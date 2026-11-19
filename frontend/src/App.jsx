@@ -22,7 +22,7 @@ export default function App() {
   const check = useCallback(async () => {
     try {
       const { data } = await axios.get('/api/auth/status');
-      setAuth({ user: data.user, setupRequired: data.setup_required });
+      setAuth({ user: data.user, setupRequired: data.setup_required, local: data.local });
     } catch {
       setAuth({ user: null, setupRequired: false, offline: true });
     }
@@ -38,7 +38,7 @@ export default function App() {
   }, []);
 
   if (auth.user === undefined) return null;
-  if (!auth.user) return <Login setupRequired={auth.setupRequired} offline={auth.offline} onDone={check} />;
+  if (!auth.user) return <Login setupRequired={auth.setupRequired} local={auth.local} offline={auth.offline} onDone={check} />;
   const logout = async () => { await axios.post('/api/auth/logout').catch(() => {}); check(); };
 
   return (

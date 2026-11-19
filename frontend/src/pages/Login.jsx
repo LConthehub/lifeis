@@ -2,7 +2,7 @@ import { useState } from 'react';
 import axios from 'axios';
 import { Field, inputClass, buttonClass, errorMessage } from '../components/ui';
 
-export default function Login({ setupRequired, offline, onDone }) {
+export default function Login({ setupRequired, local = true, offline, onDone }) {
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -29,6 +29,7 @@ export default function Login({ setupRequired, offline, onDone }) {
             <p className="text-xs text-gray-500 dark:text-life-200">{setupRequired ? 'Make your account. It stays on this computer.' : 'Sign in to your kitchen.'}</p>
           </div>
         </div>
+        {setupRequired && !local && <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">Nobody has signed up yet. The first account can only be made on the computer Life Is runs on.</p>}
         {offline && <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">Life Is isn't answering. Is it running?</p>}
         <Field label="Username"><input autoFocus autoComplete="username" required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className={inputClass} /></Field>
         <Field label="Password"><input type="password" autoComplete={setupRequired ? 'new-password' : 'current-password'} required minLength={setupRequired ? 12 : undefined} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className={inputClass} /></Field>

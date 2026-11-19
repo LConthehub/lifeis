@@ -74,6 +74,19 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "?"
 
 
+def is_local(request: Request) -> bool:
+    """Opened on this computer (or from the home network), not through a web address. Requests that come through
+    a reverse proxy such as Caddy carry X-Forwarded-For, so they never count as local."""
+    import ipaddress
+    if request.headers.get("x-forwarded-for") or request.headers.get("forwarded"):
+        return False
+    try:
+        ip = ipaddress.ip_address(client_ip(request))
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private
+
+
 @app.middleware("http")
 async def require_login(request: Request, call_next):
     path = request.url.path.rstrip("/") or "/"
@@ -138,13 +151,16 @@ def health():
 
 @app.get("/api/auth/status")
 def auth_status(request: Request, db: DbDep):
-    return {"setup_required": db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0,
+    return {"setup_required": db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0, "local": is_local(request),
             "user": auth.user_for_token(db, request.cookies.get(auth.SESSION_COOKIE), touch=False)}
 
 
 @app.post("/api/auth/setup", status_code=201)
 def auth_setup(creds: Credentials, request: Request, response: Response, db: DbDep):
-    """Make the first (admin) account. Only works while there are none."""
+    """Make the first (admin) account. Only works while there are none, and only on this computer: otherwise
+    whoever found the web address first could make themselves the admin."""
+    if not is_local(request):
+        raise HTTPException(status_code=403, detail="Make the first account on the computer Life Is runs on (http://localhost:8020)")
     username = creds.username.strip().lower()
     _check_new(username, creds.password)
     db.execute("BEGIN IMMEDIATE")

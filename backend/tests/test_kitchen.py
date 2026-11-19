@@ -25,7 +25,7 @@ MONDAY = date(2046, 3, 5)
 
 @pytest.fixture(scope="module")
 def admin():
-    c = TestClient(main.app)
+    c = TestClient(main.app, client=("127.0.0.1", 50000))       # on this computer: the first account can be made
     if c.post("/api/auth/setup", json={"username": "owner", "password": PASSWORD}).status_code != 201:
         assert c.post("/api/auth/login", json={"username": "owner", "password": PASSWORD}).status_code == 200
     return c
@@ -251,3 +251,12 @@ def test_each_person_has_their_own_kitchen(admin, api):
 def test_the_database_is_encrypted_on_disk():
     with open(main.DB_PATH, "rb") as f:
         assert f.read(16) != b"SQLite format 3\x00"
+
+
+def test_the_first_account_can_only_be_made_on_this_computer():
+    import migrations
+    c = TestClient(main.app)
+    # Through a reverse proxy (Caddy adds X-Forwarded-For), setup is refused, whether or not an account exists yet.
+    r = c.post("/api/auth/setup", json={"username": "stranger", "password": PASSWORD}, headers={"X-Forwarded-For": "203.0.113.9"})
+    assert r.status_code == 403 and "localhost" in r.json()["detail"]
+    assert c.get("/api/auth/status", headers={"X-Forwarded-For": "203.0.113.9"}).json()["local"] is False
