@@ -44,8 +44,12 @@ Your records are kept by Docker, encrypted. **Never run `docker compose down -v`
   amounts and converts units, `migrations.py` is the database's shape (a shipped migration is never edited).
 - `frontend/`: React, Vite and Tailwind.
 - `core/`: the kitchen again, in TypeScript, so the same code can run on the server, in the browser and inside
-  a phone app. Nothing uses it yet. It must give the same answers as `backend/`: `python core/tests/golden.py`
-  writes the Python answers down and `npm test` (in `core/`) checks the TypeScript against them.
+  a phone app. It must give the same answers as `backend/`: `python core/tests/golden.py` writes the Python
+  answers down and `npm test` (in `core/`) checks the TypeScript against them.
+- `server/`: the program again, on Node, with `core/` as its kitchen: the same addresses, the same sign-in and
+  the same encrypted database file as `backend/`, so records made by one open in the other. Docker still runs
+  `backend/`; this takes its place once it has been tried. To try it: `npm install` in `core/` and `server/`,
+  then `npm start` in `server/` (Node 24, no build step). Tests: `npm test` in `server/`.
 - Tests: `docker compose -f docker-compose.dev.yml run --rm tests`.
 - Working on it: `docker compose -f docker-compose.dev.yml up --build` (the program on port 8020, the pages with
   live reload on port 5180).

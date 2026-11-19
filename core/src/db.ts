@@ -17,7 +17,7 @@ export type Value = string | number | null;
 /** A row as it comes back: column name -> value. */
 export type Row = Record<string, Value>;
 
-/** What a write did: the id of the row it added (0 when it added none), and how many rows it touched. */
+/** What a write did: the id of the row it added (only meaningful after an INSERT), and how many rows it touched. */
 export type Written = { lastId: number; changes: number };
 
 /** Reading and writing. `?` in the SQL is filled from params, in order. */

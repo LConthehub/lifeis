@@ -7,7 +7,7 @@
  * Migrations 1 and 2 are word for word the tables backend/migrations.py makes, so a database made by either
  * opens in the other.
  */
-import { atomic, type Db } from './db';
+import { atomic, type Db } from './db.ts';
 
 type Migration = { number: number; name: string; statements: string[] };
 

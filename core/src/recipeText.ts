@@ -11,9 +11,9 @@
  * Nothing here touches the database. It reads the same way backend/kitchen.py does, and
  * tests/recipeText.golden.json holds the Python answers it is checked against.
  */
-import type { Part, Recipe, RecipeInput } from './kitchenTypes';
-import { Problem } from './problem';
-import { parseLine } from './units';
+import type { Part, Recipe, RecipeInput } from './kitchenTypes.ts';
+import { Problem } from './problem.ts';
+import { parseLine } from './units.ts';
 
 export const TEXT_LIMIT = 200_000; // a recipe's text: long enough for anything real
 export const MAX_LINES = 500;

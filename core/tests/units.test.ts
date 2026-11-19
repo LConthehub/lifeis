@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import golden from './units.golden.json';
-import { amount, canonical, convert, kindOf, nameKey, nice, parseLine } from '../src/units';
+import { amount, canonical, convert, kindOf, nameKey, nice, parseLine } from '../src/units.ts';
 
 describe('reading an ingredient line', () => {
   it.each([

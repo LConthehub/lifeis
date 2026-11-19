@@ -4,8 +4,11 @@
  * 409 it clashes with what's already so. The server answers with it; the app shows the words.
  */
 export class Problem extends Error {
-  constructor(public readonly status: 400 | 404 | 409, message: string) {
+  readonly status: 400 | 404 | 409;
+
+  constructor(status: 400 | 404 | 409, message: string) {
     super(message);
     this.name = 'Problem';
+    this.status = status;
   }
 }

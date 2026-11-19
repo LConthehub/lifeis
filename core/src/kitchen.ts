@@ -13,14 +13,14 @@
  * backend/kitchen.py does, and gives the same answers. Anything that changes several things changes all of
  * them or none (a transaction).
  */
-import { atomic, type Db, type Queries, type Value } from './db';
+import { atomic, type Db, type Queries, type Value } from './db.ts';
 import type {
   ExportFile, GroceryItem, Ingredient, Meal, PantryInput, PantryItem, Part, PlanInput, PlannedMeal, Recipe,
   RecipeInput, RecipeLine, RecipeSummary,
-} from './kitchenTypes';
-import { Problem } from './problem';
-import { cut, folderName, linesAsText, readImport, splitLines, TEXT_LIMIT, toSchemaOrg, type TextLine } from './recipeText';
-import * as units from './units';
+} from './kitchenTypes.ts';
+import { Problem } from './problem.ts';
+import { cut, folderName, linesAsText, readImport, splitLines, TEXT_LIMIT, toSchemaOrg, type TextLine } from './recipeText.ts';
+import * as units from './units.ts';
 
 export const MEALS: readonly string[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 export const LOCATIONS: readonly string[] = ['fridge', 'freezer', 'pantry', 'spices', 'other'];

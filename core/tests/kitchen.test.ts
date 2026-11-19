@@ -3,10 +3,10 @@
  * the pantry. These are backend/tests/test_kitchen.py's tests, asked of the TypeScript kitchen.
  */
 import { beforeEach, expect, it } from 'vitest';
-import type { Db } from '../src/db';
-import { kitchen, type Kitchen } from '../src/kitchen';
-import { LATEST, migrate } from '../src/migrations';
-import { memoryDb } from './memoryDb';
+import type { Db } from '../src/db.ts';
+import { kitchen, type Kitchen } from '../src/kitchen.ts';
+import { LATEST, migrate } from '../src/migrations.ts';
+import { memoryDb } from './memoryDb.ts';
 
 const MONDAY = '2046-03-05';
 const day = (offset: number) => new Date(Date.UTC(2046, 2, 5 + offset)).toISOString().slice(0, 10);

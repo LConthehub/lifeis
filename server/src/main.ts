@@ -1,0 +1,36 @@
+/**
+ * Starts Life Is:  node src/main.ts
+ *
+ *   DATA_DIR               where the database is kept                         (./data)
+ *   KEY_DIR                where the key that opens it is kept, apart from it  (DATA_DIR/keys)
+ *   STATIC_DIR             the built pages to serve; left out, only /api is answered
+ *   PORT, HOST             where to listen                                    (8008, every address)
+ *   SESSION_IDLE_MINUTES   sign out after this long unused                    (15)
+ */
+import { createServer } from 'node:http';
+import path from 'node:path';
+import { createApp } from './app.ts';
+import { openDatabase } from './database.ts';
+
+const dataDir = process.env.DATA_DIR || path.resolve('data');
+const keyDir = process.env.KEY_DIR || path.join(dataDir, 'keys');
+const port = Number(process.env.PORT || 8008);
+const idle = Number(process.env.SESSION_IDLE_MINUTES || 15);
+
+const database = await openDatabase(dataDir, keyDir);
+const server = createServer(createApp({
+  db: database.db,
+  staticDir: process.env.STATIC_DIR || undefined,
+  idleMinutes: Number.isInteger(idle) && idle >= 0 ? idle : 15,
+}));
+server.listen(port, process.env.HOST || '0.0.0.0', () => console.log(`Life Is is running on port ${port}`));
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(signal, () => {
+    server.close(() => {
+      database.close();
+      process.exit(0);
+    });
+    server.closeAllConnections();
+  });
+}

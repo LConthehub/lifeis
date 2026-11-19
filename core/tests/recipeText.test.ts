@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { Problem } from '../src/problem';
-import { minutes, readPasted, readSchemaOrg, splitLines } from '../src/recipeText';
+import { Problem } from '../src/problem.ts';
+import { minutes, readPasted, readSchemaOrg, splitLines } from '../src/recipeText.ts';
 import golden from './recipeText.golden.json';
 
 // The answers backend/kitchen.py gives (python core/tests/golden.py writes them). Both must read recipes alike.

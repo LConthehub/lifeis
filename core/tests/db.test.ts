@@ -1,6 +1,6 @@
 import { beforeEach, expect, it } from 'vitest';
-import type { Db } from '../src/db';
-import { memoryDb } from './memoryDb';
+import type { Db } from '../src/db.ts';
+import { memoryDb } from './memoryDb.ts';
 
 let db: Db;
 beforeEach(async () => {
