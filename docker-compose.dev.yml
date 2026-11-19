@@ -1,25 +1,29 @@
 # Development setup (for working on Life Is itself).
-#   docker compose -f docker-compose.dev.yml up --build            the program on http://localhost:8020, reloading on save
-#   docker compose -f docker-compose.dev.yml run --rm tests        the backend tests
+#   docker compose -p lifeis-dev -f docker-compose.dev.yml up              the program on http://localhost:8020, restarting on save;
+#                                                                          the pages with live reload on http://localhost:5180
+#   docker compose -p lifeis-dev -f docker-compose.dev.yml run --rm tests  every test
+# "-p lifeis-dev" keeps this apart from the Life Is you use, which has the same port: stop that one first.
 # To just use Life Is, use docker-compose.yml instead.
 
 services:
   api:
-    build: ./backend
+    image: node:24-slim
+    working_dir: /app/server
     ports:
       - "127.0.0.1:8020:8008"
     volumes:
       - lifeis_dev_data:/data
       - lifeis_dev_keys:/keys
-      - ./backend:/app
+      - ./core:/app/core
+      - ./server:/app/server
+      - /app/server/node_modules      # the container's own: the database engine is built for Linux
     environment:
       - DATA_DIR=/data
       - KEY_DIR=/keys
-      - WATCHFILES_FORCE_POLLING=true
-    command: uvicorn main:app --host 0.0.0.0 --port 8008 --reload
+    command: sh -c "npm ci --no-audit --no-fund && node --watch src/main.ts"
 
   web:
-    image: node:20-alpine
+    image: node:24-slim
     working_dir: /app
     ports:
       - "127.0.0.1:5180:5173"
@@ -32,17 +36,19 @@ services:
     depends_on:
       - api
 
-  # Runs the backend tests, then exits. It uses its own throwaway database.
+  # Runs the tests of core/ and server/, then exits. Each test makes its own throwaway database.
   tests:
-    build: ./backend
+    image: node:24-slim
     profiles: ["test"]
+    working_dir: /app
     volumes:
-      - ./backend:/app:ro
-    environment:
-      - PYTHONDONTWRITEBYTECODE=1
+      - ./core:/app/core
+      - ./server:/app/server
+      - /app/core/node_modules
+      - /app/server/node_modules
     command: >
-      sh -c "pip install -q --root-user-action=ignore --disable-pip-version-check -r requirements-dev.txt
-      && python -m pytest -p no:cacheprovider -q"
+      sh -c "cd /app/core && npm ci --no-audit --no-fund && npm run typecheck && npm test
+      && cd /app/server && npm ci --no-audit --no-fund && npm run typecheck && npm test"
 
 volumes:
   lifeis_dev_data:

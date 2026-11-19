@@ -127,6 +127,7 @@ it('the first account can only be made on this computer', async () => {
 
 it('wrong passwords are refused, then slowed down, and the wait survives a restart', async () => {
   await owner();
+  time = new Date(); // held still, so a slow disk can't run the lockout down before it's checked
   const guesser = visitor();
   for (let i = 0; i < 4; i += 1) expect((await guesser.post('/api/auth/login', { username: 'owner', password: 'wrong-wrong-wrong' })).status).toBe(401);
   expect((await guesser.post('/api/auth/login', { username: 'nobody', password: PASSWORD })).status).toBe(401);
@@ -138,7 +139,7 @@ it('wrong passwords are refused, then slowed down, and the wait survives a resta
   await stop();
   await start();
   expect((await visitor().post('/api/auth/login', { username: 'owner', password: PASSWORD })).status).toBe(429);
-  time = new Date(Date.now() + 5000);
+  time = new Date(time.getTime() + 5000);
   const back = await visitor().post('/api/auth/login', { username: 'OWNER', password: PASSWORD });
   expect([back.status, back.json]).toEqual([200, { id: 1, username: 'owner', is_admin: true }]);
 });

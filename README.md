@@ -40,19 +40,20 @@ Your records are kept by Docker, encrypted. **Never run `docker compose down -v`
 
 ## For developers
 
-- `backend/`: FastAPI on an SQLCipher-encrypted SQLite database. `kitchen.py` is the kitchen, `units.py` reads
-  amounts and converts units, `migrations.py` is the database's shape (a shipped migration is never edited).
-- `frontend/`: React, Vite and Tailwind.
-- `core/`: the kitchen again, in TypeScript, so the same code can run on the server, in the browser and inside
-  a phone app. It must give the same answers as `backend/`: `python core/tests/golden.py` writes the Python
-  answers down and `npm test` (in `core/`) checks the TypeScript against them.
-- `server/`: the program again, on Node, with `core/` as its kitchen: the same addresses, the same sign-in and
-  the same encrypted database file as `backend/`, so records made by one open in the other. Docker still runs
-  `backend/`; this takes its place once it has been tried. To try it: `npm install` in `core/` and `server/`,
-  then `npm start` in `server/` (Node 24, no build step). Tests: `npm test` in `server/`.
-- Tests: `docker compose -f docker-compose.dev.yml run --rm tests`.
-- Working on it: `docker compose -f docker-compose.dev.yml up --build` (the program on port 8020, the pages with
-  live reload on port 5180).
+- `core/`: the kitchen, in TypeScript, written so the same code runs on the server, in the browser and inside a
+  phone app. `kitchen.ts` is the kitchen, `units.ts` reads amounts and converts units, `recipeText.ts` reads
+  and writes recipes, `migrations.ts` is the database's shape (a shipped migration is never edited). It reaches
+  the database only through the small `Db` interface in `db.ts`, which each place Life Is runs supplies.
+- `server/`: the program, on Node 24 with no build step: sign-in, the web addresses the pages call, and an
+  SQLCipher-encrypted SQLite database. Its one installed dependency is the encrypted database engine.
+- `frontend/`: the pages. React, Vite and Tailwind.
+- `backend/`: the first version of the program, in Python. Docker no longer runs it. It is kept for now as the
+  reference `core/` is checked against: `python core/tests/golden.py` writes its answers down, and the tests
+  hold the TypeScript to them. The database file, its encryption and the passwords are the same in both.
+- Tests: `docker compose -p lifeis-dev -f docker-compose.dev.yml run --rm tests`, or `npm test` in `core/` and
+  in `server/` (after `npm install` in each).
+- Working on it: `docker compose -p lifeis-dev -f docker-compose.dev.yml up` (the program on port 8020, the
+  pages with live reload on port 5180). Stop the Life Is you use first: it has the same port.
 
 Life Is shares its sign-in and encryption code with its sister project, Sworkr. The plan is to move that shared
 part into one package both use.
