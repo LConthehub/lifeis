@@ -1,0 +1,21 @@
+# Life Is, on your own computer:  docker compose up -d   then open http://localhost:8020
+# Your records are kept by Docker (lifeis_data), encrypted with a key kept apart from them (lifeis_keys).
+# Never run "docker compose down -v": the -v deletes them.
+
+name: lifeis
+
+services:
+  lifeis:
+    build: .
+    ports:
+      - "127.0.0.1:8020:8008"     # this computer only. Use Tailscale to reach it from your phone.
+    volumes:
+      - lifeis_data:/data
+      - lifeis_keys:/keys
+    environment:
+      - SESSION_IDLE_MINUTES=15
+    restart: unless-stopped
+
+volumes:
+  lifeis_data:
+  lifeis_keys:

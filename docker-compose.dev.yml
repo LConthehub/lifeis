@@ -1,0 +1,49 @@
+# Development setup (for working on Life Is itself).
+#   docker compose -f docker-compose.dev.yml up --build            the program on http://localhost:8020, reloading on save
+#   docker compose -f docker-compose.dev.yml run --rm tests        the backend tests
+# To just use Life Is, use docker-compose.yml instead.
+
+services:
+  api:
+    build: ./backend
+    ports:
+      - "127.0.0.1:8020:8008"
+    volumes:
+      - lifeis_dev_data:/data
+      - lifeis_dev_keys:/keys
+      - ./backend:/app
+    environment:
+      - DATA_DIR=/data
+      - KEY_DIR=/keys
+      - WATCHFILES_FORCE_POLLING=true
+    command: uvicorn main:app --host 0.0.0.0 --port 8008 --reload
+
+  web:
+    image: node:20-alpine
+    working_dir: /app
+    ports:
+      - "127.0.0.1:5180:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - API_PROXY_TARGET=http://api:8008
+    command: sh -c "npm install --no-audit --no-fund && npm run dev"
+    depends_on:
+      - api
+
+  # Runs the backend tests, then exits. It uses its own throwaway database.
+  tests:
+    build: ./backend
+    profiles: ["test"]
+    volumes:
+      - ./backend:/app:ro
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+    command: >
+      sh -c "pip install -q --root-user-action=ignore --disable-pip-version-check -r requirements-dev.txt
+      && python -m pytest -p no:cacheprovider -q"
+
+volumes:
+  lifeis_dev_data:
+  lifeis_dev_keys:
