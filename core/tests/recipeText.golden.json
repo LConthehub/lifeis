@@ -1,0 +1,580 @@
+{
+ "ingredients": [
+  [
+   "# For the sauce\n2 tbsp olive oil\n1 onion, finely chopped\n2-3 cloves garlic\n\n# To build\n12 lasagne sheets",
+   [
+    {
+     "text": "For the sauce",
+     "is_heading": true
+    },
+    {
+     "text": "2 tbsp olive oil",
+     "is_heading": false
+    },
+    {
+     "text": "1 onion, finely chopped",
+     "is_heading": false
+    },
+    {
+     "text": "2-3 cloves garlic",
+     "is_heading": false
+    },
+    {
+     "text": "To build",
+     "is_heading": true
+    },
+    {
+     "text": "12 lasagne sheets",
+     "is_heading": false
+    }
+   ]
+  ],
+  [
+   "For the dough:\n2 cups flour\n1 tsp salt\nFilling:\n1 lb apples\r\nCinnamon to taste\n  \n## Glaze ##\n1 cup: sugar",
+   [
+    {
+     "text": "For the dough",
+     "is_heading": true
+    },
+    {
+     "text": "2 cups flour",
+     "is_heading": false
+    },
+    {
+     "text": "1 tsp salt",
+     "is_heading": false
+    },
+    {
+     "text": "Filling",
+     "is_heading": true
+    },
+    {
+     "text": "1 lb apples",
+     "is_heading": false
+    },
+    {
+     "text": "Cinnamon to taste",
+     "is_heading": false
+    },
+    {
+     "text": "Glaze ##",
+     "is_heading": true
+    },
+    {
+     "text": "1 cup: sugar",
+     "is_heading": false
+    }
+   ]
+  ],
+  [
+   "2 cups:\nSalt:\nA very long line that ends in a colon and so is not a heading because it is far too long:",
+   [
+    {
+     "text": "2 cups:",
+     "is_heading": false
+    },
+    {
+     "text": "Salt",
+     "is_heading": true
+    },
+    {
+     "text": "A very long line that ends in a colon and so is not a heading because it is far too long:",
+     "is_heading": false
+    }
+   ]
+  ],
+  [
+   "",
+   []
+  ],
+  [
+   "\n\n",
+   []
+  ],
+  [
+   "  3 eggs  \n\t1 cup milk\t",
+   [
+    {
+     "text": "3 eggs",
+     "is_heading": false
+    },
+    {
+     "text": "1 cup milk",
+     "is_heading": false
+    }
+   ]
+  ]
+ ],
+ "steps": [
+  [
+   "Warm the oil.\n\nAdd the garlic.\n\n# Layering\nSpread a thin layer.\n\nBake at 190°C.",
+   [
+    {
+     "text": "Warm the oil.",
+     "is_heading": false
+    },
+    {
+     "text": "Add the garlic.",
+     "is_heading": false
+    },
+    {
+     "text": "Layering",
+     "is_heading": true
+    },
+    {
+     "text": "Spread a thin layer.",
+     "is_heading": false
+    },
+    {
+     "text": "Bake at 190°C.",
+     "is_heading": false
+    }
+   ]
+  ],
+  [
+   "Mix.\nCut in the butter.\nBake.",
+   [
+    {
+     "text": "Mix.",
+     "is_heading": false
+    },
+    {
+     "text": "Cut in the butter.",
+     "is_heading": false
+    },
+    {
+     "text": "Bake.",
+     "is_heading": false
+    }
+   ]
+  ],
+  [
+   "One paragraph only.",
+   [
+    {
+     "text": "One paragraph only.",
+     "is_heading": false
+    }
+   ]
+  ],
+  [
+   "# Broth\n\nBlanch the bones.\n\n\n\nServe.  \n",
+   [
+    {
+     "text": "Broth",
+     "is_heading": true
+    },
+    {
+     "text": "Blanch the bones.",
+     "is_heading": false
+    },
+    {
+     "text": "Serve.",
+     "is_heading": false
+    }
+   ]
+  ],
+  [
+   "First line\nsecond line of the same step\n\nNext step",
+   [
+    {
+     "text": "First line\nsecond line of the same step",
+     "is_heading": false
+    },
+    {
+     "text": "Next step",
+     "is_heading": false
+    }
+   ]
+  ],
+  [
+   "  indented step\n\n# Only a heading",
+   [
+    {
+     "text": "  indented step",
+     "is_heading": false
+    },
+    {
+     "text": "Only a heading",
+     "is_heading": true
+    }
+   ]
+  ],
+  [
+   "#\nStep under an empty heading",
+   [
+    {
+     "text": "",
+     "is_heading": true
+    },
+    {
+     "text": "Step under an empty heading",
+     "is_heading": false
+    }
+   ]
+  ],
+  [
+   "",
+   []
+  ],
+  [
+   "Step one\r\n\r\nStep two\r\n",
+   [
+    {
+     "text": "Step one",
+     "is_heading": false
+    },
+    {
+     "text": "Step two",
+     "is_heading": false
+    }
+   ]
+  ]
+ ],
+ "pasted": [
+  [
+   "Grandma's Biscuits\nMakes 12\n\nIngredients:\n2 cups flour\n1 tbsp baking powder\n\nDirections:\nMix.\nCut in the butter until it looks like coarse crumbs.\n\nNotes:\nCold butter is everything.",
+   {
+    "title": "Grandma's Biscuits",
+    "description": "Makes 12",
+    "servings": 12.0,
+    "ingredients_text": "2 cups flour\n1 tbsp baking powder",
+    "steps_text": "Mix.\nCut in the butter until it looks like coarse crumbs.",
+    "notes": "Cold butter is everything.",
+    "original_text": "Grandma's Biscuits\nMakes 12\n\nIngredients:\n2 cups flour\n1 tbsp baking powder\n\nDirections:\nMix.\nCut in the butter until it looks like coarse crumbs.\n\nNotes:\nCold butter is everything."
+   }
+  ],
+  [
+   "Rice\n1 cup rice\n2 cups water\nRinse the rice.\n\nSimmer 18 minutes.",
+   {
+    "title": "Rice",
+    "description": null,
+    "servings": null,
+    "ingredients_text": "1 cup rice\n2 cups water",
+    "steps_text": "Rinse the rice.\n\nSimmer 18 minutes.",
+    "notes": null,
+    "original_text": "Rice\n1 cup rice\n2 cups water\nRinse the rice.\n\nSimmer 18 minutes."
+   }
+  ],
+  [
+   "Toast\n\nIngredients\n2 slices bread\nButter\n\nMethod\nToast it.\nButter it.",
+   {
+    "title": "Toast",
+    "description": null,
+    "servings": null,
+    "ingredients_text": "2 slices bread\nButter",
+    "steps_text": "Toast it.\nButter it.",
+    "notes": null,
+    "original_text": "Toast\n\nIngredients\n2 slices bread\nButter\n\nMethod\nToast it.\nButter it."
+   }
+  ],
+  [
+   "\n\n# Pancakes\nServes: 4, takes 20 minutes\nA family favourite.\n\n## Ingredients\n1 cup flour\n1 egg\n\n## Instructions\nWhisk.\n\nFry.\n\nTips\nRest the batter.",
+   {
+    "title": "Pancakes",
+    "description": "Serves: 4, takes 20 minutes\nA family favourite.",
+    "servings": 4.0,
+    "ingredients_text": "1 cup flour\n1 egg",
+    "steps_text": "Whisk.\n\nFry.",
+    "notes": "Rest the batter.",
+    "original_text": "\n\n# Pancakes\nServes: 4, takes 20 minutes\nA family favourite.\n\n## Ingredients\n1 cup flour\n1 egg\n\n## Instructions\nWhisk.\n\nFry.\n\nTips\nRest the batter."
+   }
+  ],
+  [
+   "Just a title",
+   {
+    "title": "Just a title",
+    "description": null,
+    "servings": null,
+    "ingredients_text": "",
+    "steps_text": "",
+    "notes": null,
+    "original_text": "Just a title"
+   }
+  ],
+  [
+   "",
+   {
+    "problem": "There's nothing to read"
+   }
+  ],
+  [
+   "   \n  ",
+   {
+    "problem": "There's nothing to read"
+   }
+  ],
+  [
+   "Soup\nYield 6\nServings 8\nSTEPS:\nBoil.\nINGREDIENT:\nWater",
+   {
+    "title": "Soup",
+    "description": "Yield 6\nServings 8",
+    "servings": 6.0,
+    "ingredients_text": "Water",
+    "steps_text": "Boil.",
+    "notes": null,
+    "original_text": "Soup\nYield 6\nServings 8\nSTEPS:\nBoil.\nINGREDIENT:\nWater"
+   }
+  ],
+  [
+   "Tea\r\n1 tsp tea\r\n250 ml water\r\nSteep 3 minutes.",
+   {
+    "title": "Tea",
+    "description": null,
+    "servings": null,
+    "ingredients_text": "1 tsp tea\n250 ml water",
+    "steps_text": "Steep 3 minutes.",
+    "notes": null,
+    "original_text": "Tea\r\n1 tsp tea\r\n250 ml water\r\nSteep 3 minutes."
+   }
+  ]
+ ],
+ "schema": [
+  [
+   {
+    "@context": "https://schema.org",
+    "@type": "Recipe",
+    "name": "Pho",
+    "recipeYield": "4 servings",
+    "prepTime": "PT30M",
+    "cookTime": "PT3H",
+    "recipeIngredient": [
+     "2 lb beef bones",
+     "1 onion, charred"
+    ],
+    "keywords": "soup, weekend",
+    "recipeInstructions": [
+     {
+      "@type": "HowToSection",
+      "name": "Broth",
+      "itemListElement": [
+       {
+        "@type": "HowToStep",
+        "text": "Blanch the bones."
+       }
+      ]
+     },
+     {
+      "@type": "HowToStep",
+      "text": "Serve with herbs."
+     }
+    ]
+   },
+   {
+    "title": "Pho",
+    "description": null,
+    "servings": 4.0,
+    "prep_minutes": 30,
+    "cook_minutes": 180,
+    "source_url": null,
+    "ingredients_text": "2 lb beef bones\n1 onion, charred",
+    "steps_text": "# Broth\n\nBlanch the bones.\n\nServe with herbs.",
+    "tags": [
+     "soup",
+     "weekend"
+    ],
+    "original_text": "{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Recipe\",\n  \"name\": \"Pho\",\n  \"recipeYield\": \"4 servings\",\n  \"prepTime\": \"PT30M\",\n  \"cookTime\": \"PT3H\",\n  \"recipeIngredient\": [\n    \"2 lb beef bones\",\n    \"1 onion, charred\"\n  ],\n  \"keywords\": \"soup, weekend\",\n  \"recipeInstructions\": [\n    {\n      \"@type\": \"HowToSection\",\n      \"name\": \"Broth\",\n      \"itemListElement\": [\n        {\n          \"@type\": \"HowToStep\",\n          \"text\": \"Blanch the bones.\"\n        }\n      ]\n    },\n    {\n      \"@type\": \"HowToStep\",\n      \"text\": \"Serve with herbs.\"\n    }\n  ]\n}"
+   }
+  ],
+  [
+   {
+    "@graph": [
+     {
+      "@type": "WebSite",
+      "name": "A site"
+     },
+     {
+      "@type": [
+       "Recipe",
+       "NewsArticle"
+      ],
+      "name": "Graph cake",
+      "recipeYield": [
+       "8",
+       "8 slices"
+      ],
+      "recipeInstructions": "Bake it.",
+      "description": {
+       "text": "Moist."
+      },
+      "url": "https://example.com/cake",
+      "keywords": [
+       "cake",
+       " ",
+       3,
+       "easy"
+      ],
+      "prepTime": "P1DT2H",
+      "cookTime": "PT90S",
+      "recipeIngredient": [
+       " 2 eggs ",
+       "",
+       3
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Graph cake",
+    "description": "Moist.",
+    "servings": 8.0,
+    "prep_minutes": 1560,
+    "cook_minutes": null,
+    "source_url": "https://example.com/cake",
+    "ingredients_text": "2 eggs\n3",
+    "steps_text": "Bake it.",
+    "tags": [
+     "cake",
+     "easy"
+    ],
+    "original_text": "{\n  \"@type\": [\n    \"Recipe\",\n    \"NewsArticle\"\n  ],\n  \"name\": \"Graph cake\",\n  \"recipeYield\": [\n    \"8\",\n    \"8 slices\"\n  ],\n  \"recipeInstructions\": \"Bake it.\",\n  \"description\": {\n    \"text\": \"Moist.\"\n  },\n  \"url\": \"https://example.com/cake\",\n  \"keywords\": [\n    \"cake\",\n    \" \",\n    3,\n    \"easy\"\n  ],\n  \"prepTime\": \"P1DT2H\",\n  \"cookTime\": \"PT90S\",\n  \"recipeIngredient\": [\n    \" 2 eggs \",\n    \"\",\n    3\n  ]\n}"
+   }
+  ],
+  [
+   [
+    {
+     "@type": "Thing",
+     "name": "Not it"
+    },
+    {
+     "@type": "Recipe",
+     "name": "Second one",
+     "recipeYield": 2.5,
+     "cookTime": "soon",
+     "recipeInstructions": [
+      "Stir.",
+      {
+       "name": "Named step"
+      },
+      {
+       "@type": "HowToSection",
+       "itemListElement": []
+      }
+     ]
+    }
+   ],
+   {
+    "title": "Second one",
+    "description": null,
+    "servings": 2.5,
+    "prep_minutes": null,
+    "cook_minutes": null,
+    "source_url": null,
+    "ingredients_text": "",
+    "steps_text": "Stir.\n\nNamed step\n\n# ",
+    "tags": [],
+    "original_text": "{\n  \"@type\": \"Recipe\",\n  \"name\": \"Second one\",\n  \"recipeYield\": 2.5,\n  \"cookTime\": \"soon\",\n  \"recipeInstructions\": [\n    \"Stir.\",\n    {\n      \"name\": \"Named step\"\n    },\n    {\n      \"@type\": \"HowToSection\",\n      \"itemListElement\": []\n    }\n  ]\n}"
+   }
+  ],
+  [
+   {
+    "@type": "Recipe",
+    "name": "Bare",
+    "recipeYield": 0
+   },
+   {
+    "title": "Bare",
+    "description": null,
+    "servings": null,
+    "prep_minutes": null,
+    "cook_minutes": null,
+    "source_url": null,
+    "ingredients_text": "",
+    "steps_text": "",
+    "tags": [],
+    "original_text": "{\n  \"@type\": \"Recipe\",\n  \"name\": \"Bare\",\n  \"recipeYield\": 0\n}"
+   }
+  ],
+  [
+   {
+    "@type": "Thing"
+   },
+   {
+    "problem": "That doesn't look like a recipe"
+   }
+  ],
+  [
+   [],
+   {
+    "problem": "That doesn't look like a recipe"
+   }
+  ],
+  [
+   "a string",
+   {
+    "problem": "That doesn't look like a recipe"
+   }
+  ],
+  [
+   {
+    "name": "No type, but named"
+   },
+   {
+    "title": "No type, but named",
+    "description": null,
+    "servings": null,
+    "prep_minutes": null,
+    "cook_minutes": null,
+    "source_url": null,
+    "ingredients_text": "",
+    "steps_text": "",
+    "tags": [],
+    "original_text": "{\n  \"name\": \"No type, but named\"\n}"
+   }
+  ]
+ ],
+ "minutes": [
+  [
+   "PT1H30M",
+   90
+  ],
+  [
+   "PT30M",
+   30
+  ],
+  [
+   "P1D",
+   1440
+  ],
+  [
+   "PT0M",
+   0
+  ],
+  [
+   "PT",
+   null
+  ],
+  [
+   "P",
+   null
+  ],
+  [
+   "",
+   null
+  ],
+  [
+   null,
+   null
+  ],
+  [
+   "30 minutes",
+   null
+  ],
+  [
+   " PT2H ",
+   120
+  ],
+  [
+   "PT1H30M15S",
+   90
+  ],
+  [
+   "PT45S",
+   null
+  ],
+  [
+   90,
+   null
+  ]
+ ]
+}

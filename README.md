@@ -43,6 +43,9 @@ Your records are kept by Docker, encrypted. **Never run `docker compose down -v`
 - `backend/`: FastAPI on an SQLCipher-encrypted SQLite database. `kitchen.py` is the kitchen, `units.py` reads
   amounts and converts units, `migrations.py` is the database's shape (a shipped migration is never edited).
 - `frontend/`: React, Vite and Tailwind.
+- `core/`: the kitchen again, in TypeScript, so the same code can run on the server, in the browser and inside
+  a phone app. Nothing uses it yet. It must give the same answers as `backend/`: `python core/tests/golden.py`
+  writes the Python answers down and `npm test` (in `core/`) checks the TypeScript against them.
 - Tests: `docker compose -f docker-compose.dev.yml run --rm tests`.
 - Working on it: `docker compose -f docker-compose.dev.yml up --build` (the program on port 8020, the pages with
   live reload on port 5180).
