@@ -10,6 +10,7 @@ import { BlockList, isIP } from 'node:net';
 import { atomic, home, kitchen, life, Problem, lookups, BOOK_SERVICE, weather, WEATHER_SERVICE, type Db, type Kitchen } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
 import { mailRoutes, type MailTools } from './mailRoutes.ts';
+import { planRoutes } from './planRoutes.ts';
 import { notUnderstood, queryNumber, read, readBody, Refusal, type Body, type Context, type Reply, type Route } from './http.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
 import { enjoyingRoutes } from './enjoyingRoutes.ts';
@@ -308,6 +309,7 @@ export function createApp(options: Options) {
     ...(options.reach ? connectionRoutes(db, options.reach) : []),
     ...enjoyingRoutes(db),
     ...mailRoutes(db, options.mail),
+    ...planRoutes(db),
   ];
 
   /**

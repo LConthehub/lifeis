@@ -29,7 +29,7 @@ export type Event = { id: number; title: string; day: string; end_day: string | 
 /** One coming round of a date that returns every year. */
 export type YearlyDate = { id: number; title: string; day: string; time: string | null; note: string | null; /** How many years since the first. */ years: number };
 
-export type EntryKind = 'event' | 'meal' | 'session' | 'due' | 'use_by' | 'media';
+export type EntryKind = 'plan' | 'event' | 'meal' | 'session' | 'due' | 'use_by' | 'media';
 /** One line on one day of the calendar. */
 export type Entry = {
   kind: EntryKind;
@@ -45,7 +45,7 @@ export type Entry = {
   id: number | null;
 };
 
-const KIND_ORDER: EntryKind[] = ['event', 'due', 'meal', 'session', 'media', 'use_by'];
+const KIND_ORDER: EntryKind[] = ['plan', 'event', 'due', 'meal', 'session', 'media', 'use_by'];
 const MEAL_TIME: Record<string, number> = { breakfast: 0, lunch: 1, dinner: 2, snack: 3 };
 const leap = (year: number) => (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 /** The day a yearly date falls on in one year. The 29th of February is kept on the 28th in the years without one. */
@@ -106,6 +106,14 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
         const last = e.end_day ?? e.day;
         for (let day = e.day < start ? start : e.day; day <= last && day <= end; day = addDays(day, 1)) {
           entries.push({ kind: 'event', day, time: day === e.day ? e.time : null, title: e.title, detail: e.note, link: null, id: e.id });
+        }
+      }
+      // A plan is on each of its days, and leads to its own page.
+      for (const p of await db.all<{ id: number; name: string; start_day: string; end_day: string }>(
+        'SELECT id, name, start_day, end_day FROM plans WHERE owner_id = ? AND start_day <= ? AND end_day >= ? ORDER BY start_day, id', [owner, end, start])) {
+        for (let day = p.start_day < start ? start : p.start_day; day <= p.end_day && day <= end; day = addDays(day, 1)) {
+          const nth = dayNumber(day) - dayNumber(p.start_day) + 1;
+          entries.push({ kind: 'plan', day, time: null, title: p.name, detail: p.end_day !== p.start_day ? `day ${nth} of ${dayNumber(p.end_day) - dayNumber(p.start_day) + 1}` : null, link: `/plans/${p.id}`, id: null });
         }
       }
       for (const y of await yearlyIn(start, end)) {

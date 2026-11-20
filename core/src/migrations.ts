@@ -386,6 +386,51 @@ const MIGRATIONS: Migration[] = [
       `CREATE UNIQUE INDEX idx_places_code ON places(code) WHERE code IS NOT NULL`,
     ],
   },
+  {
+    number: 11,
+    name: 'plans, and the memories they become',
+    statements: [
+      `CREATE TABLE plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        start_day TEXT NOT NULL,
+        end_day TEXT NOT NULL,
+        note TEXT,
+        story TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_plans_owner ON plans(owner_id, start_day)`,
+      // What belongs to a plan. A task is its own words; the rest point at a recipe, a thing, a title or a
+      // project by id (ref_id), and keep its name (label) in case it's later removed.
+      `CREATE TABLE plan_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL CHECK(kind IN ('task', 'recipe', 'thing', 'media', 'project')),
+        ref_id INTEGER,
+        label TEXT NOT NULL,
+        quantity REAL CHECK(quantity IS NULL OR quantity > 0),
+        note TEXT,
+        done INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER NOT NULL
+      )`,
+      `CREATE INDEX idx_plan_items ON plan_items(plan_id, sort_order)`,
+      // A photo kept here (its bytes), or one only linked from a photo library (which one: asset_id).
+      `CREATE TABLE plan_photos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        source TEXT NOT NULL CHECK(source IN ('kept', 'immich')),
+        asset_id TEXT,
+        type TEXT,
+        bytes BLOB,
+        caption TEXT,
+        sort_order INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_plan_photos ON plan_photos(plan_id, sort_order)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

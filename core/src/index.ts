@@ -32,3 +32,5 @@ export { mail, buildReply, isNearby, MAIL_SERVICE } from './mail.ts';
 export type { Inbox, Mail, MailAccount, MailAccountInput, MailMessage, MailServer, MailSummary, Outgoing, Postbox, Who } from './mail.ts';
 export { lookups, isbnOf, BOOK_SERVICE } from './lookups.ts';
 export type { FoundBook, Lookups } from './lookups.ts';
+export { plans, pictureType, MAX_PHOTO_BYTES, PLAN_ITEM_KINDS } from './plans.ts';
+export type { Plan, PlanInput, PlanItem, PlanItemInput, PlanItemKind, PlanPhoto, Plans, PlanSummary, PlanWhen } from './plans.ts';

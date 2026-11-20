@@ -75,6 +75,17 @@ time in Settings; unticking something only puts it out of sight.
   out of what you keep.
 - **The days you worked on it**, how long, and what you watched or listened to.
 
+## Plans, and the memories they become
+
+- **Anything with a day and things that belong to it**: a holiday with its menu, dishes and films, or one afternoon's
+  sewing. Make it ahead, or write it down afterwards.
+- **It points at what you already have**: recipes, things (with how many are needed, so it says what you're short
+  of), titles from the collection, a project, and a checklist of its own. Nothing is copied.
+- **Once its days have come, it remembers**: what was cooked, worked on, watched and heard on those days is gathered
+  in, with your own words about how it went and your photos. A photo picked from your phone is made smaller and
+  kept with the plan.
+- **Look back, and do it again**: past plans stay, by year. "Do it again" starts next year's from last year's.
+
 ## The calendar
 
 - **One place to see what's on each day.** Your own dates (a day or several, with a time if it has one), with

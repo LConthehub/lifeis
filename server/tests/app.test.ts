@@ -505,7 +505,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   await database.db.run('PRAGMA user_version = 2');
@@ -517,4 +517,41 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   expect((await database.db.get<{ user_version: number }>('PRAGMA user_version'))!.user_version).toBe(LATEST);
   expect((await admin.get('/api/kitchen/recipes')).json.map((r: { title: string }) => r.title)).toEqual(['Toast']); // still signed in, recipe still there
   expect((await admin.get('/api/things/kinds')).json).toEqual([]);
+});
+
+it('plans answer over the web, with their photos', async () => {
+  const admin = await owner();
+  const recipe = (await admin.post('/api/kitchen/recipes', { title: 'Stuffing', ingredients_text: '1 loaf bread' })).json;
+  const made = await admin.post('/api/plans', { name: 'Thanksgiving', start_day: '2046-11-22', note: 'Twelve of us' });
+  expect([made.status, made.json.when, made.json.end_day]).toEqual([201, 'ahead', '2046-11-22']);
+  const id = made.json.id;
+  expect((await admin.post(`/api/plans/${id}/items`, { kind: 'recipe', ref_id: recipe.id })).status).toBe(201);
+  const withTask = (await admin.post(`/api/plans/${id}/items`, { kind: 'task', label: 'Order the turkey' })).json;
+  expect(withTask.items_list.map((i: { kind: string; label: string }) => [i.kind, i.label])).toEqual([['recipe', 'Stuffing'], ['task', 'Order the turkey']]);
+  expect((await admin.put(`/api/plans/items/${withTask.items_list[1].id}`, { done: true })).json.tasks_left).toBe(0);
+  expect((await admin.post(`/api/plans/${id}/items`, { kind: 'recipe', ref_id: recipe.id })).status).toBe(409);
+  expect((await admin.post(`/api/plans/${id}/items`, { kind: 'task' })).status).toBe(400);
+
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+  const kept = await admin.post(`/api/plans/${id}/photos`, { data: jpeg.toString('base64'), caption: 'The table' });
+  expect([kept.status, kept.json.photos_list.map((p: { source: string; caption: string }) => [p.source, p.caption])]).toEqual([201, [['kept', 'The table']]]);
+  const shown = await admin.get(`/api/plans/photos/${kept.json.photos_list[0].id}`);
+  expect([shown.status, shown.headers.get('content-type'), shown.headers.get('x-content-type-options'), shown.bytes.equals(jpeg)]).toEqual([200, 'image/jpeg', 'nosniff', true]);
+  expect((await admin.post(`/api/plans/${id}/photos`, { data: Buffer.from('<svg onload=alert(1)>').toString('base64') })).status).toBe(400);
+  expect((await admin.post(`/api/plans/${id}/photos`, { data: 'not base64!' })).status).toBe(400);
+
+  const again = await admin.post(`/api/plans/${id}/copy`, { name: 'Thanksgiving 2047', start_day: '2047-11-28' });
+  expect([again.status, again.json.photos, again.json.tasks_left]).toEqual([201, 0, 1]);
+  expect((await admin.get('/api/plans')).json.map((p: { name: string }) => p.name)).toEqual(['Thanksgiving 2047', 'Thanksgiving']);
+  expect((await admin.get('/api/calendar?start=2046-11-22&days=1')).json.map((e: { kind: string; link: string }) => [e.kind, e.link])).toEqual([['plan', `/plans/${id}`]]);
+
+  // Someone else in the house sees none of it, photos included.
+  expect((await admin.post('/api/users', { username: 'other', password: PASSWORD })).status).toBe(201);
+  const other = visitor();
+  await other.post('/api/auth/login', { username: 'other', password: PASSWORD });
+  expect([(await other.get('/api/plans')).json, (await other.get(`/api/plans/${id}`)).status, (await other.get(`/api/plans/photos/${kept.json.photos_list[0].id}`)).status]).toEqual([[], 404, 404]);
+  expect((await visitor().get(`/api/plans/photos/${kept.json.photos_list[0].id}`)).status).toBe(401);
+
+  expect((await admin.delete(`/api/plans/${id}`)).status).toBe(204);
+  expect((await admin.get(`/api/plans/photos/${kept.json.photos_list[0].id}`)).status).toBe(404);
 });

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput } from '../components/ui';
 
-const ICONS = { event: '📌', meal: '🍽', session: '🧵', due: '⏳', use_by: '🥫', media: '🎞' };
+const ICONS = { plan: '✨', event: '📌', meal: '🍽', session: '🧵', due: '⏳', use_by: '🥫', media: '🎞' };
 
 function startOfWeek(d) {
   const day = new Date(d);
