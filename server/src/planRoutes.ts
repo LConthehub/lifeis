@@ -2,7 +2,7 @@
  * The addresses for plans and their photos (/api/plans). What they do is core/'s plans.ts; this reads what
  * was sent and passes it on.
  */
-import { photoLibrary, plans, MAX_PHOTO_BYTES, PHOTO_SERVICE, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
+import { photoLibrary, plans, shopping, MAX_PHOTO_BYTES, PHOTO_SERVICE, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
 import { notUnderstood, read, Refusal, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -56,6 +56,7 @@ export function planRoutes(db: Db, tools?: PhotoTools): Route[] {
     ['GET', at('/:id'), async (c) => ({ json: await mine(c).get(c.id) })],
     ['PUT', at('/:id'), async (c) => ({ json: await mine(c).update(c.id, planFrom(c.body)) })],
     ['DELETE', at('/:id'), async (c) => (await mine(c).remove(c.id), { status: 204 })],
+    ['GET', at('/:id/cost'), async (c) => ({ json: await shopping(db, c.user.id, c.clock).planCost(c.id) })],
     ['POST', at('/:id/copy'), async (c) => ({ status: 201, json: await mine(c).copy(c.id, { name: read.maybeText(c.body, 'name'), start_day: read.text(c.body, 'start_day') }) })],
 
     ['POST', at('/:id/items'), async (c) => ({

@@ -4,7 +4,7 @@ import axios from 'axios';
 import { whoText, whenText } from './Mail';
 import Modal, { buttonClass, quietButtonClass, cardClass, fromDateInput, minutesText } from '../components/ui';
 
-const ICONS = { plan: '✨', event: '📌', meal: '🍽', session: '🧵', due: '⏳', use_by: '🥫', media: '🎞' };
+const ICONS = { plan: '✨', event: '📌', outside: '🗓', meal: '🍽', session: '🧵', due: '⏳', use_by: '🥫', media: '🎞' };
 const TYPE_ICONS = { film: '🎬', show: '📺', music: '🎵', book: '📚', game: '🎮', other: '🗃' };
 const STATUS = { active: 'working on it', paused: 'paused', planned: 'planned' };
 
@@ -192,6 +192,41 @@ export default function Home({ user }) {
             <p className="mt-3 text-sm">
               <Link to="/groceries" className="text-life-700 hover:underline dark:text-life-100">{s.kitchen.to_buy === 0 ? 'Nothing on the grocery list' : `${s.kitchen.to_buy} to buy on the grocery list`} →</Link>
             </p>
+          </Card>
+        )}
+
+        {shows('plans') && (
+          <Card title="Plans coming up" to="/plans" link="All plans">
+            {s.plans.length === 0 ? <Quiet>Nothing planned in the next two months.</Quiet> : (
+              <ul className="space-y-1 text-sm">
+                {s.plans.map((p) => (
+                  <li key={p.id}>
+                    <Link to={`/plans/${p.id}`} className="flex items-baseline gap-2 hover:underline">
+                      <span aria-hidden="true">✨</span>
+                      <span className="flex-1 text-gray-800 dark:text-life-50">{p.name}</span>
+                      <span className="text-xs text-gray-500 dark:text-life-300">{p.days_until === 0 ? (p.end_day === today ? 'today' : 'now') : inDays(p.start_day, today)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        )}
+
+        {shows('coupons') && (
+          <Card title="Coupons about to run out" to="/groceries" link="Groceries">
+            {s.coupons.soon.length === 0 ? <Quiet>None run out this week.</Quiet> : (
+              <ul className="space-y-1 text-sm">
+                {s.coupons.soon.map((c) => (
+                  <li key={c.id} className="flex items-baseline gap-2">
+                    <span aria-hidden="true">🎟</span>
+                    <span className="flex-1 text-gray-800 dark:text-life-50">{c.label}
+                      <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{c.percent_off !== null ? `${c.percent_off}% off` : `${s.coupons.currency}${(c.cents_off / 100).toFixed(2)} off`}{c.store ? ` · ${c.store}` : ''}</span></span>
+                    {c.days_left <= 1 ? <Flag>{c.days_left === 0 ? 'last day' : 'tomorrow'}</Flag> : <span className="text-xs text-gray-500 dark:text-life-300">{c.days_left} days left</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
         )}
 

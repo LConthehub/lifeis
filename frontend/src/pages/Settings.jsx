@@ -14,6 +14,7 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
         <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">What Life Is looks after</h2>
         <LifeAreasPicker onSaved={onLifeChanged} />
       </section>
+      <CalendarLink />
       <OutsideServices />
       <SignedOut />
       <PasswordForm />
@@ -99,6 +100,85 @@ function AddPerson() {
   );
 }
 
+/**
+ * A link the calendar app on a phone can follow, so Life Is's calendar shows there too. Off until made.
+ * It only shows: nothing can be changed through it.
+ */
+function CalendarLink() {
+  const [link, setLink] = useState(null);
+  const [kinds, setKinds] = useState([]);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const took = (data) => { setLink(data); setKinds(data.kinds); setError(''); };
+  useEffect(() => { axios.get('/api/calendar/link').then(({ data }) => took(data)).catch(() => {}); }, []);
+  // Coming from the calendar page's link, bring this part into view once it's there.
+  const shown = Boolean(link);
+  useEffect(() => { if (shown && window.location.hash === '#calendar-link') document.getElementById('calendar-link')?.scrollIntoView(); }, [shown]);
+  if (!link) return null;
+  const ask = async (send) => { try { took((await send()).data); } catch (err) { setError(errorMessage(err, "Couldn't do that")); } };
+  const tick = (key, on) => {
+    const next = on ? [...kinds, key] : kinds.filter((k) => k !== key);
+    setKinds(next);
+    // Once the link exists, a tick is saved straight away; before that it waits for "Make a link".
+    if (link.on && next.length > 0) ask(() => axios.put('/api/calendar/link', { kinds: next }));
+  };
+  const address = link.token ? `${window.location.origin}/cal/${link.token}.ics` : '';
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(address); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch { setError('Copying was refused: press and hold the link to copy it instead'); }
+  };
+  const onThisComputerOnly = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+  return (
+    <section className={cardClass} id="calendar-link">
+      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Your calendar on your phone</h2>
+      <p className="mb-3 text-sm text-gray-600 dark:text-life-100">
+        Shows Life Is's calendar inside the calendar app you already use (Apple Calendar, and any other that can follow a link).
+        It only shows: nothing can be changed through it. Off until you make a link.
+      </p>
+      <fieldset className="mb-3">
+        <legend className="mb-1 text-sm font-medium text-gray-800 dark:text-life-50">What it shows</legend>
+        <div className="grid gap-1 sm:grid-cols-2">
+          {link.choices.map((choice) => (
+            <label key={choice.key} className="flex items-center gap-2 text-sm text-gray-700 dark:text-life-100">
+              <input type="checkbox" checked={kinds.includes(choice.key)} onChange={(e) => tick(choice.key, e.target.checked)} />
+              {choice.label}
+            </label>
+          ))}
+        </div>
+        {kinds.length === 0 && <p className="mt-1 text-xs text-red-600">Tick at least one.</p>}
+      </fieldset>
+      {!link.on ? (
+        <button type="button" disabled={kinds.length === 0} onClick={() => ask(() => axios.put('/api/calendar/link', { kinds }))} className={buttonClass}>Make a link</button>
+      ) : (
+        <div className="space-y-3">
+          <Field label="Your link">
+            <input readOnly value={address} onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs`} />
+          </Field>
+          <div className="flex flex-wrap gap-2">
+            <a href={address.replace(/^https?:/, 'webcal:')} className={buttonClass}>Add to this device's calendar</a>
+            <button type="button" onClick={copy} className={quietButtonClass}>{copied ? 'Copied' : 'Copy the link'}</button>
+          </div>
+          {onThisComputerOnly && (
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              You're on the computer Life Is runs on, so this link only works here. Open Life Is on your phone, at the address you use there, and add it from this same page.
+            </p>
+          )}
+          <ul className="list-disc space-y-1 pl-5 text-xs text-gray-600 dark:text-life-200">
+            <li>Anyone who has this link can read what's ticked above, without a password. Treat it like a key, and don't post it anywhere.</li>
+            <li>It reaches from {link.days_back} days back to a year ahead, and a calendar app looks again about once an hour, so a change takes a little while to show.</li>
+            <li>A calendar app on your own phone or computer fetches it straight from your Life Is. An online calendar (Google Calendar, Outlook on the web) fetches it from that company's computers, so they would see what's in it.</li>
+            <li>{link.read_at ? `Last fetched ${new Date(link.read_at).toLocaleString()}.` : 'Nothing has fetched it yet.'}</li>
+          </ul>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => { if (window.confirm('Make a new link? The old one stops working, and each calendar that follows it has to be given the new one.')) ask(() => axios.post('/api/calendar/link/renew')); }} className={quietButtonClass}>Make a new link</button>
+            <button type="button" onClick={() => { if (window.confirm('Turn the link off? Calendars following it stop getting anything.')) ask(() => axios.delete('/api/calendar/link')); }} className={quietButtonClass}>Turn it off</button>
+          </div>
+        </div>
+      )}
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+    </section>
+  );
+}
+
 /** Everything that reaches outside this computer, in one place. Each is off until turned on, and says what it sends. */
 function OutsideServices() {
   return (
@@ -113,6 +193,7 @@ function OutsideServices() {
         <MailService />
         <BookLookupService />
         <PhotoLibraryService />
+        <OtherCalendarsService />
         <div className="py-3">
           <h3 className="font-medium text-gray-800 dark:text-life-50">📺 Your Jellyfin or Emby</h3>
           <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Brings the films, shows, music and books on a media server you name into your collection. Life Is only reads from that server, using the key you give it, and talks to nowhere else.</p>
@@ -281,6 +362,79 @@ function MailService() {
               <p className="text-xs text-gray-500 dark:text-life-300">The account is only saved if signing in works. The password is stored locked, on this computer.</p>
             </form>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const SHOW_WORDS = { busy: 'busy only', titles: 'with what each thing is called' };
+
+/** Calendars kept somewhere else, shown on Life Is's own by following their link. Busy only unless asked for more. */
+function OtherCalendarsService() {
+  const [o, setO] = useState(null);
+  const [form, setForm] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  useEffect(() => { axios.get('/api/calendar/others').then(({ data }) => setO(data)).catch(() => {}); }, []);
+  if (!o) return null;
+  const ask = async (send) => { setMessage(''); try { setO((await send()).data); return true; } catch (err) { setMessage(errorMessage(err, "Couldn't do that")); return false; } };
+  const add = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    // The time zone of this device goes with it, so the calendar's times are said on your clock.
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (await ask(() => axios.post('/api/calendar/others', { ...form, zone }))) setForm(null);
+    setBusy(false);
+  };
+  const on = o.calendars.length > 0;
+  return (
+    <div className="py-3" id="other-calendars">
+      <div className="flex items-baseline gap-2">
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🗓 Other calendars, on yours</h3>
+        <span className={`rounded px-1.5 text-[11px] ${on ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{on ? 'On' : 'Off'}</span>
+      </div>
+      <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
+        Shows a work calendar, or any calendar that has a link, beside your own. <span className="font-medium">What it does:</span> {o.service.sends}
+      </p>
+      {!o.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : (
+        <div className="mt-2 space-y-2">
+          {o.calendars.map((c) => (
+            <div key={c.id} className="flex flex-wrap items-center gap-2 text-sm text-gray-800 dark:text-life-50">
+              <span className="mr-auto">
+                <span className="font-medium">{c.name}</span> <span className="text-xs text-gray-500 dark:text-life-300">{SHOW_WORDS[c.show]} · {c.events} in view{c.fetched_at ? ` · read ${new Date(c.fetched_at).toLocaleString()}` : ''}</span>
+                {c.problem && <span className="block text-xs text-red-600">{c.problem}</span>}
+              </span>
+              <button type="button" onClick={() => ask(() => axios.put(`/api/calendar/others/${c.id}`, { name: c.name, show: c.show === 'busy' ? 'titles' : 'busy' }))} className={quietButtonClass}>{c.show === 'busy' ? 'Show what things are called' : 'Busy only'}</button>
+              <button type="button" onClick={() => ask(() => axios.post(`/api/calendar/others/${c.id}/refresh`))} className={quietButtonClass}>Read again</button>
+              <button type="button" onClick={() => { if (window.confirm(`Stop following ${c.name}? What was read from it, and its link, are forgotten.`)) ask(() => axios.delete(`/api/calendar/others/${c.id}`)); }} className={quietButtonClass}>Stop and forget</button>
+            </div>
+          ))}
+          {!form ? <button type="button" onClick={() => { setForm({ name: '', url: '', show: 'busy' }); setMessage(''); }} className={quietButtonClass}>+ Follow a calendar</button> : (
+            <form onSubmit={add} className="space-y-3 rounded-lg bg-life-50/60 p-3 dark:bg-life-800">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="What to call it *"><input required maxLength={60} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Work" className={inputClass} /></Field>
+                <Field label="Its link *"><input required type="password" autoComplete="off" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://… or webcal://…" className={inputClass} /></Field>
+              </div>
+              <fieldset className="space-y-1 text-sm text-gray-800 dark:text-life-50">
+                <legend className="mb-1 font-medium">How much to show</legend>
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input type="radio" name="follow-show" checked={form.show === 'busy'} onChange={() => setForm({ ...form, show: 'busy' })} className="mt-1 accent-life-600" />
+                  <span>Busy only <span className="block text-xs text-gray-500 dark:text-life-300">Just the times, under the name above. What each thing is called, where it is and its notes are never kept.</span></span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input type="radio" name="follow-show" checked={form.show === 'titles'} onChange={() => setForm({ ...form, show: 'titles' })} className="mt-1 accent-life-600" />
+                  <span>What each thing is called <span className="block text-xs text-gray-500 dark:text-life-300">The times and the titles. Places and notes are still never kept.</span></span>
+                </label>
+              </fieldset>
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" onClick={() => setForm(null)} className={quietButtonClass}>Not now</button>
+                <button type="submit" disabled={busy} className={buttonClass}>{busy ? 'Reading it…' : 'Read it and follow'}</button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-life-300">It's only saved if the link answers with a calendar. The link is stored locked and isn't shown again.</p>
+            </form>
+          )}
+          {message && <p className="text-sm text-red-600">{message}</p>}
         </div>
       )}
     </div>

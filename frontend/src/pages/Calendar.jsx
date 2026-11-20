@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput } from '../components/ui';
 
-const ICONS = { plan: '✨', event: '📌', meal: '🍽', session: '🧵', due: '⏳', use_by: '🥫', media: '🎞' };
+const ICONS = { plan: '✨', event: '📌', outside: '🗓', meal: '🍽', session: '🧵', due: '⏳', use_by: '🥫', media: '🎞' };
 
 function startOfWeek(d) {
   const day = new Date(d);
@@ -39,7 +39,7 @@ export default function Calendar() {
         <button type="button" onClick={() => move(7)} className={quietButtonClass} aria-label="Week after">→</button>
         <button type="button" onClick={() => setEditing({ day: today })} className={buttonClass}>+ Add</button>
       </div>
-      <p className="text-xs text-gray-500 dark:text-life-300">Meals, project time, use-by dates and what you watched show here from their own pages. Tap one to go there.</p>
+      <p className="text-xs text-gray-500 dark:text-life-300">Meals, project time, use-by dates and what you watched show here from their own pages. Tap one to go there. <Link to="/settings#calendar-link" className="text-life-600 hover:underline dark:text-life-200">See this on your phone's calendar</Link></p>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {days.map((d) => {
           const key = toDateInput(d);
@@ -66,6 +66,7 @@ export default function Calendar() {
                       <li key={`${e.kind}-${e.id ?? e.link}-${i}`}>
                         {e.link
                           ? <Link to={e.link} className="flex items-start gap-2 rounded-lg px-1 py-0.5 hover:bg-life-50 dark:hover:bg-life-700">{body}</Link>
+                          : e.kind === 'outside' ? <span className="flex items-start gap-2 px-1 py-0.5">{body}</span>
                           : <button type="button" onClick={() => edit(e)} className="flex w-full items-start gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-life-50 dark:hover:bg-life-700">{body}</button>}
                       </li>
                     );

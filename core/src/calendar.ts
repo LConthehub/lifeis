@@ -3,7 +3,8 @@
  *
  * Most of what it shows is kept elsewhere and only gathered here: the week's meals (kitchen.ts), the time
  * spent on projects and the days they're wanted by (projects.ts), what's about to go off in the pantry, and
- * what was watched, read or heard (media.ts). Each of those links back to where it lives, and is changed
+ * what was watched, read or heard (media.ts), and the times read from other calendars a person follows
+ * (follow.ts), which can't be changed from here at all. Each of the rest links back to where it lives, and is changed
  * there. What is typed into the calendar itself is an event: a title on a day (or over several), with a
  * time if it has one.
  *
@@ -29,7 +30,7 @@ export type Event = { id: number; title: string; day: string; end_day: string | 
 /** One coming round of a date that returns every year. */
 export type YearlyDate = { id: number; title: string; day: string; time: string | null; note: string | null; /** How many years since the first. */ years: number };
 
-export type EntryKind = 'plan' | 'event' | 'meal' | 'session' | 'due' | 'use_by' | 'media';
+export type EntryKind = 'plan' | 'event' | 'outside' | 'meal' | 'session' | 'due' | 'use_by' | 'media';
 /** One line on one day of the calendar. */
 export type Entry = {
   kind: EntryKind;
@@ -45,7 +46,7 @@ export type Entry = {
   id: number | null;
 };
 
-const KIND_ORDER: EntryKind[] = ['plan', 'event', 'due', 'meal', 'session', 'media', 'use_by'];
+const KIND_ORDER: EntryKind[] = ['plan', 'event', 'outside', 'due', 'meal', 'session', 'media', 'use_by'];
 const MEAL_TIME: Record<string, number> = { breakfast: 0, lunch: 1, dinner: 2, snack: 3 };
 const leap = (year: number) => (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 /** The day a yearly date falls on in one year. The 29th of February is kept on the 28th in the years without one. */
@@ -114,6 +115,17 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
         for (let day = p.start_day < start ? start : p.start_day; day <= p.end_day && day <= end; day = addDays(day, 1)) {
           const nth = dayNumber(day) - dayNumber(p.start_day) + 1;
           entries.push({ kind: 'plan', day, time: null, title: p.name, detail: p.end_day !== p.start_day ? `day ${nth} of ${dayNumber(p.end_day) - dayNumber(p.start_day) + 1}` : null, link: `/plans/${p.id}`, id: null });
+        }
+      }
+      // Other calendars a person follows. One followed "busy only" has no titles: its times go under its own name.
+      for (const o of await db.all<{ day: string; end_day: string | null; time: string | null; end_time: string | null; title: string | null; name: string; show: string }>(
+        `SELECT e.day, e.end_day, e.time, e.end_time, e.title, f.name, f.show FROM followed_events e JOIN followed_calendars f ON f.id = e.calendar_id
+         WHERE f.owner_id = ? AND e.day <= ? AND COALESCE(e.end_day, e.day) >= ? ORDER BY e.day, e.time, e.id`, [owner, end, start])) {
+        const last = o.end_day ?? o.day;
+        for (let day = o.day < start ? start : o.day; day <= last && day <= end; day = addDays(day, 1)) {
+          const until = day === last && o.end_time ? `until ${o.end_time}` : null;
+          const named = o.show === 'titles' && o.title ? o.title : o.name;
+          entries.push({ kind: 'outside', day, time: day === o.day ? o.time : null, title: named, detail: [until, named !== o.name ? o.name : null].filter(Boolean).join(' · ') || null, link: null, id: null });
         }
       }
       for (const y of await yearlyIn(start, end)) {

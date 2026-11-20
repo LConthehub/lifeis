@@ -7,7 +7,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BlockList, isIP } from 'node:net';
-import { atomic, home, kitchen, life, Problem, lookups, BOOK_SERVICE, GROCERY_SERVICE, weather, WEATHER_SERVICE, type Db, type Kitchen } from '../../core/src/index.ts';
+import { atomic, feedFor, home, kitchen, life, Problem, lookups, BOOK_SERVICE, GROCERY_SERVICE, weather, WEATHER_SERVICE, type Db, type Kitchen } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
 import { mailRoutes, type MailTools } from './mailRoutes.ts';
 import { planRoutes } from './planRoutes.ts';
@@ -38,6 +38,8 @@ export type Options = {
   mail?: MailTools;
   /** How Life Is reaches a photo library and locks its key. Left out: none can be connected. */
   photos?: Reach;
+  /** How Life Is reads another calendar's link and locks it. Left out: none can be followed. */
+  calendars?: Reach;
   /** Told about anything that went wrong inside Life Is itself (never about a person's mistake). */
   onError?: (problem: unknown) => void;
 };
@@ -316,7 +318,7 @@ export function createApp(options: Options) {
 
     ...makingRoutes(db),
     ...(options.reach ? connectionRoutes(db, options.reach) : []),
-    ...enjoyingRoutes(db),
+    ...enjoyingRoutes(db, options.calendars),
     ...mailRoutes(db, options.mail),
     ...planRoutes(db, options.photos),
     ...shoppingRoutes(db),
@@ -370,11 +372,18 @@ export function createApp(options: Options) {
     }
     const path = url.pathname.replace(/\/+$/, '') || '/';
     const api = path === '/api' || path.startsWith('/api/');
+    // The calendar link: the long random part of the address is the only key, since a calendar app can't sign in.
+    const feed = /^\/cal\/([0-9a-f]{64})\.ics$/.exec(path);
 
     let reply: Reply;
     try {
       if (api) {
         reply = await answerApi(req, url, path);
+      } else if (feed && (req.method === 'GET' || req.method === 'HEAD')) {
+        const host = String(req.headers.host ?? '');
+        const text = await feedFor(db, feed[1]!, clock, /^[\w.\-:[\]]+$/.test(host) ? `${isHttps(req) ? 'https' : 'http'}://${host}` : '');
+        if (text === null) throw new Refusal(404, 'Not found');
+        reply = { body: Buffer.from(text, 'utf8'), headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'private, no-store' } };
       } else if (page && (req.method === 'GET' || req.method === 'HEAD')) {
         const found = await page(url.pathname, isHttps(req));
         reply = { headers: found.headers, body: found.body };

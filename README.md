@@ -112,6 +112,10 @@ time in Settings; unticking something only puts it out of sight.
   kept with the plan; one from your Immich library is only linked, and stays there.
 - **Look back, and do it again**: past plans stay, by year. "Do it again" starts next year's from last year's.
 
+- **Front page, plan cost, and just this shop.** The front page gains cards for plans coming up and coupons about to
+  run out (each only once you have one). A plan with recipes says roughly what its food will cost, going by the last
+  price of each ingredient. The grocery list, laid out by shop, can show just the shop you're in.
+
 ## The calendar
 
 - **One place to see what's on each day.** Your own dates (a day or several, with a time if it has one), with
@@ -119,6 +123,14 @@ time in Settings; unticking something only puts it out of sight.
   and what you watched, read or heard. Each of those leads back to the page it lives on.
 - **Birthdays and anniversaries.** Tick "Every year" and give the day it first happened: it shows each year, counting
   the years.
+- **On your phone's calendar.** Settings → "Your calendar on your phone" makes a private link that Apple Calendar (or
+  any calendar app that follows a link) reads, so plans, meals and dates show there too. Off until you make one;
+  you tick what it carries; it only shows and can't change anything; a new link stops the old one working. Anyone
+  holding the link can read what's ticked, so it is long, random, and yours to replace.
+- **Other calendars, on yours.** Settings → Outside services → "Other calendars" follows any calendar that has a link
+  (a work calendar, a shared family one). Followed "busy only" by default: just the times, under a name you give it.
+  What each thing is called, where it is and its notes are dropped as it's read and never stored. The link is kept
+  locked, read about once an hour, and a followed calendar is never passed on through your own phone link.
 
 ## Films, shows, music, books and games
 
