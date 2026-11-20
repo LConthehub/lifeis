@@ -13,7 +13,8 @@ const PAGE_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'no-referrer',
   'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
     "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+  // The camera is for Life Is's own pages only (scanning a barcode); the browser still asks the person each time.
+  'Permissions-Policy': 'camera=(self), microphone=(), geolocation=(), payment=()',
 };
 
 const TYPES: Record<string, string> = {

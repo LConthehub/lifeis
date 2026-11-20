@@ -113,6 +113,17 @@ function parsedIds(text: string | null): Record<string, string> {
   }
 }
 
+export type BarcodeMatch = { id: number; title: string; type: string; year: number | null; format: string };
+
+/**
+ * A barcode as two are compared: without spaces or dashes, and with the American 12-digit form (UPC) made the
+ * same as its 13-digit form (EAN), which is the same code with a 0 in front. Scanners report either.
+ */
+export function barcodeKey(code: string): string {
+  const plain = code.replace(/[\s-]/g, '').toUpperCase();
+  return /^\d{12}$/.test(plain) ? `0${plain}` : plain;
+}
+
 export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
   const now = () => stamp(clock());
 
@@ -205,6 +216,16 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
   }
 
   return {
+    /** The titles you have a copy of with this barcode, and which copy it is. */
+    async findBarcode(code: string): Promise<BarcodeMatch[]> {
+      const wanted = barcodeKey(code);
+      if (!wanted) throw new Problem(400, 'Scan or type a barcode');
+      const rows = await db.all<BarcodeMatch & { barcode: string }>(
+        `SELECT m.id, m.title, m.type, m.year, c.format, c.barcode FROM media_copies c JOIN media m ON m.id = c.media_id
+         WHERE m.owner_id = ? AND c.barcode IS NOT NULL ORDER BY m.title COLLATE NOCASE, c.id`, [owner]);
+      return rows.filter((row) => barcodeKey(row.barcode) === wanted).map(({ id, title, type, year, format }) => ({ id, title, type, year, format }));
+    },
+
     /**
      * The collection, by title. Narrowed by type, by words (in the title, who made it, or the genres), by
      * format, by place (and the places inside it), to what's wanted, or to what's out on loan.

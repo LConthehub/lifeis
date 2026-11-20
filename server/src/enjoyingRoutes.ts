@@ -61,6 +61,7 @@ export function enjoyingRoutes(db: Db): Route[] {
         }),
       };
     }],
+    ['GET', at('media/barcode'), async (c) => ({ json: await shelf(c).findBarcode(c.query.get('code') ?? '') })],
     ['POST', at('media'), async (c) => {
       const copy = read.record(c.body, 'copy');
       return { status: 201, json: await shelf(c).create(titleFrom(c.body), Object.keys(copy).length ? copyFrom(copy) : null) };

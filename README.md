@@ -83,6 +83,9 @@ time in Settings; unticking something only puts it out of sight.
 - **A title, and your copies of it.** Alien on VHS and on Blu-ray is one film with two copies, each in its own
   place, each lent out or at home. A format is any word you like: Betamax, 8-track, vinyl, paperback.
 - **What you'd like to have.** A title with no copy can be marked as wanted.
+- **Scan a barcode with the camera.** Point your phone or tablet at the back of the case: if you have it, you're
+  taken to it; if not, add it with the barcode kept on the copy. The picture is read on the device and never sent
+  anywhere. Typing the number, or a handheld scanner, works too.
 - **Your Jellyfin or Emby library, beside the discs.** Connect the server with its address and a key, and its
   films, shows, albums and books come into the collection, with their covers, kept in step as often as you choose.
   A film you also own on disc is one title with both copies. Life Is only reads from the server.

@@ -385,6 +385,11 @@ it('the collection and the calendar answer over the web', async () => {
   expect(made.status).toBe(201);
   let alien = made.json;
   expect(alien).toMatchObject({ title: 'Alien', formats: ['VHS'], ids: { tmdb: '348' } });
+  // A barcode kept on a copy finds its title when scanned.
+  expect((await admin.post(`/api/media/${alien.id}/copies`, { format: 'Blu-ray', barcode: '024543213465' })).status).toBeLessThan(300);
+  expect((await admin.get('/api/media/barcode?code=0024543213465')).json).toEqual([{ id: alien.id, title: 'Alien', type: 'film', year: 1979, format: 'Blu-ray' }]);
+  expect([(await admin.get('/api/media/barcode?code=1234')).json, (await admin.get('/api/media/barcode')).status]).toEqual([[], 400]);
+  expect((await admin.delete(`/api/media/copies/${(await admin.get(`/api/media/${alien.id}`)).json.copies.find((c: { format: string }) => c.format === 'Blu-ray').id}`)).status).toBeLessThan(300);
   expect(alien.copies[0]).toMatchObject({ format: 'VHS', place: 'Living room' });
   alien = (await admin.post(`/api/media/${alien.id}/copies`, { format: 'Blu-ray', lent_to: 'Sam' })).json;
   expect([alien.formats, alien.lent_to]).toEqual([['VHS', 'Blu-ray'], ['Sam']]);
