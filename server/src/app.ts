@@ -7,7 +7,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BlockList, isIP } from 'node:net';
-import { atomic, kitchen, Problem, type Db, type Kitchen } from '../../core/src/index.ts';
+import { atomic, kitchen, life, Problem, type Db, type Kitchen } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
 import { notUnderstood, queryNumber, read, readBody, Refusal, type Body, type Context, type Reply, type Route } from './http.ts';
 import { makingRoutes } from './makingRoutes.ts';
@@ -191,6 +191,13 @@ export function createApp(options: Options) {
         `INSERT INTO user_settings (user_id, key, value) VALUES (?, 'idle_minutes', ?)
          ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value`, [c.user.id, String(minutes)]);
       return account(c);
+    }],
+
+    // What the person wants Life Is to look after: asked once, theirs to change.
+    ['GET', /^\/api\/life$/, async (c) => ({ json: await life(db, c.user.id, clock).getProfile() })],
+    ['PUT', /^\/api\/life$/, async (c) => {
+      if (!Array.isArray(c.body.areas)) throw notUnderstood('areas');
+      return { json: await life(db, c.user.id, clock).saveProfile(read.texts(c.body, 'areas')) };
     }],
 
     // ==================== THE KITCHEN ====================

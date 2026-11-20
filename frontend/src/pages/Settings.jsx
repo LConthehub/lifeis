@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
+import { LifeAreasPicker } from '../components/LifeAreas';
 
 const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 120: '2 hours', 480: '8 hours', 0: 'Stay signed in' };
 
-export default function Settings({ user, onLogout }) {
+export default function Settings({ user, onLogout, onLifeChanged }) {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">Settings</h1>
+      <section className={cardClass}>
+        <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">What Life Is looks after</h2>
+        <LifeAreasPicker onSaved={onLifeChanged} />
+      </section>
       <SignedOut />
       <PasswordForm />
       {user.is_admin && <AddPerson />}

@@ -14,3 +14,5 @@ export type { Field, FieldInput, FieldType, FieldValue, Inventory, Item, ItemInp
 export { projects, STATUSES } from './projects.ts';
 export type { Line, LineInput, Project, ProjectInput, Projects, ProjectSummary, Session, SessionInput, Status } from './projects.ts';
 export { STARTERS } from './starters.ts';
+export { life, AREAS, SECTIONS, sectionsFor } from './life.ts';
+export type { Area, Life, LifeProfile, Section } from './life.ts';

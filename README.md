@@ -23,6 +23,12 @@ It starts with the kitchen, the things you keep, and the projects that use them.
 - **Your recipes, yours to take.** Bring them in by pasting text or recipe JSON (from the Nextcloud Cookbook app or
   a recipe website). Take them all out as Nextcloud Cookbook folders, ready to drop into your Nextcloud.
 
+## It asks what you need
+
+The first time you sign in, Life Is asks what life needs looking after: cooking, what you own, projects, sewing,
+the garden. It shows the parts that fit and adds ready-made kinds of things to start from. Change the answer any
+time in Settings; unticking something only puts it out of sight.
+
 ## The things you keep
 
 - **Your own kinds of things.** Fabric, yarn, tools, seeds, board games: a kind is whatever you say it is, with

@@ -9,6 +9,7 @@ import Pantry from './pages/Pantry';
 import Settings from './pages/Settings';
 import Things, { KindsPage, PlacesPage } from './pages/Things';
 import Projects, { ProjectPage } from './pages/Projects';
+import { LifeFirstRun } from './components/LifeAreas';
 
 axios.defaults.withCredentials = true;
 
@@ -55,7 +56,12 @@ export default function App() {
 
 function Shell({ user, onLogout }) {
   const { pathname } = useLocation();
+  // What the person asked Life Is to look after decides which sections show. Until they answer, all do.
+  const [life, setLife] = useState(null);
+  const loadLife = useCallback(() => { axios.get('/api/life').then(({ data }) => setLife(data)).catch(() => {}); }, []);
+  useEffect(() => { loadLife(); }, [loadLife]);
   const section = SECTIONS.find((s) => s.owns(pathname));
+  const showing = SECTIONS.filter((s) => !life || life.sections.includes(s.word) || s === section);
   const tabs = section ? section.tabs : [];
   const exact = (to) => to === '/' || to === '/things' || to === '/projects';
   return (
@@ -66,7 +72,7 @@ function Shell({ user, onLogout }) {
             <img src="/icon-192.png" alt="" className="h-7 w-7 rounded-lg" /> Life is
           </Link>
           <nav className="flex gap-1" aria-label="Sections">
-            {SECTIONS.map((s) => (
+            {showing.map((s) => (
               <Link key={s.word} to={s.home} aria-current={s === section ? 'page' : undefined}
                 className={`rounded-full px-2.5 py-1 text-sm font-semibold ${s === section ? 'bg-life-600 text-white' : 'text-life-600 hover:bg-life-100 dark:text-life-200 dark:hover:bg-life-800'}`}>{s.word}</Link>
             ))}
@@ -93,10 +99,11 @@ function Shell({ user, onLogout }) {
           <Route path="/things/places" element={<PlacesPage />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectPage />} />
-          <Route path="/settings" element={<Settings user={user} onLogout={onLogout} />} />
+          <Route path="/settings" element={<Settings user={user} onLogout={onLogout} onLifeChanged={setLife} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <LifeFirstRun open={!!life && life.areas === null} onDone={(data) => (data ? setLife(data) : loadLife())} />
       {/* On a phone the section's pages sit at the bottom, under your thumb. */}
       {tabs.length > 1 && (
         <nav className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t border-life-100 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-life-800 dark:bg-life-900/95 sm:hidden" aria-label={`Life is ${section.word}`}>

@@ -365,6 +365,18 @@ it('things and projects answer over the web', async () => {
   expect((await admin.delete(`/api/things/items/${linen.json.id}`)).status).toBe(204);
 });
 
+it('what Life Is looks after is asked once, and sets up what fits', async () => {
+  const admin = await owner();
+  expect((await admin.get('/api/life')).json).toMatchObject({ areas: null, sections: ['eating', 'keeping', 'making'] });
+  const saved = (await admin.put('/api/life', { areas: ['eating', 'sewing'] })).json;
+  expect([saved.areas, saved.sections, saved.added]).toEqual([['eating', 'sewing'], ['eating', 'keeping', 'making'], ['Fabric', 'Notions', 'Sewing patterns']]);
+  expect((await admin.put('/api/life', { areas: ['eating'] })).json).toMatchObject({ sections: ['eating'], added: [] });
+  expect((await admin.get('/api/things/kinds')).json).toHaveLength(3); // out of sight, still there
+  expect((await admin.put('/api/life', { areas: ['alchemy'] })).status).toBe(400);
+  expect((await admin.put('/api/life', {})).status).toBe(422);
+  expect((await (await member(admin, 'partner')).get('/api/life')).json.areas).toBeNull(); // each person answers for themselves
+});
+
 it('a database from before things and projects is upgraded, with a copy saved first', async () => {
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
