@@ -19,7 +19,7 @@ const accountFrom = (body: Body) => ({
 export function mailRoutes(db: Db, tools: MailTools | undefined): Route[] {
   const post = (c: Context) => mail(db, c.user.id, c.clock, tools);
   /** The message's number: the second one in the address. */
-  const uid = (c: Context, pattern: RegExp) => Number(pattern.exec(new URL(c.req.url ?? '/', 'http://lifeis').pathname.replace(/\/+$/, ''))![2]);
+  const uid = (c: Context, pattern: RegExp) => Number(pattern.exec(c.path)![2]);
   const one = at('/accounts/:id/messages/:uid');
   const seen = at('/accounts/:id/messages/:uid/seen');
   const reply = at('/accounts/:id/messages/:uid/reply');

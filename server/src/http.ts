@@ -1,4 +1,10 @@
-/** What every address shares: how a request is read, how a refusal is worded, and what a handler is given. */
+/**
+ * What every address shares: how a request is read, how a refusal is worded, and what a handler is given.
+ *
+ * A handler is given a Context and answers with a Reply, and knows nothing of how either travelled. On the
+ * server they come from and go back over the web (app.ts). In the phone app the pages hand them straight to
+ * the same handlers, with no web in between (frontend/src/device).
+ */
 import type { IncomingMessage } from 'node:http';
 import type { Kitchen } from '../../core/src/index.ts';
 import type * as auth from './auth.ts';
@@ -15,16 +21,19 @@ export class Refusal extends Error {
   }
 }
 
-export type Reply = { status?: number; json?: unknown; headers?: Record<string, string | string[]>; body?: Buffer };
+export type Reply = { status?: number; json?: unknown; headers?: Record<string, string | string[]>; body?: Uint8Array };
 export type Body = Record<string, unknown>;
 export type Context = {
-  req: IncomingMessage;
+  /** The address asked for, without what follows a "?": /api/kitchen/recipes/12 */
+  path: string;
   query: URLSearchParams;
   id: number;
   body: Body;
   /** The signed-in person. On the public addresses, where nobody may be signed in, this is never read. */
   user: auth.User;
   kitchen: Kitchen;
+  /** What the browser or app calls itself, kept with a sign-in so a person can tell their devices apart. */
+  userAgent?: string;
   /** The time, and the day where the person is. */
   clock: auth.Clock;
   token: string | undefined;
