@@ -26,3 +26,5 @@ export { home, CARDS } from './home.ts';
 export type { CardKey, Home, HomeSummary } from './home.ts';
 export { weather, sky, readForecast, WEATHER_SERVICE } from './weather.ts';
 export type { Forecast, FoundPlace, Units, Weather, WeatherDay, WeatherOf, WeatherPlace } from './weather.ts';
+export { mail, buildReply, isNearby, MAIL_SERVICE } from './mail.ts';
+export type { Inbox, Mail, MailAccount, MailAccountInput, MailMessage, MailServer, MailSummary, Outgoing, Postbox, Who } from './mail.ts';

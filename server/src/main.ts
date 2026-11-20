@@ -12,6 +12,7 @@ import path from 'node:path';
 import { createApp } from './app.ts';
 import { syncDue, webFetcher } from './connectionRoutes.ts';
 import { openDatabase } from './database.ts';
+import { realPostbox } from './postbox.ts';
 import { vault } from './vault.ts';
 
 const dataDir = process.env.DATA_DIR || path.resolve('data');
@@ -24,6 +25,7 @@ const reach = { fetcher: webFetcher, sealer: vault(keyDir, 'media_source') };
 const server = createServer(createApp({
   db: database.db,
   reach,
+  mail: { postbox: realPostbox, sealer: vault(keyDir, 'mail_account') },
   staticDir: process.env.STATIC_DIR || undefined,
   idleMinutes: Number.isInteger(idle) && idle >= 0 ? idle : 15,
 }));

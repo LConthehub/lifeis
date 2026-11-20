@@ -14,6 +14,7 @@ import { LifeFirstRun } from './components/LifeAreas';
 import Calendar from './pages/Calendar';
 import MediaPage, { MediaTitlePage } from './pages/Media';
 import Servers from './pages/Servers';
+import Mail from './pages/Mail';
 
 axios.defaults.withCredentials = true;
 // The server keeps time in UTC, so each request says what day it is here. Without it, something finished at
@@ -29,7 +30,7 @@ axios.interceptors.request.use((config) => {
 const SECTIONS = [
   { word: 'eating', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry'].includes(path) || path.startsWith('/recipes'),
     tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫']] },
-  { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar'), tabs: [['/calendar', 'Calendar', '📅']] },
+  { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar') || path.startsWith('/mail'), tabs: [['/calendar', 'Calendar', '📅'], ['/mail', 'Mail', '✉️']] },
   { word: 'keeping', home: '/things', owns: (path) => path.startsWith('/things'),
     tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/kinds', 'Kinds', '🏷']] },
   { word: 'making', home: '/projects', owns: (path) => path.startsWith('/projects'),
@@ -119,6 +120,7 @@ function Shell({ user, onLogout }) {
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectPage />} />
           <Route path="/calendar" element={<Calendar />} />
+          <Route path="/mail" element={<Mail />} />
           <Route path="/media" element={<MediaPage />} />
           <Route path="/media/servers" element={<Servers />} />
           <Route path="/media/:id" element={<MediaTitlePage />} />

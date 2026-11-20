@@ -9,6 +9,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BlockList, isIP } from 'node:net';
 import { atomic, home, kitchen, life, Problem, weather, WEATHER_SERVICE, type Db, type Kitchen } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
+import { mailRoutes, type MailTools } from './mailRoutes.ts';
 import { notUnderstood, queryNumber, read, readBody, Refusal, type Body, type Context, type Reply, type Route } from './http.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
 import { enjoyingRoutes } from './enjoyingRoutes.ts';
@@ -31,6 +32,8 @@ export type Options = {
   clock?: auth.Clock;
   /** How Life Is reaches a media server and locks its key. Left out: media servers can't be connected. */
   reach?: Reach;
+  /** How Life Is talks to mail providers and locks an account's password. Left out: email can't be set up. */
+  mail?: MailTools;
   /** Told about anything that went wrong inside Life Is itself (never about a person's mistake). */
   onError?: (problem: unknown) => void;
 };
@@ -299,6 +302,7 @@ export function createApp(options: Options) {
     ...makingRoutes(db),
     ...(options.reach ? connectionRoutes(db, options.reach) : []),
     ...enjoyingRoutes(db),
+    ...mailRoutes(db, options.mail),
   ];
 
   /**

@@ -8,7 +8,7 @@ RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 COPY frontend/ .
 RUN npm run build
 
-# The one thing the program needs installed: the encrypted database engine.
+# What the program needs installed: the encrypted database engine and the mail libraries.
 FROM node:24-slim AS engine
 WORKDIR /app/server
 COPY server/package.json server/package-lock.json ./

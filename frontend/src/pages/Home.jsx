@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { whoText, whenText } from './Mail';
 import Modal, { buttonClass, quietButtonClass, cardClass, fromDateInput, minutesText } from '../components/ui';
 
 const ICONS = { event: '📌', meal: '🍽', session: '🧵', due: '⏳', use_by: '🥫', media: '🎞' };
@@ -51,6 +52,10 @@ export default function Home({ user }) {
   const [choosing, setChoosing] = useState(false);
   const load = useCallback(() => { axios.get('/api/home').then(({ data }) => setS(data)).catch(() => setS(false)); }, []);
   useEffect(() => { load(); }, [load]);
+  // The email card's messages come from the mail provider, so they are asked for apart and never hold the page up.
+  const [post, setPost] = useState(null);
+  const wantsMail = Boolean(s && s.cards.includes('mail'));
+  useEffect(() => { if (wantsMail) axios.get('/api/mail/glance').then(({ data }) => setPost(data)).catch(() => setPost(false)); }, [wantsMail]);
   if (s === null) return null;
   if (s === false) return <Quiet>The front page couldn't be read. Try again in a moment.</Quiet>;
   const shows = (key) => s.cards.includes(key);
@@ -114,6 +119,34 @@ export default function Home({ user }) {
                   ))}
                 </ul>
                 <p className="text-[11px] text-gray-400 dark:text-life-400">From Open-Meteo, in °{s.weather.place.units.toUpperCase()}</p>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {shows('mail') && (
+          <Card title="Email" to="/mail" link="Inbox">
+            {post === null ? <Quiet>Reading your inbox…</Quiet> : post === false ? <Quiet>Your inbox couldn't be read just now.</Quiet> : (
+              <div className="space-y-3">
+                {post.map((a) => (
+                  <div key={a.id}>
+                    <p className="text-xs text-gray-500 dark:text-life-300">{a.address} · {a.problem ? 'couldn’t be read' : a.unread === 0 ? 'nothing unread' : `${a.unread} unread`}</p>
+                    {a.problem && <p className="mt-1 rounded-lg bg-honey-100 px-3 py-1.5 text-sm text-honey-700">{a.problem}</p>}
+                    {a.newest.length > 0 && (
+                      <ul className="mt-1 space-y-1">
+                        {a.newest.map((m) => (
+                          <li key={m.uid}>
+                            <Link to="/mail" className="flex items-baseline gap-2 text-sm hover:underline">
+                              <span className="w-28 shrink-0 truncate font-medium text-gray-800 dark:text-life-50">{whoText(m.from)}</span>
+                              <span className="min-w-0 flex-1 truncate text-gray-700 dark:text-life-100">{m.subject}</span>
+                              <span className="shrink-0 text-xs text-gray-500 dark:text-life-300">{whenText(m.date)}</span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </Card>
@@ -272,7 +305,7 @@ function CardChooser({ choices, onDone }) {
           </label>
         ))}
       </div>
-      <p className="text-xs text-gray-500 dark:text-life-300">Cards only appear for the sections you use. Change those in Settings, under "What Life Is looks after". The weather is an outside service: turn it on in Settings, under "Outside services".</p>
+      <p className="text-xs text-gray-500 dark:text-life-300">Cards only appear for the sections you use. Change those in Settings, under "What Life Is looks after". The weather and email are outside services: turn them on in Settings, under "Outside services".</p>
       <div className="text-right"><button type="button" onClick={save} className={buttonClass}>Save</button></div>
     </div>
   );

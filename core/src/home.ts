@@ -20,11 +20,13 @@ import { weather, type Forecast, type WeatherPlace } from './weather.ts';
 
 /**
  * The cards, in the order they show, and the section each belongs to. A card with no section is for everyone.
- * The weather is only offered once it has been turned on (in Settings, under "Outside services").
+ * The weather and email are only offered once they have been turned on (in Settings, under "Outside services").
+ * The email card's messages aren't in the summary: the page asks for those apart (they come from the provider).
  */
 export const CARDS = [
   { key: 'days', label: 'Today and the next two days', section: 'planning' },
   { key: 'weather', label: 'The weather', section: null },
+  { key: 'mail', label: 'Email: what’s unread', section: null },
   { key: 'dates', label: 'Birthdays and other yearly dates coming up', section: 'planning' },
   { key: 'kitchen', label: 'Cooking: today’s meals, the grocery list, pans you’re short of', section: 'eating' },
   { key: 'pantry', label: 'Pantry: running low and use soon', section: 'eating' },
@@ -85,7 +87,9 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
       const out = await hidden();
       const skies = weather(db, owner, clock, fetcher);
       const place = await skies.place();
-      const offered = CARDS.filter((card) => (card.key === 'weather' ? place !== null : card.section === null || sections.includes(card.section)));
+      const hasMail = (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM mail_accounts WHERE owner_id = ?', [owner]))!.n > 0;
+      const offered = CARDS.filter((card) => (card.key === 'weather' ? place !== null : card.key === 'mail' ? hasMail
+        : card.section === null || sections.includes(card.section)));
       const cards = offered.map((card) => card.key).filter((key) => !out.includes(key));
       const shows = (key: CardKey) => cards.includes(key);
 
