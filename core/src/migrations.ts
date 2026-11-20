@@ -346,6 +346,36 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_recipe_equipment ON recipe_equipment(recipe_id, sort_order)`,
     ],
   },
+  {
+    number: 8,
+    name: 'dates that come round every year',
+    statements: [
+      // A birthday or an anniversary: kept once, on its first day, and shown on that day every year after.
+      `ALTER TABLE events ADD COLUMN yearly INTEGER NOT NULL DEFAULT 0`,
+    ],
+  },
+  {
+    number: 9,
+    name: 'email accounts',
+    statements: [
+      // Only the account is kept: where its servers are, and its password, locked (see mail.ts). No message is.
+      `CREATE TABLE mail_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        address TEXT NOT NULL,
+        name TEXT,
+        username TEXT NOT NULL,
+        password TEXT NOT NULL,
+        imap_host TEXT NOT NULL,
+        imap_port INTEGER NOT NULL,
+        smtp_host TEXT NOT NULL,
+        smtp_port INTEGER NOT NULL,
+        local INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_mail_accounts ON mail_accounts(owner_id)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

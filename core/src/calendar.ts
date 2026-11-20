@@ -22,8 +22,12 @@ export type EventInput = {
   /** The time it starts, as 18:30. Left out: all day. */
   time?: string | null;
   note?: string | null;
+  /** A birthday or an anniversary: on this day every year from now on. */
+  yearly?: boolean;
 };
-export type Event = { id: number; title: string; day: string; end_day: string | null; time: string | null; note: string | null };
+export type Event = { id: number; title: string; day: string; end_day: string | null; time: string | null; note: string | null; yearly: boolean };
+/** One coming round of a date that returns every year. */
+export type YearlyDate = { id: number; title: string; day: string; time: string | null; note: string | null; /** How many years since the first. */ years: number };
 
 export type EntryKind = 'event' | 'meal' | 'session' | 'due' | 'use_by' | 'media';
 /** One line on one day of the calendar. */
@@ -43,6 +47,10 @@ export type Entry = {
 
 const KIND_ORDER: EntryKind[] = ['event', 'due', 'meal', 'session', 'media', 'use_by'];
 const MEAL_TIME: Record<string, number> = { breakfast: 0, lunch: 1, dinner: 2, snack: 3 };
+const leap = (year: number) => (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+/** The day a yearly date falls on in one year. The 29th of February is kept on the 28th in the years without one. */
+const inYear = (first: string, year: number) => (first.slice(5) === '02-29' && !leap(year) ? `${year}-02-28` : `${year}${first.slice(4)}`);
+const yearsText = (years: number) => (years === 1 ? '1 year' : `${years} years`);
 const duration = (minutes: number) => (minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ''}`);
 
 export function calendar(db: Db, owner: number, clock: Clock = () => new Date()) {
@@ -57,13 +65,32 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
     if (end !== null && dayNumber(end) - dayNumber(input.day) > 366) throw new Problem(400, 'An event runs for a year at most');
     const time = clean(input.time, 5);
     if (time !== null && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Problem(400, 'A time is written like 18:30');
-    return [title, input.day, end === input.day ? null : end, time, clean(input.note, 2000)];
+    const yearly = input.yearly === true;
+    if (yearly && end !== null && end !== input.day) throw new Problem(400, 'Something that comes every year is on one day');
+    return [title, input.day, end === input.day ? null : end, time, clean(input.note, 2000), yearly ? 1 : 0];
+  }
+
+  type Kept = Omit<Event, 'yearly'> & { yearly: number };
+  const COLUMNS = 'id, title, day, end_day, time, note, yearly';
+  const asEvent = (row: Kept): Event => ({ ...row, yearly: row.yearly === 1 });
+
+  /** Each time a yearly date comes round from `start` to `end`, soonest first. */
+  async function yearlyIn(start: string, end: string): Promise<YearlyDate[]> {
+    const found: YearlyDate[] = [];
+    for (const e of await db.all<Kept>(`SELECT ${COLUMNS} FROM events WHERE owner_id = ? AND yearly = 1 AND day <= ? ORDER BY id`, [owner, end])) {
+      const first = Number(e.day.slice(0, 4));
+      for (let year = Math.max(first, Number(start.slice(0, 4))); year <= Number(end.slice(0, 4)); year += 1) {
+        const day = year === first ? e.day : inYear(e.day, year);
+        if (day >= start && day <= end) found.push({ id: e.id, title: e.title, day, time: e.time, note: e.note, years: year - first });
+      }
+    }
+    return found.sort((a, b) => inOrder(a.day, b.day));
   }
 
   const event = async (id: number): Promise<Event> => {
-    const row = await db.get<Event>('SELECT id, title, day, end_day, time, note FROM events WHERE id = ? AND owner_id = ?', [id, owner]);
+    const row = await db.get<Kept>(`SELECT ${COLUMNS} FROM events WHERE id = ? AND owner_id = ?`, [id, owner]);
     if (!row) throw new Problem(404, 'Not found');
-    return row;
+    return asEvent(row);
   };
 
   return {
@@ -73,13 +100,16 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
       const end = addDays(start, days - 1);
       const entries: Entry[] = [];
 
-      for (const e of await db.all<Event>(
-        'SELECT id, title, day, end_day, time, note FROM events WHERE owner_id = ? AND day <= ? AND COALESCE(end_day, day) >= ?', [owner, end, start])) {
+      for (const e of await db.all<Kept>(
+        `SELECT ${COLUMNS} FROM events WHERE owner_id = ? AND yearly = 0 AND day <= ? AND COALESCE(end_day, day) >= ?`, [owner, end, start])) {
         // An event over several days is on each of them; its time belongs to the first.
         const last = e.end_day ?? e.day;
         for (let day = e.day < start ? start : e.day; day <= last && day <= end; day = addDays(day, 1)) {
           entries.push({ kind: 'event', day, time: day === e.day ? e.time : null, title: e.title, detail: e.note, link: null, id: e.id });
         }
+      }
+      for (const y of await yearlyIn(start, end)) {
+        entries.push({ kind: 'event', day: y.day, time: y.time, title: y.title, detail: [y.years > 0 ? yearsText(y.years) : null, y.note].filter(Boolean).join(' · ') || null, link: null, id: y.id });
       }
       for (const m of await db.all<{ day: string; meal: string; title: string | null; recipe_id: number | null; recipe: string | null }>(
         `SELECT m.day, m.meal, m.title, m.recipe_id, r.title AS recipe FROM meal_plan m LEFT JOIN recipes r ON r.id = m.recipe_id
@@ -120,8 +150,14 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
 
     getEvent: event,
 
+    /** The birthdays, anniversaries and other yearly dates in the `days` days from `start`. */
+    async yearly(start: string, days = 30): Promise<YearlyDate[]> {
+      if (!(Number.isInteger(days) && days >= 1 && days <= 366)) throw new Problem(400, '1 to 366 days');
+      return yearlyIn(start, addDays(start, days - 1));
+    },
+
     async createEvent(input: EventInput): Promise<Event> {
-      const made = await db.run('INSERT INTO events (owner_id, title, day, end_day, time, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      const made = await db.run('INSERT INTO events (owner_id, title, day, end_day, time, note, yearly, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [owner, ...checked(input), now(), now()]);
       return event(made.lastId);
     },
@@ -129,7 +165,7 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
     async updateEvent(id: number, input: EventInput): Promise<Event> {
       const values = checked(input);
       await event(id);
-      await db.run('UPDATE events SET title = ?, day = ?, end_day = ?, time = ?, note = ?, updated_at = ? WHERE id = ? AND owner_id = ?', [...values, now(), id, owner]);
+      await db.run('UPDATE events SET title = ?, day = ?, end_day = ?, time = ?, note = ?, yearly = ?, updated_at = ? WHERE id = ? AND owner_id = ?', [...values, now(), id, owner]);
       return event(id);
     },
 

@@ -26,6 +26,27 @@ So far: the kitchen, the calendar, the things you keep, the projects that use th
 - **Your recipes, yours to take.** Bring them in by pasting text or recipe JSON (from the Nextcloud Cookbook app or
   a recipe website). Take them all out as Nextcloud Cookbook folders, ready to drop into your Nextcloud.
 
+## The front page
+
+What today holds and what wants attention, gathered from every section you use: the next three days, today's
+meals and any pan you're short of, what's running low or about to go off, the projects in hand, what's lent out.
+Also the birthdays and anniversaries coming round, and the week in numbers. Each card leads to its page, and you
+choose which cards show.
+
+## Outside services, only if you turn them on
+
+Life Is works without reaching outside your computer. The few things that do are listed in one place in Settings,
+each off until you turn it on, each saying exactly what it sends:
+
+- **Weather on the front page**, from [Open-Meteo](https://open-meteo.com) (no account, no key). It is sent the
+  town you look up, then that place's position rounded to about a kilometre. Turning it off forgets the place.
+- **Email, to read and answer your inbox**, with any provider that lets mail programs in (IMAP and SMTP): Gmail,
+  iCloud, Fastmail, Yahoo, your own server, Proton through its Bridge. Life Is signs in from your computer with
+  the password you give (for most providers an "app password"), stored locked. No message is ever kept: the inbox
+  is read when you look. Opening a message doesn't mark it read. The line is always encrypted, and the account is
+  only saved if signing in works.
+- **Your Jellyfin or Emby**, read-only, at the address you give.
+
 ## It asks what you need
 
 The first time you sign in, Life Is asks what life needs looking after: cooking, what you own, projects, sewing,
@@ -54,6 +75,8 @@ time in Settings; unticking something only puts it out of sight.
 - **One place to see what's on each day.** Your own dates (a day or several, with a time if it has one), with
   the week's meals, the time on projects and the days they're wanted by, what's about to go off in the pantry,
   and what you watched, read or heard. Each of those leads back to the page it lives on.
+- **Birthdays and anniversaries.** Tick "Every year" and give the day it first happened: it shows each year, counting
+  the years.
 
 ## Films, shows, music, books and games
 
@@ -90,9 +113,10 @@ Your records are kept by Docker, encrypted. **Never run `docker compose down -v`
   shipped migration is never edited). It reaches
   the database only through the small `Db` interface in `db.ts`, which each place Life Is runs supplies.
 - `server/`: the program, on Node 24 with no build step: sign-in, the web addresses the pages call, and an
-  SQLCipher-encrypted SQLite database. Its one installed dependency is the encrypted database engine. The only
+  SQLCipher-encrypted SQLite database. It installs the encrypted database engine and three mail libraries (imapflow, nodemailer, mailparser). The only
   places it ever reaches out to are the media servers a person connects (`connectionRoutes.ts`), whose keys it
-  stores locked (`vault.ts`).
+  stores locked (`vault.ts`), the weather service if a person turns it on (core's `weather.ts`), and a person's own mail provider if they add
+  an account (`postbox.ts`; the rules are core's `mail.ts`).
 - `frontend/`: the pages. React, Vite and Tailwind.
 - `backend/`: the first version of the program, in Python. Docker no longer runs it. It is kept for now as the
   reference `core/` is checked against: `python core/tests/golden.py` writes its answers down, and the tests

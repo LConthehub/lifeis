@@ -469,11 +469,33 @@ it('a recipe says what it is cooked in, and the week flags a meal that needs mor
   expect((await other.post('/api/kitchen/recipes', { title: 'Theirs', equipment: [{ item_id: dish.id }] })).status).toBe(404);
 });
 
+it('the front page gathers today, and each person chooses what it shows', async () => {
+  const admin = await owner();
+  const day = { 'X-Local-Day': new Date().toISOString().slice(0, 10) };
+  const empty = (await admin.get('/api/home', day)).json;
+  expect([empty.day, empty.cards]).toEqual([day['X-Local-Day'], ['days', 'dates', 'kitchen', 'pantry', 'projects', 'things', 'collection', 'week']]);
+  await admin.post('/api/calendar/events', { title: 'Dentist', day: empty.day, time: '14:30' });
+  await admin.post('/api/kitchen/plan', { day: empty.day, title: 'Leftovers' });
+  await admin.post('/api/projects', { name: 'Shirt dress', status: 'active' });
+  const full = (await admin.get('/api/home', day)).json;
+  expect(full.days[0].entries.map((e: { title: string }) => e.title)).toEqual(['Dentist', 'Leftovers']);
+  expect([full.kitchen.meals.length, full.projects.map((p: { name: string }) => p.name)]).toEqual([1, ['Shirt dress']]);
+
+  const fewer = (await admin.put('/api/home/cards', { hidden: ['pantry', 'things'] })).json;
+  expect(fewer.cards).toEqual(['days', 'dates', 'kitchen', 'projects', 'collection', 'week']);
+  expect((await admin.put('/api/home/cards', { hidden: ['horoscope'] })).status).toBe(400);
+  expect((await admin.put('/api/home/cards', {})).status).toBe(422);
+  const other = await member(admin, 'partner');
+  const theirs = (await other.get('/api/home', day)).json;
+  expect([theirs.cards.length, theirs.days[0].entries, theirs.projects]).toEqual([8, [], []]);
+  expect((await visitor().get('/api/home')).status).toBe(401);
+});
+
 it('a database from before things and projects is upgraded, with a copy saved first', async () => {
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   await database.db.run('PRAGMA user_version = 2');
