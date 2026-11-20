@@ -312,6 +312,9 @@ function Photos({ plan, onChanged, onOpen }) {
   const picker = useRef(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [library, setLibrary] = useState(null);
+  const [choosing, setChoosing] = useState(false);
+  useEffect(() => { axios.get('/api/photos').then(({ data }) => setLibrary(data)).catch(() => {}); }, []);
   const add = async (e) => {
     const files = [...e.target.files];
     e.target.value = '';
@@ -329,10 +332,16 @@ function Photos({ plan, onChanged, onOpen }) {
       <div className="mb-2 flex items-baseline gap-2">
         <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">Photos</h2>
         <input ref={picker} type="file" accept="image/*" multiple onChange={add} className="hidden" aria-label="Choose photos" />
+        {library?.connected && <button type="button" onClick={() => setChoosing(true)} className="text-sm text-life-600 hover:underline dark:text-life-200">+ From Immich</button>}
         <button type="button" disabled={Boolean(busy)} onClick={() => picker.current.click()} className="text-sm text-life-600 hover:underline dark:text-life-200">{busy || '+ From this device'}</button>
       </div>
       {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
-      {plan.photos_list.length === 0 ? <p className="text-sm text-gray-400 dark:text-life-400">None yet. A photo picked from this device is made smaller and kept here with the plan.</p> : (
+      {plan.photos_list.length === 0 ? (
+        <p className="text-sm text-gray-400 dark:text-life-400">
+          None yet. A photo picked from this device is made smaller and kept here with the plan.
+          {library?.available && !library.connected && <> If your photos are in Immich, <Link to="/settings" className="underline">connect it in Settings</Link> and link them instead, without copying.</>}
+        </p>
+      ) : (
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
           {plan.photos_list.map((p) => (
             <li key={p.id}>
@@ -343,6 +352,7 @@ function Photos({ plan, onChanged, onOpen }) {
           ))}
         </ul>
       )}
+      {choosing && <Modal title="Photos from Immich" wide onClose={() => setChoosing(false)}><LibraryPicker plan={plan} onDone={(p) => { setChoosing(false); if (p) onChanged(p); }} /></Modal>}
     </section>
   );
 }
@@ -359,6 +369,48 @@ function PhotoView({ photo, onDone }) {
         <button type="button" onClick={remove} className="text-sm text-red-600 hover:underline">{photo.source === 'kept' ? 'Delete this photo' : 'Take it off the plan (it stays in your library)'}</button>
         <button type="button" onClick={save} className={buttonClass}>Save</button>
       </div>
+    </div>
+  );
+}
+
+/** The photos your library has from the plan's days. Tick the ones that belong; they are linked, not copied. */
+function LibraryPicker({ plan, onDone }) {
+  const [photos, setPhotos] = useState(null);
+  const [chosen, setChosen] = useState([]);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    axios.get(`/api/plans/${plan.id}/library`).then(({ data }) => setPhotos(data)).catch((err) => { setPhotos([]); setError(errorMessage(err, "Your library couldn't be read")); });
+  }, [plan.id]);
+  if (!photos) return <p className="text-sm text-gray-500 dark:text-life-300">Asking your library…</p>;
+  const toggle = (id) => setChosen((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
+  const link = async () => {
+    try { onDone((await axios.post(`/api/plans/${plan.id}/photos/linked`, { ids: chosen })).data); } catch (err) { setError(errorMessage(err, "Couldn't link them")); }
+  };
+  const fresh = photos.filter((p) => !p.linked);
+  return (
+    <div className="space-y-3">
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {!error && photos.length === 0 && <p className="text-sm text-gray-600 dark:text-life-100">Your library has no photos taken on {plan.end_day === plan.start_day ? 'that day' : 'those days'}.</p>}
+      {photos.length > 0 && (
+        <>
+          <p className="text-sm text-gray-600 dark:text-life-100">Taken on {plan.end_day === plan.start_day ? 'its day' : 'its days'}. Tick the ones that belong here. They stay in Immich; the plan only remembers which they are.</p>
+          <ul className="grid max-h-[55vh] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4 md:grid-cols-5">
+            {photos.map((p) => (
+              <li key={p.id}>
+                <label className={`relative block cursor-pointer overflow-hidden rounded-lg ring-2 ${chosen.includes(p.id) ? 'ring-life-500' : 'ring-transparent'} ${p.linked ? 'opacity-50' : ''}`}>
+                  <img src={`/api/photos/thumb?id=${p.id}`} alt={`${p.name}, taken ${p.taken.replace('T', ' at ')}`} loading="lazy" className="aspect-square w-full object-cover" />
+                  <input type="checkbox" disabled={p.linked} checked={p.linked || chosen.includes(p.id)} onChange={() => toggle(p.id)} className="absolute left-1.5 top-1.5 h-4 w-4 accent-life-600" />
+                  <span className="absolute inset-x-0 bottom-0 bg-black/50 px-1 text-center text-[10px] text-white">{p.linked ? 'already here' : p.taken.slice(11)}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-center justify-end gap-2">
+            {fresh.length > 1 && <button type="button" onClick={() => setChosen(fresh.map((p) => p.id))} className={quietButtonClass}>Tick all</button>}
+            <button type="button" disabled={chosen.length === 0} onClick={link} className={buttonClass}>Link {chosen.length || ''}</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

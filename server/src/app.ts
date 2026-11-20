@@ -35,6 +35,8 @@ export type Options = {
   reach?: Reach;
   /** How Life Is talks to mail providers and locks an account's password. Left out: email can't be set up. */
   mail?: MailTools;
+  /** How Life Is reaches a photo library and locks its key. Left out: none can be connected. */
+  photos?: Reach;
   /** Told about anything that went wrong inside Life Is itself (never about a person's mistake). */
   onError?: (problem: unknown) => void;
 };
@@ -309,7 +311,7 @@ export function createApp(options: Options) {
     ...(options.reach ? connectionRoutes(db, options.reach) : []),
     ...enjoyingRoutes(db),
     ...mailRoutes(db, options.mail),
-    ...planRoutes(db),
+    ...planRoutes(db, options.photos),
   ];
 
   /**

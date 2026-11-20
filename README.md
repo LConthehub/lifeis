@@ -47,6 +47,9 @@ each off until you turn it on, each saying exactly what it sends:
   only saved if signing in works.
 - **Looking a book up when you scan it**, from [Open Library](https://openlibrary.org) (no account, no key). It is
   sent the number under the book's barcode and nothing else; what comes back is yours to check before saving.
+- **Photos from your own Immich**, linked to plans and memories without copying them. Life Is asks your Immich
+  which photos were taken on a plan's days and fetches the ones shown; a plan keeps only which photo it is. The
+  key needs two permissions, `asset.read` and `asset.view`, and nothing in Immich is changed.
 - **Your Jellyfin or Emby**, read-only, at the address you give.
 
 ## It asks what you need
@@ -83,7 +86,7 @@ time in Settings; unticking something only puts it out of sight.
   of), titles from the collection, a project, and a checklist of its own. Nothing is copied.
 - **Once its days have come, it remembers**: what was cooked, worked on, watched and heard on those days is gathered
   in, with your own words about how it went and your photos. A photo picked from your phone is made smaller and
-  kept with the plan.
+  kept with the plan; one from your Immich library is only linked, and stays there.
 - **Look back, and do it again**: past plans stay, by year. "Do it again" starts next year's from last year's.
 
 ## The calendar

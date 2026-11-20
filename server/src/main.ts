@@ -25,6 +25,7 @@ const reach = { fetcher: webFetcher, sealer: vault(keyDir, 'media_source') };
 const server = createServer(createApp({
   db: database.db,
   reach,
+  photos: { fetcher: webFetcher, sealer: vault(keyDir, 'photo_library') },
   mail: { postbox: realPostbox, sealer: vault(keyDir, 'mail_account') },
   staticDir: process.env.STATIC_DIR || undefined,
   idleMinutes: Number.isInteger(idle) && idle >= 0 ? idle : 15,

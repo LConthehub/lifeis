@@ -13,8 +13,8 @@ const at = (path: string) => new RegExp(`^/api/${path.replaceAll(':id', ID)}$`);
 export type Reach = { fetcher: Fetcher; sealer: Sealer };
 
 /** Asks a web address for its answer, giving up after half a minute and never taking in more than 20 MB. */
-export const webFetcher: Fetcher = async (url, headers) => {
-  const response = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
+export const webFetcher: Fetcher = async (url, headers, send) => {
+  const response = await fetch(url, { headers, signal: AbortSignal.timeout(30_000), ...(send ? { method: send.method, body: send.body } : {}) });
   const body = async () => {
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.length > 20_000_000) throw new Error('That answer is too large');

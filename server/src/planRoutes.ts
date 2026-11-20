@@ -2,7 +2,7 @@
  * The addresses for plans and their photos (/api/plans). What they do is core/'s plans.ts; this reads what
  * was sent and passes it on.
  */
-import { plans, MAX_PHOTO_BYTES, type Db } from '../../core/src/index.ts';
+import { photoLibrary, plans, MAX_PHOTO_BYTES, PHOTO_SERVICE, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
 import { notUnderstood, read, Refusal, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -22,9 +22,35 @@ function pictureFrom(body: Body): Uint8Array {
   return new Uint8Array(Buffer.from(text, 'base64'));
 }
 
-export function planRoutes(db: Db): Route[] {
+export type PhotoTools = { fetcher: Fetcher; sealer: Sealer };
+const picture = (found: { type: string; bytes: Uint8Array }, keepFor: number) =>
+  ({ body: Buffer.from(found.bytes), headers: { 'Content-Type': found.type, 'Cache-Control': `private, max-age=${keepFor}`, 'X-Content-Type-Options': 'nosniff' } });
+
+export function planRoutes(db: Db, tools?: PhotoTools): Route[] {
   const mine = (c: Context) => plans(db, c.user.id, c.clock);
+  const library = (c: Context) => photoLibrary(db, c.user.id, c.clock, tools);
+  const described = async (c: Context) => ({ ...await library(c).status(), service: PHOTO_SERVICE });
   return [
+    // ---------- a photo library of your own (Immich): off until connected ----------
+    ['GET', /^\/api\/photos$/, async (c) => ({ json: await described(c) })],
+    ['PUT', /^\/api\/photos$/, async (c) => (await library(c).connect({ url: read.text(c.body, 'url'), key: read.text(c.body, 'key') }), { json: await described(c) })],
+    ['DELETE', /^\/api\/photos$/, async (c) => (await library(c).disconnect(), { json: await described(c) })],
+    // The photos taken on a plan's days, to choose from, and each one's small picture.
+    ['GET', at('/:id/library'), async (c) => {
+      const plan = await mine(c).get(c.id);
+      const linked = new Set<string>();
+      for (const photo of plan.photos_list) if (photo.source === 'immich') { const p = await mine(c).photo(photo.id); if (p.source === 'immich') linked.add(p.asset_id); }
+      return { json: (await library(c).taken(plan.start_day, plan.end_day)).map((photo) => ({ ...photo, linked: linked.has(photo.id) })) };
+    }],
+    ['GET', /^\/api\/photos\/thumb$/, async (c) => picture(await library(c).picture(c.query.get('id') ?? '', 'thumbnail'), 86_400)],
+    ['POST', at('/:id/photos/linked'), async (c) => {
+      const ids = read.texts(c.body, 'ids');
+      if (ids.length === 0 || ids.length > 80) throw notUnderstood('ids');
+      let plan = await mine(c).get(c.id);
+      for (const id of ids) plan = await mine(c).linkPhoto(c.id, 'immich', id);
+      return { status: 201, json: plan };
+    }],
+
     ['GET', at(''), async (c) => ({ json: await mine(c).list() })],
     ['POST', at(''), async (c) => ({ status: 201, json: await mine(c).create(planFrom(c.body)) })],
     ['GET', at('/:id'), async (c) => ({ json: await mine(c).get(c.id) })],
@@ -48,9 +74,8 @@ export function planRoutes(db: Db): Route[] {
     ['POST', at('/:id/photos'), async (c) => ({ status: 201, json: await mine(c).keepPhoto(c.id, pictureFrom(c.body), read.maybeText(c.body, 'caption')) })],
     ['GET', at('/photos/:id'), async (c) => {
       const photo = await mine(c).photo(c.id);
-      // A linked photo is fetched from its library by the photo routes; this address only serves the kept ones.
-      if (photo.source !== 'kept') throw notUnderstood('photo');
-      return { body: Buffer.from(photo.bytes), headers: { 'Content-Type': photo.type, 'Cache-Control': 'private, max-age=604800', 'X-Content-Type-Options': 'nosniff' } };
+      // A kept photo is served from here; a linked one is fetched from its library now and passed straight on.
+      return photo.source === 'kept' ? picture(photo, 604_800) : picture(await library(c).picture(photo.asset_id, 'preview'), 86_400);
     }],
     ['PUT', at('/photos/:id'), async (c) => ({ json: await mine(c).captionPhoto(c.id, read.maybeText(c.body, 'caption')) })],
     ['DELETE', at('/photos/:id'), async (c) => ({ json: await mine(c).removePhoto(c.id) })],
