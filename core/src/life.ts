@@ -2,7 +2,8 @@
  * What a person wants Life Is to look after.
  *
  * Asked once, the first time they sign in, and theirs to change whenever they like. Their answer does two
- * things: it decides which sections show ("eating", "keeping", "making"), and for the things they make and do
+ * things: it decides which sections show ("eating", "planning", "keeping", "making", "enjoying"), and for the
+ * things they make and do
  * (sewing, the garden) it adds the ready-made kinds of things to start from.
  *
  * Nothing is ever taken away by unticking: a section is only put out of sight, and what is in it stays.
@@ -14,7 +15,7 @@ import { Problem } from './problem.ts';
 import type { Clock } from './small.ts';
 import { STARTERS } from './starters.ts';
 
-export const SECTIONS = ['eating', 'keeping', 'making'] as const;
+export const SECTIONS = ['eating', 'planning', 'keeping', 'making', 'enjoying'] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export type Area = {
@@ -37,6 +38,8 @@ export const AREAS: Area[] = [
   { key: 'eating', label: 'Cooking and groceries', about: 'Recipes, the week’s meals, the pantry and the grocery list.', group: 'home', sections: ['eating'] },
   { key: 'keeping', label: 'What we own and where it is', about: 'Anything you keep, in kinds of your own, by room, shelf and bin.', group: 'home', sections: ['keeping'] },
   { key: 'making', label: 'Projects', about: 'Anything made or done over more than a day, what it uses, and the time on it.', group: 'home', sections: ['making'] },
+  { key: 'planning', label: 'The calendar', about: 'Your own dates, with the week’s meals and the time on projects alongside.', group: 'home', sections: ['planning'] },
+  { key: 'enjoying', label: 'Films, shows, music, books and games', about: 'What you own on every format, where it is, and what you’ve watched, read or heard.', group: 'home', sections: ['enjoying'] },
   ...['sewing', 'knitting', 'woodworking', 'gardening', 'home'].map(doing),
 ];
 

@@ -117,7 +117,9 @@ export function makingRoutes(db: Db, clock: auth.Clock): Route[] {
 
     ['POST', at('projects/:id/sessions'), async (c) => ({
       status: 201,
-      json: await making(c).addSession(c.id, { day: read.text(c.body, 'day'), minutes: read.maybeWhole(c.body, 'minutes'), note: read.maybeText(c.body, 'note') }),
+      json: await making(c).addSession(c.id, {
+        day: read.text(c.body, 'day'), minutes: read.maybeWhole(c.body, 'minutes'), note: read.maybeText(c.body, 'note'), media_ids: read.wholes(c.body, 'media_ids'),
+      }),
     })],
     ['DELETE', at('projects/sessions/:id'), async (c) => (await making(c).deleteSession(c.id), { status: 204 })],
   ];

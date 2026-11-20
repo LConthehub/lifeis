@@ -226,6 +226,79 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_project_sessions ON project_sessions(project_id, day)`,
     ],
   },
+  {
+    number: 4,
+    name: 'the calendar',
+    statements: [
+      // Something on a day (or over several), with a time if it has one. Meals, project sessions and the rest
+      // are shown on the calendar from where they already live; only what is typed in here is kept here.
+      `CREATE TABLE events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        day TEXT NOT NULL,
+        end_day TEXT,
+        time TEXT,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_events_owner ON events(owner_id, day)`,
+    ],
+  },
+  {
+    number: 5,
+    name: 'films, shows, music, books and games',
+    statements: [
+      // A title: the film, the album, the book. What you own of it is its copies.
+      `CREATE TABLE media (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type TEXT NOT NULL CHECK(type IN ('film', 'show', 'music', 'book', 'game', 'other')),
+        title TEXT NOT NULL,
+        creator TEXT,
+        year INTEGER,
+        summary TEXT,
+        genres TEXT,
+        minutes INTEGER,
+        cover TEXT,
+        wanted INTEGER NOT NULL DEFAULT 0 CHECK(wanted IN (0, 1)),
+        ids TEXT,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_media_owner ON media(owner_id, type, title)`,
+      // One copy: the VHS on the shelf, the Blu-ray in the bin, the file on the media server. `source` and
+      // `source_id` say which media server a copy was brought in from, so it can be kept in step.
+      `CREATE TABLE media_copies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        media_id INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+        format TEXT NOT NULL,
+        place_id INTEGER REFERENCES places(id) ON DELETE SET NULL,
+        barcode TEXT,
+        lent_to TEXT,
+        lent_on TEXT,
+        note TEXT,
+        source TEXT,
+        source_id TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_media_copies ON media_copies(media_id)`,
+      `CREATE INDEX idx_media_copies_source ON media_copies(source, source_id)`,
+      // A day it was watched, read, listened to or played, and the project session it kept company, if any.
+      `CREATE TABLE media_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        media_id INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        note TEXT,
+        session_id INTEGER REFERENCES project_sessions(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_media_log ON media_log(media_id, day)`,
+      `CREATE INDEX idx_media_log_session ON media_log(session_id)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

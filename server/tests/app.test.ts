@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import { afterEach, beforeEach, expect, it } from 'vitest';
+import { LATEST } from '../../core/src/index.ts';
 import { createApp } from '../src/app.ts';
 import { verifyPassword } from '../src/auth.ts';
 import { openDatabase, type OpenDatabase } from '../src/database.ts';
@@ -367,7 +368,7 @@ it('things and projects answer over the web', async () => {
 
 it('what Life Is looks after is asked once, and sets up what fits', async () => {
   const admin = await owner();
-  expect((await admin.get('/api/life')).json).toMatchObject({ areas: null, sections: ['eating', 'keeping', 'making'] });
+  expect((await admin.get('/api/life')).json).toMatchObject({ areas: null, sections: ['eating', 'planning', 'keeping', 'making', 'enjoying'] });
   const saved = (await admin.put('/api/life', { areas: ['eating', 'sewing'] })).json;
   expect([saved.areas, saved.sections, saved.added]).toEqual([['eating', 'sewing'], ['eating', 'keeping', 'making'], ['Fabric', 'Notions', 'Sewing patterns']]);
   expect((await admin.put('/api/life', { areas: ['eating'] })).json).toMatchObject({ sections: ['eating'], added: [] });
@@ -377,20 +378,69 @@ it('what Life Is looks after is asked once, and sets up what fits', async () => 
   expect((await (await member(admin, 'partner')).get('/api/life')).json.areas).toBeNull(); // each person answers for themselves
 });
 
+it('the collection and the calendar answer over the web', async () => {
+  const admin = await owner();
+  const room = (await admin.post('/api/things/places', { name: 'Living room' })).json[0].id;
+  const made = await admin.post('/api/media', { type: 'film', title: 'Alien', creator: 'Ridley Scott', year: 1979, genres: ['Horror'], ids: { tmdb: 348 }, copy: { format: 'VHS', place_id: room } });
+  expect(made.status).toBe(201);
+  let alien = made.json;
+  expect(alien).toMatchObject({ title: 'Alien', formats: ['VHS'], ids: { tmdb: '348' } });
+  expect(alien.copies[0]).toMatchObject({ format: 'VHS', place: 'Living room' });
+  alien = (await admin.post(`/api/media/${alien.id}/copies`, { format: 'Blu-ray', lent_to: 'Sam' })).json;
+  expect([alien.formats, alien.lent_to]).toEqual([['VHS', 'Blu-ray'], ['Sam']]);
+  // Editing without sending ids keeps them.
+  alien = (await admin.put(`/api/media/${alien.id}`, { type: 'film', title: 'Alien', year: 1979 })).json;
+  expect(alien.ids).toEqual({ tmdb: '348' });
+  expect((await admin.post('/api/media', { type: 'music', title: 'Blue', wanted: true })).json).toMatchObject({ wanted: true, formats: [] });
+  expect((await admin.post('/api/media', { type: 'podcast', title: 'x' })).status).toBe(400);
+  expect((await admin.post('/api/media', { type: 'film' })).status).toBe(422);
+  expect((await admin.post('/api/media', { type: 'film', title: 'x', copy: 'VHS' })).status).toBe(422);
+  expect((await admin.get('/api/media?type=film')).json.map((m: { title: string }) => m.title)).toEqual(['Alien']);
+  expect((await admin.get('/api/media?wanted=1')).json.map((m: { title: string }) => m.title)).toEqual(['Blue']);
+  expect((await admin.get('/api/media?lent=1')).json.map((m: { title: string }) => m.title)).toEqual(['Alien']);
+  expect((await admin.get(`/api/media?place_id=${room}`)).json.map((m: { title: string }) => m.title)).toEqual(['Alien']);
+  expect((await admin.get('/api/media/formats?type=book')).json).toEqual(['Hardcover', 'Paperback', 'Ebook', 'Audiobook']);
+
+  // Watched while sewing: kept with the session, and seen from the film and from the calendar.
+  const dress = (await admin.post('/api/projects', { name: 'Shirt dress', status: 'active' })).json;
+  const worked = (await admin.post(`/api/projects/${dress.id}/sessions`, { day: MONDAY, minutes: 90, media_ids: [alien.id] })).json;
+  expect(worked.sessions[0].media).toEqual([{ id: alien.id, title: 'Alien', type: 'film' }]);
+  expect((await admin.post(`/api/projects/${dress.id}/sessions`, { day: MONDAY, media_ids: ['Alien'] })).status).toBe(422);
+  alien = (await admin.post(`/api/media/${alien.id}/log`, { day: '2046-03-06', note: 'again' })).json;
+  expect(alien.log.map((l: { day: string; project: string | null }) => [l.day, l.project])).toEqual([['2046-03-06', null], [MONDAY, 'Shirt dress']]);
+
+  const dentist = await admin.post('/api/calendar/events', { title: 'Dentist', day: MONDAY, time: '14:30' });
+  expect(dentist.status).toBe(201);
+  expect((await admin.post('/api/calendar/events', { title: 'x', day: MONDAY, time: 'noon' })).status).toBe(400);
+  const week = (await admin.get(`/api/calendar?start=${MONDAY}&days=7`)).json;
+  expect(week.map((e: { kind: string; title: string; day: string }) => `${e.day.slice(8)} ${e.kind} ${e.title}`)).toEqual([
+    '05 event Dentist', '05 session Shirt dress', '05 media Alien', '06 media Alien']);
+  expect((await admin.get('/api/calendar')).status).toBe(422);
+  expect((await admin.put(`/api/calendar/events/${dentist.json.id}`, { title: 'Dentist', day: '2046-03-06' })).json).toMatchObject({ day: '2046-03-06', time: null });
+  expect((await admin.delete(`/api/calendar/events/${dentist.json.id}`)).status).toBe(204);
+
+  // Each person has their own.
+  const other = await member(admin, 'partner');
+  expect([(await other.get('/api/media')).json, (await other.get(`/api/calendar?start=${MONDAY}`)).json]).toEqual([[], []]);
+  expect((await other.get(`/api/media/${alien.id}`)).status).toBe(404);
+  expect((await visitor().get('/api/media')).status).toBe(401);
+  expect((await admin.delete(`/api/media/${alien.id}`)).status).toBe(204);
+});
+
 it('a database from before things and projects is upgraded, with a copy saved first', async () => {
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['media_log', 'media_copies', 'media', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   await database.db.run('PRAGMA user_version = 2');
   await stop();
 
   await start();
-  const copy = path.join(folder, 'data', 'lifeis.before-v3.db');
+  const copy = path.join(folder, 'data', `lifeis.before-v${LATEST}.db`);
   expect(readFileSync(copy).subarray(0, 16).toString('latin1')).not.toBe('SQLite format 3\0'); // the copy is encrypted too
-  expect((await database.db.get<{ user_version: number }>('PRAGMA user_version'))!.user_version).toBe(3);
+  expect((await database.db.get<{ user_version: number }>('PRAGMA user_version'))!.user_version).toBe(LATEST);
   expect((await admin.get('/api/kitchen/recipes')).json.map((r: { title: string }) => r.title)).toEqual(['Toast']); // still signed in, recipe still there
   expect((await admin.get('/api/things/kinds')).json).toEqual([]);
 });

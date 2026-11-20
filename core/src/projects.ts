@@ -6,7 +6,7 @@
  *   blue linen") sets that much aside, so another project can't count on the same cloth. A line without an
  *   amount only refers to the thing (the pattern, the tool). A line can also name something you don't have yet.
  * - what it is short of: what a line needs, less what's free for it.
- * - sessions: the days it was worked on, and for how long.
+ * - sessions: the days it was worked on, for how long, and what was watched or listened to meanwhile (media.ts).
  *
  * Amounts are set aside while a project is planned, active or paused. Using a line, or finishing the project,
  * takes its amount out of what you keep, the way cooking a meal takes from the pantry.
@@ -32,7 +32,13 @@ export type LineInput = {
   unit?: string | null;
   note?: string | null;
 };
-export type SessionInput = { day: string; minutes?: number | null; note?: string | null };
+export type SessionInput = {
+  day: string;
+  minutes?: number | null;
+  note?: string | null;
+  /** Titles from the collection that kept the session company: watched, or listened to, while working. */
+  media_ids?: number[];
+};
 
 export type Line = {
   id: number;
@@ -58,7 +64,16 @@ export type Line = {
   /** "1 yd", or "" when nothing is short or it can't be worked out. */
   short_text: string;
 };
-export type Session = { id: number; project_id: number; day: string; minutes: number | null; note: string | null; created_at: string };
+export type Session = {
+  id: number;
+  project_id: number;
+  day: string;
+  minutes: number | null;
+  note: string | null;
+  created_at: string;
+  /** What was watched or listened to while working. */
+  media: { id: number; title: string; type: string }[];
+};
 export type ProjectSummary = {
   id: number;
   name: string;
@@ -130,8 +145,14 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
     return lines;
   }
 
-  const sessionsOf = (q: Queries, projectId: number) =>
-    q.all<Session>('SELECT id, project_id, day, minutes, note, created_at FROM project_sessions WHERE project_id = ? ORDER BY day DESC, id DESC', [projectId]);
+  async function sessionsOf(q: Queries, projectId: number): Promise<Session[]> {
+    const rows = await q.all<Omit<Session, 'media'>>(
+      'SELECT id, project_id, day, minutes, note, created_at FROM project_sessions WHERE project_id = ? ORDER BY day DESC, id DESC', [projectId]);
+    const kept = await q.all<{ session_id: number; id: number; title: string; type: string }>(
+      `SELECT l.session_id, m.id, m.title, m.type FROM media_log l JOIN media m ON m.id = l.media_id JOIN project_sessions s ON s.id = l.session_id
+       WHERE s.project_id = ? ORDER BY l.id`, [projectId]);
+    return rows.map((row) => ({ ...row, media: kept.filter((k) => k.session_id === row.id).map(({ id, title, type }) => ({ id, title, type })) }));
+  }
 
   async function project(q: Queries, id: number): Promise<Project> {
     const row = await projectRow(q, id);
@@ -329,8 +350,12 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
       }
       return atomic(db, async (tx) => {
         await projectRow(tx, projectId);
-        await tx.run('INSERT INTO project_sessions (project_id, day, minutes, note, created_at) VALUES (?, ?, ?, ?, ?)',
+        const made = await tx.run('INSERT INTO project_sessions (project_id, day, minutes, note, created_at) VALUES (?, ?, ?, ?, ?)',
           [projectId, input.day, input.minutes ?? null, clean(input.note, 1000), now()]);
+        for (const mediaId of new Set(input.media_ids ?? [])) {
+          if (!(await tx.get('SELECT id FROM media WHERE id = ? AND owner_id = ?', [mediaId, owner]))) throw new Problem(404, "That isn't in your collection");
+          await tx.run('INSERT INTO media_log (media_id, day, session_id, created_at) VALUES (?, ?, ?, ?)', [mediaId, input.day, made.lastId, now()]);
+        }
         return project(tx, projectId);
       });
     },
@@ -340,7 +365,7 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
     },
 
     /** Every session between two days, with its project's name: what the calendar shows. */
-    async sessionsBetween(start: string, end: string): Promise<(Session & { project: string; activity: string | null })[]> {
+    async sessionsBetween(start: string, end: string): Promise<(Omit<Session, 'media'> & { project: string; activity: string | null })[]> {
       dayNumber(start);
       dayNumber(end);
       return db.all(

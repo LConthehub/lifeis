@@ -62,6 +62,13 @@ export const read = {
     if (typeof body[name] !== 'boolean') throw notUnderstood(name);
     return body[name];
   },
+  /** A list of whole numbers (ids); nothing given is an empty list. */
+  wholes(body: Body, name: string): number[] {
+    const value = body[name];
+    if (!given(value)) return [];
+    if (!Array.isArray(value) || !value.every((item) => Number.isSafeInteger(item))) throw notUnderstood(name);
+    return value as number[];
+  },
   /** A set of named values ({ "12": "Linen" }); nothing given is an empty set. */
   record(body: Body, name: string): Record<string, unknown> {
     const value = body[name];

@@ -9,6 +9,7 @@ import { memoryDb } from './memoryDb.ts';
 let db: Db;
 let owner: number;
 let mine: Life;
+const EVERYTHING = ['eating', 'planning', 'keeping', 'making', 'enjoying'];
 
 beforeEach(async () => {
   db = memoryDb();
@@ -19,10 +20,10 @@ beforeEach(async () => {
 
 it('until it is answered, and if it is skipped, everything shows', async () => {
   const asked = await mine.getProfile();
-  expect([asked.areas, asked.sections]).toEqual([null, ['eating', 'keeping', 'making']]);
-  expect(asked.options.map((o) => o.key)).toEqual(['eating', 'keeping', 'making', 'sewing', 'knitting', 'woodworking', 'gardening', 'home']);
+  expect([asked.areas, asked.sections]).toEqual([null, EVERYTHING]);
+  expect(asked.options.map((o) => o.key)).toEqual(['eating', 'keeping', 'making', 'planning', 'enjoying', 'sewing', 'knitting', 'woodworking', 'gardening', 'home']);
   const skipped = await mine.saveProfile([]);
-  expect([skipped.areas, skipped.sections, skipped.added]).toEqual([[], ['eating', 'keeping', 'making'], []]);
+  expect([skipped.areas, skipped.sections, skipped.added]).toEqual([[], EVERYTHING, []]);
   expect((await mine.getProfile()).areas).toEqual([]); // answered: not asked again
 });
 
@@ -31,6 +32,7 @@ it('the sections that show are the ones the ticks need', () => {
   expect(sectionsFor(['sewing'])).toEqual(['keeping', 'making']); // something you make needs its things and its projects
   expect(sectionsFor(['making', 'eating'])).toEqual(['eating', 'making']);
   expect(sectionsFor(['gardening', 'eating'])).toEqual(['eating', 'keeping', 'making']);
+  expect(sectionsFor(['enjoying', 'planning'])).toEqual(['planning', 'enjoying']);
 });
 
 it('ticking something you make adds its ready-made kinds, once, and unticking takes nothing away', async () => {

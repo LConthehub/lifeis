@@ -10,6 +10,7 @@ import { BlockList, isIP } from 'node:net';
 import { atomic, kitchen, life, Problem, type Db, type Kitchen } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
 import { notUnderstood, queryNumber, read, readBody, Refusal, type Body, type Context, type Reply, type Route } from './http.ts';
+import { enjoyingRoutes } from './enjoyingRoutes.ts';
 import { makingRoutes } from './makingRoutes.ts';
 import { pages } from './pages.ts';
 import { zip } from './zip.ts';
@@ -261,6 +262,7 @@ export function createApp(options: Options) {
     ['DELETE', /^\/api\/kitchen\/grocery\/(\d{1,15})$/, async (c) => (await c.kitchen.deleteGrocery(c.id), { status: 204 })],
 
     ...makingRoutes(db, clock),
+    ...enjoyingRoutes(db, clock),
   ];
 
   async function answerApi(req: IncomingMessage, url: URL, path: string): Promise<Reply> {

@@ -16,3 +16,7 @@ export type { Line, LineInput, Project, ProjectInput, Projects, ProjectSummary, 
 export { STARTERS } from './starters.ts';
 export { life, AREAS, SECTIONS, sectionsFor } from './life.ts';
 export type { Area, Life, LifeProfile, Section } from './life.ts';
+export { calendar } from './calendar.ts';
+export type { Calendar, Entry, EntryKind, Event, EventInput } from './calendar.ts';
+export { media, FORMATS, MEDIA_TYPES } from './media.ts';
+export type { Copy, CopyInput, LogEntry, LogInput, Media, MediaCollection, MediaInput, MediaSummary, MediaType } from './media.ts';
