@@ -29,6 +29,19 @@ function Card({ title, to, link = 'Open', children }) {
   );
 }
 
+const Number = ({ n, label }) => (
+  <li className="rounded-lg bg-life-50/70 px-3 py-2 dark:bg-life-700/60">
+    <span className="block text-2xl font-semibold text-life-700 dark:text-life-50">{n}</span>
+    <span className="block text-xs text-gray-600 dark:text-life-200">{label}</span>
+  </li>
+);
+
+const inDays = (day, today) => {
+  const n = Math.round((fromDateInput(day) - fromDateInput(today)) / 86400000);
+  const date = fromDateInput(day).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  return n === 0 ? 'today' : n === 1 ? 'tomorrow' : `${date} · in ${n} days`;
+};
+
 const Quiet = ({ children }) => <p className="text-sm text-gray-500 dark:text-life-300">{children}</p>;
 const Flag = ({ children }) => <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">{children}</span>;
 
@@ -79,6 +92,46 @@ export default function Home({ user }) {
                 </div>
               ))}
             </div>
+          </Card>
+        )}
+
+        {shows('weather') && s.weather && (
+          <Card title={s.weather.place.name} to="/settings" link="Weather settings">
+            {!s.weather.forecast ? <Quiet>The forecast couldn't be fetched just now.</Quiet> : (
+              <div className="space-y-3">
+                <p className="flex items-center gap-3 text-gray-800 dark:text-life-50">
+                  <span aria-hidden="true" className="text-4xl">{s.weather.forecast.now.icon}</span>
+                  <span className="text-3xl font-semibold">{s.weather.forecast.now.temperature}°</span>
+                  <span className="text-sm">{s.weather.forecast.now.words}</span>
+                </p>
+                <ul className="grid grid-cols-3 gap-2 text-center text-sm">
+                  {s.weather.forecast.days.map((d) => (
+                    <li key={d.day} className="rounded-lg bg-life-50/70 px-2 py-1.5 dark:bg-life-700/60">
+                      <span className="block text-xs font-semibold uppercase tracking-wide text-life-600 dark:text-life-300">{dayName(d.day, today)}</span>
+                      <span className="block text-gray-800 dark:text-life-50"><span aria-hidden="true">{d.icon}</span> {d.high}° <span className="text-gray-500 dark:text-life-300">{d.low}°</span></span>
+                      <span className="block text-xs text-gray-500 dark:text-life-300">{d.words}{d.wet !== null && d.wet >= 20 ? ` · ${d.wet}%` : ''}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[11px] text-gray-400 dark:text-life-400">From Open-Meteo, in °{s.weather.place.units.toUpperCase()}</p>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {shows('dates') && (
+          <Card title="Coming round" to="/calendar" link="Calendar">
+            {s.dates.length === 0 ? <Quiet>No birthdays or yearly dates in the next two months. Add one on the calendar and tick "Every year".</Quiet> : (
+              <ul className="space-y-1 text-sm">
+                {s.dates.map((d) => (
+                  <li key={`${d.id}-${d.day}`} className="flex items-baseline gap-2">
+                    <span aria-hidden="true">🎂</span>
+                    <span className="flex-1 text-gray-800 dark:text-life-50">{d.title}{d.years > 0 && <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{d.years} {d.years === 1 ? 'year' : 'years'}</span>}</span>
+                    <span className="text-xs text-gray-500 dark:text-life-300">{inDays(d.day, today)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
         )}
 
@@ -178,6 +231,19 @@ export default function Home({ user }) {
             )}
           </Card>
         )}
+
+        {shows('week') && (
+          <Card title="This week in numbers">
+            <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {s.week.events !== null && <Number n={s.week.events} label={s.week.events === 1 ? 'thing on the calendar' : 'things on the calendar'} />}
+              {s.week.meals_planned !== null && <Number n={s.week.meals_planned} label={s.week.meals_planned === 1 ? 'meal planned' : 'meals planned'} />}
+              {s.week.meals_cooked !== null && <Number n={s.week.meals_cooked} label="cooked so far" />}
+              {s.week.minutes !== null && <Number n={s.week.minutes === 0 ? '0' : minutesText(s.week.minutes)} label={`on projects, over ${s.week.sessions} ${s.week.sessions === 1 ? 'sitting' : 'sittings'}`} />}
+              {s.week.enjoyed !== null && <Number n={s.week.enjoyed} label="watched, read or heard" />}
+            </ul>
+            <p className="mt-2 text-[11px] text-gray-400 dark:text-life-400">Monday {fromDateInput(s.week.start).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} to Sunday {fromDateInput(s.week.end).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</p>
+          </Card>
+        )}
       </div>
 
       {choosing && (
@@ -206,7 +272,7 @@ function CardChooser({ choices, onDone }) {
           </label>
         ))}
       </div>
-      <p className="text-xs text-gray-500 dark:text-life-300">Cards only appear for the sections you use. Change those in Settings, under "What Life Is looks after".</p>
+      <p className="text-xs text-gray-500 dark:text-life-300">Cards only appear for the sections you use. Change those in Settings, under "What Life Is looks after". The weather is an outside service: turn it on in Settings, under "Outside services".</p>
       <div className="text-right"><button type="button" onClick={save} className={buttonClass}>Save</button></div>
     </div>
   );

@@ -10,7 +10,7 @@ const at = (path: string) => new RegExp(`^/api/${path.replaceAll(':id', ID)}$`);
 
 const eventFrom = (body: Body) => ({
   title: read.text(body, 'title'), day: read.text(body, 'day'), end_day: read.maybeText(body, 'end_day'),
-  time: read.maybeText(body, 'time'), note: read.maybeText(body, 'note'),
+  time: read.maybeText(body, 'time'), note: read.maybeText(body, 'note'), yearly: read.yesNo(body, 'yearly', false),
 });
 
 /** Whether a field was sent at all: left out means "leave it as it is". */

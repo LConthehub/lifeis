@@ -86,12 +86,12 @@ export default function Calendar() {
 }
 
 function EventForm({ event, onDone }) {
-  const [form, setForm] = useState({ title: event.title || '', day: event.day, end_day: event.end_day || '', time: event.time || '', note: event.note || '' });
+  const [form, setForm] = useState({ title: event.title || '', day: event.day, end_day: event.end_day || '', time: event.time || '', note: event.note || '', yearly: Boolean(event.yearly) });
   const [error, setError] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const submit = async (e) => {
     e.preventDefault();
-    const body = { title: form.title, day: form.day, end_day: form.end_day || null, time: form.time || null, note: form.note || null };
+    const body = { title: form.title, day: form.day, end_day: form.yearly ? null : form.end_day || null, time: form.time || null, note: form.note || null, yearly: form.yearly };
     try {
       if (event.id) await axios.put(`/api/calendar/events/${event.id}`, body); else await axios.post('/api/calendar/events', body);
       onDone();
@@ -103,10 +103,14 @@ function EventForm({ event, onDone }) {
       <Field label="What *"><input required autoFocus={!event.id} value={form.title} onChange={set('title')} placeholder="e.g. Dentist" className={inputClass} /></Field>
       <div className="grid grid-cols-3 gap-3">
         <Field label="Day *"><input required type="date" value={form.day} onChange={set('day')} className={inputClass} /></Field>
-        <Field label="Until (if longer)"><input type="date" min={form.day} value={form.end_day} onChange={set('end_day')} className={inputClass} /></Field>
+        <Field label="Until (if longer)"><input type="date" min={form.day} value={form.yearly ? '' : form.end_day} disabled={form.yearly} onChange={set('end_day')} className={inputClass} /></Field>
         <Field label="Time (empty: all day)"><input type="time" value={form.time} onChange={set('time')} className={inputClass} /></Field>
       </div>
       <Field label="A note"><input value={form.note} onChange={set('note')} className={inputClass} /></Field>
+      <label className="flex cursor-pointer items-start gap-2 text-sm text-gray-800 dark:text-life-50">
+        <input type="checkbox" checked={form.yearly} onChange={(e) => setForm({ ...form, yearly: e.target.checked })} className="mt-0.5 accent-life-600" />
+        <span>Every year <span className="block text-xs text-gray-500 dark:text-life-300">A birthday or an anniversary. Give the day it first happened, year and all, and the calendar counts the years.</span></span>
+      </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex items-center justify-between">
         {event.id ? <button type="button" onClick={remove} className="text-sm text-red-600 hover:underline">Remove</button> : <span />}

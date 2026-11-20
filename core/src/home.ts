@@ -5,7 +5,8 @@
  * projects, your collection) and links back there. A person can put any card out of sight; that choice is
  * the only thing this saves.
  */
-import { calendar, type Entry } from './calendar.ts';
+import { calendar, type Entry, type YearlyDate } from './calendar.ts';
+import type { Fetcher } from './connections.ts';
 import type { Db } from './db.ts';
 import { inventory } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
@@ -15,16 +16,23 @@ import { media } from './media.ts';
 import { Problem } from './problem.ts';
 import { projects, type ProjectSummary } from './projects.ts';
 import { addDays, dayNumber, todayOf, type Clock } from './small.ts';
+import { weather, type Forecast, type WeatherPlace } from './weather.ts';
 
-/** The cards, in the order they show, and the section each belongs to. */
+/**
+ * The cards, in the order they show, and the section each belongs to. A card with no section is for everyone.
+ * The weather is only offered once it has been turned on (in Settings, under "Outside services").
+ */
 export const CARDS = [
   { key: 'days', label: 'Today and the next two days', section: 'planning' },
+  { key: 'weather', label: 'The weather', section: null },
+  { key: 'dates', label: 'Birthdays and other yearly dates coming up', section: 'planning' },
   { key: 'kitchen', label: 'Cooking: today’s meals, the grocery list, pans you’re short of', section: 'eating' },
   { key: 'pantry', label: 'Pantry: running low and use soon', section: 'eating' },
   { key: 'projects', label: 'Projects in hand', section: 'making' },
   { key: 'things', label: 'Things running low', section: 'keeping' },
   { key: 'collection', label: 'Collection: lent out, and lately watched, read or heard', section: 'enjoying' },
-] as const satisfies readonly { key: string; label: string; section: Section }[];
+  { key: 'week', label: 'This week in numbers', section: null },
+] as const satisfies readonly { key: string; label: string; section: Section | null }[];
 export type CardKey = (typeof CARDS)[number]['key'];
 
 export type HomeSummary = {
@@ -45,11 +53,20 @@ export type HomeSummary = {
     lent: { id: number; title: string; to: string }[];
     lately: { id: number; title: string; type: string; day: string }[];
   };
+  /** Yearly dates in the next sixty days, soonest first. */
+  dates: YearlyDate[];
+  weather: { place: WeatherPlace; forecast: Forecast | null } | null;
+  /** Monday to Sunday of this week. A number is null when its section isn't one the person uses. */
+  week: {
+    start: string; end: string;
+    events: number | null; meals_planned: number | null; meals_cooked: number | null;
+    sessions: number | null; minutes: number | null; enjoyed: number | null;
+  };
 };
 
 const SETTING = 'home_hidden_cards';
 
-export function home(db: Db, owner: number, clock: Clock = () => new Date()) {
+export function home(db: Db, owner: number, clock: Clock = () => new Date(), fetcher?: Fetcher) {
   async function hidden(): Promise<CardKey[]> {
     const row = await db.get<{ value: string | null }>('SELECT value FROM user_settings WHERE user_id = ? AND key = ?', [owner, SETTING]);
     try {
@@ -66,7 +83,9 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date()) {
       dayNumber(day);
       const sections = (await life(db, owner, clock).getProfile()).sections;
       const out = await hidden();
-      const offered = CARDS.filter((card) => sections.includes(card.section));
+      const skies = weather(db, owner, clock, fetcher);
+      const place = await skies.place();
+      const offered = CARDS.filter((card) => (card.key === 'weather' ? place !== null : card.section === null || sections.includes(card.section)));
       const cards = offered.map((card) => card.key).filter((key) => !out.includes(key));
       const shows = (key: CardKey) => cards.includes(key);
 
@@ -75,6 +94,8 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date()) {
         choices: offered.map((card) => ({ key: card.key, label: card.label, shown: !out.includes(card.key) })),
         days: [], kitchen: { meals: [], to_buy: 0, short: [] }, pantry: { low: [], expiring: [] }, projects: [],
         things: { low: [], total: 0 }, collection: { total: 0, wanted: 0, lent: [], lately: [] },
+        dates: [], weather: null,
+        week: { start: day, end: day, events: null, meals_planned: null, meals_cooked: null, sessions: null, minutes: null, enjoyed: null },
       };
       // Only what will be shown is read, so a section put out of sight costs nothing.
       if (shows('days')) {
@@ -114,6 +135,32 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date()) {
           lately: titles.filter((t) => t.last_on).sort((a, b) => (a.last_on! < b.last_on! ? 1 : -1)).slice(0, 5)
             .map((t) => ({ id: t.id, title: t.title, type: t.type, day: t.last_on! })),
         };
+      }
+      if (shows('dates')) summary.dates = (await calendar(db, owner, clock).yearly(day, 60)).slice(0, 8);
+      if (shows('weather') && place) summary.weather = { place, forecast: (await skies.status()).forecast };
+      if (shows('week')) {
+        // 1970-01-01 was a Thursday, so this counts back to Monday.
+        const start = addDays(day, -((dayNumber(day) + 3) % 7));
+        const end = addDays(start, 6);
+        const count = async (sql: string) => (await db.get<{ n: number; total: number | null }>(sql, [owner, start, end]))!;
+        const week: HomeSummary['week'] = { ...summary.week, start, end };
+        if (sections.includes('planning')) {
+          week.events = (await count('SELECT COUNT(*) AS n, 0 AS total FROM events WHERE owner_id = ? AND yearly = 0 AND COALESCE(end_day, day) >= ? AND day <= ?')).n
+            + (await calendar(db, owner, clock).yearly(start, 7)).length;
+        }
+        if (sections.includes('eating')) {
+          const meals = await count('SELECT COUNT(*) AS n, COUNT(cooked_on) AS total FROM meal_plan WHERE owner_id = ? AND day >= ? AND day <= ?');
+          [week.meals_planned, week.meals_cooked] = [meals.n, meals.total ?? 0];
+        }
+        if (sections.includes('making')) {
+          const worked = await count(`SELECT COUNT(*) AS n, SUM(s.minutes) AS total FROM project_sessions s JOIN projects p ON p.id = s.project_id
+            WHERE p.owner_id = ? AND s.day >= ? AND s.day <= ?`);
+          [week.sessions, week.minutes] = [worked.n, worked.total ?? 0];
+        }
+        if (sections.includes('enjoying')) {
+          week.enjoyed = (await count('SELECT COUNT(DISTINCT l.media_id) AS n, 0 AS total FROM media_log l JOIN media m ON m.id = l.media_id WHERE m.owner_id = ? AND l.day >= ? AND l.day <= ?')).n;
+        }
+        summary.week = week;
       }
       return summary;
     },

@@ -7,7 +7,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BlockList, isIP } from 'node:net';
-import { atomic, home, kitchen, life, Problem, type Db, type Kitchen } from '../../core/src/index.ts';
+import { atomic, home, kitchen, life, Problem, weather, WEATHER_SERVICE, type Db, type Kitchen } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
 import { notUnderstood, queryNumber, read, readBody, Refusal, type Body, type Context, type Reply, type Route } from './http.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
@@ -120,6 +120,10 @@ export function createApp(options: Options) {
   const account = async (c: Context): Promise<Reply> =>
     ({ json: { idle_minutes: await auth.idleMinutesFor(db, c.user.id, idleDefault), idle_choices: auth.IDLE_CHOICES } });
 
+  /** How outside services are asked. Without it (no `reach`), none can be turned on. */
+  const outside = options.reach?.fetcher;
+  const skies = (c: Context) => weather(db, c.user.id, c.clock, outside);
+
   const routes: Route[] = [
     ['GET', /^\/api\/health$/, async () => ({ json: { status: 'ok' } })],
 
@@ -204,11 +208,21 @@ export function createApp(options: Options) {
     }],
 
     // The front page: what today holds, gathered from every section the person uses.
-    ['GET', /^\/api\/home$/, async (c) => ({ json: await home(db, c.user.id, c.clock).summary() })],
+    ['GET', /^\/api\/home$/, async (c) => ({ json: await home(db, c.user.id, c.clock, outside).summary() })],
     ['PUT', /^\/api\/home\/cards$/, async (c) => {
       if (!Array.isArray(c.body.hidden)) throw notUnderstood('hidden');
-      return { json: await home(db, c.user.id, c.clock).hideCards(read.texts(c.body, 'hidden')) };
+      return { json: await home(db, c.user.id, c.clock, outside).hideCards(read.texts(c.body, 'hidden')) };
     }],
+
+    // The weather: an outside service, off until the person turns it on. See core/'s weather.ts for what it sends.
+    ['GET', /^\/api\/weather$/, async (c) => ({ json: { ...await skies(c).status(), service: WEATHER_SERVICE } })],
+    ['GET', /^\/api\/weather\/places$/, async (c) => ({ json: await skies(c).findPlaces(c.query.get('q') ?? '') })],
+    ['PUT', /^\/api\/weather$/, async (c) => {
+      const [latitude, longitude] = [read.maybeNumber(c.body, 'latitude'), read.maybeNumber(c.body, 'longitude')];
+      if (latitude === null || longitude === null) throw notUnderstood('latitude');
+      return { json: { ...await skies(c).turnOn({ name: read.text(c.body, 'name'), latitude, longitude, units: read.maybeText(c.body, 'units') }), service: WEATHER_SERVICE } };
+    }],
+    ['DELETE', /^\/api\/weather$/, async (c) => ({ json: { ...await skies(c).turnOff(), service: WEATHER_SERVICE } })],
 
     // What the person wants Life Is to look after: asked once, theirs to change.
     ['GET', /^\/api\/life$/, async (c) => ({ json: await life(db, c.user.id, c.clock).getProfile() })],

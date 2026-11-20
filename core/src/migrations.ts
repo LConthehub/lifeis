@@ -346,6 +346,14 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_recipe_equipment ON recipe_equipment(recipe_id, sort_order)`,
     ],
   },
+  {
+    number: 8,
+    name: 'dates that come round every year',
+    statements: [
+      // A birthday or an anniversary: kept once, on its first day, and shown on that day every year after.
+      `ALTER TABLE events ADD COLUMN yearly INTEGER NOT NULL DEFAULT 0`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;
