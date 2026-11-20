@@ -14,6 +14,42 @@ const HOLDS = {
 
 const dayText = (day, long = false) => fromDateInput(day).toLocaleDateString(undefined, long ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'short', year: 'numeric' });
 const daysText = (p, long = false) => (p.end_day === p.start_day ? dayText(p.start_day, long) : `${dayText(p.start_day)} to ${dayText(p.end_day)}`);
+const MEALS = [['breakfast', 'Breakfast'], ['lunch', 'Lunch'], ['dinner', 'Dinner'], ['snack', 'A snack']];
+const EARLY_DAYS = 7;
+/** The days a plan's food can go on the week: its own, and the week before for what's made ahead. */
+function mealDays(plan) {
+  const first = fromDateInput(plan.start_day);
+  const last = fromDateInput(plan.end_day);
+  const days = [];
+  for (let n = -EARLY_DAYS; ; n += 1) {
+    const d = new Date(first); d.setDate(d.getDate() + n);
+    if (d > last) break;
+    const label = d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' });
+    days.push([toDateInput(d), n < 0 ? `${label} (${-n} ${n === -1 ? 'day' : 'days'} before)` : label]);
+  }
+  return days.sort((a, b) => (a[0] >= plan.start_day) - (b[0] >= plan.start_day) || (a[0] < plan.start_day ? (a[0] < b[0] ? 1 : -1) : (a[0] < b[0] ? -1 : 1)));
+}
+const onWeekText = (w) => `${fromDateInput(w.day).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} ${w.meal}${w.cooked ? ' · cooked' : ''}`;
+
+/** When a plan's recipe is eaten: a day and a meal puts it on the week's meals; "not on the week" only notes it. */
+function WhenEaten({ plan, day, meal, onChange }) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <Field label="On the week's meals">
+        <select value={day} onChange={(e) => onChange(e.target.value, meal)} className={inputClass}>
+          {mealDays(plan).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          <option value="">Not on the week: just note it here</option>
+        </select>
+      </Field>
+      <Field label="For">
+        <select value={meal} disabled={!day} onChange={(e) => onChange(day, e.target.value)} className={inputClass}>
+          {MEALS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+      </Field>
+    </div>
+  );
+}
+
 export const photoAddress = (photo) => `/api/plans/photos/${photo.id ?? photo}`;
 
 /** Makes a picked photo small enough to keep: at most 1600 across, as a JPEG. Done here, on the device. */
@@ -123,7 +159,7 @@ export function PlanPage() {
   const tasks = plan.items_list.filter((i) => i.kind === 'task');
   const short = plan.items_list.filter((i) => i.short);
   const remove = async () => {
-    if (!window.confirm(`Remove ${plan.name}, with its checklist and photos? What it points at (recipes, things, titles) stays.`)) return;
+    if (!window.confirm(`Remove ${plan.name}, with its checklist and photos? Its meals still to be cooked come off the week. What it points at (recipes, things, titles) stays.`)) return;
     await axios.delete(`/api/plans/${plan.id}`).catch(() => {});
     navigate('/plans');
   };
@@ -181,6 +217,11 @@ export function PlanPage() {
                         {i.link ? <Link to={i.link} className="text-gray-800 hover:underline dark:text-life-50">{i.label}</Link> : <span className="text-gray-500 dark:text-life-300">{i.label}</span>}
                         {i.quantity !== null && <span className="ml-1 text-gray-500 dark:text-life-300">× {i.quantity}</span>}
                         {[i.detail, i.note].filter(Boolean).length > 0 && <span className="block text-xs text-gray-500 dark:text-life-300">{[i.detail, i.note].filter(Boolean).join(' · ')}</span>}
+                        {kind === 'recipe' && i.link && (
+                          <button type="button" onClick={() => setModal({ eaten: i })} className="block text-xs text-life-600 hover:underline dark:text-life-200">
+                            {i.on_week ? `🗓 ${onWeekText(i.on_week)}` : 'Not on the week yet: put it on'}
+                          </button>
+                        )}
                         {i.short && <span className="block text-xs text-honey-700">{i.short}</span>}
                       </span>
                       <button type="button" onClick={() => act(() => axios.delete(`/api/plans/items/${i.id}`))} aria-label={`Take ${i.label} off the plan`} className="text-gray-400 hover:text-red-600">×</button>
@@ -221,6 +262,7 @@ export function PlanPage() {
       {modal === 'edit' && <Modal title={plan.name} onClose={() => setModal(null)}><PlanForm plan={plan} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
       {modal === 'again' && <Modal title={`${plan.name}, again`} onClose={() => setModal(null)}><AgainForm plan={plan} onDone={(p) => { setModal(null); navigate(`/plans/${p.id}`); }} /></Modal>}
       {modal?.add && <Modal title={`Add ${HOLDS[modal.add].add}`} onClose={() => setModal(null)}><Picker kind={modal.add} plan={plan} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
+      {modal?.eaten && <Modal title={modal.eaten.label} onClose={() => setModal(null)}><EatenForm plan={plan} item={modal.eaten} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
       {modal?.photo && <Modal title="Photo" wide onClose={() => setModal(null)}><PhotoView photo={modal.photo} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
     </div>
   );
@@ -244,6 +286,7 @@ function Picker({ kind, plan, onDone }) {
   const [quantity, setQuantity] = useState('1');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
+  const [eaten, setEaten] = useState({ day: plan.start_day, meal: 'dinner' });
   useEffect(() => { axios.get(hold.from).then(({ data }) => setChoices(data)).catch(() => setChoices([])); }, [hold.from]);
   if (!choices) return null;
   const taken = new Set(plan.items_list.filter((i) => i.kind === kind).map((i) => i.ref_id));
@@ -252,7 +295,8 @@ function Picker({ kind, plan, onDone }) {
   const submit = async (e) => {
     e.preventDefault();
     try {
-      onDone((await axios.post(`/api/plans/${plan.id}/items`, { kind, ref_id: Number(ref), quantity: kind === 'thing' && quantity !== '' ? Number(quantity) : null, note: note || null })).data);
+      onDone((await axios.post(`/api/plans/${plan.id}/items`, { kind, ref_id: Number(ref), quantity: kind === 'thing' && quantity !== '' ? Number(quantity) : null, note: note || null,
+        ...(kind === 'recipe' && eaten.day ? eaten : {}) })).data);
     } catch (err) { setError(errorMessage(err, "Couldn't add it")); }
   };
   return (
@@ -264,9 +308,33 @@ function Picker({ kind, plan, onDone }) {
         </select>
       </Field>
       {kind === 'thing' && <Field label="How many are needed"><input type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} className={inputClass} /></Field>}
+      {kind === 'recipe' && (
+        <>
+          <WhenEaten plan={plan} day={eaten.day} meal={eaten.meal} onChange={(day, meal) => setEaten({ day, meal })} />
+          <p className="text-xs text-gray-500 dark:text-life-300">On the week, it counts towards the grocery list and the pans and dishes that meal needs. It moves if the plan moves.</p>
+        </>
+      )}
       <Field label="A note"><input value={note} onChange={(e) => setNote(e.target.value)} className={inputClass} /></Field>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="text-right"><button type="submit" className={buttonClass}>Add</button></div>
+    </form>
+  );
+}
+
+function EatenForm({ plan, item, onDone }) {
+  const [eaten, setEaten] = useState({ day: item.on_week?.day ?? plan.start_day, meal: item.on_week?.meal ?? 'dinner' });
+  const [error, setError] = useState('');
+  if (item.on_week?.cooked) return <p className="text-sm text-gray-700 dark:text-life-100">This was cooked on {onWeekText(item.on_week).replace(' · cooked', '')}. That's done, so it stays where it was.</p>;
+  const save = async (e) => {
+    e.preventDefault();
+    try { onDone((await axios.put(`/api/plans/items/${item.id}`, { day: eaten.day || null, meal: eaten.meal })).data); } catch (err) { setError(errorMessage(err, "Couldn't change it")); }
+  };
+  return (
+    <form onSubmit={save} className="space-y-3">
+      <WhenEaten plan={plan} day={eaten.day} meal={eaten.meal} onChange={(day, meal) => setEaten({ day, meal })} />
+      <p className="text-xs text-gray-500 dark:text-life-300">{item.on_week ? 'Changing this moves the meal on the week. "Not on the week" takes it off there and keeps it noted here.' : 'This puts it on the week\'s meals, so the grocery list and the pans it needs follow.'}</p>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="text-right"><button type="submit" className={buttonClass}>Save</button></div>
     </form>
   );
 }
@@ -280,7 +348,7 @@ function AgainForm({ plan, onDone }) {
   };
   return (
     <form onSubmit={submit} className="space-y-3">
-      <p className="text-sm text-gray-600 dark:text-life-100">A new plan with the same food, things, titles and checklist (unticked). This one stays as it is, with its story and photos.</p>
+      <p className="text-sm text-gray-600 dark:text-life-100">A new plan with the same food, things, titles and checklist (unticked). Food that was on the week goes on the new week, the same days in. This one stays as it is, with its story and photos.</p>
       <Field label="Call the new one"><input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} /></Field>
       <Field label="Its first day"><input required type="date" value={form.start_day} onChange={(e) => setForm({ ...form, start_day: e.target.value })} className={inputClass} /></Field>
       {error && <p className="text-sm text-red-600">{error}</p>}

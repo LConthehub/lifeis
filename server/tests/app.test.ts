@@ -525,7 +525,14 @@ it('plans answer over the web, with their photos', async () => {
   const made = await admin.post('/api/plans', { name: 'Thanksgiving', start_day: '2046-11-22', note: 'Twelve of us' });
   expect([made.status, made.json.when, made.json.end_day]).toEqual([201, 'ahead', '2046-11-22']);
   const id = made.json.id;
-  expect((await admin.post(`/api/plans/${id}/items`, { kind: 'recipe', ref_id: recipe.id })).status).toBe(201);
+  // The recipe goes on the week's meals for the plan's day, and can be taken off again.
+  const withFood = await admin.post(`/api/plans/${id}/items`, { kind: 'recipe', ref_id: recipe.id, day: '2046-11-22', meal: 'dinner' });
+  expect([withFood.status, withFood.json.items_list[0].on_week]).toEqual([201, { day: '2046-11-22', meal: 'dinner', cooked: false }]);
+  expect((await admin.get('/api/kitchen/plan?start=2046-11-22&days=1')).json.map((m: { recipe_title: string; meal: string }) => [m.recipe_title, m.meal])).toEqual([['Stuffing', 'dinner']]);
+  expect((await admin.put(`/api/plans/items/${withFood.json.items_list[0].id}`, { day: '2046-11-21', meal: 'snack' })).json.items_list[0].on_week.day).toBe('2046-11-21');
+  expect((await admin.put(`/api/plans/items/${withFood.json.items_list[0].id}`, { day: '2046-12-25' })).status).toBe(400);
+  expect((await admin.put(`/api/plans/items/${withFood.json.items_list[0].id}`, { day: null })).json.items_list[0].on_week).toBeNull();
+  expect((await admin.get('/api/kitchen/plan?start=2046-11-15&days=14')).json).toEqual([]);
   const withTask = (await admin.post(`/api/plans/${id}/items`, { kind: 'task', label: 'Order the turkey' })).json;
   expect(withTask.items_list.map((i: { kind: string; label: string }) => [i.kind, i.label])).toEqual([['recipe', 'Stuffing'], ['task', 'Order the turkey']]);
   expect((await admin.put(`/api/plans/items/${withTask.items_list[1].id}`, { done: true })).json.tasks_left).toBe(0);

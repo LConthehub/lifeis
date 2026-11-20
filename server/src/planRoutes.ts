@@ -61,12 +61,13 @@ export function planRoutes(db: Db, tools?: PhotoTools): Route[] {
     ['POST', at('/:id/items'), async (c) => ({
       status: 201,
       json: await mine(c).addItem(c.id, { kind: read.text(c.body, 'kind'), ref_id: read.maybeWhole(c.body, 'ref_id'), label: read.maybeText(c.body, 'label'),
-        quantity: read.maybeNumber(c.body, 'quantity'), note: read.maybeText(c.body, 'note') }),
+        quantity: read.maybeNumber(c.body, 'quantity'), note: read.maybeText(c.body, 'note'), day: read.maybeText(c.body, 'day'), meal: read.maybeText(c.body, 'meal') }),
     })],
     ['PUT', at('/items/:id'), async (c) => ({
       json: await mine(c).updateItem(c.id, {
         ...(sent(c.body, 'label') ? { label: read.maybeText(c.body, 'label') } : {}), ...(sent(c.body, 'quantity') ? { quantity: read.maybeNumber(c.body, 'quantity') } : {}),
         ...(sent(c.body, 'note') ? { note: read.maybeText(c.body, 'note') } : {}), ...(sent(c.body, 'done') ? { done: read.yesNo(c.body, 'done') } : {}),
+        ...(sent(c.body, 'day') ? { day: read.maybeText(c.body, 'day'), meal: read.maybeText(c.body, 'meal') } : {}),
       }),
     })],
     ['DELETE', at('/items/:id'), async (c) => ({ json: await mine(c).removeItem(c.id) })],

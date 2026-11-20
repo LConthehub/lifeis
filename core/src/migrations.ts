@@ -431,6 +431,15 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_plan_photos ON plan_photos(plan_id, sort_order)`,
     ],
   },
+  {
+    number: 12,
+    name: "a plan's food on the week's meals",
+    statements: [
+      // A recipe on a plan may also be a meal on the week (meal_plan), so the grocery list and the pans it
+      // needs follow. This is which meal. Removing the meal from the week only forgets the link.
+      `ALTER TABLE plan_items ADD COLUMN meal_plan_id INTEGER REFERENCES meal_plan(id) ON DELETE SET NULL`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

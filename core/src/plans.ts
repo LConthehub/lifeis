@@ -6,6 +6,11 @@
  * never copied: recipes from the kitchen, things you keep (with how many are needed, so it can say what
  * you're short of), titles from the collection, a project, and a checklist of its own.
  *
+ * One thing a plan does change elsewhere: a recipe can be put on the week's meals for one of the plan's days
+ * (or the days just before, for what's made ahead), so the grocery list and the pans it needs follow. That
+ * meal then belongs to the plan: it moves when the plan moves, and goes when the recipe is taken off the
+ * plan or the plan is removed. A meal that has been cooked is history, and is never moved or removed.
+ *
  * Once its days have come, a plan also shows what happened on them, gathered from the calendar (what was
  * cooked, worked on, watched), and keeps your own words about how it went and your photos. Nothing is
  * thrown away when it's over: past plans are there to look back on, and to start next year's from.
@@ -42,7 +47,12 @@ export type PlanItemInput = {
   quantity?: number | null;
   note?: string | null;
   done?: boolean;
+  /** For a recipe: the day to put it on the week's meals, and which meal. Left out: it isn't put on the week. */
+  day?: string | null;
+  meal?: string | null;
 };
+/** Where a plan's recipe sits on the week's meals. */
+export type OnWeek = { day: string; meal: string; cooked: boolean };
 export type PlanItem = {
   id: number; kind: PlanItemKind; ref_id: number | null; label: string; quantity: number | null; note: string | null; done: boolean;
   /** The page of what it points at; null for a task, or when that has since been removed. */
@@ -51,6 +61,8 @@ export type PlanItem = {
   short: string | null;
   /** For a thing: where it's kept. For a title: the formats you have it on. */
   detail: string | null;
+  /** For a recipe: the meal it is on the week, or null when it's only noted on the plan. */
+  on_week: OnWeek | null;
 };
 export type PlanPhoto = { id: number; source: 'kept' | 'immich'; caption: string | null };
 export type PlanWhen = 'ahead' | 'now' | 'past';
@@ -61,12 +73,16 @@ export type PlanSummary = {
 export type Plan = PlanSummary & { story: string | null; items_list: PlanItem[]; photos_list: PlanPhoto[]; /** What the calendar holds for its days, once they've come. */ happened: Entry[] };
 
 const MAX_DAYS = 62;
+const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'];
+/** How long before a plan's first day its food may be made. */
+export const EARLY_DAYS = 7;
 const MAX_PHOTOS = 80;
 export const MAX_PHOTO_BYTES = 3_000_000;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 type PlanRow = { id: number; name: string; start_day: string; end_day: string; note: string | null; story: string | null };
-type ItemRow = { id: number; plan_id: number; kind: PlanItemKind; ref_id: number | null; label: string; quantity: number | null; note: string | null; done: number };
+type ItemRow = { id: number; plan_id: number; kind: PlanItemKind; ref_id: number | null; label: string; quantity: number | null; note: string | null; done: number; meal_plan_id: number | null };
+const ITEM_COLUMNS = 'id, plan_id, kind, ref_id, label, quantity, note, done, meal_plan_id';
 
 /** What kind of picture these bytes are, going by how they begin; null when they aren't one Life Is keeps. */
 export function pictureType(bytes: Uint8Array): string | null {
@@ -122,9 +138,27 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
     return { kind, ref: input.ref_id, label: await pointedAt(q, kind, input.ref_id), quantity: kind === 'thing' ? quantity : null, note: clean(input.note, 1000) };
   }
 
+  /** The day and meal asked for, checked against the plan's days; null when the recipe isn't to go on the week. */
+  function slotFor(plan: { start_day: string; end_day: string }, day: string | null | undefined, meal: string | null | undefined): { day: string; meal: string } | null {
+    if (!day) return null;
+    const wanted = meal ?? 'dinner';
+    if (!MEALS.includes(wanted)) throw new Problem(400, 'Breakfast, lunch, dinner or a snack');
+    if (dayNumber(day) < dayNumber(plan.start_day) - EARLY_DAYS || dayNumber(day) > dayNumber(plan.end_day)) {
+      throw new Problem(400, `Choose one of the plan's days, or one of the ${EARLY_DAYS} before it`);
+    }
+    return { day, meal: wanted };
+  }
+  const putOnWeek = async (q: Queries, recipeId: number, slot: { day: string; meal: string }): Promise<number> =>
+    (await q.run('INSERT INTO meal_plan (owner_id, day, meal, recipe_id, title, servings, created_at) VALUES (?, ?, ?, ?, NULL, NULL, ?)', [owner, slot.day, slot.meal, recipeId, now()])).lastId;
+  /** Take a plan's meal off the week, unless it has been cooked: that happened, and stays. */
+  const offWeek = (q: Queries, mealId: number | null) =>
+    (mealId === null ? Promise.resolve() : q.run('DELETE FROM meal_plan WHERE id = ? AND owner_id = ? AND cooked_on IS NULL', [mealId, owner]).then(() => {}));
+
   /** A plan's items as they stand now: names refreshed from what they point at, and what's short said. */
   async function itemsOf(q: Queries, planId: number): Promise<PlanItem[]> {
-    const rows = await q.all<ItemRow>('SELECT id, plan_id, kind, ref_id, label, quantity, note, done FROM plan_items WHERE plan_id = ? ORDER BY sort_order, id', [planId]);
+    const rows = await q.all<ItemRow>(`SELECT ${ITEM_COLUMNS} FROM plan_items WHERE plan_id = ? ORDER BY sort_order, id`, [planId]);
+    const meals = new Map((await q.all<{ id: number; day: string; meal: string; cooked_on: string | null }>(
+      'SELECT m.id, m.day, m.meal, m.cooked_on FROM meal_plan m JOIN plan_items i ON i.meal_plan_id = m.id WHERE i.plan_id = ? AND m.owner_id = ?', [planId, owner])).map((m) => [m.id, m]));
     const names = async (table: string, column: string) =>
       new Map((await q.all<{ id: number; label: string }>(`SELECT id, ${column} AS label FROM ${table} WHERE owner_id = ?`, [owner])).map((r) => [r.id, r.label]));
     const has = (kind: PlanItemKind) => rows.some((r) => r.kind === kind);
@@ -135,7 +169,9 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
       `SELECT m.id, m.title, (SELECT GROUP_CONCAT(DISTINCT c.format) FROM media_copies c WHERE c.media_id = m.id) AS formats FROM media m WHERE m.owner_id = ?`, [owner])).map((r) => [r.id, r])) : new Map();
 
     return rows.map((r): PlanItem => {
-      const base = { id: r.id, kind: r.kind, ref_id: r.ref_id, quantity: r.quantity, note: r.note, done: r.done === 1, short: null as string | null, detail: null as string | null };
+      const meal = r.meal_plan_id !== null ? meals.get(r.meal_plan_id) : undefined;
+      const base = { id: r.id, kind: r.kind, ref_id: r.ref_id, quantity: r.quantity, note: r.note, done: r.done === 1, short: null as string | null, detail: null as string | null,
+        on_week: meal ? { day: meal.day, meal: meal.meal, cooked: meal.cooked_on !== null } : null };
       if (r.kind === 'task' || r.ref_id === null) return { ...base, label: r.label, link: null };
       if (r.kind === 'recipe') return { ...base, label: recipes.get(r.ref_id) ?? r.label, link: recipes.has(r.ref_id) ? `/recipes/${r.ref_id}` : null };
       if (r.kind === 'project') return { ...base, label: projectNames.get(r.ref_id) ?? r.label, link: projectNames.has(r.ref_id) ? `/projects/${r.ref_id}` : null };
@@ -205,16 +241,29 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
       return whole(made.lastId);
     },
 
-    async update(id: number, input: PlanInput): Promise<Plan> {
+    /** Change a plan. Moved to other days, its meals on the week move with it. */
+    update(id: number, input: PlanInput): Promise<Plan> {
       const values = checked(input);
-      await row(db, id);
-      await db.run('UPDATE plans SET name = ?, start_day = ?, end_day = ?, note = ?, story = ?, updated_at = ? WHERE id = ? AND owner_id = ?', [...values, now(), id, owner]);
-      return whole(id);
+      return atomic(db, async (tx) => {
+        const old = await row(tx, id);
+        await tx.run('UPDATE plans SET name = ?, start_day = ?, end_day = ?, note = ?, story = ?, updated_at = ? WHERE id = ? AND owner_id = ?', [...values, now(), id, owner]);
+        const moved = dayNumber(input.start_day) - dayNumber(old.start_day);
+        if (moved !== 0) {
+          for (const meal of await tx.all<{ id: number; day: string }>(
+            'SELECT m.id, m.day FROM meal_plan m JOIN plan_items i ON i.meal_plan_id = m.id WHERE i.plan_id = ? AND m.owner_id = ? AND m.cooked_on IS NULL', [id, owner])) {
+            await tx.run('UPDATE meal_plan SET day = ? WHERE id = ?', [addDays(meal.day, moved), meal.id]);
+          }
+        }
+      }).then(() => whole(id));
     },
 
-    /** Remove a plan, with its checklist and photos. What it pointed at is untouched. */
-    async remove(id: number): Promise<void> {
-      await db.run('DELETE FROM plans WHERE id = ? AND owner_id = ?', [id, owner]);
+    /** Remove a plan, with its checklist, its photos, and its meals still to be cooked. What it pointed at is untouched. */
+    remove(id: number): Promise<void> {
+      return atomic(db, async (tx) => {
+        if (!(await tx.get('SELECT id FROM plans WHERE id = ? AND owner_id = ?', [id, owner]))) return;
+        for (const item of await tx.all<{ meal_plan_id: number | null }>('SELECT meal_plan_id FROM plan_items WHERE plan_id = ?', [id])) await offWeek(tx, item.meal_plan_id);
+        await tx.run('DELETE FROM plans WHERE id = ? AND owner_id = ?', [id, owner]);
+      });
     },
 
     /**
@@ -227,9 +276,15 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
         const length = dayNumber(old.end_day) - dayNumber(old.start_day);
         const values = checked({ name: clean(input.name, 200) ?? old.name, start_day: input.start_day, end_day: addDays(input.start_day, length), note: old.note });
         const made = await tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [owner, ...values, now(), now()]);
-        await tx.run(
-          `INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order)
-           SELECT ?, kind, ref_id, label, quantity, note, 0, sort_order FROM plan_items WHERE plan_id = ? ORDER BY sort_order, id`, [made.lastId, id]);
+        const moved = dayNumber(input.start_day) - dayNumber(old.start_day);
+        for (const item of await tx.all<ItemRow>(`SELECT ${ITEM_COLUMNS} FROM plan_items WHERE plan_id = ? ORDER BY sort_order, id`, [id])) {
+          // Food that was on the week goes on the new week, the same number of days in.
+          const meal = item.meal_plan_id !== null ? await tx.get<{ day: string; meal: string }>('SELECT day, meal FROM meal_plan WHERE id = ? AND owner_id = ?', [item.meal_plan_id, owner]) : undefined;
+          const stillThere = item.kind === 'recipe' && item.ref_id !== null && await tx.get('SELECT id FROM recipes WHERE id = ? AND owner_id = ?', [item.ref_id, owner]);
+          const mealId = meal && stillThere ? await putOnWeek(tx, item.ref_id!, { day: addDays(meal.day, moved), meal: meal.meal }) : null;
+          await tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)',
+            [made.lastId, item.kind, item.ref_id, item.label, item.quantity, item.note, item.id, mealId]);
+        }
         return made.lastId;
       }).then(whole);
     },
@@ -238,19 +293,39 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
 
     addItem(planId: number, input: PlanItemInput): Promise<Plan> {
       return atomic(db, async (tx) => {
-        await row(tx, planId);
+        const plan = await row(tx, planId);
         const v = await itemValues(tx, input);
         if (v.ref !== null && await tx.get('SELECT id FROM plan_items WHERE plan_id = ? AND kind = ? AND ref_id = ?', [planId, v.kind, v.ref])) throw new Problem(409, "That's already part of it");
+        const slot = v.kind === 'recipe' ? slotFor(plan, input.day, input.meal) : null;
         const last = (await tx.get<{ last: number | null }>('SELECT MAX(sort_order) AS last FROM plan_items WHERE plan_id = ?', [planId]))!.last ?? 0;
-        await tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order) VALUES (?, ?, ?, ?, ?, ?, 0, ?)',
-          [planId, v.kind, v.ref, v.label, v.quantity, v.note, last + 1]);
+        await tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)',
+          [planId, v.kind, v.ref, v.label, v.quantity, v.note, last + 1, slot ? await putOnWeek(tx, v.ref!, slot) : null]);
       }).then(() => whole(planId));
     },
 
-    /** Tick it, reword a task, or change how many are needed or the note. What it points at stays. */
-    async updateItem(itemId: number, input: { label?: string | null; quantity?: number | null; note?: string | null; done?: boolean }): Promise<Plan> {
+    /**
+     * Tick it, reword a task, change how many are needed or the note, or, for a recipe, say when it's eaten:
+     * a day puts it on the week's meals (or moves it there), and no day takes it off again.
+     */
+    async updateItem(itemId: number, input: { label?: string | null; quantity?: number | null; note?: string | null; done?: boolean; day?: string | null; meal?: string | null }): Promise<Plan> {
       const planId = await planOfItem(db, itemId);
-      const old = (await db.get<ItemRow>('SELECT id, plan_id, kind, ref_id, label, quantity, note, done FROM plan_items WHERE id = ?', [itemId]))!;
+      const old = (await db.get<ItemRow>(`SELECT ${ITEM_COLUMNS} FROM plan_items WHERE id = ?`, [itemId]))!;
+      if (input.day !== undefined && old.kind === 'recipe' && old.ref_id !== null) {
+        const slot = slotFor(await row(db, planId), input.day, input.meal);
+        await atomic(db, async (tx) => {
+          const meal = old.meal_plan_id !== null ? await tx.get<{ id: number; cooked_on: string | null }>('SELECT id, cooked_on FROM meal_plan WHERE id = ? AND owner_id = ?', [old.meal_plan_id, owner]) : undefined;
+          if (meal?.cooked_on) throw new Problem(409, "That meal has been cooked, so it stays where it was");
+          if (!slot) {
+            await offWeek(tx, old.meal_plan_id);
+            await tx.run('UPDATE plan_items SET meal_plan_id = NULL WHERE id = ?', [itemId]);
+          } else if (meal) {
+            await tx.run('UPDATE meal_plan SET day = ?, meal = ? WHERE id = ?', [slot.day, slot.meal, meal.id]);
+          } else {
+            await pointedAt(tx, 'recipe', old.ref_id!);
+            await tx.run('UPDATE plan_items SET meal_plan_id = ? WHERE id = ?', [await putOnWeek(tx, old.ref_id!, slot), itemId]);
+          }
+        });
+      }
       const label = old.kind === 'task' && input.label !== undefined ? clean(input.label, 300) : old.label;
       if (!label) throw new Problem(400, 'Say what needs doing');
       const quantity = input.quantity === undefined ? old.quantity : input.quantity;
@@ -260,9 +335,13 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
       return whole(planId);
     },
 
+    /** Take something off the plan. A recipe's meal on the week goes with it, unless it's been cooked. */
     async removeItem(itemId: number): Promise<Plan> {
       const planId = await planOfItem(db, itemId);
-      await db.run('DELETE FROM plan_items WHERE id = ?', [itemId]);
+      await atomic(db, async (tx) => {
+        await offWeek(tx, (await tx.get<{ meal_plan_id: number | null }>('SELECT meal_plan_id FROM plan_items WHERE id = ?', [itemId]))!.meal_plan_id);
+        await tx.run('DELETE FROM plan_items WHERE id = ?', [itemId]);
+      });
       return whole(planId);
     },
 

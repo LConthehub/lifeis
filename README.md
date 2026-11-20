@@ -84,6 +84,9 @@ time in Settings; unticking something only puts it out of sight.
   sewing. Make it ahead, or write it down afterwards.
 - **It points at what you already have**: recipes, things (with how many are needed, so it says what you're short
   of), titles from the collection, a project, and a checklist of its own. Nothing is copied.
+- **Its food goes on the week.** Say which day and meal a plan's recipe is for (or a day before, for what's made
+  ahead) and it's on the week's meals, so the grocery list and the pans that meal needs follow. Move the plan and
+  its meals move too; a meal already cooked stays where it happened.
 - **Once its days have come, it remembers**: what was cooked, worked on, watched and heard on those days is gathered
   in, with your own words about how it went and your photos. A photo picked from your phone is made smaller and
   kept with the plan; one from your Immich library is only linked, and stays there.
