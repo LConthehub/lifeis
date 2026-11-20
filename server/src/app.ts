@@ -7,7 +7,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BlockList, isIP } from 'node:net';
-import { atomic, home, kitchen, life, Problem, lookups, BOOK_SERVICE, weather, WEATHER_SERVICE, type Db, type Kitchen } from '../../core/src/index.ts';
+import { atomic, home, kitchen, life, Problem, lookups, BOOK_SERVICE, GROCERY_SERVICE, weather, WEATHER_SERVICE, type Db, type Kitchen } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
 import { mailRoutes, type MailTools } from './mailRoutes.ts';
 import { planRoutes } from './planRoutes.ts';
@@ -231,8 +231,14 @@ export function createApp(options: Options) {
       return { json: { ...await skies(c).turnOn({ name: read.text(c.body, 'name'), latitude, longitude, units: read.maybeText(c.body, 'units') }), service: WEATHER_SERVICE } };
     }],
     // Looking a book up from its barcode: an outside service too, off until turned on. See core/'s lookups.ts.
-    ['GET', /^\/api\/lookups$/, async (c) => ({ json: { ...await finder(c).status(), service: BOOK_SERVICE } })],
-    ['PUT', /^\/api\/lookups$/, async (c) => ({ json: { ...await finder(c).setBooks(read.yesNo(c.body, 'books')), service: BOOK_SERVICE } })],
+    ['GET', /^\/api\/lookups$/, async (c) => ({ json: { ...await finder(c).status(), service: BOOK_SERVICE, grocery_service: GROCERY_SERVICE } })],
+    ['PUT', /^\/api\/lookups$/, async (c) => {
+      if (!Object.hasOwn(c.body, 'books') && !Object.hasOwn(c.body, 'groceries')) throw notUnderstood('books');
+      if (Object.hasOwn(c.body, 'books')) await finder(c).setBooks(read.yesNo(c.body, 'books'));
+      if (Object.hasOwn(c.body, 'groceries')) await finder(c).setGroceries(read.yesNo(c.body, 'groceries'));
+      return { json: { ...await finder(c).status(), service: BOOK_SERVICE, grocery_service: GROCERY_SERVICE } };
+    }],
+    ['GET', /^\/api\/lookups\/product$/, async (c) => ({ json: { product: await finder(c).product(c.query.get('code') ?? '') } })],
     ['GET', /^\/api\/lookups\/book$/, async (c) => ({ json: { book: await finder(c).book(c.query.get('code') ?? '') } })],
     ['DELETE', /^\/api\/weather$/, async (c) => ({ json: { ...await skies(c).turnOff(), service: WEATHER_SERVICE } })],
 

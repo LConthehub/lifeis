@@ -481,6 +481,24 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_coupons_owner ON coupons(owner_id, used_on)`,
     ],
   },
+  {
+    number: 14,
+    name: 'barcodes for groceries',
+    statements: [
+      // Which ingredient a product's barcode is: taught once, by scanning it and saying what it is. Several
+      // products (brands, sizes) can be the same ingredient. The label is the product's own name, if known.
+      `CREATE TABLE ingredient_barcodes (
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        barcode TEXT NOT NULL,
+        ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
+        label TEXT,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (owner_id, barcode)
+      )`,
+      // The product a price was paid for, when it was scanned.
+      `ALTER TABLE prices ADD COLUMN barcode TEXT`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

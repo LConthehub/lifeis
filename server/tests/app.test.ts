@@ -505,7 +505,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   await database.db.run('PRAGMA user_version = 2');
@@ -590,6 +590,16 @@ it('prices, the running total and coupons answer over the web, in whole cents', 
   expect((await other.get('/api/shopping')).json).toMatchObject({ lines: [], coupons: [], currency: '$' });
   expect([(await other.put(`/api/shopping/prices/${coffee}`, { cents: 1 })).status, (await other.post(`/api/shopping/coupons/${coupon}/use`, { using: false })).status]).toEqual([404, 404]);
   expect((await visitor().get('/api/shopping')).status).toBe(401);
+
+  // A scanned packet is taught once, then found; and prices are followed over time.
+  expect((await admin.get('/api/shopping/scan?code=025500000276')).json).toEqual({ barcode: '0025500000276', ingredient: null, line: null, last: null });
+  const taught = (await admin.put('/api/shopping/scan', { code: '025500000276', grocery_id: coffee, product: 'Folgers 30 oz' })).json;
+  expect([taught.ingredient.product, taught.line.id, taught.line.done]).toEqual(['Folgers 30 oz', coffee, true]);
+  expect((await admin.put('/api/shopping/scan', { code: '025500000276' })).status).toBe(422);
+  expect((await other.get('/api/shopping/scan?code=025500000276')).json.ingredient).toBeNull();
+  const trends = (await admin.get('/api/shopping/trends')).json;
+  expect([trends.currency, trends.trends.map((t: { name: string; times: number }) => [t.name.toLowerCase(), t.times]), trends.spending[0].cents]).toEqual(['£', [['coffee', 1]], 899]);
+  expect((await other.get('/api/shopping/trends')).json.trends).toEqual([]);
 
   // Clearing the list keeps what things cost.
   await admin.post('/api/kitchen/grocery/clear-done');

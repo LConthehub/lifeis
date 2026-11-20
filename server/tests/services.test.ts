@@ -22,6 +22,10 @@ let asked: string[];
 
 const outside: Fetcher = async (url) => {
   asked.push(url);
+  if (url.includes('openfoodfacts.org')) {
+    const data = url.includes('/3017620422003.json') ? { code: '3017620422003', status: 1, product: { product_name: 'Nutella', brands: 'Ferrero', quantity: '400 g' } } : { status: 0, status_verbose: 'product not found' };
+    return { status: 200, type: 'application/json', json: async () => data, bytes: async () => new Uint8Array() };
+  }
   if (url.includes('openlibrary.org')) {
     const known = url.includes('ISBN:9780441172719');
     const data = known ? { 'ISBN:9780441172719': { title: 'Dune', authors: [{ name: 'Frank Herbert' }], publish_date: 'June 2020', number_of_pages: 896 } } : {};
@@ -194,4 +198,21 @@ it('books are looked up by barcode only once that is turned on, and only the num
   expect((await admin.put('/api/lookups', { books: false })).json.books).toBe(false);
   expect((await admin.get('/api/lookups/book?code=9780441172719')).status).toBe(400);
   expect((await visitor().get('/api/lookups')).status).toBe(401);
+});
+
+it('groceries are looked up by barcode only once that is turned on, apart from books', async () => {
+  const admin = await start(true);
+  const off = (await admin.get('/api/lookups')).json;
+  expect([off.groceries, off.books, off.grocery_service.name]).toEqual([false, false, 'Open Food Facts']);
+  expect((await admin.get('/api/lookups/product?code=3017620422003')).status).toBe(400);
+  expect(asked).toEqual([]);
+
+  const on = (await admin.put('/api/lookups', { groceries: true })).json;
+  expect([on.groceries, on.books]).toEqual([true, false]); // one doesn't turn the other on
+  expect((await admin.put('/api/lookups', {})).status).toBe(422);
+  expect((await admin.get('/api/lookups/product?code=3017620422003')).json).toEqual({ product: { barcode: '3017620422003', name: 'Nutella', brand: 'Ferrero', size: '400 g' } });
+  expect(asked).toEqual(['https://world.openfoodfacts.org/api/v2/product/3017620422003.json?fields=product_name,brands,quantity']);
+  expect((await admin.get('/api/lookups/product?code=0025500000276')).json).toEqual({ product: null });
+  expect((await admin.get('/api/lookups/product?code=abc')).status).toBe(400);
+  expect((await admin.put('/api/lookups', { groceries: false })).json.groceries).toBe(false);
 });

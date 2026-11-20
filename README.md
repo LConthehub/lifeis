@@ -24,6 +24,11 @@ So far: the kitchen, the calendar, the things you keep, the projects that use th
   sight while the list scrolls. Next time the list says what each thing cost last time and where, guesses the trip
   before you start, and keeps a price history for each ingredient. Tick something off without a price and last
   time's stands in, marked as a guess.
+- **Prices over time.** A page of what each thing has cost: its latest price, how it changed, where it was cheapest,
+  and a chart. Things always bought by the same measure are compared for one of it, so 2 lb and 5 lb sit side by
+  side. Spending is totalled by the month.
+- **Scan it in the shop.** Point the camera at a packet. The first time, say which thing on the list it is; after
+  that a scan finds its line, shows last time's price, and puts it in the trolley with what you type.
 - **Coupons.** Money or a percentage off, for one thing or the whole shop, perhaps at one shop and until a day. The
   list flags the line a coupon is for; using it takes it off the total.
 - **A recipe knows what it's cooked in.** Pans, dishes and tools from the things you keep (the cast iron skillet,
@@ -51,6 +56,8 @@ each off until you turn it on, each saying exactly what it sends:
   the password you give (for most providers an "app password"), stored locked. No message is ever kept: the inbox
   is read when you look. Opening a message doesn't mark it read. The line is always encrypted, and the account is
   only saved if signing in works.
+- **Looking a grocery up when you scan it**, from [Open Food Facts](https://world.openfoodfacts.org) (no account, no
+  key). It is sent the number under the barcode and nothing else. Scanning works without it.
 - **Looking a book up when you scan it**, from [Open Library](https://openlibrary.org) (no account, no key). It is
   sent the number under the book's barcode and nothing else; what comes back is yours to check before saving.
 - **Photos from your own Immich**, linked to plans and memories without copying them. Life Is asks your Immich

@@ -15,6 +15,7 @@ import Calendar from './pages/Calendar';
 import MediaPage, { MediaTitlePage } from './pages/Media';
 import Servers from './pages/Servers';
 import Mail from './pages/Mail';
+import Prices from './pages/Prices';
 import PlansPage, { PlanPage } from './pages/Plans';
 import { PlacePage, StickerLanding, StickersPage } from './pages/Places';
 
@@ -30,8 +31,8 @@ axios.interceptors.request.use((config) => {
 
 // Life is… each section finishes the sentence, and has its own few pages.
 const SECTIONS = [
-  { word: 'eating', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry'].includes(path) || path.startsWith('/recipes'),
-    tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫']] },
+  { word: 'eating', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
+    tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫'], ['/prices', 'Prices', '💲']] },
   { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar') || path.startsWith('/plans') || path.startsWith('/mail'), tabs: [['/calendar', 'Calendar', '📅'], ['/plans', 'Plans', '✨'], ['/mail', 'Mail', '✉️']] },
   { word: 'keeping', home: '/things', owns: (path) => path.startsWith('/things'),
     tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/kinds', 'Kinds', '🏷']] },
@@ -116,6 +117,7 @@ function Shell({ user, onLogout }) {
           <Route path="/week" element={<Week />} />
           <Route path="/groceries" element={<Groceries />} />
           <Route path="/pantry" element={<Pantry />} />
+          <Route path="/prices" element={<Prices />} />
           <Route path="/things" element={<Things />} />
           <Route path="/things/kinds" element={<KindsPage />} />
           <Route path="/things/places" element={<PlacesPage />} />

@@ -292,7 +292,21 @@ function BookLookupService() {
   useEffect(() => { axios.get('/api/lookups').then(({ data }) => setL(data)).catch(() => {}); }, []);
   if (!l) return null;
   const turn = async (books) => { const { data } = await axios.put('/api/lookups', { books }); setL(data); };
+  const turnGroceries = async (groceries) => { const { data } = await axios.put('/api/lookups', { groceries }); setL(data); };
   return (
+    <>
+    <div className="py-3">
+      <div className="flex items-baseline gap-2">
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🛒 Look up groceries when you scan them</h3>
+        <span className={`rounded px-1.5 text-[11px] ${l.groceries ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.groceries ? 'On' : 'Off'}</span>
+      </div>
+      <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
+        Scan a packet Life Is hasn't seen and its name is filled in for you to check, from <a href={l.grocery_service.site} target="_blank" rel="noreferrer" className="underline">{l.grocery_service.name}</a>.
+        {' '}<span className="font-medium">What it's sent:</span> {l.grocery_service.sends} Scanning works without it; you just type the name yourself the first time.
+      </p>
+      {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p>
+        : <button type="button" onClick={() => turnGroceries(!l.groceries)} className={`${quietButtonClass} mt-2`}>{l.groceries ? 'Turn off' : 'Turn on'}</button>}
+    </div>
     <div className="py-3">
       <div className="flex items-baseline gap-2">
         <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">📚 Look up books when you scan them</h3>
@@ -305,6 +319,7 @@ function BookLookupService() {
       {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p>
         : <button type="button" onClick={() => turn(!l.books)} className={`${quietButtonClass} mt-2`}>{l.books ? 'Turn off' : 'Turn on'}</button>}
     </div>
+    </>
   );
 }
 

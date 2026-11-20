@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
+import Scanner from '../components/Scanner';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, fromDateInput } from '../components/ui';
 
 /** Cents as money: 349 is $3.49. */
@@ -70,6 +71,7 @@ export default function Groceries() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Groceries</h1>
+        <button type="button" onClick={() => setModal({ scan: true })} className={quietButtonClass}>📷 Scan</button>
         <button type="button" onClick={low} className={quietButtonClass}>Add what's running low</button>
       </div>
       {message && <p className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-800 dark:text-life-100">{message}</p>}
@@ -198,6 +200,11 @@ export default function Groceries() {
           <PriceForm line={lineOf(modal.price)} sign={sign} onSave={async (cents) => { await price(modal.price, cents); setModal(null); }} />
         </Modal>
       )}
+      {modal?.scan && (
+        <Modal title="Scan a grocery" onClose={() => { setModal(null); load(); }}>
+          <ScanGrocery open={open} sign={sign} putAway={putAway} onChanged={load} />
+        </Modal>
+      )}
       {modal?.history && <Modal title={`${modal.history.label}: what it has cost`} onClose={() => setModal(null)}><History line={modal.history} sign={sign} /></Modal>}
       {modal?.coupon && (
         <Modal title={modal.coupon.id ? modal.coupon.label : 'A coupon'} onClose={() => setModal(null)}>
@@ -286,6 +293,112 @@ function CouponForm({ coupon, sign, lines, store, onDone }) {
         {coupon.id ? <button type="button" onClick={remove} className="text-sm text-red-600 hover:underline">Remove</button> : <span />}
         <button type="submit" className={buttonClass}>Save</button>
       </div>
+    </form>
+  );
+}
+
+/**
+ * Scan something in the shop. Known and on the list: type its price and it goes in the trolley. Not seen
+ * before: say which thing on the list it is (or add it), and it's known from then on.
+ */
+function ScanGrocery({ open, sign, putAway, onChanged }) {
+  const [round, setRound] = useState(0);
+  const [seen, setSeen] = useState(null);           // what the last scan turned out to be
+  const [product, setProduct] = useState(null);     // its name from the lookup, when that's on
+  const [text, setText] = useState('');
+  const [which, setWhich] = useState('');
+  const [name, setName] = useState('');
+  const [done, setDone] = useState('');
+  const [error, setError] = useState('');
+  const again = () => { setSeen(null); setProduct(null); setText(''); setWhich(''); setName(''); setError(''); setRound(round + 1); };
+  const look = useCallback(async (code) => {
+    setDone(''); setError('');
+    try {
+      const { data } = await axios.get('/api/shopping/scan', { params: { code } });
+      setSeen(data);
+      if (!data.ingredient) {
+        // A new product: if looking groceries up is on, ask what it's called, to save typing.
+        const { data: can } = await axios.get('/api/lookups').catch(() => ({ data: {} }));
+        if (can.groceries) {
+          const found = await axios.get('/api/lookups/product', { params: { code: data.barcode } }).then(({ data: d }) => d.product).catch(() => null);
+          if (found) { setProduct(found); setName(found.name); }
+        }
+      }
+    } catch (err) { setError(errorMessage(err, "Couldn't look that up")); setSeen({ failed: true }); }
+  }, []);
+  if (!seen) return <div className="space-y-2">{done && <p className="rounded-lg bg-life-100 px-3 py-2 text-sm text-life-800">{done}</p>}<Scanner key={round} onCode={look} label="Point the camera at the barcode on the packet" /></div>;
+  const another = <button type="button" onClick={again} className={quietButtonClass}>Scan another</button>;
+  if (seen.failed) return <div className="space-y-3"><p className="text-sm text-red-600">{error}</p>{another}</div>;
+
+  const inTrolley = async (line, barcode) => {
+    try {
+      await axios.post(`/api/kitchen/grocery/${line.id}/tick`, { done: true, put_away: putAway });
+      const cents = centsOf(text);
+      if (cents !== null) await axios.put(`/api/shopping/prices/${line.id}`, { cents, barcode });
+      else if (seen.last) await axios.put(`/api/shopping/prices/${line.id}`, { cents: seen.last.cents, assumed: true, barcode });
+      onChanged();
+      setDone(`${line.label} is in the trolley${cents !== null ? ` at ${money(cents, sign)}` : seen.last ? ` (≈ ${money(seen.last.cents, sign)}, last time's price)` : ''}.`);
+      again();
+    } catch (err) { setError(errorMessage(err, "Couldn't do that")); }
+  };
+  const addToList = async (label) => {
+    const { data } = await axios.post('/api/kitchen/grocery', { label });
+    onChanged();
+    // The line just added is the newest one still to get.
+    return data.filter((g) => !g.done).reduce((a, b) => (b.id > a.id ? b : a));
+  };
+  // Say what a new barcode is: one of the lines, or something new that goes on the list.
+  const teach = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      const line = which === '' ? await addToList(name) : { id: Number(which) };
+      const label = product ? [product.name, product.brand, product.size].filter(Boolean).join(', ') : null;
+      setSeen((await axios.put('/api/shopping/scan', { code: seen.barcode, grocery_id: line.id, product: label })).data);
+    } catch (err) { setError(errorMessage(err, "Couldn't save that")); }
+  };
+
+  if (!seen.ingredient) {
+    return (
+      <form onSubmit={teach} className="space-y-3">
+        <p className="text-sm text-gray-800 dark:text-life-50">Life Is hasn't seen this one before (<span className="font-mono">{seen.barcode}</span>). Say what it is once, and it's known from then on.</p>
+        {product && <p className="rounded-lg bg-life-50 px-3 py-2 text-sm text-gray-800 dark:bg-life-700 dark:text-life-50"><span className="block text-xs text-gray-500 dark:text-life-300">Open Food Facts says it's</span>{[product.name, product.brand, product.size].filter(Boolean).join(' · ')}</p>}
+        <Field label="It's this, on the list">
+          <select value={which} onChange={(e) => setWhich(e.target.value)} className={inputClass}>
+            <option value="">Something not on the list yet</option>
+            {open.filter((g) => g.ingredient_id).map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+          </select>
+        </Field>
+        {which === '' && <Field label="What to call it on the list *"><input required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. coffee" className={inputClass} /></Field>}
+        {which === '' && <p className="text-xs text-gray-500 dark:text-life-300">Use the everyday name ("coffee", not the brand), so recipes and the pantry know it as the same thing. It's added to the list.</p>}
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex items-center justify-end gap-2">{another}<button type="submit" className={buttonClass}>That's what it is</button></div>
+      </form>
+    );
+  }
+  const what = <p className="text-sm text-gray-800 dark:text-life-50"><span className="font-medium">{seen.ingredient.name}</span>{seen.ingredient.product && <span className="block text-xs text-gray-500 dark:text-life-300">{seen.ingredient.product}</span>}</p>;
+  const lastLine = seen.last && <p className="text-xs text-gray-500 dark:text-life-300">Last time {money(seen.last.cents, sign)}{seen.last.amount ? ` for ${seen.last.amount}` : ''}{seen.last.store ? ` at ${seen.last.store}` : ''}, {shortDay(seen.last.day)}.</p>;
+  if (seen.line?.done) return <div className="space-y-3">{what}<p className="text-sm text-gray-600 dark:text-life-100">That's already in the trolley.</p>{lastLine}{another}</div>;
+  if (!seen.line) {
+    return (
+      <div className="space-y-3">
+        {what}{lastLine}
+        <p className="text-sm text-gray-600 dark:text-life-100">It isn't on the list.</p>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex items-center justify-end gap-2">{another}
+          <button type="button" onClick={async () => { const line = await addToList(seen.ingredient.name); setSeen({ ...seen, line: { id: line.id, label: line.label, amount: line.amount, done: false } }); }} className={buttonClass}>Add it to the list</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); inTrolley(seen.line, seen.barcode); }} className="space-y-3">
+      {what}
+      <p className="text-sm text-gray-600 dark:text-life-100">On the list{seen.line.amount ? `: ${seen.line.amount}` : ''}.</p>
+      <Field label={`What it costs (${sign})`}><input autoFocus inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} placeholder={seen.last ? (seen.last.cents / 100).toFixed(2) : 'price'} className={inputClass} /></Field>
+      {lastLine}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex items-center justify-end gap-2">{another}<button type="submit" className={buttonClass}>In the trolley</button></div>
     </form>
   );
 }

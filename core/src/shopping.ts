@@ -14,6 +14,7 @@
  * shop and until a day. Saying you're using it takes it off today's total, and it isn't offered again.
  */
 import type { Db, Queries } from './db.ts';
+import { barcodeKey } from './media.ts';
 import { Problem } from './problem.ts';
 import { clean, dayNumber, dayOrNull, stamp, todayOf, type Clock } from './small.ts';
 import * as units from './units.ts';
@@ -70,12 +71,41 @@ export type Shopping = {
   };
 };
 
+/** A price with what it comes to for one of whatever it was bought by ("349 per lb"), when an amount is known. */
+export type PricePoint = LastPrice & { per_cents: number | null; per: string | null };
+/** How one ingredient's price has gone. */
+export type Trend = {
+  name: string;
+  times: number;
+  /** What the figures compare: the price for one unit (`per` says which), or the price of the line as bought. */
+  basis: 'per' | 'line';
+  per: string | null;
+  /** Oldest first. */
+  points: PricePoint[];
+  latest: PricePoint;
+  lowest: PricePoint;
+  highest: PricePoint;
+  /** The latest less the one before, on the basis above; null with only one price. */
+  change_cents: number | null;
+};
+export type MonthSpend = { /** 2046-03 */ month: string; cents: number; lines: number };
+/** What a scanned grocery barcode turned out to be. */
+export type Scanned = {
+  barcode: string;
+  /** The ingredient this product has been taught as; null the first time it's seen. */
+  ingredient: { id: number; name: string; product: string | null } | null;
+  /** The line of the list it is, if it's on it. */
+  line: { id: number; label: string; amount: string; done: boolean } | null;
+  last: LastPrice | null;
+};
+
 const CURRENCY = 'shopping_currency';
 const STORE = 'shopping_store';
 const MAX_CENTS = 100_000_000;
 
 type CouponRow = Omit<Coupon, 'days_left' | 'worth_cents' | 'ingredient'> & { ingredient: string | null };
 type Line = { id: number; ingredient_id: number | null; label: string; quantity: number | null; unit: string | null; done: number };
+const valueOf = (p: { cents: number; per_cents: number | null }, basis: 'per' | 'line') => (basis === 'per' ? p.per_cents! : p.cents);
 type PriceRow = { grocery_id: number | null; ingredient_id: number | null; label: string; cents: number; quantity: number | null; unit: string | null; store: string | null; day: string; assumed: number };
 
 const keyOf = (line: { ingredient_id: number | null; label: string }) => (line.ingredient_id !== null ? `#${line.ingredient_id}` : `~${line.label.trim().toLowerCase()}`);
@@ -181,15 +211,91 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
      * What a line on the list cost, in cents; null takes the price away again. `assumed` marks last time's
      * price standing in. The line's price is replaced, never added to.
      */
-    async setPrice(groceryId: number, price: number | null, assumed = false): Promise<Shopping> {
+    async setPrice(groceryId: number, price: number | null, assumed = false, barcode?: string | null): Promise<Shopping> {
       const l = await line(db, groceryId);
       await db.run('DELETE FROM prices WHERE owner_id = ? AND grocery_id = ?', [owner, groceryId]);
       if (price !== null) {
         await db.run(
-          'INSERT INTO prices (owner_id, ingredient_id, grocery_id, label, cents, quantity, unit, store, day, assumed, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [owner, l.ingredient_id, groceryId, l.label, cents(price, 'A price'), l.quantity, l.unit, await setting(STORE), today(), assumed ? 1 : 0, stamp(clock())]);
+          'INSERT INTO prices (owner_id, ingredient_id, grocery_id, label, cents, quantity, unit, store, day, assumed, barcode, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [owner, l.ingredient_id, groceryId, l.label, cents(price, 'A price'), l.quantity, l.unit, await setting(STORE), today(), assumed ? 1 : 0, barcode ? barcodeKey(barcode) : null, stamp(clock())]);
       }
       return summary();
+    },
+
+    // ---------- barcodes ----------
+
+    /** What a scanned barcode is: the ingredient it was taught as, the line of the list it is, and its last price. */
+    async scan(code: string): Promise<Scanned> {
+      const barcode = barcodeKey(code);
+      if (!/^[0-9A-Z]{4,40}$/.test(barcode)) throw new Problem(400, "That isn't a barcode");
+      const known = await db.get<{ id: number; name: string; product: string | null }>(
+        'SELECT i.id, i.name, b.label AS product FROM ingredient_barcodes b JOIN ingredients i ON i.id = b.ingredient_id WHERE b.owner_id = ? AND b.barcode = ?', [owner, barcode]);
+      if (!known) return { barcode, ingredient: null, line: null, last: null };
+      // On the list: the line still to get if there is one, else the one already in the trolley.
+      const onList = await db.get<Line>('SELECT id, ingredient_id, label, quantity, unit, done FROM grocery WHERE owner_id = ? AND ingredient_id = ? ORDER BY done, id LIMIT 1', [owner, known.id]);
+      const before = await db.get<PriceRow>(
+        `SELECT grocery_id, ingredient_id, label, cents, quantity, unit, store, day, assumed FROM prices
+         WHERE owner_id = ? AND ingredient_id = ? AND assumed = 0 AND (grocery_id IS NULL OR grocery_id != ?) ORDER BY day DESC, id DESC LIMIT 1`, [owner, known.id, onList?.id ?? 0]);
+      return {
+        barcode, ingredient: known,
+        line: onList ? { id: onList.id, label: onList.label, amount: units.amount(onList.quantity, onList.unit), done: onList.done === 1 } : null,
+        last: before ? { cents: before.cents, amount: units.amount(before.quantity, before.unit), store: before.store, day: before.day } : null,
+      };
+    },
+
+    /** Teach a barcode: this product is the thing on that line of the list. Taught again, it's simply changed. */
+    async learn(code: string, groceryId: number, product?: string | null): Promise<Scanned> {
+      const barcode = barcodeKey(code);
+      if (!/^[0-9A-Z]{4,40}$/.test(barcode)) throw new Problem(400, "That isn't a barcode");
+      const l = await line(db, groceryId);
+      if (l.ingredient_id === null) throw new Problem(400, "That line isn't an ingredient Life Is knows, so a barcode can't be tied to it");
+      await db.run(
+        `INSERT INTO ingredient_barcodes (owner_id, barcode, ingredient_id, label, created_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(owner_id, barcode) DO UPDATE SET ingredient_id = excluded.ingredient_id, label = COALESCE(excluded.label, label)`,
+        [owner, barcode, l.ingredient_id, clean(product, 200), stamp(clock())]);
+      return this.scan(barcode);
+    },
+
+    /** Forget what a barcode is. */
+    async forget(code: string): Promise<void> {
+      await db.run('DELETE FROM ingredient_barcodes WHERE owner_id = ? AND barcode = ?', [owner, barcodeKey(code)]);
+    },
+
+    // ---------- over time ----------
+
+    /**
+     * How each thing's price has gone, by name. Only prices somebody saw. Where every price of a thing has an
+     * amount in the same unit, they are compared for one of that unit, so 2 lb and 5 lb can be set side by
+     * side; otherwise by the price of the line as it was bought.
+     */
+    async trends(): Promise<Trend[]> {
+      const rows = await db.all<PriceRow & { name: string | null }>(
+        `SELECT p.grocery_id, p.ingredient_id, p.label, p.cents, p.quantity, p.unit, p.store, p.day, p.assumed, i.name
+         FROM prices p LEFT JOIN ingredients i ON i.id = p.ingredient_id WHERE p.owner_id = ? AND p.assumed = 0 ORDER BY p.day, p.id`, [owner]);
+      const groups = new Map<string, { name: string; points: PricePoint[] }>();
+      for (const p of rows) {
+        const group = groups.get(keyOf(p)) ?? groups.set(keyOf(p), { name: p.name ?? p.label, points: [] }).get(keyOf(p))!;
+        const known = p.quantity !== null && p.quantity > 0;
+        group.points.push({ cents: p.cents, amount: units.amount(p.quantity, p.unit), store: p.store, day: p.day,
+          per_cents: known ? Math.round(p.cents / p.quantity!) : null, per: known ? (p.unit ?? 'each') : null });
+      }
+      return [...groups.values()].map(({ name, points }): Trend => {
+        const per = points[0]!.per;
+        const basis = per !== null && points.every((p) => p.per === per) ? 'per' : 'line';
+        const by = (pick: (a: number, b: number) => boolean) => points.reduce((best, p) => (pick(valueOf(p, basis), valueOf(best, basis)) ? p : best));
+        const latest = points[points.length - 1]!;
+        return {
+          name, times: points.length, basis, per: basis === 'per' ? per : null, points, latest, lowest: by((a, b) => a < b), highest: by((a, b) => a > b),
+          change_cents: points.length > 1 ? valueOf(latest, basis) - valueOf(points[points.length - 2]!, basis) : null,
+        };
+      }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    },
+
+    /** What was spent, month by month, newest first: everything priced, stand-ins included (the money was still spent). */
+    async spending(months = 12): Promise<MonthSpend[]> {
+      if (!(Number.isInteger(months) && months >= 1 && months <= 120)) throw new Problem(400, '1 to 120 months');
+      return db.all<MonthSpend>(
+        'SELECT SUBSTR(day, 1, 7) AS month, SUM(cents) AS cents, COUNT(*) AS lines FROM prices WHERE owner_id = ? GROUP BY month ORDER BY month DESC LIMIT ?', [owner, months]);
     },
 
     /** What the thing on this line has cost before, newest first: only prices somebody saw. */
