@@ -376,6 +376,16 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_mail_accounts ON mail_accounts(owner_id)`,
     ],
   },
+  {
+    number: 10,
+    name: 'a code for each place, for its sticker',
+    statements: [
+      // What a place's printed sticker carries. Random, so one sticker says nothing about another; given the
+      // first time stickers are asked for.
+      `ALTER TABLE places ADD COLUMN code TEXT`,
+      `CREATE UNIQUE INDEX idx_places_code ON places(code) WHERE code IS NOT NULL`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

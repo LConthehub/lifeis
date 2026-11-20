@@ -60,6 +60,9 @@ time in Settings; unticking something only puts it out of sight.
   knitting, woodworking, gardening, around the house, cookware with cast iron) and change it, or make your own
   from nothing.
 - **Where everything is.** A room, a shelf in it, a bin on the shelf, as far down as helps you find things.
+- **A sticker for every shelf and bin.** Print a sheet of QR stickers for your places. Point a phone at one and
+  see what's inside: your things and whatever from your collection is kept there. Only someone signed in to your
+  Life Is sees anything, and the stickers stay good if its address changes.
 - **How much is free.** What you have, less what your projects have set aside.
 
 ## Projects

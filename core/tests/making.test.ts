@@ -277,3 +277,26 @@ it("each person has their own things and projects", async () => {
   expect(await things.getItem(linen.id)).toMatchObject({ name: 'Blue linen', set_aside: 3 });
   expect([(await things.listPlaces()).length, (await making.getProject(dress.id)).sessions_count]).toEqual([1, 1]);
 });
+
+it('each place has a sticker code that stays the same and finds it again', async () => {
+  const { inventory: things2, stickerCode } = await import('../src/inventory.ts');
+  const mine = things;
+  await mine.createPlace({ name: 'Sewing room' });
+  const room = (await mine.listPlaces())[0]!;
+  await mine.createPlace({ name: 'Bin A', parent_id: room.id });
+  const first = await mine.stickers();
+  expect(first.map((s) => [s.path, /^[2-9A-HJ-NP-Z]{10}$/.test(s.code)])).toEqual([['Sewing room', true], ['Sewing room › Bin A', true]]);
+  expect(new Set(first.map((s) => s.code)).size).toBe(2);
+  expect(await mine.stickers()).toEqual(first); // asked again: the same codes, so printed stickers stay good
+
+  const bin = first[1]!;
+  // Whatever address the sticker was printed with, and however the scanner reports it.
+  for (const read of [bin.code, bin.code.toLowerCase(), `https://lifeis.example/p/${bin.code}`, `http://192.168.1.5:8020/p/${bin.code}/`]) {
+    expect(await mine.placeForSticker(read)).toEqual({ id: bin.id, name: 'Bin A', path: 'Sewing room › Bin A' });
+  }
+  expect([stickerCode('9780441172719'), stickerCode('https://example.com/other'), stickerCode(`https://x/p/${bin.code}0`)]).toEqual([null, null, null]);
+  await expect(mine.placeForSticker('AAAAAAAAAA')).rejects.toMatchObject({ status: 404 });
+  // Someone else scanning your sticker learns nothing.
+  const other = (await db.run("INSERT INTO users (username, password_hash, created_at) VALUES ('nosy', 'x', 'now')")).lastId;
+  await expect(things2(db, other, clock).placeForSticker(bin.code)).rejects.toMatchObject({ status: 404 });
+});

@@ -15,6 +15,7 @@ import Calendar from './pages/Calendar';
 import MediaPage, { MediaTitlePage } from './pages/Media';
 import Servers from './pages/Servers';
 import Mail from './pages/Mail';
+import { PlacePage, StickerLanding, StickersPage } from './pages/Places';
 
 axios.defaults.withCredentials = true;
 // The server keeps time in UTC, so each request says what day it is here. Without it, something finished at
@@ -81,7 +82,7 @@ function Shell({ user, onLogout }) {
   const exact = (to) => ['/recipes', '/things', '/projects', '/media'].includes(to);
   return (
     <div className="min-h-screen pb-20 sm:pb-6">
-      <header className="sticky top-0 z-30 bg-life-bar text-white shadow-sm">
+      <header className="sticky top-0 z-30 bg-life-bar text-white shadow-sm print:hidden">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
           <Link to="/" className="flex items-center gap-2 font-semibold text-white">
             <img src="/icon-192.png" alt="" className="h-7 w-7 rounded-lg" /> Life is
@@ -117,6 +118,9 @@ function Shell({ user, onLogout }) {
           <Route path="/things" element={<Things />} />
           <Route path="/things/kinds" element={<KindsPage />} />
           <Route path="/things/places" element={<PlacesPage />} />
+          <Route path="/things/places/stickers" element={<StickersPage />} />
+          <Route path="/things/places/:id" element={<PlacePage />} />
+          <Route path="/p/:code" element={<StickerLanding />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectPage />} />
           <Route path="/calendar" element={<Calendar />} />

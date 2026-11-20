@@ -381,6 +381,11 @@ it('what Life Is looks after is asked once, and sets up what fits', async () => 
 it('the collection and the calendar answer over the web', async () => {
   const admin = await owner();
   const room = (await admin.post('/api/things/places', { name: 'Living room' })).json[0].id;
+  // The room's sticker finds it again, by its code or by the address printed on it.
+  const sticker = (await admin.get('/api/things/places/stickers')).json[0];
+  expect([sticker.id, sticker.path, /^[2-9A-HJ-NP-Z]{10}$/.test(sticker.code)]).toEqual([room, 'Living room', true]);
+  expect((await admin.get(`/api/things/places/sticker?code=${encodeURIComponent(`https://anywhere.example/p/${sticker.code}`)}`)).json).toEqual({ id: room, name: 'Living room', path: 'Living room' });
+  expect((await admin.get('/api/things/places/sticker?code=9780441172719')).status).toBe(404);
   const made = await admin.post('/api/media', { type: 'film', title: 'Alien', creator: 'Ridley Scott', year: 1979, genres: ['Horror'], ids: { tmdb: 348 }, copy: { format: 'VHS', place_id: room } });
   expect(made.status).toBe(201);
   let alien = made.json;

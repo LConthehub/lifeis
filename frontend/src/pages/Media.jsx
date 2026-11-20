@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import Scanner from '../components/Scanner';
+import { stickerCode } from './Places';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
 export const TYPES = [['film', 'Films', '🎬', 'Film'], ['show', 'Shows', '📺', 'Show'], ['music', 'Music', '🎵', 'Music'], ['book', 'Books', '📚', 'Book'], ['game', 'Games', '🎮', 'Game'], ['other', 'Other', '🗃', 'Something else']];
@@ -96,6 +97,8 @@ function ScanToFind({ onAdd }) {
   const [found, setFound] = useState(null);         // null while scanning, else { code, matches } or { code, error }
   const navigate = useNavigate();
   const look = useCallback(async (code) => {
+    // A place's sticker, scanned from here, goes to its place all the same.
+    if (stickerCode(code)) { navigate(`/p/${stickerCode(code)}`); return; }
     try {
       const { data } = await axios.get('/api/media/barcode', { params: { code } });
       if (data.length === 1) navigate(`/media/${data[0].id}`); else setFound({ code, matches: data });
