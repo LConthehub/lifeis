@@ -112,6 +112,9 @@ export async function readServer(fetcher: Fetcher, kind: ServerKind, url: string
   for (let start = 0; ; start += PAGE) {
     const query = new URLSearchParams({
       recursive: 'true', includeItemTypes: Object.keys(JELLYFIN_TYPES).join(','), fields: 'Overview,Genres,ProviderIds',
+      // Without this the server hides every film that belongs to a collection behind the collection, and since
+      // collections aren't asked for, those films would never arrive.
+      collapseBoxSetItems: 'false',
       enableImages: 'true', sortBy: 'SortName', startIndex: String(start), limit: String(PAGE),
     });
     const page = await ask(fetcher, kind, `${url}/Items?${query}`, authHeaders(kind, key)) as { Items?: unknown; TotalRecordCount?: unknown } | null;
@@ -141,8 +144,10 @@ export async function readServer(fetcher: Fetcher, kind: ServerKind, url: string
         coverUrl: hasCover ? `${url}/Items/${encodeURIComponent(id)}/Images/Primary?maxWidth=300&quality=80` : null,
       });
     }
+    // The server says how many there are in all. A page can come back short of what was asked for, so the count
+    // decides when to stop, not the size of a page; a server that gives no count stops at the first short page.
     const total = typeof page?.TotalRecordCount === 'number' ? page.TotalRecordCount : 0;
-    if (items.length < PAGE || start + PAGE >= total) return out;
+    if (items.length === 0 || start + PAGE >= total && (total > 0 || items.length < PAGE)) return out;
     if (start > 500_000) throw new Problem(400, 'That library is larger than Life Is can bring in');
   }
 }

@@ -20,6 +20,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 type Item = Record<string, unknown> & { Id: string; Name: string; Type: string };
 let library: Item[];
 let pictureAsks: number;
+let shortPages = false;
 let itemAsks: number;
 let jellyfin: Server;
 let jellyfinUrl: string;
@@ -48,7 +49,11 @@ function startJellyfin(): Promise<void> {
       itemAsks += 1;
       const start = Number(url.searchParams.get('startIndex') ?? 0);
       const limit = Number(url.searchParams.get('limit') ?? 100);
-      return json(200, { Items: library.slice(start, start + limit), TotalRecordCount: library.length, StartIndex: start });
+      // As Jellyfin does: a film that belongs to a collection is hidden behind it unless the request says not to.
+      const shown = url.searchParams.get('collapseBoxSetItems') === 'false' ? library : library.filter((item) => !item.InCollection);
+      // And a page may come back shorter than asked for, with the count still saying how many there are.
+      const page = shown.slice(start, start + limit).filter((item) => !shortPages || item.Id !== shown[start]?.Id || start === 0);
+      return json(200, { Items: page, TotalRecordCount: shown.length, StartIndex: start });
     }
     return json(404, {});
   });
@@ -89,6 +94,7 @@ beforeEach(async () => {
   ];
   pictureAsks = 0;
   itemAsks = 0;
+  shortPages = false;
   time = null;
   await startJellyfin();
   folder = mkdtempSync(path.join(tmpdir(), 'lifeis-test-'));
@@ -216,6 +222,23 @@ it('a server set to sync by itself is synced when its time comes, and says so wh
   expect((await admin.get('/api/connections')).json[0]).toMatchObject({ last_ok: false, copies: 455 });
   expect((await admin.get('/api/media')).json).toHaveLength(455);
   await startJellyfin(); // for afterEach to close
+});
+
+it('films inside a collection come in too, and a short page does not end the sync early', async () => {
+  const admin = await owner();
+  // Nearly half the films sit in collections, as in a real library with collections set up.
+  library = library.map((item, n) => (item.Type === 'Movie' && n % 2 === 0 ? { ...item, InCollection: true } : item));
+  const films = library.filter((item) => item.Type === 'Movie').length;
+  const id = (await admin.post('/api/connections', { kind: 'jellyfin', url: jellyfinUrl, secret: KEY })).json[0].id;
+  const synced = (await admin.post(`/api/connections/${id}/sync`)).json;
+  expect(synced.total).toBe(454);
+  expect((await admin.get('/api/media?type=film')).json).toHaveLength(films);
+
+  // The server starts giving pages one short of what was asked: every title still arrives, none is dropped as gone.
+  shortPages = true;
+  const again = (await admin.post(`/api/connections/${id}/sync`)).json;
+  expect([again.total, again.removed]).toEqual([452, 2]); // each later page drops its first item: two pages, two items
+  expect((await admin.get('/api/media?type=film')).json.length).toBeGreaterThan(films - 3);
 });
 
 it('removing a server keeps what it brought in, unless asked to take it too', async () => {
