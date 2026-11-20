@@ -191,3 +191,16 @@ it('each person has their own collection and calendar', async () => {
   await theirDates.deleteEvent(dentist.id);
   expect([(await shelf.get(alien.id)).times, (await dates.between(MONDAY, 1)).map((e) => e.title)]).toEqual([1, ['Dentist', 'Alien']]);
 });
+
+it('a scanned barcode finds the copy it is on, whichever form the scanner reports', async () => {
+  const alien = await shelf.create({ type: 'film', title: 'Alien', year: 1979 }, { format: 'Blu-ray', barcode: '0 24543-21346 5' }); // typed as printed, 12 digits
+  await shelf.addCopy(alien.id, { format: 'VHS' }); // no barcode: never matches
+  const dune = await shelf.create({ type: 'book', title: 'Dune' }, { format: 'Paperback', barcode: '9780441172719' });
+  const found = { id: alien.id, title: 'Alien', type: 'film', year: 1979, format: 'Blu-ray' };
+  expect(await shelf.findBarcode('024543213465')).toEqual([found]);
+  expect(await shelf.findBarcode('0024543213465')).toEqual([found]); // the same code as 13 digits
+  expect((await shelf.findBarcode(' 978-0441172719 ')).map((m) => m.id)).toEqual([dune.id]);
+  expect(await shelf.findBarcode('4006381333931')).toEqual([]);
+  await expect(shelf.findBarcode('  ')).rejects.toEqual(problem(400));
+  expect(await media(db, await person('other'), clock).findBarcode('9780441172719')).toEqual([]); // someone else's shelf
+});

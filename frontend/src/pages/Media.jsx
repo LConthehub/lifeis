@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import Scanner from '../components/Scanner';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
 export const TYPES = [['film', 'Films', '🎬', 'Film'], ['show', 'Shows', '📺', 'Show'], ['music', 'Music', '🎵', 'Music'], ['book', 'Books', '📚', 'Book'], ['game', 'Games', '🎮', 'Game'], ['other', 'Other', '🗃', 'Something else']];
@@ -17,7 +18,8 @@ export default function MediaPage() {
   const [type, setType] = useState('');
   const [show, setShow] = useState('');     // '', 'wanted' or 'lent'
   const [q, setQ] = useState('');
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(null);       // null, or what the new title starts with
+  const [scanning, setScanning] = useState(false);
   const navigate = useNavigate();
   const load = useCallback(() => { axios.get('/api/media').then(({ data }) => setTitles(data)).catch(() => setTitles([])); }, []);
   useEffect(() => { load(); }, [load]);
@@ -31,7 +33,8 @@ export default function MediaPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Collection</h1>
-        <button type="button" onClick={() => setAdding(true)} className={buttonClass}>+ Add</button>
+        <button type="button" onClick={() => setScanning(true)} className={quietButtonClass}>📷 Scan a barcode</button>
+        <button type="button" onClick={() => setAdding({ type: type || 'film' })} className={buttonClass}>+ Add</button>
       </div>
       {titles.length === 0 ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
@@ -74,10 +77,48 @@ export default function MediaPage() {
         </>
       )}
       {adding && (
-        <Modal title="Add to the collection" onClose={() => setAdding(false)}>
-          <TitleForm title={{ type: type || 'film' }} withCopy onDone={(m) => navigate(`/media/${m.id}`)} />
+        <Modal title="Add to the collection" onClose={() => setAdding(null)}>
+          <TitleForm title={adding} withCopy onDone={(m) => navigate(`/media/${m.id}`)} />
         </Modal>
       )}
+      {scanning && (
+        <Modal title="Scan a barcode" onClose={() => setScanning(false)}>
+          <ScanToFind onAdd={(barcode) => { setScanning(false); setAdding({ type: type || 'film', barcode }); }} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/** Scan, then: straight to the title if you have it, or the offer to add it with the barcode kept. */
+function ScanToFind({ onAdd }) {
+  const [round, setRound] = useState(0);
+  const [found, setFound] = useState(null);         // null while scanning, else { code, matches } or { code, error }
+  const navigate = useNavigate();
+  const look = useCallback(async (code) => {
+    try {
+      const { data } = await axios.get('/api/media/barcode', { params: { code } });
+      if (data.length === 1) navigate(`/media/${data[0].id}`); else setFound({ code, matches: data });
+    } catch (err) { setFound({ code, error: errorMessage(err, "Couldn't look that up") }); }
+  }, [navigate]);
+  if (!found) return <Scanner key={round} onCode={look} />;
+  const again = <button type="button" onClick={() => { setFound(null); setRound(round + 1); }} className={quietButtonClass}>Scan another</button>;
+  if (found.error) return <div className="space-y-3"><p className="text-sm text-red-600">{found.error}</p>{again}</div>;
+  if (found.matches.length === 0) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-gray-800 dark:text-life-50">Nothing in your collection has the barcode <span className="font-mono">{found.code}</span>.</p>
+        <div className="flex items-center justify-end gap-2">{again}<button type="button" onClick={() => onAdd(found.code)} className={buttonClass}>Add it, keeping the barcode</button></div>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-gray-800 dark:text-life-50">More than one copy has the barcode <span className="font-mono">{found.code}</span>:</p>
+      <ul className="space-y-1">
+        {found.matches.map((m, i) => <li key={`${m.id}-${i}`}><Link to={`/media/${m.id}`} className="text-sm text-life-700 hover:underline dark:text-life-100">{typeOf(m.type)[2]} {m.title}{m.year ? ` (${m.year})` : ''} · {m.format}</Link></li>)}
+      </ul>
+      {again}
     </div>
   );
 }
@@ -87,6 +128,7 @@ function TitleForm({ title, withCopy = false, onDone }) {
   const [form, setForm] = useState({
     type: title.type || 'film', title: title.title || '', creator: title.creator || '', year: title.year ?? '', genres: (title.genres || []).join(', '),
     minutes: title.minutes ?? '', cover: title.cover || '', summary: title.summary || '', note: title.note || '', wanted: !!title.wanted, format: '', place_id: '',
+    barcode: title.barcode || '',
   });
   const [formats, setFormats] = useState([]);
   const [places, setPlaces] = useState([]);
@@ -98,7 +140,7 @@ function TitleForm({ title, withCopy = false, onDone }) {
     e.preventDefault();
     const body = { type: form.type, title: form.title, creator: form.creator || null, year: form.year === '' ? null : Number(form.year), genres: commaList(form.genres),
       minutes: form.minutes === '' ? null : Number(form.minutes), cover: form.cover || null, summary: form.summary || null, note: form.note || null, wanted: form.wanted };
-    if (withCopy && !form.wanted && form.format) body.copy = { format: form.format, place_id: form.place_id === '' ? null : Number(form.place_id) };
+    if (withCopy && !form.wanted && form.format) body.copy = { format: form.format, place_id: form.place_id === '' ? null : Number(form.place_id), barcode: form.barcode || null };
     try { onDone((title.id ? await axios.put(`/api/media/${title.id}`, body) : await axios.post('/api/media', body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   return (
@@ -120,13 +162,14 @@ function TitleForm({ title, withCopy = false, onDone }) {
           </label>
           {!form.wanted && (
             <div className="grid grid-cols-2 gap-3">
-              <Field label="What it's on"><input list="media-formats" value={form.format} onChange={set('format')} placeholder={formats.slice(0, 3).join(', ') || 'Any word you like'} className={inputClass} /></Field>
+              <Field label={form.barcode ? "What it's on *" : "What it's on"}><input list="media-formats" required={Boolean(form.barcode)} value={form.format} onChange={set('format')} placeholder={formats.slice(0, 3).join(', ') || 'Any word you like'} className={inputClass} /></Field>
               <Field label="Where it is">
                 <select value={form.place_id} onChange={set('place_id')} className={inputClass}>
                   <option value="">No place</option>
                   {places.map((p) => <option key={p.id} value={p.id}>{p.path}</option>)}
                 </select>
               </Field>
+              {form.barcode && <p className="col-span-2 text-xs text-gray-600 dark:text-life-200">Barcode <span className="font-mono">{form.barcode}</span> will be kept with this copy, so scanning it finds it next time.</p>}
             </div>
           )}
         </div>
@@ -245,6 +288,7 @@ export function MediaTitlePage() {
 }
 
 function CopyForm({ title, copy, onDone }) {
+  const [scanning, setScanning] = useState(false);
   const [form, setForm] = useState({ format: copy.format || '', place_id: copy.place_id ?? '', barcode: copy.barcode || '', lent_to: copy.lent_to || '', lent_on: copy.lent_on || '', note: copy.note || '' });
   const [formats, setFormats] = useState([]);
   const [places, setPlaces] = useState([]);
@@ -277,7 +321,13 @@ function CopyForm({ title, copy, onDone }) {
         <Field label="Lent on"><input type="date" value={form.lent_on} onChange={set('lent_on')} className={inputClass} /></Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Barcode"><input inputMode="numeric" value={form.barcode} onChange={set('barcode')} className={inputClass} /></Field>
+        <Field label="Barcode">
+          <span className="flex gap-2">
+            <input inputMode="numeric" value={form.barcode} onChange={set('barcode')} className={inputClass} />
+            <button type="button" onClick={() => setScanning(!scanning)} aria-label="Scan the barcode with the camera" className={quietButtonClass}>📷</button>
+          </span>
+        </Field>
+        {scanning && <div className="col-span-2"><Scanner onCode={(code) => { setForm((f) => ({ ...f, barcode: code })); setScanning(false); }} /></div>}
         <Field label="A note"><input value={form.note} onChange={set('note')} placeholder="the steelbook, ex-rental…" className={inputClass} /></Field>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
