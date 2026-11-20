@@ -14,6 +14,8 @@ services:
       - lifeis_keys:/keys
     environment:
       - SESSION_IDLE_MINUTES=15
+    extra_hosts:
+      - "host.docker.internal:host-gateway"     # so a Jellyfin on this same computer can be reached
     restart: unless-stopped
 
 volumes:

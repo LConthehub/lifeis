@@ -20,3 +20,5 @@ export { calendar } from './calendar.ts';
 export type { Calendar, Entry, EntryKind, Event, EventInput } from './calendar.ts';
 export { media, FORMATS, MEDIA_TYPES } from './media.ts';
 export type { Copy, CopyInput, LogEntry, LogInput, Media, MediaCollection, MediaInput, MediaSummary, MediaType } from './media.ts';
+export { connections, connectionsDue, EVERY_CHOICES, SERVER_KINDS } from './connections.ts';
+export type { Answer, Connection as ServerConnection, ConnectionInput, Connections, Fetcher, Sealer, ServerKind, SyncResult } from './connections.ts';

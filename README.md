@@ -56,6 +56,9 @@ time in Settings; unticking something only puts it out of sight.
 - **A title, and your copies of it.** Alien on VHS and on Blu-ray is one film with two copies, each in its own
   place, each lent out or at home. A format is any word you like: Betamax, 8-track, vinyl, paperback.
 - **What you'd like to have.** A title with no copy can be marked as wanted.
+- **Your Jellyfin or Emby library, beside the discs.** Connect the server with its address and a key, and its
+  films, shows, albums and books come into the collection, with their covers, kept in step as often as you choose.
+  A film you also own on disc is one title with both copies. Life Is only reads from the server.
 - **What you've watched, read and heard**, by day. Add a film to the time on a project and "watched Alien while
   sewing" shows from the project, from the film, and on the calendar.
 
@@ -83,7 +86,9 @@ Your records are kept by Docker, encrypted. **Never run `docker compose down -v`
   shipped migration is never edited). It reaches
   the database only through the small `Db` interface in `db.ts`, which each place Life Is runs supplies.
 - `server/`: the program, on Node 24 with no build step: sign-in, the web addresses the pages call, and an
-  SQLCipher-encrypted SQLite database. Its one installed dependency is the encrypted database engine.
+  SQLCipher-encrypted SQLite database. Its one installed dependency is the encrypted database engine. The only
+  places it ever reaches out to are the media servers a person connects (`connectionRoutes.ts`), whose keys it
+  stores locked (`vault.ts`).
 - `frontend/`: the pages. React, Vite and Tailwind.
 - `backend/`: the first version of the program, in Python. Docker no longer runs it. It is kept for now as the
   reference `core/` is checked against: `python core/tests/golden.py` writes its answers down, and the tests

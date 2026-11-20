@@ -10,7 +10,9 @@
 import { createServer } from 'node:http';
 import path from 'node:path';
 import { createApp } from './app.ts';
+import { syncDue, webFetcher } from './connectionRoutes.ts';
 import { openDatabase } from './database.ts';
+import { vault } from './vault.ts';
 
 const dataDir = process.env.DATA_DIR || path.resolve('data');
 const keyDir = process.env.KEY_DIR || path.join(dataDir, 'keys');
@@ -18,12 +20,29 @@ const port = Number(process.env.PORT || 8008);
 const idle = Number(process.env.SESSION_IDLE_MINUTES || 15);
 
 const database = await openDatabase(dataDir, keyDir);
+const reach = { fetcher: webFetcher, sealer: vault(keyDir, 'media_source') };
 const server = createServer(createApp({
   db: database.db,
+  reach,
   staticDir: process.env.STATIC_DIR || undefined,
   idleMinutes: Number.isInteger(idle) && idle >= 0 ? idle : 15,
 }));
 server.listen(port, process.env.HOST || '0.0.0.0', () => console.log(`Life Is is running on port ${port}`));
+
+// Media servers that sync by themselves are looked at every five minutes, one sync at a time.
+let syncing = false;
+const timer = setInterval(async () => {
+  if (syncing) return;
+  syncing = true;
+  try {
+    await syncDue(database.db, () => new Date(), reach);
+  } catch (problem) {
+    console.error(problem);
+  } finally {
+    syncing = false;
+  }
+}, 5 * 60_000);
+timer.unref();
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {

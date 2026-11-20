@@ -12,6 +12,7 @@ import Projects, { ProjectPage } from './pages/Projects';
 import { LifeFirstRun } from './components/LifeAreas';
 import Calendar from './pages/Calendar';
 import MediaPage, { MediaTitlePage } from './pages/Media';
+import Servers from './pages/Servers';
 
 axios.defaults.withCredentials = true;
 // The server keeps time in UTC, so each request says what day it is here. Without it, something finished at
@@ -32,7 +33,7 @@ const SECTIONS = [
     tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/kinds', 'Kinds', '🏷']] },
   { word: 'making', home: '/projects', owns: (path) => path.startsWith('/projects'),
     tabs: [['/projects', 'Projects', '🧵']] },
-  { word: 'enjoying', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection', '🎞']] },
+  { word: 'enjoying', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection', '🎞'], ['/media/servers', 'Servers', '🖥']] },
 ];
 
 export default function App() {
@@ -75,7 +76,7 @@ function Shell({ user, onLogout }) {
   const section = SECTIONS.find((s) => s.owns(pathname));
   const showing = SECTIONS.filter((s) => !life || life.sections.includes(s.word) || s === section);
   const tabs = section ? section.tabs : [];
-  const exact = (to) => to === '/' || to === '/things' || to === '/projects';
+  const exact = (to) => ['/', '/things', '/projects', '/media'].includes(to);
   return (
     <div className="min-h-screen pb-20 sm:pb-6">
       <header className="sticky top-0 z-30 border-b border-life-100 bg-cream/85 backdrop-blur dark:border-life-800 dark:bg-life-900/85">
@@ -113,6 +114,7 @@ function Shell({ user, onLogout }) {
           <Route path="/projects/:id" element={<ProjectPage />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/media" element={<MediaPage />} />
+          <Route path="/media/servers" element={<Servers />} />
           <Route path="/media/:id" element={<MediaTitlePage />} />
           <Route path="/settings" element={<Settings user={user} onLogout={onLogout} onLifeChanged={setLife} />} />
           <Route path="*" element={<Navigate to="/" replace />} />

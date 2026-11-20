@@ -11,8 +11,8 @@
  * answer at once.
  */
 
-/** A value SQLite can hold. */
-export type Value = string | number | null;
+/** A value SQLite can hold. Bytes (a Uint8Array) are for pictures. */
+export type Value = string | number | null | Uint8Array;
 
 /** A row as it comes back: column name -> value. */
 export type Row = Record<string, Value>;

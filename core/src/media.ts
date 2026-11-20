@@ -338,6 +338,13 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
       });
     },
 
+    /** The title's cover, if Life Is keeps one: the picture's bytes and what kind of picture it is. */
+    async cover(id: number): Promise<{ type: string; bytes: Uint8Array } | null> {
+      const row = await db.get<{ type: string; bytes: Uint8Array }>(
+        'SELECT c.type, c.bytes FROM media_covers c JOIN media m ON m.id = c.media_id WHERE c.media_id = ? AND m.owner_id = ?', [id, owner]);
+      return row ? { type: row.type, bytes: row.bytes } : null;
+    },
+
     async removeLog(id: number): Promise<void> {
       await db.run('DELETE FROM media_log WHERE id = ? AND media_id IN (SELECT id FROM media WHERE owner_id = ?)', [id, owner]);
     },

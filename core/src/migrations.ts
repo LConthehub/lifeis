@@ -299,6 +299,35 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_media_log_session ON media_log(session_id)`,
     ],
   },
+  {
+    number: 6,
+    name: 'media servers, and covers kept here',
+    statements: [
+      // A Jellyfin or Emby server to bring the library in from. The key is stored locked (see the server's vault).
+      `CREATE TABLE media_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL CHECK(kind IN ('jellyfin', 'emby')),
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        secret TEXT,
+        every_hours INTEGER NOT NULL DEFAULT 0,
+        last_sync_at TEXT,
+        last_ok INTEGER,
+        last_message TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      // Which server a copy came from. When the server is removed, its copies stay as ordinary copies.
+      `ALTER TABLE media_copies ADD COLUMN connection_id INTEGER REFERENCES media_sources(id) ON DELETE SET NULL`,
+      `CREATE INDEX idx_media_copies_connection ON media_copies(connection_id, source_id)`,
+      // A title's cover, kept here so the pages never fetch a picture from anywhere else.
+      `CREATE TABLE media_covers (
+        media_id INTEGER PRIMARY KEY REFERENCES media(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        bytes BLOB NOT NULL
+      )`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;
