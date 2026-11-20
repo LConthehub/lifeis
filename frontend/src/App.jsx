@@ -79,26 +79,28 @@ function Shell({ user, onLogout }) {
   const exact = (to) => ['/', '/things', '/projects', '/media'].includes(to);
   return (
     <div className="min-h-screen pb-20 sm:pb-6">
-      <header className="sticky top-0 z-30 border-b border-life-100 bg-cream/85 backdrop-blur dark:border-life-800 dark:bg-life-900/85">
+      <header className="sticky top-0 z-30 bg-life-bar text-white shadow-sm">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
-          <Link to="/" className="flex items-center gap-2 font-semibold text-life-700 dark:text-life-100">
+          <Link to="/" className="flex items-center gap-2 font-semibold text-white">
             <img src="/icon-192.png" alt="" className="h-7 w-7 rounded-lg" /> Life is
           </Link>
           <nav className="flex gap-1" aria-label="Sections">
             {showing.map((s) => (
               <Link key={s.word} to={s.home} aria-current={s === section ? 'page' : undefined}
-                className={`rounded-full px-2.5 py-1 text-sm font-semibold ${s === section ? 'bg-life-600 text-white' : 'text-life-600 hover:bg-life-100 dark:text-life-200 dark:hover:bg-life-800'}`}>{s.word}</Link>
+                className={`rounded-full px-2.5 py-1 text-sm font-semibold ${s === section ? 'bg-white text-life-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.word}</Link>
             ))}
           </nav>
-          <NavLink to="/settings" aria-label="Settings" className="ml-auto text-sm text-life-700 hover:underline dark:text-life-100"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="text-lg sm:hidden">⚙</span></NavLink>
+          <NavLink to="/settings" aria-label="Settings" className="ml-auto text-sm text-white/90 hover:text-white hover:underline"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="text-lg sm:hidden">⚙</span></NavLink>
           {tabs.length > 1 && (
             <nav className="hidden w-full gap-1 sm:flex" aria-label={`Life is ${section.word}`}>
               {tabs.map(([to, label]) => (
-                <NavLink key={to} to={to} end={exact(to)} className={({ isActive }) => `rounded-full px-3 py-1 text-sm font-medium ${isActive ? 'bg-life-100 text-life-800 dark:bg-life-700 dark:text-white' : 'text-life-700 hover:bg-life-100 dark:text-life-100 dark:hover:bg-life-800'}`}>{label}</NavLink>
+                <NavLink key={to} to={to} end={exact(to)} className={({ isActive }) => `rounded-full px-3 py-1 text-sm font-medium ${isActive ? 'bg-white/25 text-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}>{label}</NavLink>
               ))}
             </nav>
           )}
         </div>
+        {/* All five colours, as a stripe under the bar. */}
+        <div aria-hidden="true" className="h-1 bg-life-all" />
       </header>
       <main className="mx-auto max-w-5xl px-4 py-4">
         <Routes>

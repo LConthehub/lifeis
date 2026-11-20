@@ -20,13 +20,13 @@ export default function Login({ setupRequired, local = true, offline, onDone }) 
     }
   };
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <form onSubmit={submit} className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-life-100 dark:bg-life-800 dark:ring-life-700">
+    <div className="flex min-h-screen items-center justify-center bg-life-sunrise px-4">
+      <form onSubmit={submit} className="w-full max-w-sm space-y-4 rounded-2xl bg-white/95 p-6 shadow-xl ring-1 ring-white/40 backdrop-blur dark:bg-life-900/90 dark:ring-life-700">
         <div className="flex items-center gap-3">
           <img src="/icon-192.png" alt="" className="h-10 w-10 rounded-xl" />
           <div>
             <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">Life Is</h1>
-            <p className="text-xs text-gray-500 dark:text-life-200">{setupRequired ? 'Make your account. It stays on this computer.' : 'Sign in to your kitchen.'}</p>
+            <p className="text-xs text-gray-500 dark:text-life-200">{setupRequired ? 'Make your account. It stays on this computer.' : 'Sign in to your home.'}</p>
           </div>
         </div>
         {setupRequired && !local && <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">Nobody has signed up yet. The first account can only be made on the computer Life Is runs on.</p>}

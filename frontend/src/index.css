@@ -4,3 +4,14 @@
 
 html { -webkit-text-size-adjust: 100%; }
 body { @apply text-gray-800 dark:text-life-50; }
+
+/* The page sits on a soft wash of the palette, pale enough that dark text reads anywhere on it. It stays put
+   while the page scrolls. */
+body {
+  min-height: 100vh;
+  background: linear-gradient(160deg, #e6f4f1 0%, #f6f4e6 48%, #fdf0e3 78%, #fbe6df 100%);
+  background-attachment: fixed;
+}
+@media (prefers-color-scheme: dark) {
+  body { background: linear-gradient(160deg, #152a33 0%, #1b323c 50%, #2a2f33 100%); background-attachment: fixed; }
+}
