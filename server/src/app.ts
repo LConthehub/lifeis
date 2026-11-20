@@ -48,6 +48,12 @@ function recipeFrom(body: Body) {
     notes: read.maybeText(body, 'notes'),
     tags: read.texts(body, 'tags'),
     original_text: read.maybeText(body, 'original_text'),
+    // What it's cooked in. Left out altogether, a recipe being changed keeps what it had.
+    ...(Object.hasOwn(body, 'equipment') ? {
+      equipment: read.records(body, 'equipment').map((one) => ({
+        item_id: read.maybeWhole(one, 'item_id'), label: read.maybeText(one, 'label'), quantity: read.maybeNumber(one, 'quantity'), note: read.maybeText(one, 'note'),
+      })),
+    } : {}),
   };
 }
 
@@ -240,6 +246,11 @@ export function createApp(options: Options) {
       const start = c.query.get('start');
       if (!start) throw notUnderstood('start');
       return { json: await c.kitchen.listPlan(start, queryNumber(c.query, 'days') ?? 7) };
+    }],
+    ['GET', /^\/api\/kitchen\/equipment$/, async (c) => {
+      const start = c.query.get('start');
+      if (!start) throw notUnderstood('start');
+      return { json: await c.kitchen.equipmentCheck(start, queryNumber(c.query, 'days') ?? 7) };
     }],
     ['POST', /^\/api\/kitchen\/plan$/, async (c) => ({
       status: 201,

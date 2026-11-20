@@ -8,18 +8,21 @@
  *   cups and spoons); amounts that can't be compared are listed in full, marked so.
  * - Ticking something off with "put away" adds it to the pantry. Marking a meal as cooked takes what it used
  *   out of the pantry.
+ * - A recipe knows what it's cooked in: pans and dishes from the things you keep (inventory.ts). The week can
+ *   then say when one meal needs more of something than you own.
  *
  * `kitchen(db, owner)` is one person's kitchen: everything it reads and writes is theirs. It does what
  * backend/kitchen.py does, and gives the same answers. Anything that changes several things changes all of
  * them or none (a transaction).
  */
 import { atomic, type Db, type Queries, type Value } from './db.ts';
+import { placePaths } from './inventory.ts';
 import type {
-  ExportFile, GroceryItem, Ingredient, Meal, PantryInput, PantryItem, Part, PlanInput, PlannedMeal, Recipe,
-  RecipeInput, RecipeLine, RecipeSummary,
+  EquipmentInput, EquipmentShortage, ExportFile, GroceryItem, Ingredient, Meal, PantryInput, PantryItem, Part, PlanInput, PlannedMeal, Recipe,
+  RecipeEquipment, RecipeInput, RecipeLine, RecipeSummary,
 } from './kitchenTypes.ts';
 import { Problem } from './problem.ts';
-import { addDays, clean, dayNumber, inOrder, rounded, stamp, todayOf, type Clock } from './small.ts';
+import { addDays, clean, dayNumber, inOrder, labelKey, rounded, stamp, todayOf, type Clock } from './small.ts';
 import { cut, folderName, linesAsText, readImport, splitLines, TEXT_LIMIT, toSchemaOrg, type TextLine } from './recipeText.ts';
 import * as units from './units.ts';
 
@@ -28,7 +31,7 @@ export const LOCATIONS: readonly string[] = ['fridge', 'freezer', 'pantry', 'spi
 
 const tagList = (tags: string | null) => (tags ?? '').split(',').filter(Boolean);
 
-type RecipeRow = Omit<Recipe, 'tags' | 'ingredients' | 'steps' | 'ingredients_text' | 'steps_text' | 'showing_servings'> & { tags: string | null };
+type RecipeRow = Omit<Recipe, 'tags' | 'ingredients' | 'steps' | 'equipment' | 'ingredients_text' | 'steps_text' | 'showing_servings'> & { tags: string | null };
 type LineRow = Omit<RecipeLine, 'is_heading' | 'scaled'> & { is_heading: number };
 type PantryRow = Omit<PantryItem, 'low' | 'days_left' | 'amount'>;
 type GroceryRow = Omit<GroceryItem, 'done' | 'from_plan' | 'amount'> & { done: number; from_plan: number };
@@ -72,6 +75,41 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
     }
   }
 
+  /**
+   * What a recipe is cooked in. A piece of equipment is one of the person's things, or only a name. Unlike an
+   * ingredient it isn't used up, and it doesn't grow with the servings: a doubled stew may still fit one pot.
+   */
+  async function saveEquipment(q: Queries, recipeId: number, list: EquipmentInput[]) {
+    if (list.length > 40) throw new Problem(400, 'A recipe can list up to 40 pieces of equipment');
+    await q.run('DELETE FROM recipe_equipment WHERE recipe_id = ?', [recipeId]);
+    for (const [i, one] of list.entries()) {
+      const quantity = one.quantity ?? 1;
+      if (!(quantity > 0 && quantity <= 1000)) throw new Problem(400, 'How many is a number above 0');
+      let label = clean(one.label, 200);
+      if (one.item_id != null) {
+        const item = await q.get<{ name: string }>('SELECT name FROM items WHERE id = ? AND owner_id = ?', [one.item_id, owner]);
+        if (!item) throw new Problem(404, "That isn't one of your things");
+        label = item.name;
+      }
+      if (!label) throw new Problem(400, 'Choose one of your things, or say what it is');
+      await q.run('INSERT INTO recipe_equipment (recipe_id, item_id, label, quantity, note, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+        [recipeId, one.item_id ?? null, label, quantity, clean(one.note, 500), i]);
+    }
+  }
+
+  async function equipmentOf(q: Queries, recipeId: number): Promise<RecipeEquipment[]> {
+    const rows = await q.all<{ id: number; item_id: number | null; label: string; quantity: number; note: string | null;
+      item_name: string | null; item_quantity: number | null; item_place: number | null; item_there: number | null }>(
+      `SELECT e.id, e.item_id, e.label, e.quantity, e.note, i.name AS item_name, i.quantity AS item_quantity, i.place_id AS item_place, i.id AS item_there
+       FROM recipe_equipment e LEFT JOIN items i ON i.id = e.item_id AND i.owner_id = ? WHERE e.recipe_id = ? ORDER BY e.sort_order, e.id`, [owner, recipeId]);
+    const paths = rows.some((r) => r.item_place !== null) ? placePaths(await q.all('SELECT id, parent_id, name, note FROM places WHERE owner_id = ?', [owner])) : new Map<number, string>();
+    return rows.map((r) => ({
+      id: r.id, item_id: r.item_there, label: r.item_name ?? r.label, quantity: r.quantity, note: r.note,
+      have: r.item_there === null ? null : (r.item_quantity ?? 1),
+      place: r.item_place !== null ? (paths.get(r.item_place) ?? null) : null,
+    }));
+  }
+
   async function readRecipe(q: Queries, id: number, servings?: number | null): Promise<Recipe> {
     const row = await q.get<RecipeRow>('SELECT * FROM recipes WHERE id = ? AND owner_id = ?', [id, owner]);
     if (!row) throw new Problem(404, 'Recipe not found');
@@ -89,6 +127,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
       ...row,
       ingredients: lines.filter((line) => line.part === 'ingredients'),
       steps: lines.filter((line) => line.part === 'steps'),
+      equipment: await equipmentOf(q, id),
       ingredients_text: linesAsText(lines, 'ingredients'),
       steps_text: linesAsText(lines, 'steps'),
       showing_servings: servings || row.servings,
@@ -121,6 +160,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
        owner_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [...recipeValues(body), owner, now(), now()]);
     await saveLines(q, made.lastId, splitLines(body.ingredients_text, 'ingredients'), splitLines(body.steps_text, 'steps'));
+    await saveEquipment(q, made.lastId, body.equipment ?? []);
     return made.lastId;
   }
 
@@ -320,6 +360,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
           `UPDATE recipes SET title = ?, description = ?, servings = ?, prep_minutes = ?, cook_minutes = ?, source_url = ?,
            original_text = ?, notes = ?, tags = ?, updated_at = ? WHERE id = ?`, [...values, now(), id]);
         await saveLines(tx, id, splitLines(body.ingredients_text, 'ingredients'), splitLines(body.steps_text, 'steps'));
+        if (body.equipment !== undefined) await saveEquipment(tx, id, body.equipment);
         return readRecipe(tx, id);
       });
     },
@@ -407,6 +448,38 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
           [owner, body.day, meal as Meal, body.recipe_id ?? null, clean(body.title, 200), body.servings ?? null, now()]);
         return (await planRows(tx, body.day, body.day)).find((row) => row.id === made.lastId)!;
       });
+    },
+
+    /**
+     * For each meal planned between the days given, what its recipes need more of than you have. Everything
+     * cooked for one meal is assumed to need its pans and dishes at the same time, so their numbers add up;
+     * breakfast and dinner on the same day can share a pan. A meal already cooked isn't counted.
+     */
+    async equipmentCheck(start: string, days = 7): Promise<EquipmentShortage[]> {
+      const [from, to] = planWindow(start, days);
+      const rows = await db.all<{ day: string; meal: Meal; title: string; item_id: number | null; label: string; quantity: number;
+        item_name: string | null; item_quantity: number | null; item_there: number | null }>(
+        `SELECT m.day, m.meal, r.title, e.item_id, e.label, e.quantity, i.name AS item_name, i.quantity AS item_quantity, i.id AS item_there
+         FROM meal_plan m JOIN recipes r ON r.id = m.recipe_id JOIN recipe_equipment e ON e.recipe_id = r.id
+         LEFT JOIN items i ON i.id = e.item_id AND i.owner_id = m.owner_id
+         WHERE m.owner_id = ? AND m.day >= ? AND m.day <= ? AND m.cooked_on IS NULL ORDER BY m.day, m.id, e.sort_order`, [owner, from, to]);
+      const needs = new Map<string, EquipmentShortage>();
+      for (const row of rows) {
+        const label = row.item_name ?? row.label;
+        const key = `${row.day}|${row.meal}|${row.item_there !== null ? `#${row.item_there}` : labelKey(label)}`;
+        let need = needs.get(key);
+        if (!need) {
+          need = { day: row.day, meal: row.meal, item_id: row.item_there, label, need: 0, have: row.item_there === null ? null : (row.item_quantity ?? 1), short: 0, recipes: [] };
+          needs.set(key, need);
+        }
+        need.need += row.quantity;
+        if (!need.recipes.includes(row.title)) need.recipes.push(row.title);
+      }
+      const mealOrder = ['breakfast', 'lunch', 'dinner', 'snack'];
+      return [...needs.values()]
+        .map((need) => ({ ...need, need: rounded(need.need, 3), short: rounded(Math.max(0, need.need - (need.have ?? 0)), 3) }))
+        .filter((need) => need.short > 0)
+        .sort((a, b) => inOrder(a.day, b.day) || mealOrder.indexOf(a.meal) - mealOrder.indexOf(b.meal) || inOrder(a.label.toLowerCase(), b.label.toLowerCase()));
     },
 
     async deletePlan(id: number): Promise<void> {

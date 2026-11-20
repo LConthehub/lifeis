@@ -101,13 +101,21 @@ export function RecipeForm({ recipe, onSaved }) {
     ingredients_text: recipe?.ingredients_text || '', steps_text: recipe?.steps_text || '', notes: recipe?.notes || '',
     tags: (recipe?.tags || []).join(', '),
   });
+  // What it's cooked in: each row is one of your things, or a name typed in.
+  const [equipment, setEquipment] = useState(() => (recipe?.equipment || []).map((e) => ({ item_id: e.item_id ?? '', label: e.item_id ? '' : e.label, quantity: e.quantity, note: e.note || '' })));
+  const [things, setThings] = useState([]);
+  useEffect(() => { axios.get('/api/things/items').then(({ data }) => setThings(data)).catch(() => {}); }, []);
+  const setRow = (i, change) => setEquipment(equipment.map((row, n) => (n === i ? { ...row, ...change } : row)));
   const [error, setError] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const num = (v) => (v === '' ? null : Number(v));
   const submit = async (e) => {
     e.preventDefault();
     const body = { ...form, servings: num(form.servings), prep_minutes: num(form.prep_minutes), cook_minutes: num(form.cook_minutes),
-      tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean) };
+      tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
+      equipment: equipment.filter((row) => row.item_id !== '' || row.label.trim()).map((row) => ({
+        item_id: row.item_id === '' ? null : Number(row.item_id), label: row.item_id === '' ? row.label : null,
+        quantity: row.quantity === '' ? null : Number(row.quantity), note: row.note || null })) };
     try {
       const { data } = recipe ? await axios.put(`/api/kitchen/recipes/${recipe.id}`, body) : await axios.post('/api/kitchen/recipes', body);
       onSaved(data);
@@ -130,6 +138,24 @@ export function RecipeForm({ recipe, onSaved }) {
       <Field label="Method: one step a paragraph (a blank line between steps). # starts a section">
         <textarea rows={12} value={form.steps_text} onChange={set('steps_text')} className={`${inputClass} text-sm`} />
       </Field>
+      <div className="space-y-2">
+        <span className="block text-xs font-medium text-gray-600 dark:text-life-200">What it's cooked in: pans, dishes and tools, from your things or just by name</span>
+        {equipment.map((row, i) => (
+          <div key={i} className="flex flex-wrap items-center gap-2">
+            <input type="number" min="1" step="1" value={row.quantity} onChange={(e) => setRow(i, { quantity: e.target.value })} aria-label="How many" className={`${inputClass} w-16`} />
+            <select value={row.item_id} onChange={(e) => setRow(i, { item_id: e.target.value })} aria-label="Which of your things" className={`${inputClass} w-auto flex-1`}>
+              <option value="">Something not in my things…</option>
+              {[...new Set(things.map((t) => t.kind))].map((kind) => (
+                <optgroup key={kind} label={kind}>{things.filter((t) => t.kind === kind).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</optgroup>
+              ))}
+            </select>
+            {row.item_id === '' && <input value={row.label} onChange={(e) => setRow(i, { label: e.target.value })} placeholder="e.g. 8x8 baking dish" aria-label="What it is" className={`${inputClass} w-auto flex-1`} />}
+            <input value={row.note} onChange={(e) => setRow(i, { note: e.target.value })} placeholder="note" aria-label="A note" className={`${inputClass} w-28`} />
+            <button type="button" onClick={() => setEquipment(equipment.filter((_, n) => n !== i))} className="text-xs text-gray-400 hover:text-red-600" aria-label="Take this off">✕</button>
+          </div>
+        ))}
+        <button type="button" onClick={() => setEquipment([...equipment, { item_id: things[0] ? String(things[0].id) : '', label: '', quantity: 1, note: '' }])} className="text-sm text-life-600 hover:underline dark:text-life-200">+ Add a pan, dish or tool</button>
+      </div>
       <Field label="Notes"><textarea rows={3} value={form.notes} onChange={set('notes')} className={inputClass} /></Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Tags, with commas"><input value={form.tags} onChange={set('tags')} placeholder="dinner, freezes well" className={inputClass} /></Field>
@@ -196,6 +222,22 @@ export function RecipePage() {
           {servings !== '' && Number(servings) !== r.servings && <p className="mt-2 text-xs text-gray-500 dark:text-life-300">The highlighted amounts are for {servings}. The lines stay as written.</p>}
         </section>
         <section className={cardClass}>
+          {r.equipment?.length > 0 && (
+            <div className="mb-4">
+              <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Cooked in</h2>
+              <ul className="space-y-1 text-sm">
+                {r.equipment.map((e) => (
+                  <li key={e.id} className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="text-gray-800 dark:text-life-50">{e.quantity !== 1 ? `${e.quantity} × ` : ''}{e.label}</span>
+                    {e.note && <span className="text-xs text-gray-500 dark:text-life-300">{e.note}</span>}
+                    {e.place && <span className="text-xs text-gray-500 dark:text-life-300">📍 {e.place}</span>}
+                    {e.have === null ? <span className="rounded bg-gray-100 px-1.5 text-[11px] text-gray-600">not in your things</span>
+                      : e.have < e.quantity && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">you have {e.have}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">Method</h2>
           <ol className="space-y-3">
             {r.steps.map((s) => (s.is_heading

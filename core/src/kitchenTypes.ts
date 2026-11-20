@@ -24,6 +24,45 @@ export type RecipeInput = {
   tags?: string[];
   /** What was pasted or imported, kept as it was. */
   original_text?: string | null;
+  /** What it's cooked in. Left out when changing a recipe: what it had stays. */
+  equipment?: EquipmentInput[];
+};
+
+/** A pan, dish or tool a recipe needs. */
+export type EquipmentInput = {
+  /** One of the things you keep. Left out: something named by `label` that isn't catalogued. */
+  item_id?: number | null;
+  label?: string | null;
+  /** How many are needed at once. Left out: one. */
+  quantity?: number | null;
+  note?: string | null;
+};
+
+export type RecipeEquipment = {
+  id: number;
+  item_id: number | null;
+  /** The thing's name, kept even if the thing is later removed. */
+  label: string;
+  quantity: number;
+  note: string | null;
+  /** How many of it you have, or null when it isn't one of your things. Owning it with no count is one. */
+  have: number | null;
+  /** Where it's kept, when it's one of your things with a place. */
+  place: string | null;
+};
+
+/** For one meal of one day: something the planned recipes need more of than you have. */
+export type EquipmentShortage = {
+  day: string;
+  meal: Meal;
+  item_id: number | null;
+  label: string;
+  /** How many the recipes planned for that meal need at once. */
+  need: number;
+  have: number | null;
+  short: number;
+  /** The recipes that need it. */
+  recipes: string[];
 };
 
 export type RecipeLine = {
@@ -63,6 +102,7 @@ export type Recipe = Omit<RecipeSummary, 'tags'> & {
   created_at: string;
   ingredients: RecipeLine[];
   steps: RecipeLine[];
+  equipment: RecipeEquipment[];
   ingredients_text: string;
   steps_text: string;
   showing_servings: number | null;

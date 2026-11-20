@@ -40,6 +40,7 @@ export const AREAS: Area[] = [
   { key: 'making', label: 'Projects', about: 'Anything made or done over more than a day, what it uses, and the time on it.', group: 'home', sections: ['making'] },
   { key: 'planning', label: 'The calendar', about: 'Your own dates, with the week’s meals and the time on projects alongside.', group: 'home', sections: ['planning'] },
   { key: 'enjoying', label: 'Films, shows, music, books and games', about: 'What you own on every format, where it is, and what you’ve watched, read or heard.', group: 'home', sections: ['enjoying'] },
+  { key: 'cookware', label: 'Cookware and kitchen gear', about: 'Cast iron, pans and baking dishes, so a recipe can say what it is cooked in.', group: 'home', sections: ['eating', 'keeping'], starter: 'cookware' },
   ...['sewing', 'knitting', 'woodworking', 'gardening', 'home'].map(doing),
 ];
 

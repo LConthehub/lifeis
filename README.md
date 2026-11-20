@@ -20,6 +20,9 @@ So far: the kitchen, the calendar, the things you keep, the projects that use th
 - **The pantry.** What you have, how much, where (fridge, freezer, cupboard), when to use it by, and when it's
   running low. Ticking something off the grocery list puts it in the pantry; marking a meal as cooked takes out
   what it used.
+- **A recipe knows what it's cooked in.** Pans, dishes and tools from the things you keep (the cast iron skillet,
+  the 8x8 baking dishes), or just by name. The week then tells you when one meal needs more of something than you
+  own: "Thursday dinner: 4 × 8x8 baking dish, and you have 2."
 - **Your recipes, yours to take.** Bring them in by pasting text or recipe JSON (from the Nextcloud Cookbook app or
   a recipe website). Take them all out as Nextcloud Cookbook folders, ready to drop into your Nextcloud.
 
@@ -33,7 +36,8 @@ time in Settings; unticking something only puts it out of sight.
 
 - **Your own kinds of things.** Fabric, yarn, tools, seeds, board games: a kind is whatever you say it is, with
   the fields you care about (a fabric's width, a seed packet's sow-by date). Start from a ready-made set (sewing,
-  knitting, woodworking, gardening, around the house) and change it, or make your own from nothing.
+  knitting, woodworking, gardening, around the house, cookware with cast iron) and change it, or make your own
+  from nothing.
 - **Where everything is.** A room, a shelf in it, a bin on the shelf, as far down as helps you find things.
 - **How much is free.** What you have, less what your projects have set aside.
 

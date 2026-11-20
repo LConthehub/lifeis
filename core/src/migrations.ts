@@ -328,6 +328,24 @@ const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    number: 7,
+    name: 'what a recipe is cooked in',
+    statements: [
+      // The pans, dishes and tools a recipe needs, and how many. Each is one of the person's things, or just a
+      // name for something they haven't catalogued. The label keeps the name if the thing is later removed.
+      `CREATE TABLE recipe_equipment (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+        item_id INTEGER REFERENCES items(id) ON DELETE SET NULL,
+        label TEXT NOT NULL,
+        quantity REAL NOT NULL DEFAULT 1 CHECK(quantity > 0),
+        note TEXT,
+        sort_order INTEGER NOT NULL
+      )`,
+      `CREATE INDEX idx_recipe_equipment ON recipe_equipment(recipe_id, sort_order)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

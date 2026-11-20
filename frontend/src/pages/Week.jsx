@@ -18,10 +18,13 @@ export default function Week() {
   const [meals, setMeals] = useState(null);
   const [adding, setAdding] = useState(null);
   const [message, setMessage] = useState('');
+  // Meals whose recipes need more of a pan or dish than there is.
+  const [short, setShort] = useState([]);
   const navigate = useNavigate();
   const startText = toDateInput(start);
   const load = useCallback(() => {
     axios.get('/api/kitchen/plan', { params: { start: startText, days: 7 } }).then(({ data }) => setMeals(data)).catch(() => setMeals([]));
+    axios.get('/api/kitchen/equipment', { params: { start: startText, days: 7 } }).then(({ data }) => setShort(data)).catch(() => setShort([]));
   }, [startText]);
   useEffect(() => { load(); }, [load]);
   const move = (days) => { const d = new Date(start); d.setDate(d.getDate() + days); setStart(d); };
@@ -52,6 +55,19 @@ export default function Week() {
       </div>
       <p className="text-xs text-gray-500 dark:text-life-300">The grocery list is what these meals need, for the servings you planned, minus what's in your pantry.</p>
       {message && <p className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-800 dark:text-life-100">{message}</p>}
+      {short.length > 0 && (
+        <div className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">
+          <p className="font-medium">Not enough to cook these at once:</p>
+          <ul className="mt-1 space-y-0.5">
+            {short.map((s) => (
+              <li key={`${s.day}-${s.meal}-${s.label}`}>
+                {fromDateInput(s.day).toLocaleDateString(undefined, { weekday: 'long' })} {s.meal}: {s.need} × {s.label}
+                {s.have === null ? ", which isn't in your things" : `, and you have ${s.have}`} ({s.recipes.join(', ')})
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {days.map((d) => {
           const key = toDateInput(d);

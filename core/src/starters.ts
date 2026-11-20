@@ -31,6 +31,20 @@ export const STARTERS: Starter[] = [
     ],
   },
   {
+    slug: 'cookware',
+    name: 'Cookware and kitchen gear',
+    about: 'Cast iron, pots and pans, baking dishes and tools: what you cook in, so recipes can say which.',
+    kinds: [
+      { name: 'Cast iron', icon: '🍳', fields: [
+        text('Maker'), text('Made'), text('Size'), text('Pattern or model number'),
+        choice('Kind', 'Skillet', 'Dutch oven', 'Griddle', 'Grill pan', 'Bakeware', 'Other'),
+        choice('Condition', 'Daily user', 'Good', 'Needs restoring', 'Display only'), date('Last seasoned'), text('Care notes'), text('Bought from'), number('Paid') ] },
+      { name: 'Pots and pans', icon: '🥘', fields: [text('Maker'), text('Size'), choice('Material', 'Stainless', 'Non-stick', 'Carbon steel', 'Copper', 'Enamel', 'Aluminium', 'Other'), yesNo('Oven safe'), text('Care notes')] },
+      { name: 'Baking dishes', icon: '🥧', fields: [text('Size'), choice('Material', 'Glass', 'Ceramic', 'Metal', 'Stoneware', 'Silicone'), text('Maker'), yesNo('Has a lid')] },
+      { name: 'Kitchen tools', icon: '🔪', fields: [text('Maker'), text('Size or model'), text('Care notes')] },
+    ],
+  },
+  {
     slug: 'knitting',
     name: 'Knitting & crochet',
     about: 'Yarn, needles and hooks, and patterns.',

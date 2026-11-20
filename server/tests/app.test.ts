@@ -447,11 +447,33 @@ it('days are the person\'s own, not the server\'s', async () => {
   }
 });
 
+it('a recipe says what it is cooked in, and the week flags a meal that needs more than you own', async () => {
+  const admin = await owner();
+  const kinds = (await admin.post('/api/things/starters', { slug: 'cookware' })).json;
+  const dishes = kinds.find((k: { name: string }) => k.name === 'Baking dishes').id;
+  const dish = (await admin.post('/api/things/items', { kind_id: dishes, name: '8x8 baking dish', quantity: 2 })).json;
+  const made = await admin.post('/api/kitchen/recipes', { title: 'Brownies', equipment: [{ item_id: dish.id, quantity: 3 }, { label: 'Wire rack' }] });
+  expect(made.status).toBe(201);
+  expect(made.json.equipment.map((e: { label: string; quantity: number; have: number | null }) => [e.label, e.quantity, e.have])).toEqual([['8x8 baking dish', 3, 2], ['Wire rack', 1, null]]);
+  // The pages that don't know about equipment yet send none, and nothing is lost.
+  expect((await admin.put(`/api/kitchen/recipes/${made.json.id}`, { title: 'Brownies' })).json.equipment).toHaveLength(2);
+  expect((await admin.post('/api/kitchen/recipes', { title: 'x', equipment: 'a pan' })).status).toBe(422);
+  expect((await admin.post('/api/kitchen/recipes', { title: 'x', equipment: [{ item_id: 9999 }] })).status).toBe(404);
+
+  await admin.post('/api/kitchen/plan', { day: MONDAY, meal: 'dinner', recipe_id: made.json.id });
+  const short = (await admin.get(`/api/kitchen/equipment?start=${MONDAY}&days=7`)).json;
+  expect(short.map((s: { label: string; need: number; have: number | null; short: number }) => [s.label, s.need, s.have, s.short])).toEqual([['8x8 baking dish', 3, 2, 1], ['Wire rack', 1, null, 1]]);
+  expect((await admin.get('/api/kitchen/equipment')).status).toBe(422);
+  const other = await member(admin, 'partner');
+  expect((await other.get(`/api/kitchen/equipment?start=${MONDAY}`)).json).toEqual([]);
+  expect((await other.post('/api/kitchen/recipes', { title: 'Theirs', equipment: [{ item_id: dish.id }] })).status).toBe(404);
+});
+
 it('a database from before things and projects is upgraded, with a copy saved first', async () => {
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   await database.db.run('PRAGMA user_version = 2');
