@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import Login from './pages/Login';
+import Home from './pages/Home';
 import Recipes, { RecipePage } from './pages/Recipes';
 import Week from './pages/Week';
 import Groceries from './pages/Groceries';
@@ -26,8 +27,8 @@ axios.interceptors.request.use((config) => {
 
 // Life is… each section finishes the sentence, and has its own few pages.
 const SECTIONS = [
-  { word: 'eating', home: '/', owns: (path) => ['/', '/week', '/groceries', '/pantry'].includes(path) || path.startsWith('/recipes/'),
-    tabs: [['/', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫']] },
+  { word: 'eating', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry'].includes(path) || path.startsWith('/recipes'),
+    tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫']] },
   { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar'), tabs: [['/calendar', 'Calendar', '📅']] },
   { word: 'keeping', home: '/things', owns: (path) => path.startsWith('/things'),
     tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/kinds', 'Kinds', '🏷']] },
@@ -76,7 +77,7 @@ function Shell({ user, onLogout }) {
   const section = SECTIONS.find((s) => s.owns(pathname));
   const showing = SECTIONS.filter((s) => !life || life.sections.includes(s.word) || s === section);
   const tabs = section ? section.tabs : [];
-  const exact = (to) => ['/', '/things', '/projects', '/media'].includes(to);
+  const exact = (to) => ['/recipes', '/things', '/projects', '/media'].includes(to);
   return (
     <div className="min-h-screen pb-20 sm:pb-6">
       <header className="sticky top-0 z-30 bg-life-bar text-white shadow-sm">
@@ -102,9 +103,12 @@ function Shell({ user, onLogout }) {
         {/* All five colours, as a stripe under the bar. */}
         <div aria-hidden="true" className="h-1 bg-life-all" />
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-4">
+      <main className="mx-auto max-w-5xl px-3 py-4 sm:px-4">
+        {/* The page is a sheet of frosted glass over the gradient, so everything on it reads clearly. */}
+        <div className="rounded-3xl bg-white/80 p-4 shadow-xl ring-1 ring-white/50 backdrop-blur-md dark:bg-life-900/75 dark:ring-white/10 sm:p-6">
         <Routes>
-          <Route path="/" element={<Recipes />} />
+          <Route path="/" element={<Home user={user} />} />
+          <Route path="/recipes" element={<Recipes />} />
           <Route path="/recipes/:id" element={<RecipePage />} />
           <Route path="/week" element={<Week />} />
           <Route path="/groceries" element={<Groceries />} />
@@ -121,6 +125,7 @@ function Shell({ user, onLogout }) {
           <Route path="/settings" element={<Settings user={user} onLogout={onLogout} onLifeChanged={setLife} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </div>
       </main>
       <LifeFirstRun open={!!life && life.areas === null} onDone={(data) => (data ? setLife(data) : loadLife())} />
       {/* On a phone the section's pages sit at the bottom, under your thumb. */}

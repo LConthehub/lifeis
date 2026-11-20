@@ -26,6 +26,12 @@ So far: the kitchen, the calendar, the things you keep, the projects that use th
 - **Your recipes, yours to take.** Bring them in by pasting text or recipe JSON (from the Nextcloud Cookbook app or
   a recipe website). Take them all out as Nextcloud Cookbook folders, ready to drop into your Nextcloud.
 
+## The front page
+
+What today holds and what wants attention, gathered from every section you use: the next three days, today's
+meals and any pan you're short of, what's running low or about to go off, the projects in hand, what's lent out.
+Each card leads to its page, and you choose which cards show.
+
 ## It asks what you need
 
 The first time you sign in, Life Is asks what life needs looking after: cooking, what you own, projects, sewing,

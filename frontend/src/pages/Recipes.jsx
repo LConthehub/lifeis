@@ -181,19 +181,19 @@ export function RecipePage() {
       .then(({ data }) => setR(data)).catch(() => setMissing(true));
   }, [id, servings]);
   useEffect(() => { load(); }, [load]);
-  if (missing) return <p className="text-sm text-gray-500">That recipe isn't here. <Link to="/" className="underline">All recipes</Link></p>;
+  if (missing) return <p className="text-sm text-gray-500">That recipe isn't here. <Link to="/recipes" className="underline">All recipes</Link></p>;
   if (!r) return null;
   const remove = async () => {
     if (!window.confirm(`Delete "${r.title}"? It can't be brought back.`)) return;
     await axios.delete(`/api/kitchen/recipes/${r.id}`).catch(() => {});
-    navigate('/');
+    navigate('/recipes');
   };
   let stepNumber = 0;
   return (
     <article className="space-y-4">
       <div className="flex flex-wrap items-start gap-2">
         <div className="mr-auto">
-          <Link to="/" className="text-xs text-life-600 hover:underline dark:text-life-200">← Recipes</Link>
+          <Link to="/recipes" className="text-xs text-life-600 hover:underline dark:text-life-200">← Recipes</Link>
           <h1 className="text-2xl font-semibold text-life-800 dark:text-life-50">{r.title}</h1>
           <p className="text-sm text-gray-500 dark:text-life-200">
             {[r.prep_minutes != null && `prep ${minutesText(r.prep_minutes)}`, r.cook_minutes != null && `cook ${minutesText(r.cook_minutes)}`, r.source_url].filter(Boolean).join(' · ')}

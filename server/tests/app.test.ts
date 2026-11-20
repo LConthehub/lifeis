@@ -469,6 +469,28 @@ it('a recipe says what it is cooked in, and the week flags a meal that needs mor
   expect((await other.post('/api/kitchen/recipes', { title: 'Theirs', equipment: [{ item_id: dish.id }] })).status).toBe(404);
 });
 
+it('the front page gathers today, and each person chooses what it shows', async () => {
+  const admin = await owner();
+  const day = { 'X-Local-Day': new Date().toISOString().slice(0, 10) };
+  const empty = (await admin.get('/api/home', day)).json;
+  expect([empty.day, empty.cards]).toEqual([day['X-Local-Day'], ['days', 'kitchen', 'pantry', 'projects', 'things', 'collection']]);
+  await admin.post('/api/calendar/events', { title: 'Dentist', day: empty.day, time: '14:30' });
+  await admin.post('/api/kitchen/plan', { day: empty.day, title: 'Leftovers' });
+  await admin.post('/api/projects', { name: 'Shirt dress', status: 'active' });
+  const full = (await admin.get('/api/home', day)).json;
+  expect(full.days[0].entries.map((e: { title: string }) => e.title)).toEqual(['Dentist', 'Leftovers']);
+  expect([full.kitchen.meals.length, full.projects.map((p: { name: string }) => p.name)]).toEqual([1, ['Shirt dress']]);
+
+  const fewer = (await admin.put('/api/home/cards', { hidden: ['pantry', 'things'] })).json;
+  expect(fewer.cards).toEqual(['days', 'kitchen', 'projects', 'collection']);
+  expect((await admin.put('/api/home/cards', { hidden: ['weather'] })).status).toBe(400);
+  expect((await admin.put('/api/home/cards', {})).status).toBe(422);
+  const other = await member(admin, 'partner');
+  const theirs = (await other.get('/api/home', day)).json;
+  expect([theirs.cards.length, theirs.days[0].entries, theirs.projects]).toEqual([6, [], []]);
+  expect((await visitor().get('/api/home')).status).toBe(401);
+});
+
 it('a database from before things and projects is upgraded, with a copy saved first', async () => {
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });

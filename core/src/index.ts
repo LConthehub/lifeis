@@ -22,3 +22,5 @@ export { media, FORMATS, MEDIA_TYPES } from './media.ts';
 export type { Copy, CopyInput, LogEntry, LogInput, Media, MediaCollection, MediaInput, MediaSummary, MediaType } from './media.ts';
 export { connections, connectionsDue, EVERY_CHOICES, SERVER_KINDS } from './connections.ts';
 export type { Answer, Connection as ServerConnection, ConnectionInput, Connections, Fetcher, Sealer, ServerKind, SyncResult } from './connections.ts';
+export { home, CARDS } from './home.ts';
+export type { CardKey, Home, HomeSummary } from './home.ts';

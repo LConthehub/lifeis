@@ -7,7 +7,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BlockList, isIP } from 'node:net';
-import { atomic, kitchen, life, Problem, type Db, type Kitchen } from '../../core/src/index.ts';
+import { atomic, home, kitchen, life, Problem, type Db, type Kitchen } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
 import { notUnderstood, queryNumber, read, readBody, Refusal, type Body, type Context, type Reply, type Route } from './http.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
@@ -201,6 +201,13 @@ export function createApp(options: Options) {
         `INSERT INTO user_settings (user_id, key, value) VALUES (?, 'idle_minutes', ?)
          ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value`, [c.user.id, String(minutes)]);
       return account(c);
+    }],
+
+    // The front page: what today holds, gathered from every section the person uses.
+    ['GET', /^\/api\/home$/, async (c) => ({ json: await home(db, c.user.id, c.clock).summary() })],
+    ['PUT', /^\/api\/home\/cards$/, async (c) => {
+      if (!Array.isArray(c.body.hidden)) throw notUnderstood('hidden');
+      return { json: await home(db, c.user.id, c.clock).hideCards(read.texts(c.body, 'hidden')) };
     }],
 
     // What the person wants Life Is to look after: asked once, theirs to change.

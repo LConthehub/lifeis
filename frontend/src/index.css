@@ -5,13 +5,14 @@
 html { -webkit-text-size-adjust: 100%; }
 body { @apply text-gray-800 dark:text-life-50; }
 
-/* The page sits on a soft wash of the palette, pale enough that dark text reads anywhere on it. It stays put
-   while the page scrolls. */
+/* Behind everything, all five colours: deep teal through teal and sand to orange and coral. It stays put while
+   the page scrolls. Each page lies on a sheet of frosted glass over it (see App.jsx), which is what keeps the
+   words easy to read. */
 body {
   min-height: 100vh;
-  background: linear-gradient(160deg, #e6f4f1 0%, #f6f4e6 48%, #fdf0e3 78%, #fbe6df 100%);
+  background: linear-gradient(135deg, #264653 0%, #2a9d8f 40%, #e9c46a 74%, #f4a261 90%, #e76f51 100%);
   background-attachment: fixed;
 }
 @media (prefers-color-scheme: dark) {
-  body { background: linear-gradient(160deg, #152a33 0%, #1b323c 50%, #2a2f33 100%); background-attachment: fixed; }
+  body { background: linear-gradient(135deg, #14262e 0%, #1c5a55 42%, #7d6a39 76%, #84583a 90%, #7c3e2f 100%); background-attachment: fixed; }
 }
