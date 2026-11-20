@@ -19,34 +19,13 @@ import type {
   RecipeInput, RecipeLine, RecipeSummary,
 } from './kitchenTypes.ts';
 import { Problem } from './problem.ts';
+import { addDays, clean, dayNumber, inOrder, localDay, rounded, stamp, type Clock } from './small.ts';
 import { cut, folderName, linesAsText, readImport, splitLines, TEXT_LIMIT, toSchemaOrg, type TextLine } from './recipeText.ts';
 import * as units from './units.ts';
 
 export const MEALS: readonly string[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 export const LOCATIONS: readonly string[] = ['fridge', 'freezer', 'pantry', 'spices', 'other'];
 
-/** What time it is. The tests give their own. */
-export type Clock = () => Date;
-
-const DAY = 86_400_000;
-const pad = (n: number) => String(n).padStart(2, '0');
-
-/** The moment, as the database keeps it: 2046-03-05T18:30:00+00:00. */
-const stamp = (at: Date) => at.toISOString().slice(0, 19) + '+00:00';
-/** The day where the person is, as 2046-03-05. */
-const localDay = (at: Date) => `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
-
-function dayNumber(day: string): number {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
-  const at = m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : NaN;
-  if (Number.isNaN(at) || new Date(at).toISOString().slice(0, 10) !== day) throw new Problem(400, 'A day is written like 2046-03-05');
-  return at / DAY;
-}
-const addDays = (day: string, days: number) => new Date((dayNumber(day) + days) * DAY).toISOString().slice(0, 10);
-
-const clean = (text: string | null | undefined, limit = 2000) => cut((text ?? '').trim(), limit) || null;
-const rounded = (n: number, places: number) => Number(n.toFixed(places));
-const inOrder = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 const tagList = (tags: string | null) => (tags ?? '').split(',').filter(Boolean);
 
 type RecipeRow = Omit<Recipe, 'tags' | 'ingredients' | 'steps' | 'ingredients_text' | 'steps_text' | 'showing_servings'> & { tags: string | null };
@@ -541,3 +520,4 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
 }
 
 export type Kitchen = ReturnType<typeof kitchen>;
+export type { Clock };

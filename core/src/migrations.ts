@@ -4,8 +4,8 @@
  * Each migration runs once, in order, inside a transaction, and the database remembers the last one it ran
  * (PRAGMA user_version). A shipped migration is never edited: a change is always a new one at the end.
  *
- * Migrations 1 and 2 are word for word the tables backend/migrations.py makes, so a database made by either
- * opens in the other.
+ * Migrations 1 and 2 are word for word the tables backend/migrations.py made. From 3 on, the database is this
+ * program's alone: the Python one refuses a database newer than it knows.
  */
 import { atomic, type Db } from './db.ts';
 
@@ -126,6 +126,104 @@ const MIGRATIONS: Migration[] = [
         created_at TEXT NOT NULL
       )`,
       `CREATE INDEX idx_grocery_owner ON grocery(owner_id, done)`,
+    ],
+  },
+  {
+    number: 3,
+    name: 'things you keep, and the projects that use them',
+    statements: [
+      // A kind of thing ("Fabric", "Seeds"), made by the person, with the fields they chose for it.
+      `CREATE TABLE kinds (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        key TEXT NOT NULL,
+        icon TEXT,
+        unit TEXT,
+        created_at TEXT NOT NULL,
+        UNIQUE (owner_id, key)
+      )`,
+      `CREATE TABLE kind_fields (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind_id INTEGER NOT NULL REFERENCES kinds(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        key TEXT NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('text', 'number', 'choice', 'yesno', 'date', 'link')),
+        unit TEXT,
+        choices TEXT,
+        sort_order INTEGER NOT NULL,
+        UNIQUE (kind_id, key)
+      )`,
+      // Where things are: a room, a shelf in it, a bin on the shelf.
+      `CREATE TABLE places (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        parent_id INTEGER REFERENCES places(id) ON DELETE SET NULL,
+        name TEXT NOT NULL,
+        note TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_places_owner ON places(owner_id, parent_id)`,
+      `CREATE TABLE items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind_id INTEGER NOT NULL REFERENCES kinds(id) ON DELETE RESTRICT,
+        name TEXT NOT NULL,
+        quantity REAL CHECK(quantity IS NULL OR quantity >= 0),
+        unit TEXT,
+        place_id INTEGER REFERENCES places(id) ON DELETE SET NULL,
+        low_at REAL,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_items_owner ON items(owner_id, kind_id)`,
+      `CREATE TABLE item_values (
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        field_id INTEGER NOT NULL REFERENCES kind_fields(id) ON DELETE CASCADE,
+        value TEXT NOT NULL,
+        PRIMARY KEY (item_id, field_id)
+      )`,
+      // Something being made or done, from an idea to finished.
+      `CREATE TABLE projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        activity TEXT,
+        status TEXT NOT NULL DEFAULT 'idea' CHECK(status IN ('idea', 'planned', 'active', 'paused', 'done', 'dropped')),
+        notes TEXT,
+        due_on TEXT,
+        started_on TEXT,
+        finished_on TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_projects_owner ON projects(owner_id, status)`,
+      // What a project uses. With an amount, that much is set aside for it; without, it's only referred to
+      // (a pattern, a tool). The label keeps the thing's name if the thing itself is later removed.
+      `CREATE TABLE project_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        item_id INTEGER REFERENCES items(id) ON DELETE SET NULL,
+        label TEXT NOT NULL,
+        quantity REAL CHECK(quantity IS NULL OR quantity > 0),
+        unit TEXT,
+        used_on TEXT,
+        note TEXT,
+        sort_order INTEGER NOT NULL
+      )`,
+      `CREATE INDEX idx_project_items ON project_items(project_id, sort_order)`,
+      `CREATE INDEX idx_project_items_item ON project_items(item_id)`,
+      // Time spent on a project: a day, and how long. The calendar will show these.
+      `CREATE TABLE project_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        minutes INTEGER CHECK(minutes IS NULL OR minutes >= 0),
+        note TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_project_sessions ON project_sessions(project_id, day)`,
     ],
   },
 ];

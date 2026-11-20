@@ -9,6 +9,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BlockList, isIP } from 'node:net';
 import { atomic, kitchen, Problem, type Db, type Kitchen } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
+import { notUnderstood, queryNumber, read, readBody, Refusal, type Body, type Context, type Reply, type Route } from './http.ts';
+import { makingRoutes } from './makingRoutes.ts';
 import { pages } from './pages.ts';
 import { zip } from './zip.ts';
 
@@ -17,7 +19,6 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store',
 };
-const MAX_BODY_BYTES = 8 * 1024 * 1024; // room for the largest paste the kitchen accepts
 
 export type Options = {
   db: Db;
@@ -29,97 +30,6 @@ export type Options = {
   /** Told about anything that went wrong inside Life Is itself (never about a person's mistake). */
   onError?: (problem: unknown) => void;
 };
-
-/** A refusal with words for the person, as the pages expect them: { detail }. */
-class Refusal extends Error {
-  readonly status: number;
-
-  constructor(status: number, detail: string) {
-    super(detail);
-    this.status = status;
-  }
-}
-
-type Reply = { status?: number; json?: unknown; headers?: Record<string, string | string[]>; body?: Buffer };
-type Body = Record<string, unknown>;
-type Context = {
-  req: IncomingMessage;
-  query: URLSearchParams;
-  id: number;
-  body: Body;
-  /** The signed-in person. On the public addresses, where nobody may be signed in, this is never read. */
-  user: auth.User;
-  kitchen: Kitchen;
-  token: string | undefined;
-  ip: string;
-  https: boolean;
-  local: boolean;
-};
-type Handler = (c: Context) => Promise<Reply>;
-
-// ---------- reading what was sent ----------
-
-const notUnderstood = (name: string) => new Refusal(422, `That couldn't be read: "${name}" is missing or isn't the right kind of thing`);
-const given = (value: unknown) => value !== undefined && value !== null;
-
-const read = {
-  text(body: Body, name: string): string {
-    if (typeof body[name] !== 'string') throw notUnderstood(name);
-    return body[name];
-  },
-  maybeText(body: Body, name: string): string | null {
-    return given(body[name]) ? read.text(body, name) : null;
-  },
-  maybeNumber(body: Body, name: string): number | null {
-    const value = body[name];
-    if (!given(value)) return null;
-    if (typeof value !== 'number' || !Number.isFinite(value)) throw notUnderstood(name);
-    return value;
-  },
-  maybeWhole(body: Body, name: string): number | null {
-    const value = read.maybeNumber(body, name);
-    if (value !== null && !Number.isInteger(value)) throw notUnderstood(name);
-    return value;
-  },
-  yesNo(body: Body, name: string, otherwise?: boolean): boolean {
-    if (!given(body[name]) && otherwise !== undefined) return otherwise;
-    if (typeof body[name] !== 'boolean') throw notUnderstood(name);
-    return body[name];
-  },
-  texts(body: Body, name: string): string[] {
-    const value = body[name];
-    if (!given(value)) return [];
-    if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) throw notUnderstood(name);
-    return value;
-  },
-};
-
-function queryNumber(query: URLSearchParams, name: string): number | null {
-  const text = query.get(name);
-  if (text === null || text === '') return null;
-  const value = Number(text);
-  if (!Number.isFinite(value)) throw notUnderstood(name);
-  return value;
-}
-
-async function readBody(req: IncomingMessage): Promise<Body> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += (chunk as Buffer).length;
-    if (size > MAX_BODY_BYTES) throw new Refusal(413, "That's too much to send at once");
-    chunks.push(chunk as Buffer);
-  }
-  if (size === 0) return {};
-  let data: unknown;
-  try {
-    data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  } catch {
-    throw new Refusal(422, "That couldn't be read");
-  }
-  if (typeof data !== 'object' || data === null || Array.isArray(data)) throw new Refusal(422, "That couldn't be read");
-  return data as Body;
-}
 
 function recipeFrom(body: Body) {
   return {
@@ -200,7 +110,7 @@ export function createApp(options: Options) {
   const account = async (c: Context): Promise<Reply> =>
     ({ json: { idle_minutes: await auth.idleMinutesFor(db, c.user.id, idleDefault), idle_choices: auth.IDLE_CHOICES } });
 
-  const routes: [method: string, path: RegExp, handler: Handler][] = [
+  const routes: Route[] = [
     ['GET', /^\/api\/health$/, async () => ({ json: { status: 'ok' } })],
 
     // ==================== THE FRONT DOOR ====================
@@ -342,6 +252,8 @@ export function createApp(options: Options) {
     ['POST', /^\/api\/kitchen\/grocery\/(\d{1,15})\/tick$/, async (c) =>
       ({ json: await c.kitchen.tickGrocery(c.id, { done: read.yesNo(c.body, 'done'), put_away: read.yesNo(c.body, 'put_away', true) }) })],
     ['DELETE', /^\/api\/kitchen\/grocery\/(\d{1,15})$/, async (c) => (await c.kitchen.deleteGrocery(c.id), { status: 204 })],
+
+    ...makingRoutes(db, clock),
   ];
 
   async function answerApi(req: IncomingMessage, url: URL, path: string): Promise<Reply> {

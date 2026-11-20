@@ -41,6 +41,19 @@ unit('pint', 'volume', 473.176, 'pints', 'pt');
 unit('quart', 'volume', 946.353, 'quarts', 'qt');
 unit('gallon', 'volume', 3785.41, 'gallons', 'gal');
 
+// Lengths (in metres), for fabric, yarn, wood and the like. Kept apart from the table above because they are
+// never read out of a recipe line: "2 m" at the start of an ingredient is not two metres of anything.
+const LENGTHS = new Map<string, UnitInfo>();
+const length = (canonical: string, factor: number, ...aliases: string[]) => {
+  for (const alias of [canonical, ...aliases]) LENGTHS.set(alias, { canonical, kind: 'length', factor });
+};
+length('mm', 0.001, 'millimeter', 'millimeters', 'millimetre', 'millimetres');
+length('cm', 0.01, 'centimeter', 'centimeters', 'centimetre', 'centimetres');
+length('m', 1, 'meter', 'meters', 'metre', 'metres');
+length('in', 0.0254, 'inch', 'inches', '"');
+length('ft', 0.3048, 'foot', 'feet', "'");
+length('yd', 0.9144, 'yard', 'yards', 'yds');
+
 // Words that are units of their own: they only add up with the same word.
 const OWN = new Map<string, string>([
   ['clove', 'clove'], ['cloves', 'clove'], ['can', 'can'], ['cans', 'can'], ['tin', 'tin'], ['tins', 'tin'],
@@ -92,7 +105,7 @@ function number(text: string): number {
 export function unitInfo(unitName: string | null | undefined): UnitInfo | null {
   if (!unitName) return null;
   const u = unitName.trim().toLowerCase().replace(/\.+$/, '');
-  const known = TABLE.get(u);
+  const known = TABLE.get(u) ?? LENGTHS.get(u);
   if (known) return known;
   const own = OWN.get(u) ?? u;
   return { canonical: own, kind: `own:${own}`, factor: 1 };

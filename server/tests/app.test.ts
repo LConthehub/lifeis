@@ -307,3 +307,78 @@ it('the pages are served, and nothing outside their folder is', async () => {
   expect((await anyone.get('/api/nothing')).status).toBe(401);
   expect((await anyone.post('/')).status).toBe(404);
 });
+
+// ---------- things and projects, over the web ----------
+
+it('things and projects answer over the web', async () => {
+  const admin = await owner();
+  expect((await admin.get('/api/things/starters')).json.map((s: { slug: string }) => s.slug)).toContain('sewing');
+  let kinds = (await admin.post('/api/things/starters', { slug: 'sewing' })).json;
+  const fabric = kinds.find((k: { name: string }) => k.name === 'Fabric');
+  const fibre = fabric.fields.find((f: { name: string }) => f.name === 'Fibre').id;
+
+  // A kind of the person's own, with their own fields.
+  const made = await admin.post('/api/things/kinds', { name: 'Board games', icon: '🎲', fields: [{ name: 'Players', type: 'text' }, { name: 'Wear', type: 'choice', choices: ['None', 'Some'] }] });
+  expect(made.status).toBe(201);
+  const games = made.json.find((k: { name: string }) => k.name === 'Board games');
+  expect((await admin.post('/api/things/kinds', { name: 'board games' })).status).toBe(409);
+  expect((await admin.post('/api/things/kinds', { name: 'Bad', fields: [{ name: 'x', type: 'colour' }] })).status).toBe(400);
+  expect((await admin.post('/api/things/kinds', { name: 'Bad', fields: 'Players' })).status).toBe(422);
+  kinds = (await admin.post(`/api/things/kinds/${games.id}/fields`, { name: 'Minutes', type: 'number', unit: 'min' })).json;
+  // Renaming a kind leaves its picture alone unless a new one is sent.
+  kinds = (await admin.put(`/api/things/kinds/${games.id}`, { name: 'Games' })).json;
+  expect(kinds.find((k: { id: number }) => k.id === games.id)).toMatchObject({ name: 'Games', icon: '🎲' });
+
+  const places = (await admin.post('/api/things/places', { name: 'Sewing room' })).json;
+  const linen = await admin.post('/api/things/items', { kind_id: fabric.id, name: 'Blue linen', quantity: 5, place_id: places[0].id, values: { [fibre]: 'Flax' } });
+  expect([linen.status, linen.json.amount, linen.json.place, linen.json.values]).toEqual([201, '5 yd', 'Sewing room', { [fibre]: 'Flax' }]);
+  expect((await admin.post('/api/things/items', { name: 'No kind' })).status).toBe(422);
+  expect((await admin.post('/api/things/items', { kind_id: fabric.id, name: 'x', values: ['Flax'] })).status).toBe(422);
+  expect((await admin.get('/api/things/items?q=flax')).json.map((i: { name: string }) => i.name)).toEqual(['Blue linen']);
+  expect((await admin.get(`/api/things/items?kind_id=${games.id}`)).json).toEqual([]);
+  expect((await admin.delete(`/api/things/kinds/${fabric.id}`)).status).toBe(409);
+
+  let dress = (await admin.post('/api/projects', { name: 'Shirt dress', activity: 'Sewing', status: 'planned' })).json;
+  dress = (await admin.post(`/api/projects/${dress.id}/lines`, { item_id: linen.json.id, quantity: 3 })).json;
+  dress = (await admin.post(`/api/projects/${dress.id}/lines`, { label: '9 inch zip', quantity: 1 })).json;
+  expect(dress.lines.map((l: { label: string; amount: string; short: number }) => [l.label, l.amount, l.short])).toEqual([['Blue linen', '3 yd', 0], ['9 inch zip', '1', 1]]);
+  expect((await admin.get(`/api/things/items/${linen.json.id}`)).json).toMatchObject({ set_aside: 3, free: 2 });
+  expect((await admin.post(`/api/projects/${dress.id}/sessions`, { day: MONDAY, minutes: 90, note: 'Cut out' })).status).toBe(201);
+  expect((await admin.get(`/api/projects/sessions?start=${MONDAY}&end=${MONDAY}`)).json.map((s: { project: string; minutes: number }) => [s.project, s.minutes])).toEqual([['Shirt dress', 90]]);
+  expect((await admin.get('/api/projects/sessions')).status).toBe(422);
+  expect((await admin.get('/api/projects/activities')).json).toEqual(['Sewing']);
+  const used = (await admin.post(`/api/projects/lines/${dress.lines[0].id}/use`)).json;
+  expect([used.taken, used.lines[0].used_on !== null]).toEqual([true, true]);
+  const done = (await admin.put(`/api/projects/${dress.id}`, { name: 'Shirt dress', activity: 'Sewing', status: 'done' })).json;
+  expect([done.status, done.check_by_hand]).toEqual(['done', []]);
+  expect((await admin.get(`/api/things/items/${linen.json.id}`)).json).toMatchObject({ quantity: 2, set_aside: 0 });
+  expect((await admin.get('/api/projects')).json.map((p: { name: string; status: string; minutes: number }) => [p.name, p.status, p.minutes])).toEqual([['Shirt dress', 'done', 90]]);
+
+  // Each person has their own.
+  const other = await member(admin, 'partner');
+  expect([(await other.get('/api/things/kinds')).json, (await other.get('/api/projects')).json]).toEqual([[], []]);
+  expect((await other.get(`/api/things/items/${linen.json.id}`)).status).toBe(404);
+  expect((await other.get(`/api/projects/${dress.id}`)).status).toBe(404);
+  expect((await visitor().get('/api/things/items')).status).toBe(401);
+
+  expect((await admin.delete(`/api/projects/${dress.id}`)).status).toBe(204);
+  expect((await admin.delete(`/api/things/items/${linen.json.id}`)).status).toBe(204);
+});
+
+it('a database from before things and projects is upgraded, with a copy saved first', async () => {
+  const admin = await owner();
+  await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
+  // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
+  for (const table of ['project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+    await database.db.run(`DROP TABLE ${table}`);
+  }
+  await database.db.run('PRAGMA user_version = 2');
+  await stop();
+
+  await start();
+  const copy = path.join(folder, 'data', 'lifeis.before-v3.db');
+  expect(readFileSync(copy).subarray(0, 16).toString('latin1')).not.toBe('SQLite format 3\0'); // the copy is encrypted too
+  expect((await database.db.get<{ user_version: number }>('PRAGMA user_version'))!.user_version).toBe(3);
+  expect((await admin.get('/api/kitchen/recipes')).json.map((r: { title: string }) => r.title)).toEqual(['Toast']); // still signed in, recipe still there
+  expect((await admin.get('/api/things/kinds')).json).toEqual([]);
+});
