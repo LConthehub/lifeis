@@ -20,6 +20,12 @@ So far: the kitchen, the calendar, the things you keep, the projects that use th
 - **The pantry.** What you have, how much, where (fridge, freezer, cupboard), when to use it by, and when it's
   running low. Ticking something off the grocery list puts it in the pantry; marking a meal as cooked takes out
   what it used.
+- **What it costs, as you shop.** Type the price as each thing goes in the trolley and the total keeps up, in
+  sight while the list scrolls. Next time the list says what each thing cost last time and where, guesses the trip
+  before you start, and keeps a price history for each ingredient. Tick something off without a price and last
+  time's stands in, marked as a guess.
+- **Coupons.** Money or a percentage off, for one thing or the whole shop, perhaps at one shop and until a day. The
+  list flags the line a coupon is for; using it takes it off the total.
 - **A recipe knows what it's cooked in.** Pans, dishes and tools from the things you keep (the cast iron skillet,
   the 8x8 baking dishes), or just by name. The week then tells you when one meal needs more of something than you
   own: "Thursday dinner: 4 × 8x8 baking dish, and you have 2."

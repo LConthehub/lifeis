@@ -440,6 +440,47 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE plan_items ADD COLUMN meal_plan_id INTEGER REFERENCES meal_plan(id) ON DELETE SET NULL`,
     ],
   },
+  {
+    number: 13,
+    name: 'what things cost, and coupons',
+    statements: [
+      // A price paid for a line of the grocery list, in whole cents. While the line is on the list the price
+      // is tied to it (grocery_id); once the list is cleared it stays as that ingredient's history. A price
+      // marked assumed is last time's standing in, and is never treated as history.
+      `CREATE TABLE prices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        ingredient_id INTEGER REFERENCES ingredients(id) ON DELETE SET NULL,
+        grocery_id INTEGER REFERENCES grocery(id) ON DELETE SET NULL,
+        label TEXT NOT NULL,
+        cents INTEGER NOT NULL CHECK(cents >= 0),
+        quantity REAL,
+        unit TEXT,
+        store TEXT,
+        day TEXT NOT NULL,
+        assumed INTEGER NOT NULL DEFAULT 0 CHECK(assumed IN (0, 1)),
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_prices_owner ON prices(owner_id, ingredient_id, day)`,
+      `CREATE INDEX idx_prices_grocery ON prices(grocery_id)`,
+      // Money or a percentage off: for one ingredient, or (ingredient_id empty) for the whole shop.
+      `CREATE TABLE coupons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        label TEXT NOT NULL,
+        ingredient_id INTEGER REFERENCES ingredients(id) ON DELETE SET NULL,
+        cents_off INTEGER CHECK(cents_off IS NULL OR cents_off > 0),
+        percent_off REAL CHECK(percent_off IS NULL OR (percent_off > 0 AND percent_off <= 100)),
+        store TEXT,
+        code TEXT,
+        expires_on TEXT,
+        used_on TEXT,
+        note TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_coupons_owner ON coupons(owner_id, used_on)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

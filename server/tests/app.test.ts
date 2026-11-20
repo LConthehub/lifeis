@@ -505,7 +505,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   await database.db.run('PRAGMA user_version = 2');
@@ -562,4 +562,37 @@ it('plans answer over the web, with their photos', async () => {
 
   expect((await admin.delete(`/api/plans/${id}`)).status).toBe(204);
   expect((await admin.get(`/api/plans/photos/${kept.json.photos_list[0].id}`)).status).toBe(404);
+});
+
+it('prices, the running total and coupons answer over the web, in whole cents', async () => {
+  const admin = await owner();
+  const list = (await admin.post('/api/kitchen/grocery', { label: 'coffee' })).json;
+  const coffee = list[0].id;
+  expect((await admin.get('/api/shopping')).json).toMatchObject({ currency: '$', store: null, totals: { trolley_cents: 0, left_unknown: 1 } });
+  expect((await admin.put('/api/shopping/settings', { store: 'Aldi', currency: '£' })).json).toMatchObject({ store: 'Aldi', currency: '£' });
+
+  await admin.post(`/api/kitchen/grocery/${coffee}/tick`, { done: true, put_away: false });
+  expect((await admin.put(`/api/shopping/prices/${coffee}`, { cents: 899 })).json.totals.trolley_cents).toBe(899);
+  expect((await admin.put(`/api/shopping/prices/${coffee}`, { cents: 8.99 })).status).toBe(422); // pounds, not pence
+  expect((await admin.put(`/api/shopping/prices/${coffee}`, {})).status).toBe(422);
+  expect((await admin.get(`/api/shopping/prices/${coffee}/history`)).json).toEqual([{ cents: 899, amount: '', store: 'Aldi', day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }]);
+
+  const made = await admin.post('/api/shopping/coupons', { label: '£2 off coffee', grocery_id: coffee, cents_off: 200, expires_on: '2099-01-01' });
+  expect([made.status, made.json.coupons[0].ingredient.toLowerCase(), made.json.totals.to_pay_cents]).toEqual([201, 'coffee', 899]);
+  const coupon = made.json.coupons[0].id;
+  expect((await admin.post(`/api/shopping/coupons/${coupon}/use`, { using: true })).json.totals).toMatchObject({ coupons_cents: 200, to_pay_cents: 699 });
+  expect((await admin.post('/api/shopping/coupons', { label: 'Both', cents_off: 100, percent_off: 10 })).status).toBe(400);
+
+  // Someone else in the house sees none of it and can't touch it.
+  expect((await admin.post('/api/users', { username: 'other', password: PASSWORD })).status).toBe(201);
+  const other = visitor();
+  await other.post('/api/auth/login', { username: 'other', password: PASSWORD });
+  expect((await other.get('/api/shopping')).json).toMatchObject({ lines: [], coupons: [], currency: '$' });
+  expect([(await other.put(`/api/shopping/prices/${coffee}`, { cents: 1 })).status, (await other.post(`/api/shopping/coupons/${coupon}/use`, { using: false })).status]).toEqual([404, 404]);
+  expect((await visitor().get('/api/shopping')).status).toBe(401);
+
+  // Clearing the list keeps what things cost.
+  await admin.post('/api/kitchen/grocery/clear-done');
+  const again = (await admin.post('/api/kitchen/grocery', { label: 'coffee' })).json[0].id;
+  expect((await admin.get('/api/shopping')).json.lines).toEqual([{ id: again, price_cents: null, assumed: false, last: expect.objectContaining({ cents: 899, store: 'Aldi' }), coupons: [] }]);
 });
