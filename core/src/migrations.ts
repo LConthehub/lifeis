@@ -530,6 +530,20 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE ingredients ADD COLUMN usual_size_unit TEXT`,
     ],
   },
+  {
+    number: 17,
+    name: 'a link the calendar on your phone can follow',
+    statements: [
+      // One link each: the random part of its address, and which kinds of thing it carries (a JSON list).
+      `CREATE TABLE calendar_feeds (
+        owner_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        kinds TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        read_at TEXT
+      )`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

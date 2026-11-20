@@ -119,6 +119,10 @@ time in Settings; unticking something only puts it out of sight.
   and what you watched, read or heard. Each of those leads back to the page it lives on.
 - **Birthdays and anniversaries.** Tick "Every year" and give the day it first happened: it shows each year, counting
   the years.
+- **On your phone's calendar.** Settings → "Your calendar on your phone" makes a private link that Apple Calendar (or
+  any calendar app that follows a link) reads, so plans, meals and dates show there too. Off until you make one;
+  you tick what it carries; it only shows and can't change anything; a new link stops the old one working. Anyone
+  holding the link can read what's ticked, so it is long, random, and yours to replace.
 
 ## Films, shows, music, books and games
 

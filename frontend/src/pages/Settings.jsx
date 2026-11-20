@@ -14,6 +14,7 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
         <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">What Life Is looks after</h2>
         <LifeAreasPicker onSaved={onLifeChanged} />
       </section>
+      <CalendarLink />
       <OutsideServices />
       <SignedOut />
       <PasswordForm />
@@ -96,6 +97,85 @@ function AddPerson() {
       {message && <p className="text-sm text-gray-700 dark:text-life-100">{message}</p>}
       <button type="submit" className={buttonClass}>Add them</button>
     </form>
+  );
+}
+
+/**
+ * A link the calendar app on a phone can follow, so Life Is's calendar shows there too. Off until made.
+ * It only shows: nothing can be changed through it.
+ */
+function CalendarLink() {
+  const [link, setLink] = useState(null);
+  const [kinds, setKinds] = useState([]);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const took = (data) => { setLink(data); setKinds(data.kinds); setError(''); };
+  useEffect(() => { axios.get('/api/calendar/link').then(({ data }) => took(data)).catch(() => {}); }, []);
+  // Coming from the calendar page's link, bring this part into view once it's there.
+  const shown = Boolean(link);
+  useEffect(() => { if (shown && window.location.hash === '#calendar-link') document.getElementById('calendar-link')?.scrollIntoView(); }, [shown]);
+  if (!link) return null;
+  const ask = async (send) => { try { took((await send()).data); } catch (err) { setError(errorMessage(err, "Couldn't do that")); } };
+  const tick = (key, on) => {
+    const next = on ? [...kinds, key] : kinds.filter((k) => k !== key);
+    setKinds(next);
+    // Once the link exists, a tick is saved straight away; before that it waits for "Make a link".
+    if (link.on && next.length > 0) ask(() => axios.put('/api/calendar/link', { kinds: next }));
+  };
+  const address = link.token ? `${window.location.origin}/cal/${link.token}.ics` : '';
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(address); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch { setError('Copying was refused: press and hold the link to copy it instead'); }
+  };
+  const onThisComputerOnly = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+  return (
+    <section className={cardClass} id="calendar-link">
+      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Your calendar on your phone</h2>
+      <p className="mb-3 text-sm text-gray-600 dark:text-life-100">
+        Shows Life Is's calendar inside the calendar app you already use (Apple Calendar, and any other that can follow a link).
+        It only shows: nothing can be changed through it. Off until you make a link.
+      </p>
+      <fieldset className="mb-3">
+        <legend className="mb-1 text-sm font-medium text-gray-800 dark:text-life-50">What it shows</legend>
+        <div className="grid gap-1 sm:grid-cols-2">
+          {link.choices.map((choice) => (
+            <label key={choice.key} className="flex items-center gap-2 text-sm text-gray-700 dark:text-life-100">
+              <input type="checkbox" checked={kinds.includes(choice.key)} onChange={(e) => tick(choice.key, e.target.checked)} />
+              {choice.label}
+            </label>
+          ))}
+        </div>
+        {kinds.length === 0 && <p className="mt-1 text-xs text-red-600">Tick at least one.</p>}
+      </fieldset>
+      {!link.on ? (
+        <button type="button" disabled={kinds.length === 0} onClick={() => ask(() => axios.put('/api/calendar/link', { kinds }))} className={buttonClass}>Make a link</button>
+      ) : (
+        <div className="space-y-3">
+          <Field label="Your link">
+            <input readOnly value={address} onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs`} />
+          </Field>
+          <div className="flex flex-wrap gap-2">
+            <a href={address.replace(/^https?:/, 'webcal:')} className={buttonClass}>Add to this device's calendar</a>
+            <button type="button" onClick={copy} className={quietButtonClass}>{copied ? 'Copied' : 'Copy the link'}</button>
+          </div>
+          {onThisComputerOnly && (
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              You're on the computer Life Is runs on, so this link only works here. Open Life Is on your phone, at the address you use there, and add it from this same page.
+            </p>
+          )}
+          <ul className="list-disc space-y-1 pl-5 text-xs text-gray-600 dark:text-life-200">
+            <li>Anyone who has this link can read what's ticked above, without a password. Treat it like a key, and don't post it anywhere.</li>
+            <li>It reaches from {link.days_back} days back to a year ahead, and a calendar app looks again about once an hour, so a change takes a little while to show.</li>
+            <li>A calendar app on your own phone or computer fetches it straight from your Life Is. An online calendar (Google Calendar, Outlook on the web) fetches it from that company's computers, so they would see what's in it.</li>
+            <li>{link.read_at ? `Last fetched ${new Date(link.read_at).toLocaleString()}.` : 'Nothing has fetched it yet.'}</li>
+          </ul>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => { if (window.confirm('Make a new link? The old one stops working, and each calendar that follows it has to be given the new one.')) ask(() => axios.post('/api/calendar/link/renew')); }} className={quietButtonClass}>Make a new link</button>
+            <button type="button" onClick={() => { if (window.confirm('Turn the link off? Calendars following it stop getting anything.')) ask(() => axios.delete('/api/calendar/link')); }} className={quietButtonClass}>Turn it off</button>
+          </div>
+        </div>
+      )}
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+    </section>
   );
 }
 

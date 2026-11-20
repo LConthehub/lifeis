@@ -2,7 +2,7 @@
  * The addresses for the calendar (/api/calendar) and the collection of films, shows, music, books and games
  * (/api/media). What they do is core/'s calendar.ts and media.ts; this only reads what was sent and passes it on.
  */
-import { calendar, media, type Db } from '../../core/src/index.ts';
+import { calendar, calendarFeed, media, type Db } from '../../core/src/index.ts';
 import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -44,6 +44,11 @@ export function enjoyingRoutes(db: Db): Route[] {
       if (!start) throw notUnderstood('start');
       return { json: await dates(c).between(start, queryNumber(c.query, 'days') ?? 7) };
     }],
+    // The link a calendar app follows: off until made, and what it answers with is in app.ts (/cal/….ics).
+    ['GET', at('calendar/link'), async (c) => ({ json: await calendarFeed(db, c.user.id, c.clock).status() })],
+    ['PUT', at('calendar/link'), async (c) => ({ json: await calendarFeed(db, c.user.id, c.clock).turnOn(Object.hasOwn(c.body, 'kinds') ? read.texts(c.body, 'kinds') : null) })],
+    ['POST', at('calendar/link/renew'), async (c) => ({ json: await calendarFeed(db, c.user.id, c.clock).renew() })],
+    ['DELETE', at('calendar/link'), async (c) => ({ json: await calendarFeed(db, c.user.id, c.clock).turnOff() })],
     ['POST', at('calendar/events'), async (c) => ({ status: 201, json: await dates(c).createEvent(eventFrom(c.body)) })],
     ['GET', at('calendar/events/:id'), async (c) => ({ json: await dates(c).getEvent(c.id) })],
     ['PUT', at('calendar/events/:id'), async (c) => ({ json: await dates(c).updateEvent(c.id, eventFrom(c.body)) })],

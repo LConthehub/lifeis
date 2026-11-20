@@ -39,7 +39,7 @@ export default function Calendar() {
         <button type="button" onClick={() => move(7)} className={quietButtonClass} aria-label="Week after">→</button>
         <button type="button" onClick={() => setEditing({ day: today })} className={buttonClass}>+ Add</button>
       </div>
-      <p className="text-xs text-gray-500 dark:text-life-300">Meals, project time, use-by dates and what you watched show here from their own pages. Tap one to go there.</p>
+      <p className="text-xs text-gray-500 dark:text-life-300">Meals, project time, use-by dates and what you watched show here from their own pages. Tap one to go there. <Link to="/settings#calendar-link" className="text-life-600 hover:underline dark:text-life-200">See this on your phone's calendar</Link></p>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {days.map((d) => {
           const key = toDateInput(d);

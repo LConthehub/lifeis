@@ -216,3 +216,28 @@ it('groceries are looked up by barcode only once that is turned on, apart from b
   expect((await admin.get('/api/lookups/product?code=abc')).status).toBe(400);
   expect((await admin.put('/api/lookups', { groceries: false })).json.groceries).toBe(false);
 });
+
+it('the calendar link answers a calendar app without signing in, and only while it exists', async () => {
+  const admin = await start(false);
+  const day = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+  await admin.post('/api/calendar/events', { title: 'Book club', day, time: '19:00' });
+  expect((await admin.get('/api/calendar/link')).json).toMatchObject({ on: false, token: null });
+  expect((await visitor().get('/api/calendar/link')).status).toBe(401);
+
+  const on = (await admin.put('/api/calendar/link', {})).json;
+  expect([on.on, on.kinds]).toEqual([true, ['event', 'plan', 'meal', 'due']]);
+  const fetched = await fetch(`${base}/cal/${on.token}.ics`); // no cookie: the address is the key
+  const file = await fetched.text();
+  expect([fetched.status, fetched.headers.get('content-type'), fetched.headers.get('cache-control')]).toEqual([200, 'text/calendar; charset=utf-8', 'private, no-store']);
+  expect(file).toContain('SUMMARY:Book club');
+  expect(file).toContain(`DTSTART:${day.replaceAll('-', '')}T190000`);
+  expect((await admin.get('/api/calendar/link')).json.read_at).not.toBeNull();
+  expect((await fetch(`${base}/cal/${'0'.repeat(64)}.ics`)).status).toBe(404);
+  expect((await fetch(`${base}/cal/${on.token}.ics`, { method: 'POST' })).status).toBe(404);
+
+  expect((await admin.put('/api/calendar/link', { kinds: ['nonsense'] })).status).toBe(400);
+  const renewed = (await admin.post('/api/calendar/link/renew')).json;
+  expect([(await fetch(`${base}/cal/${on.token}.ics`)).status, (await fetch(`${base}/cal/${renewed.token}.ics`)).status]).toEqual([404, 200]);
+  expect((await admin.delete('/api/calendar/link')).json.on).toBe(false);
+  expect((await fetch(`${base}/cal/${renewed.token}.ics`)).status).toBe(404);
+});

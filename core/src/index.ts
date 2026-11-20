@@ -40,3 +40,5 @@ export type { LibraryPhoto, PhotoLibrary, Photos } from './photos.ts';
 export { shopping, sizeOf } from './shopping.ts';
 export type { Store } from './shopping.ts';
 export type { Coupon, CouponInput, LastPrice, MonthSpend, PricePoint, Scanned, Shopping, ShoppingLine, ShoppingOf, Trend } from './shopping.ts';
+export { calendarFeed, calendarFile, feedFor, FEED_KINDS } from './feed.ts';
+export type { CalendarFeed, FeedEvent, FeedStatus } from './feed.ts';
