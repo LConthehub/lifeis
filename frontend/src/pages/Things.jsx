@@ -1,0 +1,415 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import axios from 'axios';
+import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
+
+const TYPES = [['text', 'Text'], ['number', 'A number'], ['choice', 'A choice from a list'], ['yesno', 'Yes or no'], ['date', 'A date'], ['link', 'A link']];
+const typeName = (type) => (TYPES.find(([id]) => id === type) || ['', type])[1];
+const commaList = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
+
+/** How a field's value reads in a list: "Yes", "45 min", "Flax". */
+function shown(field, value) {
+  if (value === undefined || value === null || value === '') return '';
+  if (field.type === 'yesno') return value ? field.name : `not ${field.name.toLowerCase()}`;
+  if (field.type === 'number') return `${value}${field.unit ? ` ${field.unit}` : ''}`;
+  return String(value);
+}
+
+/** The ready-made sets, each with a button to add it. Shown big when there's nothing yet, small after. */
+function Starters({ onAdded }) {
+  const [starters, setStarters] = useState([]);
+  const load = useCallback(() => { axios.get('/api/things/starters').then(({ data }) => setStarters(data)).catch(() => {}); }, []);
+  useEffect(() => { load(); }, [load]);
+  const add = async (slug) => { await axios.post('/api/things/starters', { slug }).catch(() => {}); load(); onAdded(); };
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {starters.map((s) => {
+        const all = s.kinds.every((k) => k.have);
+        return (
+          <section key={s.slug} className={cardClass}>
+            <div className="flex items-start gap-2">
+              <div className="flex-1">
+                <h3 className="font-semibold text-life-800 dark:text-life-50">{s.name}</h3>
+                <p className="text-sm text-gray-600 dark:text-life-200">{s.about}</p>
+              </div>
+              <button type="button" disabled={all} onClick={() => add(s.slug)} className={quietButtonClass}>{all ? 'Added' : 'Add'}</button>
+            </div>
+            <p className="mt-2 text-xs text-gray-500 dark:text-life-300">{s.kinds.map((k) => `${k.icon} ${k.name}`).join('  ·  ')}</p>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Everything you keep: by kind, found by a word, with where it is and how much is free. */
+export default function Things() {
+  const [kinds, setKinds] = useState(null);
+  const [places, setPlaces] = useState([]);
+  const [items, setItems] = useState([]);
+  const [kind, setKind] = useState(null);
+  const [q, setQ] = useState('');
+  const [editing, setEditing] = useState(null);
+  const load = useCallback(() => {
+    axios.get('/api/things/kinds').then(({ data }) => setKinds(data)).catch(() => setKinds([]));
+    axios.get('/api/things/places').then(({ data }) => setPlaces(data)).catch(() => {});
+    axios.get('/api/things/items').then(({ data }) => setItems(data)).catch(() => setItems([]));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  if (!kinds) return null;
+
+  if (kinds.length === 0) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">Things</h1>
+        <div className={cardClass}>
+          <p className="text-sm text-gray-700 dark:text-life-100">Keep track of anything: fabric, yarn, tools, seeds, board games. First say what kinds of things you keep.
+            Start from a ready-made set and change it to suit you, or <Link to="/things/kinds" className="underline">make your own kind</Link> from nothing.</p>
+        </div>
+        <Starters onAdded={load} />
+      </div>
+    );
+  }
+
+  const word = q.trim().toLowerCase();
+  const matches = (item) => !word || [item.name, item.note, item.place, ...Object.values(item.values)].some((v) => String(v ?? '').toLowerCase().includes(word));
+  const shownItems = items.filter((i) => (kind === null || i.kind_id === kind) && matches(i));
+  const low = items.filter((i) => i.low).map((i) => i.name);
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Things</h1>
+        <button type="button" onClick={() => setEditing({ kind_id: kind ?? kinds[0].id })} className={buttonClass}>+ Add</button>
+      </div>
+      {low.length > 0 && <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">Running low: {low.join(', ')}.</p>}
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Kind of thing">
+        {[{ id: null, name: 'Everything', items: items.length }, ...kinds].map((k) => (
+          <button key={k.id ?? 'all'} type="button" onClick={() => setKind(k.id)} aria-pressed={kind === k.id}
+            className={`rounded-full px-3 py-1 text-sm ${kind === k.id ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`}>
+            {k.icon ? `${k.icon} ` : ''}{k.name} <span className="opacity-70">{k.items}</span>
+          </button>
+        ))}
+      </div>
+      {items.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find something" aria-label="Find a thing" className={`${inputClass} max-w-sm`} />}
+      {shownItems.length === 0 ? (
+        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>{items.length === 0 ? 'Nothing here yet. Add the first thing you keep.' : 'Nothing matches.'}</div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {kinds.filter((k) => kind === null || k.id === kind).map((k) => {
+            const here = shownItems.filter((i) => i.kind_id === k.id);
+            if (here.length === 0) return null;
+            return (
+              <section key={k.id} className={cardClass}>
+                <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">{k.icon ? `${k.icon} ` : ''}{k.name}</h2>
+                <ul className="divide-y divide-life-50 dark:divide-life-700">
+                  {here.map((item) => {
+                    const details = k.fields.map((f) => shown(f, item.values[f.id])).filter(Boolean).slice(0, 4);
+                    return (
+                      <li key={item.id}>
+                        <button type="button" onClick={() => setEditing(item)} className="flex w-full items-start gap-2 py-2 text-left">
+                          <span className="flex-1">
+                            <span className="block text-sm text-gray-800 dark:text-life-50">{item.name}</span>
+                            {(details.length > 0 || item.place) && (
+                              <span className="block text-xs text-gray-500 dark:text-life-300">{[...details, item.place && `📍 ${item.place}`].filter(Boolean).join(' · ')}</span>
+                            )}
+                            {item.set_aside > 0 && <span className="block text-xs text-life-600 dark:text-life-200">{item.set_aside} {item.unit || ''} set aside for projects</span>}
+                          </span>
+                          {item.low && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">low</span>}
+                          <span className="text-sm text-gray-500 dark:text-life-300">{item.amount}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
+      )}
+      {editing && (
+        <Modal title={editing.id ? editing.name : 'Add a thing'} onClose={() => setEditing(null)}>
+          <ItemForm item={editing} kinds={kinds} places={places} onDone={() => { setEditing(null); load(); }} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/** One input for a field, of the right sort for what the field is. */
+function ValueInput({ field, value, onChange }) {
+  if (field.type === 'choice') {
+    return (
+      <select value={value ?? ''} onChange={(e) => onChange(e.target.value)} className={inputClass}>
+        <option value="">—</option>
+        {field.choices.map((c) => <option key={c} value={c}>{c}</option>)}
+        {value && !field.choices.includes(value) && <option value={value}>{value}</option>}
+      </select>
+    );
+  }
+  if (field.type === 'yesno') {
+    return (
+      <select value={value === true ? 'yes' : value === false ? 'no' : ''} onChange={(e) => onChange(e.target.value === '' ? '' : e.target.value === 'yes')} className={inputClass}>
+        <option value="">—</option><option value="yes">Yes</option><option value="no">No</option>
+      </select>
+    );
+  }
+  if (field.type === 'number') return <input type="number" step="any" value={value ?? ''} onChange={(e) => onChange(e.target.value)} className={inputClass} />;
+  if (field.type === 'date') return <input type="date" value={value ?? ''} onChange={(e) => onChange(e.target.value)} className={inputClass} />;
+  return <input type={field.type === 'link' ? 'url' : 'text'} value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder={field.type === 'link' ? 'https://' : ''} className={inputClass} />;
+}
+
+function ItemForm({ item, kinds, places, onDone }) {
+  const [form, setForm] = useState({
+    kind_id: item.kind_id, name: item.name || '', quantity: item.quantity ?? '', unit: item.unit || '', place_id: item.place_id ?? '',
+    low_at: item.low_at ?? '', note: item.note || '', values: { ...(item.values || {}) },
+  });
+  const [error, setError] = useState('');
+  const kind = kinds.find((k) => k.id === Number(form.kind_id)) || kinds[0];
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const submit = async (e) => {
+    e.preventDefault();
+    const values = {};
+    for (const f of kind.fields) {
+      const v = form.values[f.id];
+      if (v !== undefined && v !== '' && v !== null) values[f.id] = f.type === 'number' ? Number(v) : v;
+    }
+    const body = { name: form.name, quantity: form.quantity === '' ? null : Number(form.quantity), unit: form.unit || null,
+      place_id: form.place_id === '' ? null : Number(form.place_id), low_at: form.low_at === '' ? null : Number(form.low_at), note: form.note || null, values };
+    try {
+      if (item.id) await axios.put(`/api/things/items/${item.id}`, body);
+      else await axios.post('/api/things/items', { ...body, kind_id: kind.id });
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err, "Couldn't save"));
+    }
+  };
+  const remove = async () => {
+    if (!window.confirm(`Remove ${item.name}? Projects that used it keep its name.`)) return;
+    await axios.delete(`/api/things/items/${item.id}`).catch(() => {});
+    onDone();
+  };
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      {!item.id && kinds.length > 1 && (
+        <Field label="Kind of thing">
+          <select value={form.kind_id} onChange={(e) => setForm({ ...form, kind_id: Number(e.target.value), values: {} })} className={inputClass}>
+            {kinds.map((k) => <option key={k.id} value={k.id}>{k.icon ? `${k.icon} ` : ''}{k.name}</option>)}
+          </select>
+        </Field>
+      )}
+      <Field label="What *"><input required autoFocus={!item.id} value={form.name} onChange={set('name')} placeholder="e.g. Blue linen" className={inputClass} /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="How much (empty: some)"><input type="number" min="0" step="any" value={form.quantity} onChange={set('quantity')} className={inputClass} /></Field>
+        <Field label="Unit"><input list="thing-units" value={form.unit} onChange={set('unit')} placeholder={kind.unit || 'yd, m, skein, box…'} className={inputClass} /></Field>
+      </div>
+      <datalist id="thing-units">{['yd', 'm', 'cm', 'in', 'ft', 'g', 'kg', 'oz', 'lb', 'ml', 'l', 'skein', 'spool', 'packet', 'box', 'piece'].map((u) => <option key={u} value={u} />)}</datalist>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Where it is">
+          <select value={form.place_id} onChange={set('place_id')} className={inputClass}>
+            <option value="">No place</option>
+            {places.map((p) => <option key={p.id} value={p.id}>{p.path}</option>)}
+          </select>
+        </Field>
+        <Field label="Running low at"><input type="number" min="0" step="any" value={form.low_at} onChange={set('low_at')} className={inputClass} /></Field>
+      </div>
+      {kind.fields.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 border-t border-life-100 pt-3 dark:border-life-700">
+          {kind.fields.map((f) => (
+            <Field key={f.id} label={`${f.name}${f.unit ? ` (${f.unit})` : ''}`}>
+              <ValueInput field={f} value={form.values[f.id]} onChange={(v) => setForm({ ...form, values: { ...form.values, [f.id]: v } })} />
+            </Field>
+          ))}
+        </div>
+      )}
+      <Field label="Notes"><textarea rows={2} value={form.note} onChange={set('note')} className={inputClass} /></Field>
+      {item.set_aside > 0 && <p className="text-xs text-life-600 dark:text-life-200">{item.set_aside} {item.unit || ''} is set aside for projects, leaving {item.free} free.</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex items-center justify-between">
+        {item.id ? <button type="button" onClick={remove} className="text-sm text-red-600 hover:underline">Remove</button>
+          : <Link to="/things/kinds" className="text-xs text-life-600 underline dark:text-life-200">Change this kind's fields</Link>}
+        <button type="submit" className={buttonClass}>Save</button>
+      </div>
+    </form>
+  );
+}
+
+// ==================== KINDS ====================
+
+/** The kinds of things you keep, and the fields each one has. All of it is yours to change. */
+export function KindsPage() {
+  const [kinds, setKinds] = useState(null);
+  const [modal, setModal] = useState(null);
+  const [error, setError] = useState('');
+  const load = useCallback(() => { axios.get('/api/things/kinds').then(({ data }) => setKinds(data)).catch(() => setKinds([])); }, []);
+  useEffect(() => { load(); }, [load]);
+  if (!kinds) return null;
+  const done = (data) => { setKinds(data); setModal(null); setError(''); };
+  const removeKind = async (k) => {
+    if (!window.confirm(`Remove the kind "${k.name}" and its fields?`)) return;
+    try { done((await axios.delete(`/api/things/kinds/${k.id}`)).data); } catch (err) { setError(errorMessage(err, "Couldn't remove it")); }
+  };
+  const removeField = async (f) => {
+    if (!window.confirm(`Remove the field "${f.name}"? What was typed into it on every thing goes too.`)) return;
+    try { done((await axios.delete(`/api/things/fields/${f.id}`)).data); } catch (err) { setError(errorMessage(err, "Couldn't remove it")); }
+  };
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Kinds of things</h1>
+        <button type="button" onClick={() => setModal({ kind: {} })} className={buttonClass}>+ New kind</button>
+      </div>
+      <p className="text-sm text-gray-600 dark:text-life-200">A kind is whatever you say it is, with the fields you care about. Rename anything, add fields, take them away.</p>
+      {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      <div className="grid gap-3 md:grid-cols-2">
+        {kinds.map((k) => (
+          <section key={k.id} className={cardClass}>
+            <div className="flex items-center gap-2">
+              <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">{k.icon ? `${k.icon} ` : ''}{k.name}
+                <span className="ml-2 text-xs font-normal text-gray-500 dark:text-life-300">{k.items} {k.items === 1 ? 'thing' : 'things'}{k.unit ? ` · counted in ${k.unit}` : ''}</span></h2>
+              <button type="button" onClick={() => setModal({ kind: k })} className="text-xs text-life-600 hover:underline dark:text-life-200">Edit</button>
+              {k.items === 0 && <button type="button" onClick={() => removeKind(k)} className="text-xs text-gray-400 hover:text-red-600">Remove</button>}
+            </div>
+            <ul className="mt-2 divide-y divide-life-50 dark:divide-life-700">
+              {k.fields.map((f) => (
+                <li key={f.id} className="flex items-center gap-2 py-1.5 text-sm">
+                  <button type="button" onClick={() => setModal({ field: f })} className="flex-1 text-left text-gray-800 hover:underline dark:text-life-50">{f.name}</button>
+                  <span className="text-xs text-gray-500 dark:text-life-300">{f.type === 'choice' ? f.choices.join(', ') : typeName(f.type)}{f.unit ? ` (${f.unit})` : ''}</span>
+                  <button type="button" onClick={() => removeField(f)} className="text-xs text-gray-400 hover:text-red-600" aria-label={`Remove the field ${f.name}`}>✕</button>
+                </li>
+              ))}
+            </ul>
+            <button type="button" onClick={() => setModal({ field: { kind_id: k.id } })} className="mt-2 text-sm text-life-600 hover:underline dark:text-life-200">+ Add a field</button>
+          </section>
+        ))}
+      </div>
+      <h2 className="pt-2 font-semibold text-life-800 dark:text-life-50">Ready-made sets</h2>
+      <Starters onAdded={load} />
+      {modal?.kind && <Modal title={modal.kind.id ? modal.kind.name : 'A new kind of thing'} onClose={() => setModal(null)}><KindForm kind={modal.kind} onDone={done} /></Modal>}
+      {modal?.field && <Modal title={modal.field.id ? modal.field.name : 'A new field'} onClose={() => setModal(null)}><FieldForm field={modal.field} onDone={done} /></Modal>}
+    </div>
+  );
+}
+
+function KindForm({ kind, onDone }) {
+  const [form, setForm] = useState({ name: kind.name || '', icon: kind.icon || '', unit: kind.unit || '' });
+  const [error, setError] = useState('');
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const submit = async (e) => {
+    e.preventDefault();
+    const body = { name: form.name, icon: form.icon || null, unit: form.unit || null };
+    try { onDone((kind.id ? await axios.put(`/api/things/kinds/${kind.id}`, body) : await axios.post('/api/things/kinds', body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+  };
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <Field label="What it's called *"><input required autoFocus value={form.name} onChange={set('name')} placeholder="e.g. Board games" className={inputClass} /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="A picture (an emoji)"><input value={form.icon} onChange={set('icon')} placeholder="🎲" className={inputClass} /></Field>
+        <Field label="Usually counted in"><input value={form.unit} onChange={set('unit')} placeholder="yd, skein, box… or nothing" className={inputClass} /></Field>
+      </div>
+      {!kind.id && <p className="text-xs text-gray-500 dark:text-life-300">Add its fields after saving.</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="text-right"><button type="submit" className={buttonClass}>Save</button></div>
+    </form>
+  );
+}
+
+function FieldForm({ field, onDone }) {
+  const [form, setForm] = useState({ name: field.name || '', type: field.type || 'text', unit: field.unit || '', choices: (field.choices || []).join(', ') });
+  const [error, setError] = useState('');
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const submit = async (e) => {
+    e.preventDefault();
+    const body = { name: form.name, type: form.type, unit: form.type === 'number' ? form.unit || null : null, choices: form.type === 'choice' ? commaList(form.choices) : [] };
+    try {
+      onDone((field.id ? await axios.put(`/api/things/fields/${field.id}`, body) : await axios.post(`/api/things/kinds/${field.kind_id}/fields`, body)).data);
+    } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+  };
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <Field label="What it's called *"><input required autoFocus value={form.name} onChange={set('name')} placeholder="e.g. Colour" className={inputClass} /></Field>
+      <Field label="What goes in it">
+        <select value={form.type} onChange={set('type')} disabled={!!field.id} className={inputClass}>{TYPES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
+      </Field>
+      {field.id && <p className="text-xs text-gray-500 dark:text-life-300">What goes in a field can't change once it's made: what's already typed in wouldn't fit.</p>}
+      {form.type === 'number' && <Field label="Measured in (optional)"><input value={form.unit} onChange={set('unit')} placeholder="in, cm, gsm, min…" className={inputClass} /></Field>}
+      {form.type === 'choice' && <Field label="The choices, with commas between *"><input required value={form.choices} onChange={set('choices')} placeholder="Woven, Knit, Other" className={inputClass} /></Field>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="text-right"><button type="submit" className={buttonClass}>Save</button></div>
+    </form>
+  );
+}
+
+// ==================== PLACES ====================
+
+/** Where things are: rooms, the shelves in them, the bins on the shelves. */
+export function PlacesPage() {
+  const [places, setPlaces] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const load = useCallback(() => { axios.get('/api/things/places').then(({ data }) => setPlaces(data)).catch(() => setPlaces([])); }, []);
+  useEffect(() => { load(); }, [load]);
+  if (!places) return null;
+  const depth = (p) => p.path.split(' › ').length - 1;
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Places</h1>
+        <button type="button" onClick={() => setEditing({})} className={buttonClass}>+ New place</button>
+      </div>
+      {places.length === 0 ? (
+        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>No places yet. Add a room, then the shelves and bins inside it, as far down as helps you find things.</div>
+      ) : (
+        <section className={cardClass}>
+          <ul className="divide-y divide-life-50 dark:divide-life-700">
+            {places.map((p) => (
+              <li key={p.id}>
+                <button type="button" onClick={() => setEditing(p)} className="flex w-full items-center gap-2 py-2 text-left" style={{ paddingLeft: `${depth(p) * 1.25}rem` }}>
+                  <span className="flex-1 text-sm text-gray-800 dark:text-life-50">{p.name}{p.note && <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{p.note}</span>}</span>
+                  <span className="text-xs text-gray-500 dark:text-life-300">{p.items > 0 ? `${p.items} ${p.items === 1 ? 'thing' : 'things'}` : ''}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {editing && (
+        <Modal title={editing.id ? editing.name : 'A new place'} onClose={() => setEditing(null)}>
+          <PlaceForm place={editing} places={places} onDone={(data) => { setPlaces(data); setEditing(null); }} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function PlaceForm({ place, places, onDone }) {
+  const [form, setForm] = useState({ name: place.name || '', parent_id: place.parent_id ?? '', note: place.note || '' });
+  const [error, setError] = useState('');
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  // A place can't go inside itself or anything inside it.
+  const allowed = places.filter((p) => !place.id || (p.id !== place.id && !p.path.startsWith(`${place.path} › `)));
+  const submit = async (e) => {
+    e.preventDefault();
+    const body = { name: form.name, parent_id: form.parent_id === '' ? null : Number(form.parent_id), note: form.note || null };
+    try { onDone((place.id ? await axios.put(`/api/things/places/${place.id}`, body) : await axios.post('/api/things/places', body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+  };
+  const remove = async () => {
+    if (!window.confirm(`Remove ${place.name}? What's in it stays yours, with no place.`)) return;
+    try { onDone((await axios.delete(`/api/things/places/${place.id}`)).data); } catch (err) { setError(errorMessage(err, "Couldn't remove it")); }
+  };
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <Field label="What it's called *"><input required autoFocus value={form.name} onChange={set('name')} placeholder="e.g. Sewing room, Shelf 2, Bin A" className={inputClass} /></Field>
+      <Field label="Inside">
+        <select value={form.parent_id} onChange={set('parent_id')} className={inputClass}>
+          <option value="">Nothing: it's a room or a place of its own</option>
+          {allowed.map((p) => <option key={p.id} value={p.id}>{p.path}</option>)}
+        </select>
+      </Field>
+      <Field label="A note"><input value={form.note} onChange={set('note')} placeholder="clear lid, top shelf…" className={inputClass} /></Field>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex items-center justify-between">
+        {place.id ? <button type="button" onClick={remove} className="text-sm text-red-600 hover:underline">Remove</button> : <span />}
+        <button type="submit" className={buttonClass}>Save</button>
+      </div>
+    </form>
+  );
+}

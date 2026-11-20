@@ -3,7 +3,7 @@
 Life is chaotic, unorganised and overwhelming sometimes. Life Is helps put it back on track: a planner for everyday
 life that runs on your own computer, with your records kept there, encrypted.
 
-It starts with the kitchen.
+It starts with the kitchen, the things you keep, and the projects that use them.
 
 ## The kitchen
 
@@ -22,6 +22,22 @@ It starts with the kitchen.
   what it used.
 - **Your recipes, yours to take.** Bring them in by pasting text or recipe JSON (from the Nextcloud Cookbook app or
   a recipe website). Take them all out as Nextcloud Cookbook folders, ready to drop into your Nextcloud.
+
+## The things you keep
+
+- **Your own kinds of things.** Fabric, yarn, tools, seeds, board games: a kind is whatever you say it is, with
+  the fields you care about (a fabric's width, a seed packet's sow-by date). Start from a ready-made set (sewing,
+  knitting, woodworking, gardening, around the house) and change it, or make your own from nothing.
+- **Where everything is.** A room, a shelf in it, a bin on the shelf, as far down as helps you find things.
+- **How much is free.** What you have, less what your projects have set aside.
+
+## Projects
+
+- **Anything made or done over more than a day**: a dress, a jumper, a bookshelf, the spring planting.
+- **A list of what it uses**, drawn from your things. An amount ("3 yd of the blue linen") is set aside, so two
+  projects can't count on the same cloth, and each says what it's short of. Using it, or finishing, takes it
+  out of what you keep.
+- **The days you worked on it**, how long, and what you watched or listened to.
 
 ## Try it
 
@@ -42,7 +58,8 @@ Your records are kept by Docker, encrypted. **Never run `docker compose down -v`
 
 - `core/`: the kitchen, in TypeScript, written so the same code runs on the server, in the browser and inside a
   phone app. `kitchen.ts` is the kitchen, `units.ts` reads amounts and converts units, `recipeText.ts` reads
-  and writes recipes, `migrations.ts` is the database's shape (a shipped migration is never edited). It reaches
+  and writes recipes, `inventory.ts` is the things you keep, `projects.ts` the projects, `migrations.ts` the database's shape (a
+  shipped migration is never edited). It reaches
   the database only through the small `Db` interface in `db.ts`, which each place Life Is runs supplies.
 - `server/`: the program, on Node 24 with no build step: sign-in, the web addresses the pages call, and an
   SQLCipher-encrypted SQLite database. Its one installed dependency is the encrypted database engine.
