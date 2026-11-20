@@ -71,6 +71,8 @@ export function makingRoutes(db: Db): Route[] {
     ['POST', at('things/starters'), async (c) => ({ json: await things(c).addStarter(read.text(c.body, 'slug')) })],
 
     ['GET', at('things/places'), async (c) => ({ json: await things(c).listPlaces() })],
+    ['GET', at('things/places/stickers'), async (c) => ({ json: await things(c).stickers() })],
+    ['GET', at('things/places/sticker'), async (c) => ({ json: await things(c).placeForSticker(c.query.get('code') ?? '') })],
     ['POST', at('things/places'), async (c) => ({ status: 201, json: await things(c).createPlace(placeFrom(c.body)) })],
     ['PUT', at('things/places/:id'), async (c) => ({ json: await things(c).updatePlace(c.id, placeFrom(c.body)) })],
     ['DELETE', at('things/places/:id'), async (c) => ({ json: await things(c).deletePlace(c.id) })],

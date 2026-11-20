@@ -20,6 +20,23 @@ So far: the kitchen, the calendar, the things you keep, the projects that use th
 - **The pantry.** What you have, how much, where (fridge, freezer, cupboard), when to use it by, and when it's
   running low. Ticking something off the grocery list puts it in the pantry; marking a meal as cooked takes out
   what it used.
+- **What it costs, as you shop.** Type the price as each thing goes in the trolley and the total keeps up, in
+  sight while the list scrolls. Next time the list says what each thing cost last time and where, guesses the trip
+  before you start, and keeps a price history for each ingredient. Tick something off without a price and last
+  time's stands in, marked as a guess.
+- **Prices over time.** A page of what each thing has cost: its latest price, how it changed, where it was cheapest,
+  and a chart. Things always bought by the same measure are compared for one of it, so 2 lb and 5 lb sit side by
+  side. Spending is totalled by the month.
+- **Shops and sizes.** Your shops are a list to pick from, and each price keeps the size you bought: the amount on
+  the list, or the size on the packet (a 30 oz tin, a 12 oz bag). So a thing's price is shown for one ounce, pound
+  or each, whatever size it came in, and set side by side for each shop, cheapest first.
+- **A usual shop and a usual size for each thing.** "Coffee: Costco, 3 lb." The list can be laid out by shop, with the
+  one you're standing in first; the usual size shows on a line that gives no amount, and is what a price is taken
+  to be for unless you type another.
+- **Scan it in the shop.** Point the camera at a packet. The first time, say which thing on the list it is; after
+  that a scan finds its line, shows last time's price, and puts it in the trolley with what you type.
+- **Coupons.** Money or a percentage off, for one thing or the whole shop, perhaps at one shop and until a day. The
+  list flags the line a coupon is for; using it takes it off the total.
 - **A recipe knows what it's cooked in.** Pans, dishes and tools from the things you keep (the cast iron skillet,
   the 8x8 baking dishes), or just by name. The week then tells you when one meal needs more of something than you
   own: "Thursday dinner: 4 × 8x8 baking dish, and you have 2."
@@ -45,6 +62,13 @@ each off until you turn it on, each saying exactly what it sends:
   the password you give (for most providers an "app password"), stored locked. No message is ever kept: the inbox
   is read when you look. Opening a message doesn't mark it read. The line is always encrypted, and the account is
   only saved if signing in works.
+- **Looking a grocery up when you scan it**, from [Open Food Facts](https://world.openfoodfacts.org) (no account, no
+  key). It is sent the number under the barcode and nothing else. Scanning works without it.
+- **Looking a book up when you scan it**, from [Open Library](https://openlibrary.org) (no account, no key). It is
+  sent the number under the book's barcode and nothing else; what comes back is yours to check before saving.
+- **Photos from your own Immich**, linked to plans and memories without copying them. Life Is asks your Immich
+  which photos were taken on a plan's days and fetches the ones shown; a plan keeps only which photo it is. The
+  key needs two permissions, `asset.read` and `asset.view`, and nothing in Immich is changed.
 - **Your Jellyfin or Emby**, read-only, at the address you give.
 
 ## It asks what you need
@@ -57,9 +81,13 @@ time in Settings; unticking something only puts it out of sight.
 
 - **Your own kinds of things.** Fabric, yarn, tools, seeds, board games: a kind is whatever you say it is, with
   the fields you care about (a fabric's width, a seed packet's sow-by date). Start from a ready-made set (sewing,
-  knitting, woodworking, gardening, around the house, cookware with cast iron) and change it, or make your own
+  knitting, woodworking, gardening, around the house, cookware with cast iron, clothes and shoes with their sizes,
+  bedding by bed size) and change it, or make your own
   from nothing.
 - **Where everything is.** A room, a shelf in it, a bin on the shelf, as far down as helps you find things.
+- **A sticker for every shelf and bin.** Print a sheet of QR stickers for your places. Point a phone at one and
+  see what's inside: your things and whatever from your collection is kept there. Only someone signed in to your
+  Life Is sees anything, and the stickers stay good if its address changes.
 - **How much is free.** What you have, less what your projects have set aside.
 
 ## Projects
@@ -69,6 +97,20 @@ time in Settings; unticking something only puts it out of sight.
   projects can't count on the same cloth, and each says what it's short of. Using it, or finishing, takes it
   out of what you keep.
 - **The days you worked on it**, how long, and what you watched or listened to.
+
+## Plans, and the memories they become
+
+- **Anything with a day and things that belong to it**: a holiday with its menu, dishes and films, or one afternoon's
+  sewing. Make it ahead, or write it down afterwards.
+- **It points at what you already have**: recipes, things (with how many are needed, so it says what you're short
+  of), titles from the collection, a project, and a checklist of its own. Nothing is copied.
+- **Its food goes on the week.** Say which day and meal a plan's recipe is for (or a day before, for what's made
+  ahead) and it's on the week's meals, so the grocery list and the pans that meal needs follow. Move the plan and
+  its meals move too; a meal already cooked stays where it happened.
+- **Once its days have come, it remembers**: what was cooked, worked on, watched and heard on those days is gathered
+  in, with your own words about how it went and your photos. A photo picked from your phone is made smaller and
+  kept with the plan; one from your Immich library is only linked, and stays there.
+- **Look back, and do it again**: past plans stay, by year. "Do it again" starts next year's from last year's.
 
 ## The calendar
 

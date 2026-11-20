@@ -22,6 +22,15 @@ let asked: string[];
 
 const outside: Fetcher = async (url) => {
   asked.push(url);
+  if (url.includes('openfoodfacts.org')) {
+    const data = url.includes('/3017620422003.json') ? { code: '3017620422003', status: 1, product: { product_name: 'Nutella', brands: 'Ferrero', quantity: '400 g' } } : { status: 0, status_verbose: 'product not found' };
+    return { status: 200, type: 'application/json', json: async () => data, bytes: async () => new Uint8Array() };
+  }
+  if (url.includes('openlibrary.org')) {
+    const known = url.includes('ISBN:9780441172719');
+    const data = known ? { 'ISBN:9780441172719': { title: 'Dune', authors: [{ name: 'Frank Herbert' }], publish_date: 'June 2020', number_of_pages: 896 } } : {};
+    return { status: 200, type: 'application/json', json: async () => data, bytes: async () => new Uint8Array() };
+  }
   const data = url.includes('geocoding-api')
     ? { results: [{ name: 'Springfield', admin1: 'Missouri', country: 'United States', latitude: 37.21533, longitude: -93.29824 }] }
     : { current: { temperature_2m: 7.2, weather_code: 61 },
@@ -169,4 +178,41 @@ it('without a way to reach mail providers, email says so', async () => {
   const admin = await start(false);
   expect((await admin.get('/api/mail')).json.available).toBe(false);
   expect((await admin.post('/api/mail/accounts', { address: 'me@example.org', password: 'x', imap_host: 'a.example.org', smtp_host: 'b.example.org' })).status).toBe(400);
+});
+
+it('books are looked up by barcode only once that is turned on, and only the number is sent', async () => {
+  const admin = await start(true);
+  const off = (await admin.get('/api/lookups')).json;
+  expect([off.available, off.books, off.service.name]).toEqual([true, false, 'Open Library']);
+  expect((await admin.get('/api/lookups/book?code=9780441172719')).status).toBe(400); // off: refused, and nothing asked
+  expect(asked).toEqual([]);
+
+  expect((await admin.put('/api/lookups', { books: true })).json.books).toBe(true);
+  expect((await admin.put('/api/lookups', { books: 'yes' })).status).toBe(422);
+  expect((await admin.get('/api/lookups/book?code=978-0-441-17271-9')).json).toEqual({ book: { isbn: '9780441172719', title: 'Dune', creator: 'Frank Herbert', edition_year: 2020, pages: 896 } });
+  expect(asked).toEqual(['https://openlibrary.org/api/books?bibkeys=ISBN:9780441172719&format=json&jscmd=data']);
+  expect((await admin.get('/api/lookups/book?code=9791234567896')).json).toEqual({ book: null }); // a book it doesn't know
+  expect((await admin.get('/api/lookups/book?code=024543213465')).status).toBe(400); // a film's barcode isn't a book's
+  expect(asked).toHaveLength(2);
+
+  expect((await admin.put('/api/lookups', { books: false })).json.books).toBe(false);
+  expect((await admin.get('/api/lookups/book?code=9780441172719')).status).toBe(400);
+  expect((await visitor().get('/api/lookups')).status).toBe(401);
+});
+
+it('groceries are looked up by barcode only once that is turned on, apart from books', async () => {
+  const admin = await start(true);
+  const off = (await admin.get('/api/lookups')).json;
+  expect([off.groceries, off.books, off.grocery_service.name]).toEqual([false, false, 'Open Food Facts']);
+  expect((await admin.get('/api/lookups/product?code=3017620422003')).status).toBe(400);
+  expect(asked).toEqual([]);
+
+  const on = (await admin.put('/api/lookups', { groceries: true })).json;
+  expect([on.groceries, on.books]).toEqual([true, false]); // one doesn't turn the other on
+  expect((await admin.put('/api/lookups', {})).status).toBe(422);
+  expect((await admin.get('/api/lookups/product?code=3017620422003')).json).toEqual({ product: { barcode: '3017620422003', name: 'Nutella', brand: 'Ferrero', size: '400 g' } });
+  expect(asked).toEqual(['https://world.openfoodfacts.org/api/v2/product/3017620422003.json?fields=product_name,brands,quantity']);
+  expect((await admin.get('/api/lookups/product?code=0025500000276')).json).toEqual({ product: null });
+  expect((await admin.get('/api/lookups/product?code=abc')).status).toBe(400);
+  expect((await admin.put('/api/lookups', { groceries: false })).json.groceries).toBe(false);
 });

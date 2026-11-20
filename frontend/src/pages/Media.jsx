@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import Scanner from '../components/Scanner';
+import { stickerCode } from './Places';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
 export const TYPES = [['film', 'Films', '🎬', 'Film'], ['show', 'Shows', '📺', 'Show'], ['music', 'Music', '🎵', 'Music'], ['book', 'Books', '📚', 'Book'], ['game', 'Games', '🎮', 'Game'], ['other', 'Other', '🗃', 'Something else']];
@@ -83,7 +84,7 @@ export default function MediaPage() {
       )}
       {scanning && (
         <Modal title="Scan a barcode" onClose={() => setScanning(false)}>
-          <ScanToFind onAdd={(barcode) => { setScanning(false); setAdding({ type: type || 'film', barcode }); }} />
+          <ScanToFind onAdd={(barcode, book) => { setScanning(false); setAdding(book ? { type: 'book', title: book.title, creator: book.creator || '', barcode } : { type: type || 'film', barcode }); }} />
         </Modal>
       )}
     </div>
@@ -96,9 +97,23 @@ function ScanToFind({ onAdd }) {
   const [found, setFound] = useState(null);         // null while scanning, else { code, matches } or { code, error }
   const navigate = useNavigate();
   const look = useCallback(async (code) => {
+    // A place's sticker, scanned from here, goes to its place all the same.
+    if (stickerCode(code)) { navigate(`/p/${stickerCode(code)}`); return; }
     try {
       const { data } = await axios.get('/api/media/barcode', { params: { code } });
-      if (data.length === 1) navigate(`/media/${data[0].id}`); else setFound({ code, matches: data });
+      if (data.length === 1) { navigate(`/media/${data[0].id}`); return; }
+      // Not on the shelf yet. If it's a book and looking books up is turned on, ask what book it is.
+      let book = null;
+      let hint = '';
+      const isbn = /^(97[89]\d{10}|\d{9}[\dXx])$/.test(code.replace(/[\s-]/g, ''));
+      if (data.length === 0 && isbn) {
+        const { data: can } = await axios.get('/api/lookups').catch(() => ({ data: { books: false } }));
+        if (can.books) {
+          await axios.get('/api/lookups/book', { params: { code } }).then(({ data: got }) => { book = got.book; if (!book) hint = "Open Library doesn't know this book."; })
+            .catch((err) => { hint = errorMessage(err, "The book couldn't be looked up."); });
+        } else if (can.available) hint = 'This looks like a book. Life Is can fill in its title for you: turn on "Look up books" in Settings, under Outside services.';
+      }
+      setFound({ code, matches: data, book, hint });
     } catch (err) { setFound({ code, error: errorMessage(err, "Couldn't look that up") }); }
   }, [navigate]);
   if (!found) return <Scanner key={round} onCode={look} />;
@@ -108,7 +123,17 @@ function ScanToFind({ onAdd }) {
     return (
       <div className="space-y-3">
         <p className="text-sm text-gray-800 dark:text-life-50">Nothing in your collection has the barcode <span className="font-mono">{found.code}</span>.</p>
-        <div className="flex items-center justify-end gap-2">{again}<button type="button" onClick={() => onAdd(found.code)} className={buttonClass}>Add it, keeping the barcode</button></div>
+        {found.book && (
+          <div className="rounded-lg bg-life-50 px-3 py-2 text-sm text-gray-800 dark:bg-life-700 dark:text-life-50">
+            <p className="text-xs text-gray-500 dark:text-life-300">Open Library says it's</p>
+            <p className="font-medium">📚 {found.book.title}</p>
+            <p className="text-xs text-gray-600 dark:text-life-200">{[found.book.creator, found.book.edition_year && `this printing ${found.book.edition_year}`, found.book.pages && `${found.book.pages} pages`].filter(Boolean).join(' · ')}</p>
+          </div>
+        )}
+        {found.hint && <p className="text-xs text-gray-500 dark:text-life-300">{found.hint}</p>}
+        <div className="flex items-center justify-end gap-2">{again}
+          <button type="button" onClick={() => onAdd(found.code, found.book)} className={buttonClass}>{found.book ? 'Add this book' : 'Add it, keeping the barcode'}</button>
+        </div>
       </div>
     );
   }

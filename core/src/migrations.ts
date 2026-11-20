@@ -376,6 +376,160 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_mail_accounts ON mail_accounts(owner_id)`,
     ],
   },
+  {
+    number: 10,
+    name: 'a code for each place, for its sticker',
+    statements: [
+      // What a place's printed sticker carries. Random, so one sticker says nothing about another; given the
+      // first time stickers are asked for.
+      `ALTER TABLE places ADD COLUMN code TEXT`,
+      `CREATE UNIQUE INDEX idx_places_code ON places(code) WHERE code IS NOT NULL`,
+    ],
+  },
+  {
+    number: 11,
+    name: 'plans, and the memories they become',
+    statements: [
+      `CREATE TABLE plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        start_day TEXT NOT NULL,
+        end_day TEXT NOT NULL,
+        note TEXT,
+        story TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_plans_owner ON plans(owner_id, start_day)`,
+      // What belongs to a plan. A task is its own words; the rest point at a recipe, a thing, a title or a
+      // project by id (ref_id), and keep its name (label) in case it's later removed.
+      `CREATE TABLE plan_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL CHECK(kind IN ('task', 'recipe', 'thing', 'media', 'project')),
+        ref_id INTEGER,
+        label TEXT NOT NULL,
+        quantity REAL CHECK(quantity IS NULL OR quantity > 0),
+        note TEXT,
+        done INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER NOT NULL
+      )`,
+      `CREATE INDEX idx_plan_items ON plan_items(plan_id, sort_order)`,
+      // A photo kept here (its bytes), or one only linked from a photo library (which one: asset_id).
+      `CREATE TABLE plan_photos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        source TEXT NOT NULL CHECK(source IN ('kept', 'immich')),
+        asset_id TEXT,
+        type TEXT,
+        bytes BLOB,
+        caption TEXT,
+        sort_order INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_plan_photos ON plan_photos(plan_id, sort_order)`,
+    ],
+  },
+  {
+    number: 12,
+    name: "a plan's food on the week's meals",
+    statements: [
+      // A recipe on a plan may also be a meal on the week (meal_plan), so the grocery list and the pans it
+      // needs follow. This is which meal. Removing the meal from the week only forgets the link.
+      `ALTER TABLE plan_items ADD COLUMN meal_plan_id INTEGER REFERENCES meal_plan(id) ON DELETE SET NULL`,
+    ],
+  },
+  {
+    number: 13,
+    name: 'what things cost, and coupons',
+    statements: [
+      // A price paid for a line of the grocery list, in whole cents. While the line is on the list the price
+      // is tied to it (grocery_id); once the list is cleared it stays as that ingredient's history. A price
+      // marked assumed is last time's standing in, and is never treated as history.
+      `CREATE TABLE prices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        ingredient_id INTEGER REFERENCES ingredients(id) ON DELETE SET NULL,
+        grocery_id INTEGER REFERENCES grocery(id) ON DELETE SET NULL,
+        label TEXT NOT NULL,
+        cents INTEGER NOT NULL CHECK(cents >= 0),
+        quantity REAL,
+        unit TEXT,
+        store TEXT,
+        day TEXT NOT NULL,
+        assumed INTEGER NOT NULL DEFAULT 0 CHECK(assumed IN (0, 1)),
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_prices_owner ON prices(owner_id, ingredient_id, day)`,
+      `CREATE INDEX idx_prices_grocery ON prices(grocery_id)`,
+      // Money or a percentage off: for one ingredient, or (ingredient_id empty) for the whole shop.
+      `CREATE TABLE coupons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        label TEXT NOT NULL,
+        ingredient_id INTEGER REFERENCES ingredients(id) ON DELETE SET NULL,
+        cents_off INTEGER CHECK(cents_off IS NULL OR cents_off > 0),
+        percent_off REAL CHECK(percent_off IS NULL OR (percent_off > 0 AND percent_off <= 100)),
+        store TEXT,
+        code TEXT,
+        expires_on TEXT,
+        used_on TEXT,
+        note TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_coupons_owner ON coupons(owner_id, used_on)`,
+    ],
+  },
+  {
+    number: 14,
+    name: 'barcodes for groceries',
+    statements: [
+      // Which ingredient a product's barcode is: taught once, by scanning it and saying what it is. Several
+      // products (brands, sizes) can be the same ingredient. The label is the product's own name, if known.
+      `CREATE TABLE ingredient_barcodes (
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        barcode TEXT NOT NULL,
+        ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
+        label TEXT,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (owner_id, barcode)
+      )`,
+      // The product a price was paid for, when it was scanned.
+      `ALTER TABLE prices ADD COLUMN barcode TEXT`,
+    ],
+  },
+  {
+    number: 15,
+    name: 'shops, and the sizes things come in',
+    statements: [
+      // The shops a person uses, to choose from. Prices and coupons keep the shop's name as it was.
+      `CREATE TABLE stores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        note TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX idx_stores_name ON stores(owner_id, name COLLATE NOCASE)`,
+      // Shops already named on a price become the start of the list.
+      `INSERT OR IGNORE INTO stores (owner_id, name, created_at)
+       SELECT owner_id, TRIM(store), MIN(created_at) FROM prices WHERE store IS NOT NULL AND TRIM(store) != '' GROUP BY owner_id, TRIM(store) COLLATE NOCASE`,
+      // The size on a product's packet ("30 oz"), learned with its barcode.
+      `ALTER TABLE ingredient_barcodes ADD COLUMN size_quantity REAL`,
+      `ALTER TABLE ingredient_barcodes ADD COLUMN size_unit TEXT`,
+    ],
+  },
+  {
+    number: 16,
+    name: 'where each thing is usually bought, and in what size',
+    statements: [
+      // A person's habits for an ingredient: the shop they get it at, and the size they get ("30 oz").
+      `ALTER TABLE ingredients ADD COLUMN usual_store TEXT`,
+      `ALTER TABLE ingredients ADD COLUMN usual_size_quantity REAL`,
+      `ALTER TABLE ingredients ADD COLUMN usual_size_unit TEXT`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

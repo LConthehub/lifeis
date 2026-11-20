@@ -381,6 +381,11 @@ it('what Life Is looks after is asked once, and sets up what fits', async () => 
 it('the collection and the calendar answer over the web', async () => {
   const admin = await owner();
   const room = (await admin.post('/api/things/places', { name: 'Living room' })).json[0].id;
+  // The room's sticker finds it again, by its code or by the address printed on it.
+  const sticker = (await admin.get('/api/things/places/stickers')).json[0];
+  expect([sticker.id, sticker.path, /^[2-9A-HJ-NP-Z]{10}$/.test(sticker.code)]).toEqual([room, 'Living room', true]);
+  expect((await admin.get(`/api/things/places/sticker?code=${encodeURIComponent(`https://anywhere.example/p/${sticker.code}`)}`)).json).toEqual({ id: room, name: 'Living room', path: 'Living room' });
+  expect((await admin.get('/api/things/places/sticker?code=9780441172719')).status).toBe(404);
   const made = await admin.post('/api/media', { type: 'film', title: 'Alien', creator: 'Ridley Scott', year: 1979, genres: ['Horror'], ids: { tmdb: 348 }, copy: { format: 'VHS', place_id: room } });
   expect(made.status).toBe(201);
   let alien = made.json;
@@ -500,9 +505,11 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
+  // Columns later added to a table that was already there go back too.
+  for (const column of ['usual_store', 'usual_size_quantity', 'usual_size_unit']) await database.db.run(`ALTER TABLE ingredients DROP COLUMN ${column}`);
   await database.db.run('PRAGMA user_version = 2');
   await stop();
 
@@ -512,4 +519,104 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   expect((await database.db.get<{ user_version: number }>('PRAGMA user_version'))!.user_version).toBe(LATEST);
   expect((await admin.get('/api/kitchen/recipes')).json.map((r: { title: string }) => r.title)).toEqual(['Toast']); // still signed in, recipe still there
   expect((await admin.get('/api/things/kinds')).json).toEqual([]);
+});
+
+it('plans answer over the web, with their photos', async () => {
+  const admin = await owner();
+  const recipe = (await admin.post('/api/kitchen/recipes', { title: 'Stuffing', ingredients_text: '1 loaf bread' })).json;
+  const made = await admin.post('/api/plans', { name: 'Thanksgiving', start_day: '2046-11-22', note: 'Twelve of us' });
+  expect([made.status, made.json.when, made.json.end_day]).toEqual([201, 'ahead', '2046-11-22']);
+  const id = made.json.id;
+  // The recipe goes on the week's meals for the plan's day, and can be taken off again.
+  const withFood = await admin.post(`/api/plans/${id}/items`, { kind: 'recipe', ref_id: recipe.id, day: '2046-11-22', meal: 'dinner' });
+  expect([withFood.status, withFood.json.items_list[0].on_week]).toEqual([201, { day: '2046-11-22', meal: 'dinner', cooked: false, servings: null }]);
+  expect((await admin.put(`/api/plans/items/${withFood.json.items_list[0].id}`, { day: '2046-11-22', meal: 'dinner', servings: 12 })).json.items_list[0].on_week.servings).toBe(12);
+  expect((await admin.get('/api/kitchen/plan?start=2046-11-22&days=1')).json.map((m: { recipe_title: string; meal: string }) => [m.recipe_title, m.meal])).toEqual([['Stuffing', 'dinner']]);
+  expect((await admin.put(`/api/plans/items/${withFood.json.items_list[0].id}`, { day: '2046-11-21', meal: 'snack' })).json.items_list[0].on_week.day).toBe('2046-11-21');
+  expect((await admin.put(`/api/plans/items/${withFood.json.items_list[0].id}`, { day: '2046-12-25' })).status).toBe(400);
+  expect((await admin.put(`/api/plans/items/${withFood.json.items_list[0].id}`, { day: null })).json.items_list[0].on_week).toBeNull();
+  expect((await admin.get('/api/kitchen/plan?start=2046-11-15&days=14')).json).toEqual([]);
+  const withTask = (await admin.post(`/api/plans/${id}/items`, { kind: 'task', label: 'Order the turkey' })).json;
+  expect(withTask.items_list.map((i: { kind: string; label: string }) => [i.kind, i.label])).toEqual([['recipe', 'Stuffing'], ['task', 'Order the turkey']]);
+  expect((await admin.put(`/api/plans/items/${withTask.items_list[1].id}`, { done: true })).json.tasks_left).toBe(0);
+  expect((await admin.post(`/api/plans/${id}/items`, { kind: 'recipe', ref_id: recipe.id })).status).toBe(409);
+  expect((await admin.post(`/api/plans/${id}/items`, { kind: 'task' })).status).toBe(400);
+
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+  const kept = await admin.post(`/api/plans/${id}/photos`, { data: jpeg.toString('base64'), caption: 'The table' });
+  expect([kept.status, kept.json.photos_list.map((p: { source: string; caption: string }) => [p.source, p.caption])]).toEqual([201, [['kept', 'The table']]]);
+  const shown = await admin.get(`/api/plans/photos/${kept.json.photos_list[0].id}`);
+  expect([shown.status, shown.headers.get('content-type'), shown.headers.get('x-content-type-options'), shown.bytes.equals(jpeg)]).toEqual([200, 'image/jpeg', 'nosniff', true]);
+  expect((await admin.post(`/api/plans/${id}/photos`, { data: Buffer.from('<svg onload=alert(1)>').toString('base64') })).status).toBe(400);
+  expect((await admin.post(`/api/plans/${id}/photos`, { data: 'not base64!' })).status).toBe(400);
+
+  const again = await admin.post(`/api/plans/${id}/copy`, { name: 'Thanksgiving 2047', start_day: '2047-11-28' });
+  expect([again.status, again.json.photos, again.json.tasks_left]).toEqual([201, 0, 1]);
+  expect((await admin.get('/api/plans')).json.map((p: { name: string }) => p.name)).toEqual(['Thanksgiving 2047', 'Thanksgiving']);
+  expect((await admin.get('/api/calendar?start=2046-11-22&days=1')).json.map((e: { kind: string; link: string }) => [e.kind, e.link])).toEqual([['plan', `/plans/${id}`]]);
+
+  // Someone else in the house sees none of it, photos included.
+  expect((await admin.post('/api/users', { username: 'other', password: PASSWORD })).status).toBe(201);
+  const other = visitor();
+  await other.post('/api/auth/login', { username: 'other', password: PASSWORD });
+  expect([(await other.get('/api/plans')).json, (await other.get(`/api/plans/${id}`)).status, (await other.get(`/api/plans/photos/${kept.json.photos_list[0].id}`)).status]).toEqual([[], 404, 404]);
+  expect((await visitor().get(`/api/plans/photos/${kept.json.photos_list[0].id}`)).status).toBe(401);
+
+  expect((await admin.delete(`/api/plans/${id}`)).status).toBe(204);
+  expect((await admin.get(`/api/plans/photos/${kept.json.photos_list[0].id}`)).status).toBe(404);
+});
+
+it('prices, the running total and coupons answer over the web, in whole cents', async () => {
+  const admin = await owner();
+  const list = (await admin.post('/api/kitchen/grocery', { label: 'coffee' })).json;
+  const coffee = list[0].id;
+  expect((await admin.get('/api/shopping')).json).toMatchObject({ currency: '$', store: null, totals: { trolley_cents: 0, left_unknown: 1 } });
+  expect((await admin.put('/api/shopping/settings', { store: 'Aldi', currency: '£' })).json).toMatchObject({ store: 'Aldi', currency: '£' });
+
+  await admin.post(`/api/kitchen/grocery/${coffee}/tick`, { done: true, put_away: false });
+  expect((await admin.put(`/api/shopping/prices/${coffee}`, { cents: 899 })).json.totals.trolley_cents).toBe(899);
+  expect((await admin.put(`/api/shopping/prices/${coffee}`, { cents: 8.99 })).status).toBe(422); // pounds, not pence
+  expect((await admin.put(`/api/shopping/prices/${coffee}`, {})).status).toBe(422);
+  expect((await admin.get(`/api/shopping/prices/${coffee}/history`)).json).toEqual([{ cents: 899, amount: '', store: 'Aldi', day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }]);
+
+  const made = await admin.post('/api/shopping/coupons', { label: '£2 off coffee', grocery_id: coffee, cents_off: 200, expires_on: '2099-01-01' });
+  expect([made.status, made.json.coupons[0].ingredient.toLowerCase(), made.json.totals.to_pay_cents]).toEqual([201, 'coffee', 899]);
+  const coupon = made.json.coupons[0].id;
+  expect((await admin.post(`/api/shopping/coupons/${coupon}/use`, { using: true })).json.totals).toMatchObject({ coupons_cents: 200, to_pay_cents: 699 });
+  expect((await admin.post('/api/shopping/coupons', { label: 'Both', cents_off: 100, percent_off: 10 })).status).toBe(400);
+
+  // Someone else in the house sees none of it and can't touch it.
+  expect((await admin.post('/api/users', { username: 'other', password: PASSWORD })).status).toBe(201);
+  const other = visitor();
+  await other.post('/api/auth/login', { username: 'other', password: PASSWORD });
+  expect((await other.get('/api/shopping')).json).toMatchObject({ lines: [], coupons: [], currency: '$' });
+  expect([(await other.put(`/api/shopping/prices/${coffee}`, { cents: 1 })).status, (await other.post(`/api/shopping/coupons/${coupon}/use`, { using: false })).status]).toEqual([404, 404]);
+  expect((await visitor().get('/api/shopping')).status).toBe(401);
+
+  // A scanned packet is taught once, then found; and prices are followed over time.
+  expect((await admin.get('/api/shopping/scan?code=025500000276')).json).toEqual({ barcode: '0025500000276', ingredient: null, line: null, last: null });
+  const taught = (await admin.put('/api/shopping/scan', { code: '025500000276', grocery_id: coffee, product: 'Folgers 30 oz' })).json;
+  expect([taught.ingredient.product, taught.line.id, taught.line.done]).toEqual(['Folgers 30 oz', coffee, true]);
+  expect((await admin.put('/api/shopping/scan', { code: '025500000276' })).status).toBe(422);
+  expect((await other.get('/api/shopping/scan?code=025500000276')).json.ingredient).toBeNull();
+  const trends = (await admin.get('/api/shopping/trends')).json;
+  expect([trends.currency, trends.trends.map((t: { name: string; times: number }) => [t.name.toLowerCase(), t.times]), trends.spending[0].cents]).toEqual(['£', [['coffee', 1]], 899]);
+  expect((await other.get('/api/shopping/trends')).json.trends).toEqual([]);
+
+  // Shops are a list to choose from; a size typed with a price is kept with it.
+  expect((await admin.get('/api/shopping/stores')).json.map((x: { name: string; prices: number }) => [x.name, x.prices])).toEqual([['Aldi', 1]]);
+  const shops = await admin.post('/api/shopping/stores', { name: 'Costco', note: 'needs the card' });
+  expect([shops.status, shops.json.map((x: { name: string }) => x.name), (await admin.post('/api/shopping/stores', { name: 'aldi' })).status]).toEqual([201, ['Aldi', 'Costco'], 409]);
+  expect((await admin.put(`/api/shopping/stores/${shops.json[0].id}`, { name: 'Aldi on Main St' })).json[0].name).toBe('Aldi on Main St');
+  expect((await admin.get('/api/shopping')).json).toMatchObject({ store: 'Aldi on Main St', stores: ['Aldi on Main St', 'Costco'] });
+  expect((await admin.put(`/api/shopping/prices/${coffee}`, { cents: 899, size: '30 oz' })).json.lines[0].size).toBe('30 oz');
+  expect((await admin.put(`/api/shopping/prices/${coffee}`, { cents: 899, size: 'a big one' })).status).toBe(400);
+  expect((await other.get('/api/shopping/stores')).json).toEqual([]);
+
+  // Clearing the list keeps what things cost.
+  await admin.post('/api/kitchen/grocery/clear-done');
+  const again = (await admin.post('/api/kitchen/grocery', { label: 'coffee' })).json[0].id;
+  expect((await admin.put(`/api/shopping/usual/${again}`, { store: 'Costco', size: '3 lb' })).json.lines).toEqual([{ id: again, price_cents: null, size: '', assumed: false,
+    last: expect.objectContaining({ cents: 899, amount: '30 oz', store: 'Aldi on Main St' }), coupons: [], usual_store: 'Costco', usual_size: '3 lb', likely_store: 'Costco' }]);
+  expect((await admin.put(`/api/shopping/usual/${again}`, { size: 'huge' })).status).toBe(400);
 });

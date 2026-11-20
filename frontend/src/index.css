@@ -16,3 +16,12 @@ body {
 @media (prefers-color-scheme: dark) {
   body { background: linear-gradient(135deg, #14262e 0%, #1c5a55 42%, #7d6a39 76%, #84583a 90%, #7c3e2f 100%); background-attachment: fixed; }
 }
+
+/* Printing: only the sheet of stickers, black on white, with nothing of the screen's colours around it. */
+@media print {
+  html, body { background: #fff !important; }
+  body::before, body::after { display: none !important; }
+  main { padding: 0 !important; max-width: none !important; }
+  main > div { background: transparent !important; box-shadow: none !important; padding: 0 !important; backdrop-filter: none !important; --tw-ring-shadow: 0 0 #0000 !important; }
+  .sticker-sheet { padding: 0 !important; }
+}

@@ -75,6 +75,31 @@ export type Item = {
 type KindRow = { id: number; name: string; icon: string | null; unit: string | null };
 type FieldRow = Omit<Field, 'choices'> & { choices: string | null };
 type PlaceRow = { id: number; parent_id: number | null; name: string; note: string | null };
+/** A place and what its sticker carries. */
+export type PlaceSticker = { id: number; name: string; path: string; code: string };
+
+// Letters and digits that can't be mistaken for each other when read off a sticker: no 0/O, 1/I/L.
+const CODE_LETTERS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+const CODE_LENGTH = 10;
+function newCode(): string {
+  const picks = new Uint8Array(CODE_LENGTH * 2);
+  let code = '';
+  while (code.length < CODE_LENGTH) {
+    globalThis.crypto.getRandomValues(picks);
+    // Numbers past the last whole run of the alphabet are passed over, so every letter is as likely as any other.
+    for (const n of picks) if (n < 248 && code.length < CODE_LENGTH) code += CODE_LETTERS[n % CODE_LETTERS.length];
+  }
+  return code;
+}
+
+/**
+ * The code out of whatever a scanner read from a sticker: the code itself, or a web address ending in /p/ and
+ * the code, whatever address Life Is had when the sticker was printed. Null when it isn't a sticker.
+ */
+export function stickerCode(read: string): string | null {
+  const m = /(?:^|\/p\/)([2-9A-HJ-NP-Za-hj-np-z]{10})\/?$/.exec(read.trim());
+  return m ? m[1]!.toUpperCase() : null;
+}
 type ItemRow = Omit<Item, 'amount' | 'place' | 'low' | 'values' | 'set_aside' | 'free'>;
 
 const asField = (row: FieldRow): Field => ({ ...row, choices: row.choices ? (JSON.parse(row.choices) as string[]) : [] });
@@ -420,6 +445,26 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
         await tx.run('INSERT INTO places (owner_id, parent_id, name, note, created_at) VALUES (?, ?, ?, ?, ?)', [owner, place.parent, place.name, place.note, now()]);
         return places(tx);
       });
+    },
+
+    /** Every place with the code its sticker carries. A place that has none yet is given one, and keeps it. */
+    stickers(): Promise<PlaceSticker[]> {
+      return atomic(db, async (tx) => {
+        for (const row of await tx.all<{ id: number }>('SELECT id FROM places WHERE owner_id = ? AND code IS NULL', [owner])) {
+          await tx.run('UPDATE places SET code = ? WHERE id = ?', [newCode(), row.id]);
+        }
+        const codes = new Map((await tx.all<{ id: number; code: string }>('SELECT id, code FROM places WHERE owner_id = ?', [owner])).map((r) => [r.id, r.code]));
+        return (await places(tx)).map(({ id, name, path }) => ({ id, name, path, code: codes.get(id)! }));
+      });
+    },
+
+    /** The place a scanned sticker belongs to. Only ever one of the person's own. */
+    async placeForSticker(read: string): Promise<{ id: number; name: string; path: string }> {
+      const code = stickerCode(read);
+      const row = code ? await db.get<{ id: number }>('SELECT id FROM places WHERE owner_id = ? AND code = ?', [owner, code]) : undefined;
+      const place = row ? (await places(db)).find((p) => p.id === row.id) : undefined;
+      if (!place) throw new Problem(404, "That isn't the sticker of one of your places");
+      return { id: place.id, name: place.name, path: place.path };
     },
 
     /** Rename a place, or move it (and everything in it) into another. */

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
+import { ScanSticker } from './Places';
 
 const TYPES = [['text', 'Text'], ['number', 'A number'], ['choice', 'A choice from a list'], ['yesno', 'Yes or no'], ['date', 'A date'], ['link', 'A link']];
 const typeName = (type) => (TYPES.find(([id]) => id === type) || ['', type])[1];
@@ -345,6 +346,7 @@ function FieldForm({ field, onDone }) {
 export function PlacesPage() {
   const [places, setPlaces] = useState(null);
   const [editing, setEditing] = useState(null);
+  const [scanning, setScanning] = useState(false);
   const load = useCallback(() => { axios.get('/api/things/places').then(({ data }) => setPlaces(data)).catch(() => setPlaces([])); }, []);
   useEffect(() => { load(); }, [load]);
   if (!places) return null;
@@ -353,6 +355,8 @@ export function PlacesPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Places</h1>
+        {places.length > 0 && <button type="button" onClick={() => setScanning(true)} className={quietButtonClass}>📷 Scan a sticker</button>}
+        {places.length > 0 && <Link to="/things/places/stickers" className={quietButtonClass}>Print stickers</Link>}
         <button type="button" onClick={() => setEditing({})} className={buttonClass}>+ New place</button>
       </div>
       {places.length === 0 ? (
@@ -361,11 +365,12 @@ export function PlacesPage() {
         <section className={cardClass}>
           <ul className="divide-y divide-life-50 dark:divide-life-700">
             {places.map((p) => (
-              <li key={p.id}>
-                <button type="button" onClick={() => setEditing(p)} className="flex w-full items-center gap-2 py-2 text-left" style={{ paddingLeft: `${depth(p) * 1.25}rem` }}>
+              <li key={p.id} className="flex items-center gap-2">
+                <Link to={`/things/places/${p.id}`} className="flex flex-1 items-center gap-2 py-2 text-left hover:underline" style={{ paddingLeft: `${depth(p) * 1.25}rem` }}>
                   <span className="flex-1 text-sm text-gray-800 dark:text-life-50">{p.name}{p.note && <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{p.note}</span>}</span>
                   <span className="text-xs text-gray-500 dark:text-life-300">{p.items > 0 ? `${p.items} ${p.items === 1 ? 'thing' : 'things'}` : ''}</span>
-                </button>
+                </Link>
+                <button type="button" onClick={() => setEditing(p)} aria-label={`Change ${p.name}`} className="text-xs text-life-600 hover:underline dark:text-life-200">Change</button>
               </li>
             ))}
           </ul>
@@ -376,6 +381,7 @@ export function PlacesPage() {
           <PlaceForm place={editing} places={places} onDone={(data) => { setPlaces(data); setEditing(null); }} />
         </Modal>
       )}
+      {scanning && <Modal title="Scan a sticker" onClose={() => setScanning(false)}><ScanSticker /></Modal>}
     </div>
   );
 }

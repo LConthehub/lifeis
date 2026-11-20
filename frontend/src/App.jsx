@@ -15,6 +15,9 @@ import Calendar from './pages/Calendar';
 import MediaPage, { MediaTitlePage } from './pages/Media';
 import Servers from './pages/Servers';
 import Mail from './pages/Mail';
+import Prices from './pages/Prices';
+import PlansPage, { PlanPage } from './pages/Plans';
+import { PlacePage, StickerLanding, StickersPage } from './pages/Places';
 
 axios.defaults.withCredentials = true;
 // The server keeps time in UTC, so each request says what day it is here. Without it, something finished at
@@ -28,9 +31,9 @@ axios.interceptors.request.use((config) => {
 
 // Life is… each section finishes the sentence, and has its own few pages.
 const SECTIONS = [
-  { word: 'eating', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry'].includes(path) || path.startsWith('/recipes'),
-    tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫']] },
-  { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar') || path.startsWith('/mail'), tabs: [['/calendar', 'Calendar', '📅'], ['/mail', 'Mail', '✉️']] },
+  { word: 'eating', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
+    tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫'], ['/prices', 'Prices', '💲']] },
+  { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar') || path.startsWith('/plans') || path.startsWith('/mail'), tabs: [['/calendar', 'Calendar', '📅'], ['/plans', 'Plans', '✨'], ['/mail', 'Mail', '✉️']] },
   { word: 'keeping', home: '/things', owns: (path) => path.startsWith('/things'),
     tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/kinds', 'Kinds', '🏷']] },
   { word: 'making', home: '/projects', owns: (path) => path.startsWith('/projects'),
@@ -81,7 +84,7 @@ function Shell({ user, onLogout }) {
   const exact = (to) => ['/recipes', '/things', '/projects', '/media'].includes(to);
   return (
     <div className="min-h-screen pb-20 sm:pb-6">
-      <header className="sticky top-0 z-30 bg-life-bar text-white shadow-sm">
+      <header className="sticky top-0 z-30 bg-life-bar text-white shadow-sm print:hidden">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
           <Link to="/" className="flex items-center gap-2 font-semibold text-white">
             <img src="/icon-192.png" alt="" className="h-7 w-7 rounded-lg" /> Life is
@@ -114,13 +117,19 @@ function Shell({ user, onLogout }) {
           <Route path="/week" element={<Week />} />
           <Route path="/groceries" element={<Groceries />} />
           <Route path="/pantry" element={<Pantry />} />
+          <Route path="/prices" element={<Prices />} />
           <Route path="/things" element={<Things />} />
           <Route path="/things/kinds" element={<KindsPage />} />
           <Route path="/things/places" element={<PlacesPage />} />
+          <Route path="/things/places/stickers" element={<StickersPage />} />
+          <Route path="/things/places/:id" element={<PlacePage />} />
+          <Route path="/p/:code" element={<StickerLanding />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectPage />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/mail" element={<Mail />} />
+          <Route path="/plans" element={<PlansPage />} />
+          <Route path="/plans/:id" element={<PlanPage />} />
           <Route path="/media" element={<MediaPage />} />
           <Route path="/media/servers" element={<Servers />} />
           <Route path="/media/:id" element={<MediaTitlePage />} />

@@ -21,7 +21,7 @@ beforeEach(async () => {
 it('until it is answered, and if it is skipped, everything shows', async () => {
   const asked = await mine.getProfile();
   expect([asked.areas, asked.sections]).toEqual([null, EVERYTHING]);
-  expect(asked.options.map((o) => o.key)).toEqual(['eating', 'keeping', 'making', 'planning', 'enjoying', 'cookware', 'sewing', 'knitting', 'woodworking', 'gardening', 'home']);
+  expect(asked.options.map((o) => o.key)).toEqual(['eating', 'keeping', 'making', 'planning', 'enjoying', 'cookware', 'clothing', 'sewing', 'knitting', 'woodworking', 'gardening', 'home']);
   const skipped = await mine.saveProfile([]);
   expect([skipped.areas, skipped.sections, skipped.added]).toEqual([[], EVERYTHING, []]);
   expect((await mine.getProfile()).areas).toEqual([]); // answered: not asked again

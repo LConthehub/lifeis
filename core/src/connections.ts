@@ -24,7 +24,8 @@ const NAMES: Record<ServerKind, string> = { jellyfin: 'Jellyfin', emby: 'Emby' }
 export const EVERY_CHOICES = [0, 1, 6, 24, 168];
 
 export type Answer = { status: number; json(): Promise<unknown>; bytes(): Promise<Uint8Array>; type: string | null };
-export type Fetcher = (url: string, headers: Record<string, string>) => Promise<Answer>;
+/** Asks a web address for its answer. Almost always a plain question; `send` is for the few that must be posted. */
+export type Fetcher = (url: string, headers: Record<string, string>, send?: { method: 'POST'; body: string }) => Promise<Answer>;
 export type Sealer = { seal(plain: string): string; unseal(sealed: string): string | null };
 
 /** One thing on a server, as the collection needs it. */

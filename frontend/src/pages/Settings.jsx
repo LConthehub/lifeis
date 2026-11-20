@@ -111,6 +111,8 @@ function OutsideServices() {
       <div className="divide-y divide-life-100 dark:divide-life-700">
         <WeatherService />
         <MailService />
+        <BookLookupService />
+        <PhotoLibraryService />
         <div className="py-3">
           <h3 className="font-medium text-gray-800 dark:text-life-50">📺 Your Jellyfin or Emby</h3>
           <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Brings the films, shows, music and books on a media server you name into your collection. Life Is only reads from that server, using the key you give it, and talks to nowhere else.</p>
@@ -280,6 +282,88 @@ function MailService() {
             </form>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+function BookLookupService() {
+  const [l, setL] = useState(null);
+  useEffect(() => { axios.get('/api/lookups').then(({ data }) => setL(data)).catch(() => {}); }, []);
+  if (!l) return null;
+  const turn = async (books) => { const { data } = await axios.put('/api/lookups', { books }); setL(data); };
+  const turnGroceries = async (groceries) => { const { data } = await axios.put('/api/lookups', { groceries }); setL(data); };
+  return (
+    <>
+    <div className="py-3">
+      <div className="flex items-baseline gap-2">
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🛒 Look up groceries when you scan them</h3>
+        <span className={`rounded px-1.5 text-[11px] ${l.groceries ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.groceries ? 'On' : 'Off'}</span>
+      </div>
+      <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
+        Scan a packet Life Is hasn't seen and its name is filled in for you to check, from <a href={l.grocery_service.site} target="_blank" rel="noreferrer" className="underline">{l.grocery_service.name}</a>.
+        {' '}<span className="font-medium">What it's sent:</span> {l.grocery_service.sends} Scanning works without it; you just type the name yourself the first time.
+      </p>
+      {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p>
+        : <button type="button" onClick={() => turnGroceries(!l.groceries)} className={`${quietButtonClass} mt-2`}>{l.groceries ? 'Turn off' : 'Turn on'}</button>}
+    </div>
+    <div className="py-3">
+      <div className="flex items-baseline gap-2">
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">📚 Look up books when you scan them</h3>
+        <span className={`rounded px-1.5 text-[11px] ${l.books ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.books ? 'On' : 'Off'}</span>
+      </div>
+      <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
+        Scan a book you don't have yet and its title and author are filled in for you to check, from <a href={l.service.site} target="_blank" rel="noreferrer" className="underline">{l.service.name}</a>.
+        {' '}<span className="font-medium">What it's sent:</span> {l.service.sends}
+      </p>
+      {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p>
+        : <button type="button" onClick={() => turn(!l.books)} className={`${quietButtonClass} mt-2`}>{l.books ? 'Turn off' : 'Turn on'}</button>}
+    </div>
+    </>
+  );
+}
+
+function PhotoLibraryService() {
+  const [l, setL] = useState(null);
+  const [form, setForm] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  useEffect(() => { axios.get('/api/photos').then(({ data }) => setL(data)).catch(() => {}); }, []);
+  if (!l) return null;
+  const connect = async (e) => {
+    e.preventDefault();
+    setBusy(true); setMessage('');
+    try { const { data } = await axios.put('/api/photos', form); setL(data); setForm(null); } catch (err) { setMessage(errorMessage(err, "Couldn't connect it")); }
+    setBusy(false);
+  };
+  const disconnect = async () => { const { data } = await axios.delete('/api/photos'); setL(data); };
+  return (
+    <div className="py-3">
+      <div className="flex items-baseline gap-2">
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🖼 Photos from your Immich, on plans and memories</h3>
+        <span className={`rounded px-1.5 text-[11px] ${l.connected ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.connected ? 'On' : 'Off'}</span>
+      </div>
+      <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
+        Link photos from your own <a href={l.service.site} target="_blank" rel="noreferrer" className="underline">{l.service.name}</a> library to a plan, without copying them. <span className="font-medium">What it does:</span> {l.service.sends}
+      </p>
+      {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : l.connected ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-800 dark:text-life-50">
+          <span className="mr-auto">Connected to <span className="font-medium">{l.url}</span></span>
+          <button type="button" onClick={disconnect} className={quietButtonClass}>Disconnect and forget its key</button>
+        </div>
+      ) : !form ? <button type="button" onClick={() => { setForm({ url: '', key: '' }); setMessage(''); }} className={`${quietButtonClass} mt-2`}>Connect Immich</button> : (
+        <form onSubmit={connect} className="mt-2 space-y-3 rounded-lg bg-life-50/60 p-3 dark:bg-life-800">
+          <p className="text-sm text-gray-600 dark:text-life-100">{l.service.needs}</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Immich's address *"><input required value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="http://192.168.1.20:2283" className={inputClass} /></Field>
+            <Field label="API key *"><input required type="password" autoComplete="off" value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} className={inputClass} /></Field>
+          </div>
+          {message && <p className="text-sm text-red-600">{message}</p>}
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={() => setForm(null)} className={quietButtonClass}>Not now</button>
+            <button type="submit" disabled={busy} className={buttonClass}>{busy ? 'Checking…' : 'Check and connect'}</button>
+          </div>
+        </form>
       )}
     </div>
   );
