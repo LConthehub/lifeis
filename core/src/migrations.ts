@@ -499,6 +499,27 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE prices ADD COLUMN barcode TEXT`,
     ],
   },
+  {
+    number: 15,
+    name: 'shops, and the sizes things come in',
+    statements: [
+      // The shops a person uses, to choose from. Prices and coupons keep the shop's name as it was.
+      `CREATE TABLE stores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        note TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX idx_stores_name ON stores(owner_id, name COLLATE NOCASE)`,
+      // Shops already named on a price become the start of the list.
+      `INSERT OR IGNORE INTO stores (owner_id, name, created_at)
+       SELECT owner_id, TRIM(store), MIN(created_at) FROM prices WHERE store IS NOT NULL AND TRIM(store) != '' GROUP BY owner_id, TRIM(store) COLLATE NOCASE`,
+      // The size on a product's packet ("30 oz"), learned with its barcode.
+      `ALTER TABLE ingredient_barcodes ADD COLUMN size_quantity REAL`,
+      `ALTER TABLE ingredient_barcodes ADD COLUMN size_unit TEXT`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

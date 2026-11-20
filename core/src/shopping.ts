@@ -6,8 +6,11 @@
  * price for that ingredient, with the shop and the day, so next time the list can say what it cost last
  * time and guess the trip before you start.
  *
- * A price is what you paid for the line as it's written ("2 lb chicken thighs": 6.98), in whole cents, so
- * adding up never drifts. A line ticked off without a price takes last time's as a stand-in, marked as
+ * A price is what you paid, in whole cents, so adding up never drifts. With it goes the size you bought: the
+ * amount on the list ("2 lb chicken thighs"), or, when the list only says "coffee", the size on the packet
+ * ("30 oz"). Sizes are what let two shops, or a small bag and a big tin, be compared for one ounce.
+ *
+ * Shops are a list of your own to choose from, so a shop is spelt one way and prices can be set side by side. A line ticked off without a price takes last time's as a stand-in, marked as
  * assumed: it counts in the total, but isn't remembered as a price anyone actually saw.
  *
  * A coupon is money or a percentage off, for one thing on the list or for the whole shop, perhaps only at one
@@ -24,6 +27,8 @@ export type ShoppingLine = {
   /** The grocery line's id. */
   id: number;
   price_cents: number | null;
+  /** The size that price was for ("30 oz"); empty when none is known. */
+  size: string;
   /** True when the price is last time's, standing in until the real one is typed. */
   assumed: boolean;
   last: LastPrice | null;
@@ -55,6 +60,8 @@ export type Shopping = {
   currency: string;
   /** Where today's shop is, kept with each price. */
   store: string | null;
+  /** Your shops, to choose from, by name. */
+  stores: string[];
   lines: ShoppingLine[];
   coupons: Coupon[];
   totals: {
@@ -82,18 +89,21 @@ export type Trend = {
   per: string | null;
   /** Oldest first. */
   points: PricePoint[];
+  /** The latest price at each shop, cheapest first. */
+  shops: PricePoint[];
   latest: PricePoint;
   lowest: PricePoint;
   highest: PricePoint;
   /** The latest less the one before, on the basis above; null with only one price. */
   change_cents: number | null;
 };
+export type Store = { id: number; name: string; note: string | null; /** How many prices were seen there, and when last. */ prices: number; last_on: string | null };
 export type MonthSpend = { /** 2046-03 */ month: string; cents: number; lines: number };
 /** What a scanned grocery barcode turned out to be. */
 export type Scanned = {
   barcode: string;
   /** The ingredient this product has been taught as; null the first time it's seen. */
-  ingredient: { id: number; name: string; product: string | null } | null;
+  ingredient: { id: number; name: string; product: string | null; /** The size on the packet, when taught: "30 oz". */ size: string } | null;
   /** The line of the list it is, if it's on it. */
   line: { id: number; label: string; amount: string; done: boolean } | null;
   last: LastPrice | null;
@@ -106,6 +116,19 @@ const MAX_CENTS = 100_000_000;
 type CouponRow = Omit<Coupon, 'days_left' | 'worth_cents' | 'ingredient'> & { ingredient: string | null };
 type Line = { id: number; ingredient_id: number | null; label: string; quantity: number | null; unit: string | null; done: number };
 const valueOf = (p: { cents: number; per_cents: number | null }, basis: 'per' | 'line') => (basis === 'per' ? p.per_cents! : p.cents);
+
+/** A size as it's typed ("30 oz", "2 lb", "6"): how much, and of what. Null when nothing was typed. */
+export function sizeOf(text: string | null | undefined): { quantity: number; unit: string | null } | null {
+  const tidy = clean(text, 40);
+  if (!tidy) return null;
+  const read = units.parseLine(tidy);
+  if (read.quantity === null || !(read.quantity > 0)) throw new Problem(400, 'A size is written like 30 oz, 2 lb or 6');
+  return { quantity: read.quantity, unit: read.unit };
+}
+/** What kind of measure a size is, so only like is compared with like: weight, volume, or a count. */
+const family = (unit: string | null) => (unit === null ? 'count' : units.kindOf(unit));
+/** What one "per" is for a unit: a pound, an ounce, each; but 100 g and 100 ml, since one gram costs next to nothing. */
+const perOf = (unit: string | null): { label: string; of: number } => (unit === null ? { label: 'each', of: 1 } : ['g', 'ml'].includes(unit) ? { label: `100 ${unit}`, of: 100 } : { label: unit, of: 1 });
 type PriceRow = { grocery_id: number | null; ingredient_id: number | null; label: string; cents: number; quantity: number | null; unit: string | null; store: string | null; day: string; assumed: number };
 
 const keyOf = (line: { ingredient_id: number | null; label: string }) => (line.ingredient_id !== null ? `#${line.ingredient_id}` : `~${line.label.trim().toLowerCase()}`);
@@ -154,6 +177,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       `SELECT c.id, c.label, c.ingredient_id, i.name AS ingredient, c.cents_off, c.percent_off, c.store, c.code, c.expires_on, c.note, c.used_on
        FROM coupons c LEFT JOIN ingredients i ON i.id = c.ingredient_id
        WHERE c.owner_id = ? AND (c.used_on IS NULL OR c.used_on = ?) ORDER BY COALESCE(c.expires_on, '9999'), c.id`, [owner, day]);
+    const storeNames = (await db.all<{ name: string }>('SELECT name FROM stores WHERE owner_id = ? ORDER BY name COLLATE NOCASE', [owner])).map((r) => r.name);
     const done = lines.filter((l) => l.done === 1);
     const trolley = done.reduce((sum, l) => sum + (onLine.get(l.id)?.cents ?? 0), 0);
     const worth = (c: CouponRow): number => {
@@ -173,8 +197,10 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
     return {
       currency: (await setting(CURRENCY)) ?? '$',
       store: await setting(STORE),
+      stores: storeNames,
       lines: lines.map((l) => ({
-        id: l.id, price_cents: onLine.get(l.id)?.cents ?? null, assumed: onLine.get(l.id)?.assumed === 1, last: lastFor(l),
+        id: l.id, price_cents: onLine.get(l.id)?.cents ?? null, size: onLine.has(l.id) ? units.amount(onLine.get(l.id)!.quantity, onLine.get(l.id)!.unit) : '',
+        assumed: onLine.get(l.id)?.assumed === 1, last: lastFor(l),
         coupons: coupons.filter((c) => c.used_on === null && (c.days_left === null || c.days_left >= 0) && c.ingredient_id !== null && c.ingredient_id === l.ingredient_id).map((c) => c.id),
       })),
       coupons,
@@ -193,10 +219,53 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
   return {
     summary,
 
-    /** Where today's shop is. Kept with each price from now on. */
+    /** Where today's shop is. Kept with each price from now on. A shop not seen before joins your list. */
     async setStore(name: string | null): Promise<Shopping> {
-      await keep(STORE, clean(name, 100));
+      const tidy = clean(name, 100);
+      if (tidy) await db.run('INSERT OR IGNORE INTO stores (owner_id, name, created_at) VALUES (?, ?, ?)', [owner, tidy, stamp(clock())]);
+      // Kept as the list spells it, however it was typed this time.
+      const listed = tidy ? await db.get<{ name: string }>('SELECT name FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE', [owner, tidy]) : undefined;
+      await keep(STORE, listed?.name ?? tidy);
       return summary();
+    },
+
+    // ---------- shops ----------
+
+    /** Your shops, with how many prices were seen at each. */
+    stores(): Promise<Store[]> {
+      return db.all<Store>(
+        `SELECT s.id, s.name, s.note,
+           (SELECT COUNT(*) FROM prices p WHERE p.owner_id = s.owner_id AND p.store = s.name COLLATE NOCASE AND p.assumed = 0) AS prices,
+           (SELECT MAX(p.day) FROM prices p WHERE p.owner_id = s.owner_id AND p.store = s.name COLLATE NOCASE) AS last_on
+         FROM stores s WHERE s.owner_id = ? ORDER BY s.name COLLATE NOCASE`, [owner]);
+    },
+
+    async addStore(input: { name: string; note?: string | null }): Promise<Store[]> {
+      const name = clean(input.name, 100);
+      if (!name) throw new Problem(400, 'Give the shop a name');
+      if (await db.get('SELECT id FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE', [owner, name])) throw new Problem(409, "That shop is already on your list");
+      await db.run('INSERT INTO stores (owner_id, name, note, created_at) VALUES (?, ?, ?, ?)', [owner, name, clean(input.note, 300), stamp(clock())]);
+      return this.stores();
+    },
+
+    /** Rename a shop, or change its note. Its prices and coupons follow the new name. */
+    async updateStore(id: number, input: { name: string; note?: string | null }): Promise<Store[]> {
+      const name = clean(input.name, 100);
+      if (!name) throw new Problem(400, 'Give the shop a name');
+      const old = await db.get<{ name: string }>('SELECT name FROM stores WHERE id = ? AND owner_id = ?', [id, owner]);
+      if (!old) throw new Problem(404, 'Not found');
+      if (await db.get('SELECT id FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE AND id != ?', [owner, name, id])) throw new Problem(409, "Another shop already has that name");
+      await db.run('UPDATE stores SET name = ?, note = ? WHERE id = ?', [name, clean(input.note, 300), id]);
+      await db.run('UPDATE prices SET store = ? WHERE owner_id = ? AND store = ? COLLATE NOCASE', [name, owner, old.name]);
+      await db.run('UPDATE coupons SET store = ? WHERE owner_id = ? AND store = ? COLLATE NOCASE', [name, owner, old.name]);
+      if (((await setting(STORE)) ?? '').toLowerCase() === old.name.toLowerCase()) await keep(STORE, name);
+      return this.stores();
+    },
+
+    /** Take a shop off your list. What you paid there stays in the prices, under its name. */
+    async removeStore(id: number): Promise<Store[]> {
+      await db.run('DELETE FROM stores WHERE id = ? AND owner_id = ?', [id, owner]);
+      return this.stores();
     },
 
     /** The sign prices are shown with: $, £, €, kr. Nothing is converted. */
@@ -211,8 +280,21 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
      * What a line on the list cost, in cents; null takes the price away again. `assumed` marks last time's
      * price standing in. The line's price is replaced, never added to.
      */
-    async setPrice(groceryId: number, price: number | null, assumed = false, barcode?: string | null): Promise<Shopping> {
+    async setPrice(groceryId: number, price: number | null, assumed = false, barcode?: string | null, size?: string | null): Promise<Shopping> {
       const l = await line(db, groceryId);
+      // The size bought: what was typed; else the amount on the list; else the packet's own; else what it was last time.
+      const typed = sizeOf(size);
+      const packet = barcode ? await db.get<{ size_quantity: number | null; size_unit: string | null }>(
+        'SELECT size_quantity, size_unit FROM ingredient_barcodes WHERE owner_id = ? AND barcode = ?', [owner, barcodeKey(barcode)]) : undefined;
+      const before = await db.get<{ quantity: number | null; unit: string | null }>(
+        `SELECT quantity, unit FROM prices WHERE owner_id = ? AND assumed = 0 AND quantity IS NOT NULL AND (grocery_id IS NULL OR grocery_id != ?)
+         AND ${l.ingredient_id !== null ? 'ingredient_id = ?' : 'ingredient_id IS NULL AND LOWER(TRIM(label)) = ?'} ORDER BY day DESC, id DESC LIMIT 1`,
+        [owner, groceryId, l.ingredient_id ?? l.label.trim().toLowerCase()]);
+      const bought = typed ?? (l.quantity !== null ? { quantity: l.quantity, unit: l.unit }
+        : packet?.size_quantity != null ? { quantity: packet.size_quantity, unit: packet.size_unit }
+        : before?.quantity != null ? { quantity: before.quantity, unit: before.unit } : { quantity: null, unit: null });
+      l.quantity = bought.quantity;
+      l.unit = bought.unit;
       await db.run('DELETE FROM prices WHERE owner_id = ? AND grocery_id = ?', [owner, groceryId]);
       if (price !== null) {
         await db.run(
@@ -228,9 +310,11 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
     async scan(code: string): Promise<Scanned> {
       const barcode = barcodeKey(code);
       if (!/^[0-9A-Z]{4,40}$/.test(barcode)) throw new Problem(400, "That isn't a barcode");
-      const known = await db.get<{ id: number; name: string; product: string | null }>(
-        'SELECT i.id, i.name, b.label AS product FROM ingredient_barcodes b JOIN ingredients i ON i.id = b.ingredient_id WHERE b.owner_id = ? AND b.barcode = ?', [owner, barcode]);
-      if (!known) return { barcode, ingredient: null, line: null, last: null };
+      const found = await db.get<{ id: number; name: string; product: string | null; size_quantity: number | null; size_unit: string | null }>(
+        `SELECT i.id, i.name, b.label AS product, b.size_quantity, b.size_unit FROM ingredient_barcodes b JOIN ingredients i ON i.id = b.ingredient_id
+         WHERE b.owner_id = ? AND b.barcode = ?`, [owner, barcode]);
+      if (!found) return { barcode, ingredient: null, line: null, last: null };
+      const known = { id: found.id, name: found.name, product: found.product, size: units.amount(found.size_quantity, found.size_unit) };
       // On the list: the line still to get if there is one, else the one already in the trolley.
       const onList = await db.get<Line>('SELECT id, ingredient_id, label, quantity, unit, done FROM grocery WHERE owner_id = ? AND ingredient_id = ? ORDER BY done, id LIMIT 1', [owner, known.id]);
       const before = await db.get<PriceRow>(
@@ -243,16 +327,18 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       };
     },
 
-    /** Teach a barcode: this product is the thing on that line of the list. Taught again, it's simply changed. */
-    async learn(code: string, groceryId: number, product?: string | null): Promise<Scanned> {
+    /** Teach a barcode: this product is the thing on that line of the list, and comes in this size. Taught again, it's simply changed. */
+    async learn(code: string, groceryId: number, product?: string | null, size?: string | null): Promise<Scanned> {
       const barcode = barcodeKey(code);
       if (!/^[0-9A-Z]{4,40}$/.test(barcode)) throw new Problem(400, "That isn't a barcode");
       const l = await line(db, groceryId);
       if (l.ingredient_id === null) throw new Problem(400, "That line isn't an ingredient Life Is knows, so a barcode can't be tied to it");
+      const packet = sizeOf(size);
       await db.run(
-        `INSERT INTO ingredient_barcodes (owner_id, barcode, ingredient_id, label, created_at) VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(owner_id, barcode) DO UPDATE SET ingredient_id = excluded.ingredient_id, label = COALESCE(excluded.label, label)`,
-        [owner, barcode, l.ingredient_id, clean(product, 200), stamp(clock())]);
+        `INSERT INTO ingredient_barcodes (owner_id, barcode, ingredient_id, label, size_quantity, size_unit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(owner_id, barcode) DO UPDATE SET ingredient_id = excluded.ingredient_id, label = COALESCE(excluded.label, label),
+           size_quantity = COALESCE(excluded.size_quantity, size_quantity), size_unit = CASE WHEN excluded.size_quantity IS NULL THEN size_unit ELSE excluded.size_unit END`,
+        [owner, barcode, l.ingredient_id, clean(product, 200), packet?.quantity ?? null, packet?.unit ?? null, stamp(clock())]);
       return this.scan(barcode);
     },
 
@@ -272,21 +358,29 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       const rows = await db.all<PriceRow & { name: string | null }>(
         `SELECT p.grocery_id, p.ingredient_id, p.label, p.cents, p.quantity, p.unit, p.store, p.day, p.assumed, i.name
          FROM prices p LEFT JOIN ingredients i ON i.id = p.ingredient_id WHERE p.owner_id = ? AND p.assumed = 0 ORDER BY p.day, p.id`, [owner]);
-      const groups = new Map<string, { name: string; points: PricePoint[] }>();
-      for (const p of rows) {
-        const group = groups.get(keyOf(p)) ?? groups.set(keyOf(p), { name: p.name ?? p.label, points: [] }).get(keyOf(p))!;
-        const known = p.quantity !== null && p.quantity > 0;
-        group.points.push({ cents: p.cents, amount: units.amount(p.quantity, p.unit), store: p.store, day: p.day,
-          per_cents: known ? Math.round(p.cents / p.quantity!) : null, per: known ? (p.unit ?? 'each') : null });
-      }
-      return [...groups.values()].map(({ name, points }): Trend => {
-        const per = points[0]!.per;
-        const basis = per !== null && points.every((p) => p.per === per) ? 'per' : 'line';
-        const by = (pick: (a: number, b: number) => boolean) => points.reduce((best, p) => (pick(valueOf(p, basis), valueOf(best, basis)) ? p : best));
+      const groups = new Map<string, { name: string; rows: typeof rows }>();
+      for (const p of rows) (groups.get(keyOf(p)) ?? groups.set(keyOf(p), { name: p.name ?? p.label, rows: [] }).get(keyOf(p))!).rows.push(p);
+      return [...groups.values()].map(({ name, rows: bought }): Trend => {
+        // Like with like: every price has a size, and the sizes are all weights, or all volumes, or all counts.
+        const newest = bought[bought.length - 1]!;
+        const sized = bought.every((p) => p.quantity !== null && p.quantity > 0);
+        const basis = sized && bought.every((p) => family(p.unit) === family(newest.unit)) && family(newest.unit) !== 'other' ? 'per' : 'line';
+        // Each price is worked out for one of the newest price's measure: a 12 oz bag and a 2 lb tin, both per lb.
+        const per = perOf(newest.unit);
+        const points = bought.map((p): PricePoint => {
+          const inNewest = basis !== 'per' ? null : p.unit === newest.unit ? p.quantity : p.unit === null || newest.unit === null ? null : units.convert(p.quantity!, p.unit, newest.unit);
+          return { cents: p.cents, amount: units.amount(p.quantity, p.unit), store: p.store, day: p.day,
+            per_cents: inNewest ? Math.round(p.cents / inNewest * per.of) : null, per: inNewest ? per.label : null };
+        });
+        const usable = basis === 'per' && points.every((p) => p.per_cents !== null) ? 'per' : 'line';
+        const by = (pick: (a: number, b: number) => boolean) => points.reduce((best, p) => (pick(valueOf(p, usable), valueOf(best, usable)) ? p : best));
         const latest = points[points.length - 1]!;
+        const atShop = new Map<string, PricePoint>();
+        for (const p of points) if (p.store) atShop.set(p.store.toLowerCase(), p); // oldest first, so the last one kept is the latest there
         return {
-          name, times: points.length, basis, per: basis === 'per' ? per : null, points, latest, lowest: by((a, b) => a < b), highest: by((a, b) => a > b),
-          change_cents: points.length > 1 ? valueOf(latest, basis) - valueOf(points[points.length - 2]!, basis) : null,
+          name, times: points.length, basis: usable, per: usable === 'per' ? per.label : null, points, latest, lowest: by((a, b) => a < b), highest: by((a, b) => a > b),
+          shops: [...atShop.values()].sort((a, b) => valueOf(a, usable) - valueOf(b, usable)),
+          change_cents: points.length > 1 ? valueOf(latest, usable) - valueOf(points[points.length - 2]!, usable) : null,
         };
       }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     },

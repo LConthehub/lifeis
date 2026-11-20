@@ -37,5 +37,6 @@ export type { OnWeek } from './plans.ts';
 export type { Plan, PlanInput, PlanItem, PlanItemInput, PlanItemKind, PlanPhoto, Plans, PlanSummary, PlanWhen } from './plans.ts';
 export { photoLibrary, PHOTO_SERVICE } from './photos.ts';
 export type { LibraryPhoto, PhotoLibrary, Photos } from './photos.ts';
-export { shopping } from './shopping.ts';
+export { shopping, sizeOf } from './shopping.ts';
+export type { Store } from './shopping.ts';
 export type { Coupon, CouponInput, LastPrice, MonthSpend, PricePoint, Scanned, Shopping, ShoppingLine, ShoppingOf, Trend } from './shopping.ts';

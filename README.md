@@ -27,6 +27,9 @@ So far: the kitchen, the calendar, the things you keep, the projects that use th
 - **Prices over time.** A page of what each thing has cost: its latest price, how it changed, where it was cheapest,
   and a chart. Things always bought by the same measure are compared for one of it, so 2 lb and 5 lb sit side by
   side. Spending is totalled by the month.
+- **Shops and sizes.** Your shops are a list to pick from, and each price keeps the size you bought: the amount on
+  the list, or the size on the packet (a 30 oz tin, a 12 oz bag). So a thing's price is shown for one ounce, pound
+  or each, whatever size it came in, and set side by side for each shop, cheapest first.
 - **Scan it in the shop.** Point the camera at a packet. The first time, say which thing on the list it is; after
   that a scan finds its line, shows last time's price, and puts it in the trolley with what you type.
 - **Coupons.** Money or a percentage off, for one thing or the whole shop, perhaps at one shop and until a day. The

@@ -505,7 +505,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   await database.db.run('PRAGMA user_version = 2');
@@ -601,8 +601,18 @@ it('prices, the running total and coupons answer over the web, in whole cents', 
   expect([trends.currency, trends.trends.map((t: { name: string; times: number }) => [t.name.toLowerCase(), t.times]), trends.spending[0].cents]).toEqual(['£', [['coffee', 1]], 899]);
   expect((await other.get('/api/shopping/trends')).json.trends).toEqual([]);
 
+  // Shops are a list to choose from; a size typed with a price is kept with it.
+  expect((await admin.get('/api/shopping/stores')).json.map((x: { name: string; prices: number }) => [x.name, x.prices])).toEqual([['Aldi', 1]]);
+  const shops = await admin.post('/api/shopping/stores', { name: 'Costco', note: 'needs the card' });
+  expect([shops.status, shops.json.map((x: { name: string }) => x.name), (await admin.post('/api/shopping/stores', { name: 'aldi' })).status]).toEqual([201, ['Aldi', 'Costco'], 409]);
+  expect((await admin.put(`/api/shopping/stores/${shops.json[0].id}`, { name: 'Aldi on Main St' })).json[0].name).toBe('Aldi on Main St');
+  expect((await admin.get('/api/shopping')).json).toMatchObject({ store: 'Aldi on Main St', stores: ['Aldi on Main St', 'Costco'] });
+  expect((await admin.put(`/api/shopping/prices/${coffee}`, { cents: 899, size: '30 oz' })).json.lines[0].size).toBe('30 oz');
+  expect((await admin.put(`/api/shopping/prices/${coffee}`, { cents: 899, size: 'a big one' })).status).toBe(400);
+  expect((await other.get('/api/shopping/stores')).json).toEqual([]);
+
   // Clearing the list keeps what things cost.
   await admin.post('/api/kitchen/grocery/clear-done');
   const again = (await admin.post('/api/kitchen/grocery', { label: 'coffee' })).json[0].id;
-  expect((await admin.get('/api/shopping')).json.lines).toEqual([{ id: again, price_cents: null, assumed: false, last: expect.objectContaining({ cents: 899, store: 'Aldi' }), coupons: [] }]);
+  expect((await admin.get('/api/shopping')).json.lines).toEqual([{ id: again, price_cents: null, size: '', assumed: false, last: expect.objectContaining({ cents: 899, amount: '30 oz', store: 'Aldi on Main St' }), coupons: [] }]);
 });

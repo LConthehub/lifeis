@@ -23,6 +23,7 @@ export default function Groceries() {
   const [shop, setShop] = useState(null);
   const [text, setText] = useState('');
   const [typed, setTyped] = useState({});           // prices being typed, by line
+  const [sizes, setSizes] = useState({});           // sizes being typed, by line
   const [putAway, setPutAway] = useState(true);
   const [modal, setModal] = useState(null);
   const [message, setMessage] = useState(state?.added != null
@@ -33,7 +34,7 @@ export default function Groceries() {
   if (!items || !shop) return null;
 
   const sign = shop.currency;
-  const lineOf = (g) => shop.lines.find((l) => l.id === g.id) || { price_cents: null, assumed: false, last: null, coupons: [] };
+  const lineOf = (g) => shop.lines.find((l) => l.id === g.id) || { price_cents: null, size: '', assumed: false, last: null, coupons: [] };
   const add = async (e) => {
     e.preventDefault();
     try {
@@ -41,7 +42,9 @@ export default function Groceries() {
       setItems(data); setText(''); loadShop();
     } catch (err) { setMessage(errorMessage(err, "Couldn't add it")); }
   };
-  const price = async (g, cents, assumed = false) => { const { data } = await axios.put(`/api/shopping/prices/${g.id}`, { cents, assumed }); setShop(data); };
+  const price = async (g, cents, assumed = false, size = null) => {
+    try { setShop((await axios.put(`/api/shopping/prices/${g.id}`, { cents, assumed, size: size || null })).data); } catch (err) { setMessage(errorMessage(err, "Couldn't save that price")); loadShop(); }
+  };
   // Into the trolley: with the price typed, or else last time's standing in. Out of it: the price goes too.
   const tick = async (g) => {
     const { data } = await axios.post(`/api/kitchen/grocery/${g.id}/tick`, { done: !g.done, put_away: putAway });
@@ -49,8 +52,10 @@ export default function Groceries() {
     if (g.done) { await price(g, null); return; }
     const mine = centsOf(typed[g.id] ?? '');
     const last = lineOf(g).last;
-    if (mine !== null) await price(g, mine); else if (last) await price(g, last.cents, true); else loadShop();
+    const size = (sizes[g.id] ?? '').trim();
+    if (mine !== null) await price(g, mine, false, size); else if (last) await price(g, last.cents, true, size); else loadShop();
     setTyped((all) => ({ ...all, [g.id]: undefined }));
+    setSizes((all) => ({ ...all, [g.id]: undefined }));
   };
   const remove = async (g) => { await axios.delete(`/api/kitchen/grocery/${g.id}`).catch(() => {}); load(); };
   const clearDone = async () => { const { data } = await axios.post('/api/kitchen/grocery/clear-done'); setItems(data); loadShop(); };
@@ -97,8 +102,9 @@ export default function Groceries() {
           <button type="submit" disabled={!text.trim()} className={buttonClass}>Add</button>
         </form>
         <label className="w-full text-xs text-gray-600 dark:text-life-200 sm:w-40">Shopping at
-          <input defaultValue={shop.store || ''} onBlur={saveStore} placeholder="which shop" aria-label="Shopping at" className={`${inputClass} mt-0.5`} />
+          <input key={shop.store || ''} list="my-shops" defaultValue={shop.store || ''} onBlur={saveStore} placeholder="which shop" aria-label="Shopping at" className={`${inputClass} mt-0.5`} />
         </label>
+        <datalist id="my-shops">{shop.stores.map((name) => <option key={name} value={name} />)}</datalist>
       </div>
 
       <div className={cardClass}>
@@ -122,6 +128,11 @@ export default function Groceries() {
                         </button>
                       )}
                     </span>
+                    {/* The list gives no amount, so the size is whatever was picked up: a 30 oz tin, a dozen. */}
+                    {!g.amount && (
+                      <input value={sizes[g.id] ?? ''} onChange={(e) => setSizes({ ...sizes, [g.id]: e.target.value })} placeholder={l.last?.amount || 'size'}
+                        aria-label={`Size of ${g.label}`} className={`${inputClass} !w-16 !px-2 text-center`} />
+                    )}
                     <input inputMode="decimal" value={typed[g.id] ?? ''} onChange={(e) => setTyped({ ...typed, [g.id]: e.target.value })} placeholder={l.last ? (l.last.cents / 100).toFixed(2) : 'price'}
                       aria-label={`Price of ${g.label}`} className={`${inputClass} !w-20 text-right`} />
                     <button type="button" onClick={() => remove(g)} className="text-xs text-gray-400 hover:text-red-600" aria-label={`Remove ${g.label}`}>✕</button>
@@ -148,7 +159,7 @@ export default function Groceries() {
               return (
                 <li key={g.id} className="flex items-center gap-3 py-1">
                   <input type="checkbox" checked onChange={() => tick(g)} aria-label={`Not got ${g.label}`} className="h-5 w-5 accent-life-600" />
-                  <span className="flex-1 text-sm text-gray-400 line-through">{g.label} {g.amount}</span>
+                  <span className="flex-1 text-sm text-gray-400"><span className="line-through">{g.label} {g.amount}</span>{!g.amount && l.size && <span className="ml-1 text-xs">{l.size}</span>}</span>
                   <button type="button" onClick={() => setModal({ price: g })} aria-label={`Price of ${g.label}`}
                     className={`rounded px-1.5 text-sm ${l.price_cents === null ? 'text-life-600 underline dark:text-life-200' : l.assumed ? 'bg-honey-100 text-honey-700' : 'text-gray-700 dark:text-life-100'}`}>
                     {l.price_cents === null ? 'add price' : `${l.assumed ? '≈ ' : ''}${money(l.price_cents, sign)}`}
@@ -197,7 +208,7 @@ export default function Groceries() {
 
       {modal?.price && (
         <Modal title={modal.price.label} onClose={() => setModal(null)}>
-          <PriceForm line={lineOf(modal.price)} sign={sign} onSave={async (cents) => { await price(modal.price, cents); setModal(null); }} />
+          <PriceForm line={lineOf(modal.price)} fixedSize={modal.price.amount} sign={sign} onSave={async (cents, size) => { await price(modal.price, cents, false, size); setModal(null); }} />
         </Modal>
       )}
       {modal?.scan && (
@@ -215,12 +226,18 @@ export default function Groceries() {
   );
 }
 
-function PriceForm({ line, sign, onSave }) {
+function PriceForm({ line, fixedSize, sign, onSave }) {
   const [text, setText] = useState(line.price_cents === null ? '' : (line.price_cents / 100).toFixed(2));
+  const [size, setSize] = useState(line.size || line.last?.amount || '');
   const cents = centsOf(text);
   return (
-    <form onSubmit={(e) => { e.preventDefault(); onSave(text.trim() === '' ? null : cents); }} className="space-y-3">
-      <Field label={`What it cost (${sign})`}><input autoFocus inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} className={inputClass} /></Field>
+    <form onSubmit={(e) => { e.preventDefault(); onSave(text.trim() === '' ? null : cents, fixedSize ? null : size); }} className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <Field label={`What it cost (${sign})`}><input autoFocus inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} className={inputClass} /></Field>
+        {fixedSize ? <Field label="For"><input value={fixedSize} disabled className={inputClass} /></Field>
+          : <Field label="The size you bought"><input value={size} onChange={(e) => setSize(e.target.value)} placeholder="30 oz, 2 lb, 6" className={inputClass} /></Field>}
+      </div>
+      {!fixedSize && <p className="text-xs text-gray-500 dark:text-life-300">With a size, shops and pack sizes can be compared for one ounce, pound or each.</p>}
       {line.assumed && <p className="text-xs text-gray-500 dark:text-life-300">This is last time's price, standing in. Saving it here records it as what you paid today.</p>}
       <div className="flex items-center justify-between">
         <button type="button" onClick={() => onSave(null)} className="text-sm text-red-600 hover:underline">No price</button>
@@ -283,7 +300,7 @@ function CouponForm({ coupon, sign, lines, store, onDone }) {
           <select value={form.kind} onChange={set('kind')} className={inputClass}><option value="money">An amount ({sign})</option><option value="percent">A percentage (%)</option></select>
         </Field>
         <Field label={form.kind === 'money' ? `How much (${sign}) *` : 'How much (%) *'}><input required inputMode="decimal" value={form.value} onChange={set('value')} placeholder={form.kind === 'money' ? '2.00' : '10'} className={inputClass} /></Field>
-        <Field label="Only at"><input value={form.store} onChange={set('store')} placeholder="any shop" className={inputClass} /></Field>
+        <Field label="Only at"><input list="my-shops" value={form.store} onChange={set('store')} placeholder="any shop" className={inputClass} /></Field>
         <Field label="Good until"><input type="date" value={form.expires_on} onChange={set('expires_on')} className={inputClass} /></Field>
         <Field label="Code, if it has one"><input value={form.code} onChange={set('code')} className={inputClass} /></Field>
         <Field label="A note"><input value={form.note} onChange={set('note')} placeholder="in the app, in the drawer…" className={inputClass} /></Field>
@@ -308,20 +325,22 @@ function ScanGrocery({ open, sign, putAway, onChanged }) {
   const [text, setText] = useState('');
   const [which, setWhich] = useState('');
   const [name, setName] = useState('');
+  const [size, setSize] = useState('');
   const [done, setDone] = useState('');
   const [error, setError] = useState('');
-  const again = () => { setSeen(null); setProduct(null); setText(''); setWhich(''); setName(''); setError(''); setRound(round + 1); };
+  const again = () => { setSeen(null); setProduct(null); setText(''); setWhich(''); setName(''); setSize(''); setError(''); setRound(round + 1); };
   const look = useCallback(async (code) => {
     setDone(''); setError('');
     try {
       const { data } = await axios.get('/api/shopping/scan', { params: { code } });
       setSeen(data);
+      setSize(data.ingredient?.size || data.last?.amount || '');
       if (!data.ingredient) {
         // A new product: if looking groceries up is on, ask what it's called, to save typing.
         const { data: can } = await axios.get('/api/lookups').catch(() => ({ data: {} }));
         if (can.groceries) {
           const found = await axios.get('/api/lookups/product', { params: { code: data.barcode } }).then(({ data: d }) => d.product).catch(() => null);
-          if (found) { setProduct(found); setName(found.name); }
+          if (found) { setProduct(found); setName(found.name); setSize(found.size || ''); }
         }
       }
     } catch (err) { setError(errorMessage(err, "Couldn't look that up")); setSeen({ failed: true }); }
@@ -334,8 +353,9 @@ function ScanGrocery({ open, sign, putAway, onChanged }) {
     try {
       await axios.post(`/api/kitchen/grocery/${line.id}/tick`, { done: true, put_away: putAway });
       const cents = centsOf(text);
-      if (cents !== null) await axios.put(`/api/shopping/prices/${line.id}`, { cents, barcode });
-      else if (seen.last) await axios.put(`/api/shopping/prices/${line.id}`, { cents: seen.last.cents, assumed: true, barcode });
+      const bought = line.amount ? null : size.trim() || null;   // the list's own amount stands when it has one
+      if (cents !== null) await axios.put(`/api/shopping/prices/${line.id}`, { cents, barcode, size: bought });
+      else if (seen.last) await axios.put(`/api/shopping/prices/${line.id}`, { cents: seen.last.cents, assumed: true, barcode, size: bought });
       onChanged();
       setDone(`${line.label} is in the trolley${cents !== null ? ` at ${money(cents, sign)}` : seen.last ? ` (≈ ${money(seen.last.cents, sign)}, last time's price)` : ''}.`);
       again();
@@ -354,7 +374,7 @@ function ScanGrocery({ open, sign, putAway, onChanged }) {
     try {
       const line = which === '' ? await addToList(name) : { id: Number(which) };
       const label = product ? [product.name, product.brand, product.size].filter(Boolean).join(', ') : null;
-      setSeen((await axios.put('/api/shopping/scan', { code: seen.barcode, grocery_id: line.id, product: label })).data);
+      setSeen((await axios.put('/api/shopping/scan', { code: seen.barcode, grocery_id: line.id, product: label, size: size.trim() || null })).data);
     } catch (err) { setError(errorMessage(err, "Couldn't save that")); }
   };
 
@@ -370,13 +390,14 @@ function ScanGrocery({ open, sign, putAway, onChanged }) {
           </select>
         </Field>
         {which === '' && <Field label="What to call it on the list *"><input required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. coffee" className={inputClass} /></Field>}
+        <Field label="The size on the packet"><input value={size} onChange={(e) => setSize(e.target.value)} placeholder="30 oz, 400 g, 6" className={inputClass} /></Field>
         {which === '' && <p className="text-xs text-gray-500 dark:text-life-300">Use the everyday name ("coffee", not the brand), so recipes and the pantry know it as the same thing. It's added to the list.</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex items-center justify-end gap-2">{another}<button type="submit" className={buttonClass}>That's what it is</button></div>
       </form>
     );
   }
-  const what = <p className="text-sm text-gray-800 dark:text-life-50"><span className="font-medium">{seen.ingredient.name}</span>{seen.ingredient.product && <span className="block text-xs text-gray-500 dark:text-life-300">{seen.ingredient.product}</span>}</p>;
+  const what = <p className="text-sm text-gray-800 dark:text-life-50"><span className="font-medium">{seen.ingredient.name}</span>{(seen.ingredient.product || seen.ingredient.size) && <span className="block text-xs text-gray-500 dark:text-life-300">{[seen.ingredient.product, seen.ingredient.size].filter(Boolean).join(' · ')}</span>}</p>;
   const lastLine = seen.last && <p className="text-xs text-gray-500 dark:text-life-300">Last time {money(seen.last.cents, sign)}{seen.last.amount ? ` for ${seen.last.amount}` : ''}{seen.last.store ? ` at ${seen.last.store}` : ''}, {shortDay(seen.last.day)}.</p>;
   if (seen.line?.done) return <div className="space-y-3">{what}<p className="text-sm text-gray-600 dark:text-life-100">That's already in the trolley.</p>{lastLine}{another}</div>;
   if (!seen.line) {
@@ -395,7 +416,10 @@ function ScanGrocery({ open, sign, putAway, onChanged }) {
     <form onSubmit={(e) => { e.preventDefault(); inTrolley(seen.line, seen.barcode); }} className="space-y-3">
       {what}
       <p className="text-sm text-gray-600 dark:text-life-100">On the list{seen.line.amount ? `: ${seen.line.amount}` : ''}.</p>
-      <Field label={`What it costs (${sign})`}><input autoFocus inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} placeholder={seen.last ? (seen.last.cents / 100).toFixed(2) : 'price'} className={inputClass} /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label={`What it costs (${sign})`}><input autoFocus inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} placeholder={seen.last ? (seen.last.cents / 100).toFixed(2) : 'price'} className={inputClass} /></Field>
+        {!seen.line.amount && <Field label="Size"><input value={size} onChange={(e) => setSize(e.target.value)} placeholder="30 oz" className={inputClass} /></Field>}
+      </div>
       {lastLine}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex items-center justify-end gap-2">{another}<button type="submit" className={buttonClass}>In the trolley</button></div>

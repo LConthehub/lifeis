@@ -25,16 +25,21 @@ export function shoppingRoutes(db: Db): Route[] {
     }],
     ['PUT', at('/prices/:id'), async (c) => {
       if (!sent(c.body, 'cents')) throw notUnderstood('cents');
-      return { json: await mine(c).setPrice(c.id, read.maybeWhole(c.body, 'cents'), read.yesNo(c.body, 'assumed', false), read.maybeText(c.body, 'barcode')) };
+      return { json: await mine(c).setPrice(c.id, read.maybeWhole(c.body, 'cents'), read.yesNo(c.body, 'assumed', false), read.maybeText(c.body, 'barcode'), read.maybeText(c.body, 'size')) };
     }],
     // A grocery's barcode: what it is, teaching it, and forgetting it.
     ['GET', at('/scan'), async (c) => ({ json: await mine(c).scan(c.query.get('code') ?? '') })],
     ['PUT', at('/scan'), async (c) => {
       const line = read.maybeWhole(c.body, 'grocery_id');
       if (line === null) throw notUnderstood('grocery_id');
-      return { json: await mine(c).learn(read.text(c.body, 'code'), line, read.maybeText(c.body, 'product')) };
+      return { json: await mine(c).learn(read.text(c.body, 'code'), line, read.maybeText(c.body, 'product'), read.maybeText(c.body, 'size')) };
     }],
     ['DELETE', at('/scan'), async (c) => (await mine(c).forget(c.query.get('code') ?? ''), { status: 204 })],
+    // Your shops.
+    ['GET', at('/stores'), async (c) => ({ json: await mine(c).stores() })],
+    ['POST', at('/stores'), async (c) => ({ status: 201, json: await mine(c).addStore({ name: read.text(c.body, 'name'), note: read.maybeText(c.body, 'note') }) })],
+    ['PUT', at('/stores/:id'), async (c) => ({ json: await mine(c).updateStore(c.id, { name: read.text(c.body, 'name'), note: read.maybeText(c.body, 'note') }) })],
+    ['DELETE', at('/stores/:id'), async (c) => ({ json: await mine(c).removeStore(c.id) })],
     // Prices over time.
     ['GET', at('/trends'), async (c) => ({ json: { currency: (await mine(c).summary()).currency, trends: await mine(c).trends(), spending: await mine(c).spending() } })],
     ['GET', at('/prices/:id/history'), async (c) => ({ json: await mine(c).history(c.id) })],

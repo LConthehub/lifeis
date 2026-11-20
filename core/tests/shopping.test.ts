@@ -46,7 +46,7 @@ it('prices add up as things go in the trolley, in whole cents', async () => {
   await k.tickGrocery(bread, { done: true, put_away: false });
   s = await shop.setPrice(bread, 20);
   expect([s.store, s.totals.trolley_cents, s.totals.to_pay_cents, s.totals.left_unknown]).toEqual(['Aldi', 728, 728, 0]);
-  expect(s.lines.find((l) => l.id === chicken)).toEqual({ id: chicken, price_cents: 698, assumed: false, last: null, coupons: [] });
+  expect(s.lines.find((l) => l.id === chicken)).toEqual({ id: chicken, price_cents: 698, size: '2 lb', assumed: false, last: null, coupons: [] });
 
   // A price is replaced, not added to; and can be taken away again.
   s = await shop.setPrice(chicken, 649);
@@ -175,7 +175,7 @@ it('a product is taught once by its barcode, and found on the list ever after', 
 
   expect(await shop.scan('0 25500-00027 6')).toEqual({ barcode: '0025500000276', ingredient: null, line: null, last: null }); // never seen
   let seen = await shop.learn('025500000276', coffee, 'Folgers Classic Roast 30 oz');
-  expect(seen).toEqual({ barcode: '0025500000276', ingredient: { id: expect.any(Number), name: expect.stringMatching(/coffee/i), product: 'Folgers Classic Roast 30 oz' },
+  expect(seen).toEqual({ barcode: '0025500000276', ingredient: { id: expect.any(Number), name: expect.stringMatching(/coffee/i), product: 'Folgers Classic Roast 30 oz', size: '' },
     line: { id: coffee, label: expect.stringMatching(/coffee/i), amount: '', done: false }, last: null });
   // The 12-digit and 13-digit forms of the same code are one barcode.
   expect((await shop.scan('0025500000276')).line!.id).toBe(coffee);
@@ -237,4 +237,82 @@ it('prices are followed over time, like for like, and spending by the month', as
   expect(await shop.spending()).toEqual([{ month: '2046-03', cents: 798 + 349 + 349 + 1200, lines: 4 }, { month: '2046-02', cents: 1495 + 329, lines: 2 }, { month: '2046-01', cents: 698, lines: 1 }]);
   expect(await shop.spending(1)).toHaveLength(1);
   expect(await shopping(db, await person('other'), clock).trends()).toEqual([]);
+});
+
+it('shops are a list of your own, spelt one way', async () => {
+  expect([(await shop.summary()).stores, await shop.stores()]).toEqual([[], []]);
+  await shop.setStore('Aldi'); // a shop typed for the first time joins the list
+  await shop.addStore({ name: 'Costco', note: 'needs the card' });
+  expect((await shop.setStore('aldi')).store).toBe('Aldi'); // however it's typed later, it's the same shop
+  expect((await shop.summary()).stores).toEqual(['Aldi', 'Costco']);
+  await expect(shop.addStore({ name: 'ALDI' })).rejects.toEqual(problem(409));
+  await expect(shop.addStore({ name: ' ' })).rejects.toEqual(problem(400));
+
+  await k.addGrocery({ label: 'milk' });
+  const milk = await idOf('milk');
+  await k.tickGrocery(milk, { done: true, put_away: false });
+  await shop.setPrice(milk, 329);
+  await shop.addCoupon({ label: '$1 off', cents_off: 100, store: 'Aldi' });
+  let list = await shop.stores();
+  expect(list.map((s) => [s.name, s.note, s.prices, s.last_on])).toEqual([['Aldi', null, 1, '2046-03-05'], ['Costco', 'needs the card', 0, null]]);
+
+  // Renamed, its prices, its coupons and today's shop all follow.
+  list = await shop.updateStore(list[0]!.id, { name: 'Aldi Süd' });
+  const s = await shop.summary();
+  expect([s.store, s.stores, s.coupons[0]!.store, (await shop.history(milk))[0]!.store, list[0]!.prices]).toEqual(['Aldi Süd', ['Aldi Süd', 'Costco'], 'Aldi Süd', 'Aldi Süd', 1]);
+  await expect(shop.updateStore(list[0]!.id, { name: 'costco' })).rejects.toEqual(problem(409));
+  await expect(shop.updateStore(9999, { name: 'Nowhere' })).rejects.toEqual(problem(404));
+
+  // Taken off the list, what was paid there is still known.
+  expect((await shop.removeStore(list[0]!.id)).map((x) => x.name)).toEqual(['Costco']);
+  expect((await shop.history(milk))[0]!.store).toBe('Aldi Süd');
+  expect(await shopping(db, await person('other'), clock).stores()).toEqual([]);
+});
+
+it('the size bought goes with the price, so a bag and a tin compare for one ounce', async () => {
+  const buy = async (label: string, price: number, at: Date, store: string, size?: string, barcode?: string) => {
+    time = at;
+    await shop.setStore(store);
+    await k.addGrocery({ label });
+    const id = (await k.listGrocery()).find((g) => !g.done)!.id;
+    await k.tickGrocery(id, { done: true, put_away: false });
+    const s = await shop.setPrice(id, price, false, barcode, size);
+    await k.clearDone();
+    return s.lines.find((l) => l.id === id)!;
+  };
+  // The list only says "coffee"; the size is what was picked up.
+  expect((await buy('coffee', 899, new Date(2046, 0, 10), 'Aldi', '30 oz')).size).toBe('30 oz');
+  expect((await buy('coffee', 549, new Date(2046, 1, 14), 'Hy-Vee', '12 oz')).size).toBe('12 oz');
+  expect((await buy('coffee', 1299, new Date(2046, 2, 5), 'Costco', '3 lb')).size).toBe('3 lb');
+
+  const [coffee] = await shop.trends();
+  // Every price worked out for one pound, the newest one's measure: the big tin wins.
+  expect([coffee!.basis, coffee!.per, coffee!.points.map((p) => [p.amount, p.per_cents])]).toEqual(['per', 'lb', [['30 oz', 479], ['12 oz', 732], ['3 lb', 433]]]);
+  expect([coffee!.lowest.store, coffee!.highest.store, coffee!.change_cents]).toEqual(['Costco', 'Hy-Vee', 433 - 732]);
+  expect(coffee!.shops.map((p) => [p.store, p.per_cents])).toEqual([['Costco', 433], ['Aldi', 479], ['Hy-Vee', 732]]); // by shop, cheapest first
+
+  // No size typed: the amount on the list is the size; with none there, the same pack as last time.
+  expect((await buy('2 lb chicken thighs', 698, new Date(2046, 2, 6), 'Aldi')).size).toBe('2 lb');
+  expect((await buy('coffee', 1349, new Date(2046, 2, 12), 'Costco')).size).toBe('3 lb');
+
+  // A packet's own size is learned with its barcode, and used when it's scanned.
+  time = new Date(2046, 2, 13);
+  await k.addGrocery({ label: 'rice' });
+  const rice = (await k.listGrocery()).find((g) => !g.done)!.id;
+  expect((await shop.learn('4006381333931', rice, 'Jasmine rice', '2 kg')).ingredient!.size).toBe('2 kg');
+  await k.tickGrocery(rice, { done: true, put_away: false });
+  expect((await shop.setPrice(rice, 500, false, '4006381333931')).lines.find((l) => l.id === rice)!.size).toBe('2 kg');
+  await k.clearDone();
+  await buy('rice', 150, new Date(2046, 2, 14), 'Aldi', '500 g');
+  const riceTrend = (await shop.trends()).find((t) => /rice/i.test(t.name))!;
+  expect([riceTrend.per, riceTrend.points.map((p) => p.per_cents)]).toEqual(['100 g', [25, 30]]); // grams are priced by the hundred
+
+  // Weight against volume, or a size against none, can't be compared: those fall back to the price as bought.
+  await buy('oil', 500, new Date(2046, 2, 15), 'Aldi', '1 lb');
+  await buy('oil', 600, new Date(2046, 2, 16), 'Aldi', '2 cups');
+  const oil = (await shop.trends()).find((t) => /oil/i.test(t.name))!;
+  expect([oil.basis, oil.per, oil.change_cents]).toEqual(['line', null, 100]);
+
+  await k.addGrocery({ label: 'tea' });
+  await expect(shop.setPrice((await k.listGrocery()).find((g) => !g.done)!.id, 300, false, null, 'a big one')).rejects.toEqual(problem(400));
 });

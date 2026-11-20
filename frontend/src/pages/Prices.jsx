@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
-import Modal, { cardClass, fromDateInput } from '../components/ui';
+import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, fromDateInput } from '../components/ui';
 
 const money = (cents, sign) => `${cents < 0 ? '−' : ''}${sign}${(Math.abs(cents) / 100).toFixed(2)}`;
 const valueOf = (p, t) => (t.basis === 'per' ? p.per_cents : p.cents);
@@ -14,6 +14,9 @@ export default function Prices() {
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(null);
   useEffect(() => { axios.get('/api/shopping/trends').then(({ data: d }) => setData(d)).catch(() => setData({ currency: '$', trends: [], spending: [] })); }, []);
+  const [shops, setShops] = useState([]);
+  const [shop, setShop] = useState(null);
+  useEffect(() => { axios.get('/api/shopping/stores').then(({ data: d }) => setShops(d)).catch(() => {}); }, []);
   if (!data) return null;
   const sign = data.currency;
   return (
@@ -70,6 +73,25 @@ export default function Prices() {
           <p className="text-xs text-gray-500 dark:text-life-300">Where a thing was always bought by the same measure (2 lb, 5 lb), its prices are compared for one of that measure. Otherwise by the price as bought.</p>
         </>
       )}
+      <section className={cardClass}>
+        <div className="mb-2 flex items-baseline gap-2">
+          <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">Your shops</h2>
+          <button type="button" onClick={() => setShop({})} className="text-sm text-life-600 hover:underline dark:text-life-200">+ Add a shop</button>
+        </div>
+        {shops.length === 0 ? <p className="text-sm text-gray-400 dark:text-life-400">None yet. Add the shops you use, or just type one in "Shopping at" on the grocery list and it joins this list.</p> : (
+          <ul className="divide-y divide-life-50 dark:divide-life-700">
+            {shops.map((s) => (
+              <li key={s.id}>
+                <button type="button" onClick={() => setShop(s)} className="flex w-full items-baseline gap-2 py-1.5 text-left text-sm hover:underline">
+                  <span className="flex-1 text-gray-800 dark:text-life-50">{s.name}{s.note && <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{s.note}</span>}</span>
+                  <span className="text-xs text-gray-500 dark:text-life-300">{s.prices === 0 ? 'no prices yet' : `${s.prices} ${s.prices === 1 ? 'price' : 'prices'}, last ${dayText(s.last_on, false)}`}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      {shop && <Modal title={shop.id ? shop.name : 'A shop'} onClose={() => setShop(null)}><ShopForm shop={shop} onDone={(list) => { setShops(list); setShop(null); axios.get('/api/shopping/trends').then(({ data: d }) => setData(d)).catch(() => {}); }} /></Modal>}
       {open && <Modal title={open.name} wide onClose={() => setOpen(null)}><TrendView trend={open} sign={sign} /></Modal>}
     </div>
   );
@@ -89,6 +111,20 @@ function TrendView({ trend: t, sign }) {
         {t.basis === 'per' ? `Price for one ${t.per}.` : 'Price as bought.'} {t.times > 1 && <>Cheapest was {priced(t.lowest, t, sign)}{t.lowest.store ? ` at ${t.lowest.store}` : ''} on {dayText(t.lowest.day)}.</>}
       </p>
       {t.points.length > 1 && <PriceChart trend={t} sign={sign} />}
+      {t.shops.length > 1 && (
+        <div>
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-life-700 dark:text-life-200">By shop, latest price at each</h3>
+          <ul className="flex flex-wrap gap-2">
+            {t.shops.map((p, i) => (
+              <li key={p.store} className="rounded-lg bg-life-50/70 px-3 py-1.5 text-sm dark:bg-life-700/60">
+                <span className="text-gray-800 dark:text-life-50">{p.store}</span> <span className="font-semibold tabular-nums text-life-700 dark:text-life-50">{priced(p, t, sign)}</span>
+                {i === 0 && <span className="ml-1 rounded bg-life-100 px-1.5 text-[11px] text-life-700">cheapest</span>}
+                <span className="block text-[11px] text-gray-500 dark:text-life-300">{dayText(p.day)}{p.amount ? ` · ${p.amount}` : ''}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <table className="w-full text-sm">
         <caption className="sr-only">Every price, newest first</caption>
         <thead><tr className="text-left text-xs text-gray-500 dark:text-life-300"><th scope="col" className="py-1 font-medium">Day</th><th scope="col" className="py-1 font-medium">Where</th><th scope="col" className="py-1 text-right font-medium">Paid</th>{t.basis === 'per' && <th scope="col" className="py-1 text-right font-medium">For one {t.per}</th>}</tr></thead>
@@ -164,5 +200,28 @@ function PriceChart({ trend: t, sign }) {
       )}
       <figcaption className="sr-only">Every figure is in the table below.</figcaption>
     </figure>
+  );
+}
+
+function ShopForm({ shop, onDone }) {
+  const [form, setForm] = useState({ name: shop.name || '', note: shop.note || '' });
+  const [error, setError] = useState('');
+  const submit = async (e) => {
+    e.preventDefault();
+    const body = { name: form.name, note: form.note || null };
+    try { onDone((shop.id ? await axios.put(`/api/shopping/stores/${shop.id}`, body) : await axios.post('/api/shopping/stores', body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+  };
+  const remove = async () => onDone((await axios.delete(`/api/shopping/stores/${shop.id}`)).data);
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <Field label="Its name *"><input required autoFocus={!shop.id} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Aldi on Main St" className={inputClass} /></Field>
+      <Field label="A note"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="needs the card, closes at 8…" className={inputClass} /></Field>
+      {shop.id && <p className="text-xs text-gray-500 dark:text-life-300">Renaming it renames it on every price and coupon. Removing it only takes it off this list: what you paid there stays.</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex items-center justify-between">
+        {shop.id ? <button type="button" onClick={remove} className={quietButtonClass}>Take off the list</button> : <span />}
+        <button type="submit" className={buttonClass}>Save</button>
+      </div>
+    </form>
   );
 }
