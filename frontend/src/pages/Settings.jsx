@@ -111,6 +111,7 @@ function OutsideServices() {
       <div className="divide-y divide-life-100 dark:divide-life-700">
         <WeatherService />
         <MailService />
+        <BookLookupService />
         <div className="py-3">
           <h3 className="font-medium text-gray-800 dark:text-life-50">📺 Your Jellyfin or Emby</h3>
           <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Brings the films, shows, music and books on a media server you name into your collection. Life Is only reads from that server, using the key you give it, and talks to nowhere else.</p>
@@ -281,6 +282,27 @@ function MailService() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function BookLookupService() {
+  const [l, setL] = useState(null);
+  useEffect(() => { axios.get('/api/lookups').then(({ data }) => setL(data)).catch(() => {}); }, []);
+  if (!l) return null;
+  const turn = async (books) => { const { data } = await axios.put('/api/lookups', { books }); setL(data); };
+  return (
+    <div className="py-3">
+      <div className="flex items-baseline gap-2">
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">📚 Look up books when you scan them</h3>
+        <span className={`rounded px-1.5 text-[11px] ${l.books ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.books ? 'On' : 'Off'}</span>
+      </div>
+      <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
+        Scan a book you don't have yet and its title and author are filled in for you to check, from <a href={l.service.site} target="_blank" rel="noreferrer" className="underline">{l.service.name}</a>.
+        {' '}<span className="font-medium">What it's sent:</span> {l.service.sends}
+      </p>
+      {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p>
+        : <button type="button" onClick={() => turn(!l.books)} className={`${quietButtonClass} mt-2`}>{l.books ? 'Turn off' : 'Turn on'}</button>}
     </div>
   );
 }

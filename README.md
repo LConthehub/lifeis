@@ -45,6 +45,8 @@ each off until you turn it on, each saying exactly what it sends:
   the password you give (for most providers an "app password"), stored locked. No message is ever kept: the inbox
   is read when you look. Opening a message doesn't mark it read. The line is always encrypted, and the account is
   only saved if signing in works.
+- **Looking a book up when you scan it**, from [Open Library](https://openlibrary.org) (no account, no key). It is
+  sent the number under the book's barcode and nothing else; what comes back is yours to check before saving.
 - **Your Jellyfin or Emby**, read-only, at the address you give.
 
 ## It asks what you need

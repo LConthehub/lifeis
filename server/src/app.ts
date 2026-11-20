@@ -7,7 +7,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BlockList, isIP } from 'node:net';
-import { atomic, home, kitchen, life, Problem, weather, WEATHER_SERVICE, type Db, type Kitchen } from '../../core/src/index.ts';
+import { atomic, home, kitchen, life, Problem, lookups, BOOK_SERVICE, weather, WEATHER_SERVICE, type Db, type Kitchen } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
 import { mailRoutes, type MailTools } from './mailRoutes.ts';
 import { notUnderstood, queryNumber, read, readBody, Refusal, type Body, type Context, type Reply, type Route } from './http.ts';
@@ -126,6 +126,7 @@ export function createApp(options: Options) {
   /** How outside services are asked. Without it (no `reach`), none can be turned on. */
   const outside = options.reach?.fetcher;
   const skies = (c: Context) => weather(db, c.user.id, c.clock, outside);
+  const finder = (c: Context) => lookups(db, c.user.id, c.clock, outside);
 
   const routes: Route[] = [
     ['GET', /^\/api\/health$/, async () => ({ json: { status: 'ok' } })],
@@ -225,6 +226,10 @@ export function createApp(options: Options) {
       if (latitude === null || longitude === null) throw notUnderstood('latitude');
       return { json: { ...await skies(c).turnOn({ name: read.text(c.body, 'name'), latitude, longitude, units: read.maybeText(c.body, 'units') }), service: WEATHER_SERVICE } };
     }],
+    // Looking a book up from its barcode: an outside service too, off until turned on. See core/'s lookups.ts.
+    ['GET', /^\/api\/lookups$/, async (c) => ({ json: { ...await finder(c).status(), service: BOOK_SERVICE } })],
+    ['PUT', /^\/api\/lookups$/, async (c) => ({ json: { ...await finder(c).setBooks(read.yesNo(c.body, 'books')), service: BOOK_SERVICE } })],
+    ['GET', /^\/api\/lookups\/book$/, async (c) => ({ json: { book: await finder(c).book(c.query.get('code') ?? '') } })],
     ['DELETE', /^\/api\/weather$/, async (c) => ({ json: { ...await skies(c).turnOff(), service: WEATHER_SERVICE } })],
 
     // What the person wants Life Is to look after: asked once, theirs to change.
