@@ -16,7 +16,7 @@
 import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { placePaths, setAsideByItem } from './inventory.ts';
 import { Problem } from './problem.ts';
-import { clean, dayNumber, dayOrNull, localDay, rounded, stamp, type Clock } from './small.ts';
+import { clean, dayNumber, dayOrNull, rounded, stamp, todayOf, type Clock } from './small.ts';
 import * as units from './units.ts';
 
 export const STATUSES = ['idea', 'planned', 'active', 'paused', 'done', 'dropped'] as const;
@@ -102,7 +102,7 @@ const PROJECT_COLUMNS = 'id, name, activity, status, notes, due_on, started_on, 
 
 export function projects(db: Db, owner: number, clock: Clock = () => new Date()) {
   const now = () => stamp(clock());
-  const today = () => localDay(clock());
+  const today = () => todayOf(clock);
 
   async function projectRow(q: Queries, id: number): Promise<ProjectRow> {
     const row = await q.get<ProjectRow>(`SELECT ${PROJECT_COLUMNS} FROM projects WHERE id = ? AND owner_id = ?`, [id, owner]);

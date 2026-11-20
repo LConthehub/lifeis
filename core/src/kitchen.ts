@@ -19,7 +19,7 @@ import type {
   RecipeInput, RecipeLine, RecipeSummary,
 } from './kitchenTypes.ts';
 import { Problem } from './problem.ts';
-import { addDays, clean, dayNumber, inOrder, localDay, rounded, stamp, type Clock } from './small.ts';
+import { addDays, clean, dayNumber, inOrder, rounded, stamp, todayOf, type Clock } from './small.ts';
 import { cut, folderName, linesAsText, readImport, splitLines, TEXT_LIMIT, toSchemaOrg, type TextLine } from './recipeText.ts';
 import * as units from './units.ts';
 
@@ -35,7 +35,7 @@ type GroceryRow = Omit<GroceryItem, 'done' | 'from_plan' | 'amount'> & { done: n
 
 export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) {
   const now = () => stamp(clock());
-  const today = () => localDay(clock());
+  const today = () => todayOf(clock);
 
   // ==================== INGREDIENTS ====================
 

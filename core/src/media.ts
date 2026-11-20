@@ -14,7 +14,7 @@
 import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { placePaths } from './inventory.ts';
 import { Problem } from './problem.ts';
-import { clean, dayNumber, dayOrNull, inOrder, labelKey, stamp, type Clock } from './small.ts';
+import { clean, dayNumber, dayOrNull, inOrder, labelKey, stamp, todayOf, type Clock } from './small.ts';
 
 export const MEDIA_TYPES = ['film', 'show', 'music', 'book', 'game', 'other'] as const;
 export type MediaType = (typeof MEDIA_TYPES)[number];
@@ -186,7 +186,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
       throw new Problem(404, "That place isn't there to put it in");
     }
     const lentTo = clean(input.lent_to, 100);
-    const lentOn = lentTo ? (dayOrNull(input.lent_on) ?? now().slice(0, 10)) : null;
+    const lentOn = lentTo ? (dayOrNull(input.lent_on) ?? todayOf(clock)) : null;
     return [format, input.place_id ?? null, clean(input.barcode, 40), lentTo, lentOn, clean(input.note, 1000)];
   }
 

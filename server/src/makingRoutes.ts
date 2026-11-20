@@ -3,7 +3,6 @@
  * What they do is core/'s inventory.ts and projects.ts; this only reads what was sent and passes it on.
  */
 import { inventory, projects, type Db, type FieldInput, type FieldType } from '../../core/src/index.ts';
-import type * as auth from './auth.ts';
 import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -34,9 +33,9 @@ const lineFrom = (body: Body) => ({
 /** Whether a field was sent at all: left out means "leave it as it is", where null means "clear it". */
 const sent = (body: Body, name: string) => Object.hasOwn(body, name);
 
-export function makingRoutes(db: Db, clock: auth.Clock): Route[] {
-  const things = (c: Context) => inventory(db, c.user.id, clock);
-  const making = (c: Context) => projects(db, c.user.id, clock);
+export function makingRoutes(db: Db): Route[] {
+  const things = (c: Context) => inventory(db, c.user.id, c.clock);
+  const making = (c: Context) => projects(db, c.user.id, c.clock);
 
   return [
     // ==================== THE THINGS YOU KEEP ====================

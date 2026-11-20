@@ -10,17 +10,29 @@ import Settings from './pages/Settings';
 import Things, { KindsPage, PlacesPage } from './pages/Things';
 import Projects, { ProjectPage } from './pages/Projects';
 import { LifeFirstRun } from './components/LifeAreas';
+import Calendar from './pages/Calendar';
+import MediaPage, { MediaTitlePage } from './pages/Media';
 
 axios.defaults.withCredentials = true;
+// The server keeps time in UTC, so each request says what day it is here. Without it, something finished at
+// nine in the evening would be dated tomorrow.
+axios.interceptors.request.use((config) => {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  config.headers['X-Local-Day'] = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return config;
+});
 
 // Life is… each section finishes the sentence, and has its own few pages.
 const SECTIONS = [
-  { word: 'eating', home: '/', owns: (path) => !path.startsWith('/things') && !path.startsWith('/projects') && path !== '/settings',
+  { word: 'eating', home: '/', owns: (path) => ['/', '/week', '/groceries', '/pantry'].includes(path) || path.startsWith('/recipes/'),
     tabs: [['/', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫']] },
+  { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar'), tabs: [['/calendar', 'Calendar', '📅']] },
   { word: 'keeping', home: '/things', owns: (path) => path.startsWith('/things'),
     tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/kinds', 'Kinds', '🏷']] },
   { word: 'making', home: '/projects', owns: (path) => path.startsWith('/projects'),
     tabs: [['/projects', 'Projects', '🧵']] },
+  { word: 'enjoying', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection', '🎞']] },
 ];
 
 export default function App() {
@@ -99,6 +111,9 @@ function Shell({ user, onLogout }) {
           <Route path="/things/places" element={<PlacesPage />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectPage />} />
+          <Route path="/calendar" element={<Calendar />} />
+          <Route path="/media" element={<MediaPage />} />
+          <Route path="/media/:id" element={<MediaTitlePage />} />
           <Route path="/settings" element={<Settings user={user} onLogout={onLogout} onLifeChanged={setLife} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

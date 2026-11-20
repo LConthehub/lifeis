@@ -22,7 +22,7 @@ const SCRYPT = { N: 2 ** 14, r: 8, p: 1 };
 const MAX_SCRYPT_MEMORY = 256 * 1024 * 1024;
 
 export type User = { id: number; username: string; is_admin: boolean };
-export type Clock = () => Date;
+export type Clock = (() => Date) & { today?: () => string };
 
 const stamp = (at: Date) => at.toISOString().slice(0, 19) + '+00:00';
 

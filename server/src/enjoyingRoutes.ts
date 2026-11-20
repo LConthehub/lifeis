@@ -3,7 +3,6 @@
  * (/api/media). What they do is core/'s calendar.ts and media.ts; this only reads what was sent and passes it on.
  */
 import { calendar, media, type Db } from '../../core/src/index.ts';
-import type * as auth from './auth.ts';
 import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -33,9 +32,9 @@ const copyFrom = (body: Body) => ({
   lent_to: read.maybeText(body, 'lent_to'), lent_on: read.maybeText(body, 'lent_on'), note: read.maybeText(body, 'note'),
 });
 
-export function enjoyingRoutes(db: Db, clock: auth.Clock): Route[] {
-  const dates = (c: Context) => calendar(db, c.user.id, clock);
-  const shelf = (c: Context) => media(db, c.user.id, clock);
+export function enjoyingRoutes(db: Db): Route[] {
+  const dates = (c: Context) => calendar(db, c.user.id, c.clock);
+  const shelf = (c: Context) => media(db, c.user.id, c.clock);
 
   return [
     // ==================== THE CALENDAR ====================

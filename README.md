@@ -3,7 +3,7 @@
 Life is chaotic, unorganised and overwhelming sometimes. Life Is helps put it back on track: a planner for everyday
 life that runs on your own computer, with your records kept there, encrypted.
 
-It starts with the kitchen, the things you keep, and the projects that use them.
+So far: the kitchen, the calendar, the things you keep, the projects that use them, and what you watch, read and hear.
 
 ## The kitchen
 
@@ -45,6 +45,20 @@ time in Settings; unticking something only puts it out of sight.
   out of what you keep.
 - **The days you worked on it**, how long, and what you watched or listened to.
 
+## The calendar
+
+- **One place to see what's on each day.** Your own dates (a day or several, with a time if it has one), with
+  the week's meals, the time on projects and the days they're wanted by, what's about to go off in the pantry,
+  and what you watched, read or heard. Each of those leads back to the page it lives on.
+
+## Films, shows, music, books and games
+
+- **A title, and your copies of it.** Alien on VHS and on Blu-ray is one film with two copies, each in its own
+  place, each lent out or at home. A format is any word you like: Betamax, 8-track, vinyl, paperback.
+- **What you'd like to have.** A title with no copy can be marked as wanted.
+- **What you've watched, read and heard**, by day. Add a film to the time on a project and "watched Alien while
+  sewing" shows from the project, from the film, and on the calendar.
+
 ## Try it
 
 You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows or Mac) or Docker (Linux).
@@ -64,7 +78,8 @@ Your records are kept by Docker, encrypted. **Never run `docker compose down -v`
 
 - `core/`: the kitchen, in TypeScript, written so the same code runs on the server, in the browser and inside a
   phone app. `kitchen.ts` is the kitchen, `units.ts` reads amounts and converts units, `recipeText.ts` reads
-  and writes recipes, `inventory.ts` is the things you keep, `projects.ts` the projects, `migrations.ts` the database's shape (a
+  and writes recipes, `inventory.ts` is the things you keep, `projects.ts` the projects, `calendar.ts` the calendar, `media.ts` the
+  collection, `life.ts` what each person asked for, `migrations.ts` the database's shape (a
   shipped migration is never edited). It reaches
   the database only through the small `Db` interface in `db.ts`, which each place Life Is runs supplies.
 - `server/`: the program, on Node 24 with no build step: sign-in, the web addresses the pages call, and an

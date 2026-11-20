@@ -25,6 +25,8 @@ export type Context = {
   /** The signed-in person. On the public addresses, where nobody may be signed in, this is never read. */
   user: auth.User;
   kitchen: Kitchen;
+  /** The time, and the day where the person is. */
+  clock: auth.Clock;
   token: string | undefined;
   ip: string;
   https: boolean;

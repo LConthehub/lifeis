@@ -427,6 +427,26 @@ it('the collection and the calendar answer over the web', async () => {
   expect((await admin.delete(`/api/media/${alien.id}`)).status).toBe(204);
 });
 
+it('days are the person\'s own, not the server\'s', async () => {
+  const admin = await owner();
+  time = new Date('2046-03-05T03:00:00Z'); // three in the morning in UTC: still the evening of the 4th in Chicago
+  expect((await admin.post('/api/auth/login', { username: 'owner', password: PASSWORD })).status).toBe(200);
+  const evening = { 'X-Local-Day': '2046-03-04' };
+  const finish = async (name: string, headers?: Record<string, string>) => {
+    const made = (await admin.post('/api/projects', { name, status: 'active' }, headers)).json;
+    return [made.started_on, (await admin.put(`/api/projects/${made.id}`, { name, status: 'done' })).json.finished_on, made.created_at];
+  };
+  // The day comes from the person; the moment is always the server's.
+  expect((await finish('Evening sewing', evening))[0]).toBe('2046-03-04');
+  expect((await finish('Evening sewing 2', evening))[2]).toBe('2046-03-05T03:00:00+00:00');
+  const film = (await admin.post('/api/media', { type: 'film', title: 'Alien', copy: { format: 'VHS', lent_to: 'Sam' } }, evening)).json;
+  expect(film.copies[0].lent_on).toBe('2046-03-04');
+  // A day that can't be right anywhere on Earth is ignored, and so is one that isn't a day.
+  for (const wrong of ['2046-03-02', '1999-01-01', 'yesterday', '2046-03-06T22:00']) {
+    expect((await finish(`Sent ${wrong}`, { 'X-Local-Day': wrong }))[0], wrong).not.toBe(wrong.slice(0, 10));
+  }
+});
+
 it('a database from before things and projects is upgraded, with a copy saved first', async () => {
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });

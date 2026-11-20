@@ -195,10 +195,10 @@ export function createApp(options: Options) {
     }],
 
     // What the person wants Life Is to look after: asked once, theirs to change.
-    ['GET', /^\/api\/life$/, async (c) => ({ json: await life(db, c.user.id, clock).getProfile() })],
+    ['GET', /^\/api\/life$/, async (c) => ({ json: await life(db, c.user.id, c.clock).getProfile() })],
     ['PUT', /^\/api\/life$/, async (c) => {
       if (!Array.isArray(c.body.areas)) throw notUnderstood('areas');
-      return { json: await life(db, c.user.id, clock).saveProfile(read.texts(c.body, 'areas')) };
+      return { json: await life(db, c.user.id, c.clock).saveProfile(read.texts(c.body, 'areas')) };
     }],
 
     // ==================== THE KITCHEN ====================
@@ -220,7 +220,7 @@ export function createApp(options: Options) {
     ['PUT', /^\/api\/kitchen\/recipes\/(\d{1,15})$/, async (c) => ({ json: await c.kitchen.updateRecipe(c.id, recipeFrom(c.body)) })],
     ['DELETE', /^\/api\/kitchen\/recipes\/(\d{1,15})$/, async (c) => (await c.kitchen.deleteRecipe(c.id), { status: 204 })],
     ['GET', /^\/api\/kitchen\/recipes-export\.zip$/, async (c) => ({
-      body: zip(await c.kitchen.exportRecipes(), clock()),
+      body: zip(await c.kitchen.exportRecipes(), c.clock()),
       headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="lifeis-recipes.zip"' },
     })],
 
@@ -261,9 +261,23 @@ export function createApp(options: Options) {
       ({ json: await c.kitchen.tickGrocery(c.id, { done: read.yesNo(c.body, 'done'), put_away: read.yesNo(c.body, 'put_away', true) }) })],
     ['DELETE', /^\/api\/kitchen\/grocery\/(\d{1,15})$/, async (c) => (await c.kitchen.deleteGrocery(c.id), { status: 204 })],
 
-    ...makingRoutes(db, clock),
-    ...enjoyingRoutes(db, clock),
+    ...makingRoutes(db),
+    ...enjoyingRoutes(db),
   ];
+
+  /**
+   * The clock for one request: the server's time, and the day where the person is. The pages send their day
+   * (X-Local-Day). It is believed only when it's the server's day or a neighbour of it, which is as far as
+   * any two places on Earth can differ; anything else is ignored.
+   */
+  function clockFor(req: IncomingMessage): auth.Clock {
+    const said = String(req.headers['x-local-day'] ?? '');
+    const here = Date.UTC(Number(said.slice(0, 4)), Number(said.slice(5, 7)) - 1, Number(said.slice(8, 10)));
+    const server = clock();
+    const serverDay = Date.UTC(server.getUTCFullYear(), server.getUTCMonth(), server.getUTCDate());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(said) || !(Math.abs(here - serverDay) <= 86_400_000)) return clock;
+    return Object.assign(() => clock(), { today: () => said });
+  }
 
   async function answerApi(req: IncomingMessage, url: URL, path: string): Promise<Reply> {
     const method = req.method ?? 'GET';
@@ -282,9 +296,10 @@ export function createApp(options: Options) {
     const route = here.find(([m]) => m === method);
     if (!route) throw new Refusal(405, 'Method not allowed');
     const signedIn = user ?? { id: 0, username: '', is_admin: false };
+    const theirClock = clockFor(req);
     return route[2]({
       req, query: url.searchParams, id: Number(route[1].exec(path)![1] ?? 0), body: SAFE_METHODS.has(method) ? {} : await readBody(req),
-      user: signedIn, kitchen: kitchen(db, signedIn.id, clock), token, ip: clientIp(req), https: isHttps(req), local: isLocal(req),
+      user: signedIn, kitchen: kitchen(db, signedIn.id, theirClock), clock: theirClock, token, ip: clientIp(req), https: isHttps(req), local: isLocal(req),
     });
   }
 

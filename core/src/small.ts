@@ -2,8 +2,13 @@
 import { Problem } from './problem.ts';
 import { cut } from './recipeText.ts';
 
-/** What time it is. The tests give their own. */
-export type Clock = () => Date;
+/**
+ * What time it is. The tests give their own.
+ *
+ * A clock may also say what day it is where the person is (`today`). The server needs that: it keeps time in
+ * UTC, and at nine in the evening in Chicago its own date is already tomorrow.
+ */
+export type Clock = (() => Date) & { today?: () => string };
 
 const DAY = 86_400_000;
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -13,6 +18,9 @@ export const stamp = (at: Date) => at.toISOString().slice(0, 19) + '+00:00';
 
 /** The day where the person is, as 2046-03-05. */
 export const localDay = (at: Date) => `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
+
+/** Today where the person is: what the clock says if it knows, otherwise the day on this computer. */
+export const todayOf = (clock: Clock) => clock.today?.() ?? localDay(clock());
 
 /** A day as a count of days, so two can be taken apart. Refuses anything that isn't a real day. */
 export function dayNumber(day: string): number {

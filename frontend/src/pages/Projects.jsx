@@ -193,6 +193,11 @@ export function ProjectPage() {
                   <span className="flex-1">
                     <span className="block text-sm text-gray-800 dark:text-life-50">{s.day}{s.minutes != null ? ` · ${minutesText(s.minutes)}` : ''}</span>
                     {s.note && <span className="block text-xs text-gray-500 dark:text-life-300">{s.note}</span>}
+                    {s.media.length > 0 && (
+                      <span className="block text-xs text-gray-500 dark:text-life-300">with {s.media.map((m, i) => (
+                        <span key={m.id}>{i > 0 && ', '}<Link to={`/media/${m.id}`} className="underline">{m.title}</Link></span>
+                      ))}</span>
+                    )}
                   </span>
                   <button type="button" onClick={() => removeSession(s)} className="text-xs text-gray-400 hover:text-red-600" aria-label={`Remove the time on ${s.day}`}>✕</button>
                 </li>
@@ -256,11 +261,18 @@ function LineForm({ projectId, items, onDone }) {
 function SessionForm({ projectId, onDone }) {
   const [form, setForm] = useState({ day: toDateInput(new Date()), hours: '', minutes: '', note: '' });
   const [error, setError] = useState('');
+  // What kept the session company, from the collection: found by typing, ticked to add.
+  const [titles, setTitles] = useState([]);
+  const [chosen, setChosen] = useState([]);
+  const [find, setFind] = useState('');
+  useEffect(() => { axios.get('/api/media').then(({ data }) => setTitles(data)).catch(() => {}); }, []);
+  const word = find.trim().toLowerCase();
+  const offered = word ? titles.filter((m) => !chosen.includes(m.id) && [m.title, m.creator].some((v) => String(v ?? '').toLowerCase().includes(word))).slice(0, 6) : [];
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const submit = async (e) => {
     e.preventDefault();
     const total = form.hours === '' && form.minutes === '' ? null : Math.round(Number(form.hours || 0) * 60 + Number(form.minutes || 0));
-    try { onDone((await axios.post(`/api/projects/${projectId}/sessions`, { day: form.day, minutes: total, note: form.note || null })).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+    try { onDone((await axios.post(`/api/projects/${projectId}/sessions`, { day: form.day, minutes: total, note: form.note || null, media_ids: chosen })).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   return (
     <form onSubmit={submit} className="space-y-3">
@@ -269,7 +281,19 @@ function SessionForm({ projectId, onDone }) {
         <Field label="Hours"><input type="number" min="0" step="any" value={form.hours} onChange={set('hours')} className={inputClass} /></Field>
         <Field label="Minutes"><input type="number" min="0" step="1" value={form.minutes} onChange={set('minutes')} className={inputClass} /></Field>
       </div>
-      <Field label="What you did, watched or listened to"><input value={form.note} onChange={set('note')} placeholder="Cut out the bodice. Watched Alien." className={inputClass} /></Field>
+      <Field label="What you did"><input value={form.note} onChange={set('note')} placeholder="Cut out the bodice." className={inputClass} /></Field>
+      {titles.length > 0 && (
+        <div className="space-y-1">
+          <Field label="Watched or listened to meanwhile, from your collection"><input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Type a title" className={inputClass} /></Field>
+          {offered.map((m) => (
+            <button key={m.id} type="button" onClick={() => { setChosen([...chosen, m.id]); setFind(''); }} className="mr-1 rounded-full bg-white px-3 py-1 text-sm text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700">+ {m.title}{m.year ? ` (${m.year})` : ''}</button>
+          ))}
+          {chosen.map((id) => {
+            const m = titles.find((t) => t.id === id);
+            return <button key={id} type="button" onClick={() => setChosen(chosen.filter((c) => c !== id))} className="mr-1 rounded-full bg-life-600 px-3 py-1 text-sm text-white" aria-label={`Take off ${m?.title}`}>{m?.title} ✕</button>;
+          })}
+        </div>
+      )}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="text-right"><button type="submit" className={buttonClass}>Add</button></div>
     </form>
