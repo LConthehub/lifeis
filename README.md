@@ -112,6 +112,10 @@ time in Settings; unticking something only puts it out of sight.
   kept with the plan; one from your Immich library is only linked, and stays there.
 - **Look back, and do it again**: past plans stay, by year. "Do it again" starts next year's from last year's.
 
+- **Front page, plan cost, and just this shop.** The front page gains cards for plans coming up and coupons about to
+  run out (each only once you have one). A plan with recipes says roughly what its food will cost, going by the last
+  price of each ingredient. The grocery list, laid out by shop, can show just the shop you're in.
+
 ## The calendar
 
 - **One place to see what's on each day.** Your own dates (a day or several, with a time if it has one), with

@@ -195,6 +195,41 @@ export default function Home({ user }) {
           </Card>
         )}
 
+        {shows('plans') && (
+          <Card title="Plans coming up" to="/plans" link="All plans">
+            {s.plans.length === 0 ? <Quiet>Nothing planned in the next two months.</Quiet> : (
+              <ul className="space-y-1 text-sm">
+                {s.plans.map((p) => (
+                  <li key={p.id}>
+                    <Link to={`/plans/${p.id}`} className="flex items-baseline gap-2 hover:underline">
+                      <span aria-hidden="true">✨</span>
+                      <span className="flex-1 text-gray-800 dark:text-life-50">{p.name}</span>
+                      <span className="text-xs text-gray-500 dark:text-life-300">{p.days_until === 0 ? (p.end_day === today ? 'today' : 'now') : inDays(p.start_day, today)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        )}
+
+        {shows('coupons') && (
+          <Card title="Coupons about to run out" to="/groceries" link="Groceries">
+            {s.coupons.soon.length === 0 ? <Quiet>None run out this week.</Quiet> : (
+              <ul className="space-y-1 text-sm">
+                {s.coupons.soon.map((c) => (
+                  <li key={c.id} className="flex items-baseline gap-2">
+                    <span aria-hidden="true">🎟</span>
+                    <span className="flex-1 text-gray-800 dark:text-life-50">{c.label}
+                      <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{c.percent_off !== null ? `${c.percent_off}% off` : `${s.coupons.currency}${(c.cents_off / 100).toFixed(2)} off`}{c.store ? ` · ${c.store}` : ''}</span></span>
+                    {c.days_left <= 1 ? <Flag>{c.days_left === 0 ? 'last day' : 'tomorrow'}</Flag> : <span className="text-xs text-gray-500 dark:text-life-300">{c.days_left} days left</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        )}
+
         {shows('pantry') && (
           <Card title="Pantry" to="/pantry">
             {s.pantry.low.length === 0 && s.pantry.expiring.length === 0 ? <Quiet>Nothing running low, nothing to use up.</Quiet> : (

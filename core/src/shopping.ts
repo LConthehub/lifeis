@@ -107,6 +107,17 @@ export type Trend = {
   change_cents: number | null;
 };
 export type Store = { id: number; name: string; note: string | null; /** How many prices were seen there, and when last. */ prices: number; last_on: string | null };
+/** A rough cost for a plan's food, going by the last price seen for each ingredient its recipes call for. */
+export type PlanCost = {
+  currency: string;
+  /** How many different ingredients the plan's recipes name. */
+  ingredients: number;
+  /** How many of those have a price to go by, and what they come to. */
+  priced: number;
+  cents: number;
+  /** The ones with no price yet, by name. */
+  unpriced: string[];
+};
 export type MonthSpend = { /** 2046-03 */ month: string; cents: number; lines: number };
 /** What a scanned grocery barcode turned out to be. */
 export type Scanned = {
@@ -417,6 +428,28 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
           change_cents: points.length > 1 ? valueOf(latest, usable) - valueOf(points[points.length - 2]!, usable) : null,
         };
       }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    },
+
+    /**
+     * Roughly what a plan's food will cost: one of each ingredient its recipes call for, at the last price
+     * somebody saw. It doesn't know how much of a packet a recipe uses, or what's already in the pantry.
+     */
+    async planCost(planId: number): Promise<PlanCost> {
+      if (!(await db.get('SELECT id FROM plans WHERE id = ? AND owner_id = ?', [planId, owner]))) throw new Problem(404, 'Not found');
+      const needed = await db.all<{ id: number; name: string }>(
+        `SELECT DISTINCT i.id, i.name FROM plan_items p JOIN recipe_lines l ON l.recipe_id = p.ref_id AND l.part = 'ingredients'
+         JOIN ingredients i ON i.id = l.ingredient_id
+         WHERE p.plan_id = ? AND p.kind = 'recipe' AND i.owner_id = ? ORDER BY i.name COLLATE NOCASE`, [planId, owner]);
+      const last = new Map<number, number>();
+      for (const p of await db.all<{ ingredient_id: number; cents: number }>(
+        'SELECT ingredient_id, cents FROM prices WHERE owner_id = ? AND assumed = 0 AND ingredient_id IS NOT NULL ORDER BY day DESC, id DESC', [owner])) {
+        if (!last.has(p.ingredient_id)) last.set(p.ingredient_id, p.cents);
+      }
+      const known = needed.filter((i) => last.has(i.id));
+      return {
+        currency: (await setting(CURRENCY)) ?? '$', ingredients: needed.length, priced: known.length,
+        cents: known.reduce((sum, i) => sum + last.get(i.id)!, 0), unpriced: needed.filter((i) => !last.has(i.id)).map((i) => i.name),
+      };
     },
 
     /** What was spent, month by month, newest first: everything priced, stand-ins included (the money was still spent). */

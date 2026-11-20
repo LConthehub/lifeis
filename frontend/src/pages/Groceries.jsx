@@ -27,6 +27,9 @@ export default function Groceries() {
   const [putAway, setPutAway] = useState(true);
   // How the list is laid out: by aisle, or by the shop each thing is got at. Remembered on this device.
   const [by, setBy] = useState(() => { try { return window.localStorage.getItem('grocery-by') === 'shop' ? 'shop' : 'aisle'; } catch { return 'aisle'; } });
+  // By shop: whether to show only where you are (with what can be got anywhere). Remembered on this device.
+  const [justHere, setJustHere] = useState(() => { try { return window.localStorage.getItem('grocery-just-here') === '1'; } catch { return false; } });
+  const onlyHere = (on) => { setJustHere(on); try { window.localStorage.setItem('grocery-just-here', on ? '1' : '0'); } catch { /* remembered for this visit only */ } };
   const layOut = (how) => { setBy(how); try { window.localStorage.setItem('grocery-by', how); } catch { /* remembered for this visit only */ } };
   const [modal, setModal] = useState(null);
   const [message, setMessage] = useState(state?.added != null
@@ -77,6 +80,10 @@ export default function Groceries() {
   const here = (shop.store || '').toLowerCase();
   const aisles = [...new Set(open.map(groupOf))].sort((a, b) => (by !== 'shop' ? 0
     : (b.toLowerCase() === here) - (a.toLowerCase() === here) || (a === 'Any shop') - (b === 'Any shop') || a.localeCompare(b)));
+  const isHere = (group) => group.toLowerCase() === here;
+  const canNarrow = by === 'shop' && aisles.some(isHere) && aisles.some((a) => !isHere(a) && a !== 'Any shop');
+  const shownGroups = canNarrow && justHere ? aisles.filter((a) => isHere(a) || a === 'Any shop') : aisles;
+  const elsewhere = open.filter((g) => !shownGroups.includes(groupOf(g))).length;
   const t = shop.totals;
   const anyMoney = t.trolley_cents > 0 || t.left_cents > 0 || shop.coupons.length > 0;
   return (
@@ -121,10 +128,16 @@ export default function Groceries() {
             <button key={how} type="button" onClick={() => layOut(how)} aria-pressed={by === how}
               className={`rounded-full px-3 py-1 ${by === how ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`}>{label}</button>
           ))}
+          {canNarrow && (
+            <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-xs text-gray-600 dark:text-life-200">
+              <input type="checkbox" checked={justHere} onChange={(e) => onlyHere(e.target.checked)} className="accent-life-600" />
+              Just {shop.store}
+            </label>
+          )}
         </div>
       )}
       <div className={cardClass}>
-        {open.length === 0 ? <p className="py-4 text-center text-sm text-gray-500 dark:text-life-200">Nothing to buy. Plan the week and press "Make the grocery list", or add things here.</p> : aisles.map((aisle) => (
+        {open.length === 0 ? <p className="py-4 text-center text-sm text-gray-500 dark:text-life-200">Nothing to buy. Plan the week and press "Make the grocery list", or add things here.</p> : shownGroups.map((aisle) => (
           <div key={aisle} className="mb-3 last:mb-0">
             {(aisles.length > 1 || by === 'shop') && <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-life-600 dark:text-life-300">{aisle}{by === 'shop' && aisle.toLowerCase() === here && <span className="ml-2 normal-case text-gray-500 dark:text-life-300">where you are</span>}</h2>}
             <ul className="divide-y divide-life-50 dark:divide-life-700">
@@ -161,6 +174,7 @@ export default function Groceries() {
             </ul>
           </div>
         ))}
+        {elsewhere > 0 && <p className="mt-2 text-xs text-gray-500 dark:text-life-300">{elsewhere} more for other shops. Untick "Just {shop.store}" to see {elsewhere === 1 ? 'it' : 'them'}.</p>}
       </div>
       <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-life-200">
         <input type="checkbox" checked={putAway} onChange={(e) => setPutAway(e.target.checked)} className="accent-life-600" /> Ticking something off adds it to the pantry

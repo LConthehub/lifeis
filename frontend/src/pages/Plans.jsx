@@ -155,6 +155,13 @@ export function PlanPage() {
   const [error, setError] = useState('');
   const load = useCallback(() => { axios.get(`/api/plans/${id}`).then(({ data }) => setPlan(data)).catch(() => setPlan(null)); }, [id]);
   useEffect(() => { load(); }, [load]);
+  // Roughly what the food will cost, asked again whenever the plan's recipes change.
+  const [cost, setCost] = useState(null);
+  const recipesKey = plan ? plan.items_list.filter((i) => i.kind === 'recipe').map((i) => i.ref_id).join(',') : '';
+  useEffect(() => {
+    if (!recipesKey) { setCost(null); return; }
+    axios.get(`/api/plans/${id}/cost`).then(({ data }) => setCost(data)).catch(() => setCost(null));
+  }, [id, recipesKey]);
   if (plan === undefined) return null;
   if (plan === null) return <p className="text-sm text-gray-500 dark:text-life-300">That plan isn't there. <Link to="/plans" className="underline">All plans</Link></p>;
 
@@ -180,6 +187,15 @@ export function PlanPage() {
         <button type="button" onClick={() => setModal('again')} className={quietButtonClass}>Do it again</button>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {cost && cost.ingredients > 0 && plan.when !== 'past' && (
+        <div className="rounded-lg bg-life-50 px-3 py-2 text-sm text-gray-700 dark:bg-life-800 dark:text-life-100" data-plan-cost>
+          {cost.priced === 0 ? <p>No prices yet for this plan's food. Type prices as you shop and a rough cost shows here.</p> : (
+            <p><span className="font-semibold text-life-800 dark:text-life-50">The food: about {cost.currency}{(cost.cents / 100).toFixed(2)}</span>, going by the last price of {cost.priced} of its {cost.ingredients} ingredients.</p>
+          )}
+          {cost.priced > 0 && cost.unpriced.length > 0 && <p className="mt-0.5 text-xs">No price yet for: {cost.unpriced.slice(0, 10).join(', ')}{cost.unpriced.length > 10 ? ` and ${cost.unpriced.length - 10} more` : ''}.</p>}
+          {cost.priced > 0 && <p className="mt-0.5 text-xs text-gray-500 dark:text-life-300">Rough: one of each at the size you last bought, with nothing taken off for what's already in the pantry.</p>}
+        </div>
+      )}
       {short.length > 0 && plan.when !== 'past' && (
         <ul className="space-y-1 rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">
           {short.map((i) => <li key={i.id}>{i.label}: {i.short}</li>)}

@@ -361,3 +361,26 @@ it('each thing has a usual shop and a usual size, so the list can be read shop b
   await expect(shop.setUsual(9999, { store: 'Aldi' })).rejects.toEqual(problem(404));
   await expect(shopping(db, await person('other'), clock).setUsual(again, { store: 'Aldi' })).rejects.toEqual(problem(404));
 });
+
+it("a plan's food gets a rough cost from the last price of each ingredient", async () => {
+  const { plans } = await import('../src/plans.ts');
+  const soup = await k.createRecipe({ title: 'Leek soup', ingredients_text: '3 leeks\n2 potatoes\n1 pinch saffron' });
+  const pie = await k.createRecipe({ title: 'Potato pie', ingredients_text: '6 potatoes\n1 cup cream' });
+  const plan = await plans(db, owner, clock).create({ name: 'Sunday lunch', start_day: '2046-03-08', end_day: '2046-03-08', note: null, story: null });
+  expect(await shop.planCost(plan.id)).toMatchObject({ ingredients: 0, priced: 0, cents: 0 });
+  await plans(db, owner, clock).addItem(plan.id, { kind: 'recipe', ref_id: soup.id });
+  await plans(db, owner, clock).addItem(plan.id, { kind: 'recipe', ref_id: pie.id });
+
+  // Prices come from shopping: potatoes twice (the later one counts), leeks once, cream only guessed.
+  for (const what of ['leeks', 'potatoes', 'cream']) await k.addGrocery({ label: what });
+  await shop.setPrice(await idOf('leek'), 249);
+  await shop.setPrice(await idOf('potato'), 450);
+  await shop.setPrice(await idOf('potato'), 399);
+  await shop.setPrice(await idOf('cream'), 300, true);
+  const cost = await shop.planCost(plan.id);
+  // Potatoes are in both recipes and counted once.
+  expect(cost).toEqual({ currency: '$', ingredients: 4, priced: 2, cents: 648, unpriced: expect.arrayContaining(['saffron']) });
+  expect(cost.unpriced).toHaveLength(2);
+  await expect(shop.planCost(99999)).rejects.toEqual(expect.objectContaining({ status: 404 }));
+  await expect(shopping(db, await person('visitor'), clock).planCost(plan.id)).rejects.toEqual(expect.objectContaining({ status: 404 }));
+});

@@ -85,3 +85,28 @@ it('a person chooses what shows, and a section they do not use brings no cards',
   const theirs = await home(db, await person('other'), clock).summary();
   expect([theirs.cards.length, theirs.pantry.low]).toEqual([8, []]);
 });
+
+it('plans coming up and coupons about to run out get a card once there is one', async () => {
+  const { plans } = await import('../src/plans.ts');
+  const { shopping } = await import('../src/shopping.ts');
+  const { addDays } = await import('../src/small.ts');
+  expect((await front.summary()).choices.map((c) => c.key)).not.toEqual(expect.arrayContaining(['plans', 'coupons']));
+
+  const mine = plans(db, owner, clock);
+  const easter = await mine.create({ name: 'Easter', start_day: addDays(TODAY, 12), end_day: addDays(TODAY, 14), note: null, story: null });
+  await mine.create({ name: 'House guests', start_day: addDays(TODAY, -1), end_day: addDays(TODAY, 1), note: null, story: null });
+  await mine.create({ name: 'Last summer', start_day: addDays(TODAY, -200), end_day: addDays(TODAY, -190), note: null, story: null });
+  await mine.create({ name: 'Next year', start_day: addDays(TODAY, 300), end_day: addDays(TODAY, 300), note: null, story: null });
+  const shop = shopping(db, owner, clock);
+  await shop.addCoupon({ label: 'Coffee', cents_off: 150, store: 'Aldi', expires_on: addDays(TODAY, 2) });
+  await shop.addCoupon({ label: 'Whole shop', percent_off: 10, expires_on: TODAY });
+  await shop.addCoupon({ label: 'Next month', cents_off: 100, expires_on: addDays(TODAY, 30) });
+  await shop.addCoupon({ label: 'Ran out', cents_off: 100, expires_on: addDays(TODAY, -1) });
+
+  const s = await front.summary();
+  expect([s.cards.includes('plans'), s.cards.includes('coupons')]).toEqual([true, true]);
+  expect(s.plans.map((p) => [p.name, p.days_until])).toEqual([['House guests', 0], ['Easter', 12]]);
+  expect(s.plans[1]!.id).toBe(easter.id);
+  expect(s.coupons.soon.map((c) => [c.label, c.days_left, c.store])).toEqual([['Whole shop', 0, null], ['Coffee', 2, 'Aldi']]);
+  expect(s.coupons.currency).toBe('$');
+});
