@@ -2,7 +2,7 @@
  * The addresses for the calendar (/api/calendar) and the collection of films, shows, music, books and games
  * (/api/media). What they do is core/'s calendar.ts and media.ts; this only reads what was sent and passes it on.
  */
-import { calendar, calendarFeed, media, type Db } from '../../core/src/index.ts';
+import { calendar, calendarFeed, followedCalendars, media, FOLLOW_SERVICE, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
 import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -32,8 +32,13 @@ const copyFrom = (body: Body) => ({
   lent_to: read.maybeText(body, 'lent_to'), lent_on: read.maybeText(body, 'lent_on'), note: read.maybeText(body, 'note'),
 });
 
-export function enjoyingRoutes(db: Db): Route[] {
+export type FollowTools = { fetcher: Fetcher; sealer: Sealer };
+
+export function enjoyingRoutes(db: Db, follow?: FollowTools): Route[] {
   const dates = (c: Context) => calendar(db, c.user.id, c.clock);
+  const others = (c: Context) => followedCalendars(db, c.user.id, c.clock, follow);
+  const followed = async (c: Context, calendars: Awaited<ReturnType<ReturnType<typeof followedCalendars>['list']>>) =>
+    ({ available: others(c).available(), service: FOLLOW_SERVICE, calendars });
   const shelf = (c: Context) => media(db, c.user.id, c.clock);
 
   return [
@@ -44,6 +49,15 @@ export function enjoyingRoutes(db: Db): Route[] {
       if (!start) throw notUnderstood('start');
       return { json: await dates(c).between(start, queryNumber(c.query, 'days') ?? 7) };
     }],
+    // Other calendars followed by their link: off until one is added. The link itself is never sent back.
+    ['GET', at('calendar/others'), async (c) => ({ json: await followed(c, await others(c).list()) })],
+    ['POST', at('calendar/others'), async (c) => ({
+      status: 201,
+      json: await followed(c, await others(c).add({ name: read.text(c.body, 'name'), url: read.text(c.body, 'url'), show: read.maybeText(c.body, 'show'), zone: read.maybeText(c.body, 'zone') })),
+    })],
+    ['PUT', at('calendar/others/:id'), async (c) => ({ json: await followed(c, await others(c).update(c.id, { name: read.text(c.body, 'name'), show: read.maybeText(c.body, 'show') })) })],
+    ['POST', at('calendar/others/:id/refresh'), async (c) => ({ json: await followed(c, await others(c).refresh(c.id)) })],
+    ['DELETE', at('calendar/others/:id'), async (c) => ({ json: await followed(c, await others(c).remove(c.id)) })],
     // The link a calendar app follows: off until made, and what it answers with is in app.ts (/cal/….ics).
     ['GET', at('calendar/link'), async (c) => ({ json: await calendarFeed(db, c.user.id, c.clock).status() })],
     ['PUT', at('calendar/link'), async (c) => ({ json: await calendarFeed(db, c.user.id, c.clock).turnOn(Object.hasOwn(c.body, 'kinds') ? read.texts(c.body, 'kinds') : null) })],

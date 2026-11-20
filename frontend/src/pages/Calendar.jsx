@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput } from '../components/ui';
 
-const ICONS = { plan: '✨', event: '📌', meal: '🍽', session: '🧵', due: '⏳', use_by: '🥫', media: '🎞' };
+const ICONS = { plan: '✨', event: '📌', outside: '🗓', meal: '🍽', session: '🧵', due: '⏳', use_by: '🥫', media: '🎞' };
 
 function startOfWeek(d) {
   const day = new Date(d);
@@ -66,6 +66,7 @@ export default function Calendar() {
                       <li key={`${e.kind}-${e.id ?? e.link}-${i}`}>
                         {e.link
                           ? <Link to={e.link} className="flex items-start gap-2 rounded-lg px-1 py-0.5 hover:bg-life-50 dark:hover:bg-life-700">{body}</Link>
+                          : e.kind === 'outside' ? <span className="flex items-start gap-2 px-1 py-0.5">{body}</span>
                           : <button type="button" onClick={() => edit(e)} className="flex w-full items-start gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-life-50 dark:hover:bg-life-700">{body}</button>}
                       </li>
                     );

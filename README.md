@@ -127,6 +127,10 @@ time in Settings; unticking something only puts it out of sight.
   any calendar app that follows a link) reads, so plans, meals and dates show there too. Off until you make one;
   you tick what it carries; it only shows and can't change anything; a new link stops the old one working. Anyone
   holding the link can read what's ticked, so it is long, random, and yours to replace.
+- **Other calendars, on yours.** Settings → Outside services → "Other calendars" follows any calendar that has a link
+  (a work calendar, a shared family one). Followed "busy only" by default: just the times, under a name you give it.
+  What each thing is called, where it is and its notes are dropped as it's read and never stored. The link is kept
+  locked, read about once an hour, and a followed calendar is never passed on through your own phone link.
 
 ## Films, shows, music, books and games
 

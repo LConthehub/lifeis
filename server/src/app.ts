@@ -38,6 +38,8 @@ export type Options = {
   mail?: MailTools;
   /** How Life Is reaches a photo library and locks its key. Left out: none can be connected. */
   photos?: Reach;
+  /** How Life Is reads another calendar's link and locks it. Left out: none can be followed. */
+  calendars?: Reach;
   /** Told about anything that went wrong inside Life Is itself (never about a person's mistake). */
   onError?: (problem: unknown) => void;
 };
@@ -316,7 +318,7 @@ export function createApp(options: Options) {
 
     ...makingRoutes(db),
     ...(options.reach ? connectionRoutes(db, options.reach) : []),
-    ...enjoyingRoutes(db),
+    ...enjoyingRoutes(db, options.calendars),
     ...mailRoutes(db, options.mail),
     ...planRoutes(db, options.photos),
     ...shoppingRoutes(db),

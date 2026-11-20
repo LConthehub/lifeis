@@ -544,6 +544,36 @@ const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    number: 18,
+    name: 'other calendars, followed by their link',
+    statements: [
+      // A calendar somewhere else. Its link is the key to it, so it is kept locked. `show` is how much of it
+      // Life Is keeps: 'busy' (the times only) or 'titles'. `zone` is the time zone its times are shown in.
+      `CREATE TABLE followed_calendars (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        show TEXT NOT NULL DEFAULT 'busy' CHECK(show IN ('busy', 'titles')),
+        zone TEXT NOT NULL DEFAULT 'UTC',
+        fetched_at TEXT,
+        problem TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      // What was last read from it, replaced whole each time. A 'busy' calendar's rows never have a title.
+      `CREATE TABLE followed_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        calendar_id INTEGER NOT NULL REFERENCES followed_calendars(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        end_day TEXT,
+        time TEXT,
+        end_time TEXT,
+        title TEXT
+      )`,
+      `CREATE INDEX idx_followed_events ON followed_events(calendar_id, day)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

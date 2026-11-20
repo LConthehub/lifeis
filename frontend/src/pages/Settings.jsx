@@ -193,6 +193,7 @@ function OutsideServices() {
         <MailService />
         <BookLookupService />
         <PhotoLibraryService />
+        <OtherCalendarsService />
         <div className="py-3">
           <h3 className="font-medium text-gray-800 dark:text-life-50">📺 Your Jellyfin or Emby</h3>
           <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Brings the films, shows, music and books on a media server you name into your collection. Life Is only reads from that server, using the key you give it, and talks to nowhere else.</p>
@@ -361,6 +362,79 @@ function MailService() {
               <p className="text-xs text-gray-500 dark:text-life-300">The account is only saved if signing in works. The password is stored locked, on this computer.</p>
             </form>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const SHOW_WORDS = { busy: 'busy only', titles: 'with what each thing is called' };
+
+/** Calendars kept somewhere else, shown on Life Is's own by following their link. Busy only unless asked for more. */
+function OtherCalendarsService() {
+  const [o, setO] = useState(null);
+  const [form, setForm] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  useEffect(() => { axios.get('/api/calendar/others').then(({ data }) => setO(data)).catch(() => {}); }, []);
+  if (!o) return null;
+  const ask = async (send) => { setMessage(''); try { setO((await send()).data); return true; } catch (err) { setMessage(errorMessage(err, "Couldn't do that")); return false; } };
+  const add = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    // The time zone of this device goes with it, so the calendar's times are said on your clock.
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (await ask(() => axios.post('/api/calendar/others', { ...form, zone }))) setForm(null);
+    setBusy(false);
+  };
+  const on = o.calendars.length > 0;
+  return (
+    <div className="py-3" id="other-calendars">
+      <div className="flex items-baseline gap-2">
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🗓 Other calendars, on yours</h3>
+        <span className={`rounded px-1.5 text-[11px] ${on ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{on ? 'On' : 'Off'}</span>
+      </div>
+      <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
+        Shows a work calendar, or any calendar that has a link, beside your own. <span className="font-medium">What it does:</span> {o.service.sends}
+      </p>
+      {!o.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : (
+        <div className="mt-2 space-y-2">
+          {o.calendars.map((c) => (
+            <div key={c.id} className="flex flex-wrap items-center gap-2 text-sm text-gray-800 dark:text-life-50">
+              <span className="mr-auto">
+                <span className="font-medium">{c.name}</span> <span className="text-xs text-gray-500 dark:text-life-300">{SHOW_WORDS[c.show]} · {c.events} in view{c.fetched_at ? ` · read ${new Date(c.fetched_at).toLocaleString()}` : ''}</span>
+                {c.problem && <span className="block text-xs text-red-600">{c.problem}</span>}
+              </span>
+              <button type="button" onClick={() => ask(() => axios.put(`/api/calendar/others/${c.id}`, { name: c.name, show: c.show === 'busy' ? 'titles' : 'busy' }))} className={quietButtonClass}>{c.show === 'busy' ? 'Show what things are called' : 'Busy only'}</button>
+              <button type="button" onClick={() => ask(() => axios.post(`/api/calendar/others/${c.id}/refresh`))} className={quietButtonClass}>Read again</button>
+              <button type="button" onClick={() => { if (window.confirm(`Stop following ${c.name}? What was read from it, and its link, are forgotten.`)) ask(() => axios.delete(`/api/calendar/others/${c.id}`)); }} className={quietButtonClass}>Stop and forget</button>
+            </div>
+          ))}
+          {!form ? <button type="button" onClick={() => { setForm({ name: '', url: '', show: 'busy' }); setMessage(''); }} className={quietButtonClass}>+ Follow a calendar</button> : (
+            <form onSubmit={add} className="space-y-3 rounded-lg bg-life-50/60 p-3 dark:bg-life-800">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="What to call it *"><input required maxLength={60} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Work" className={inputClass} /></Field>
+                <Field label="Its link *"><input required type="password" autoComplete="off" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://… or webcal://…" className={inputClass} /></Field>
+              </div>
+              <fieldset className="space-y-1 text-sm text-gray-800 dark:text-life-50">
+                <legend className="mb-1 font-medium">How much to show</legend>
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input type="radio" name="follow-show" checked={form.show === 'busy'} onChange={() => setForm({ ...form, show: 'busy' })} className="mt-1 accent-life-600" />
+                  <span>Busy only <span className="block text-xs text-gray-500 dark:text-life-300">Just the times, under the name above. What each thing is called, where it is and its notes are never kept.</span></span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input type="radio" name="follow-show" checked={form.show === 'titles'} onChange={() => setForm({ ...form, show: 'titles' })} className="mt-1 accent-life-600" />
+                  <span>What each thing is called <span className="block text-xs text-gray-500 dark:text-life-300">The times and the titles. Places and notes are still never kept.</span></span>
+                </label>
+              </fieldset>
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" onClick={() => setForm(null)} className={quietButtonClass}>Not now</button>
+                <button type="submit" disabled={busy} className={buttonClass}>{busy ? 'Reading it…' : 'Read it and follow'}</button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-life-300">It's only saved if the link answers with a calendar. The link is stored locked and isn't shown again.</p>
+            </form>
+          )}
+          {message && <p className="text-sm text-red-600">{message}</p>}
         </div>
       )}
     </div>

@@ -10,6 +10,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { Problem, type Fetcher, type MailMessage, type Outgoing, type Postbox } from '../../core/src/index.ts';
 import { createApp } from '../src/app.ts';
+import { webFetcher } from '../src/connectionRoutes.ts';
 import { openDatabase, type OpenDatabase } from '../src/database.ts';
 import { vault } from '../src/vault.ts';
 
@@ -240,4 +241,42 @@ it('the calendar link answers a calendar app without signing in, and only while 
   expect([(await fetch(`${base}/cal/${on.token}.ics`)).status, (await fetch(`${base}/cal/${renewed.token}.ics`)).status]).toEqual([404, 200]);
   expect((await admin.delete('/api/calendar/link')).json.on).toBe(false);
   expect((await fetch(`${base}/cal/${renewed.token}.ics`)).status).toBe(404);
+});
+
+it('another calendar is followed over the web addresses, busy only, and its link never comes back', async () => {
+  const admin = await start(true);
+  // A stand-in calendar somewhere else: a small server of its own, answering with one booking.
+  const day = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10).replaceAll('-', '');
+  const other = createServer((req, res) => {
+    if (req.url !== '/busy/key123.ics') { res.writeHead(404).end(); return; }
+    res.writeHead(200, { 'Content-Type': 'text/calendar' }).end(['BEGIN:VCALENDAR', 'BEGIN:VEVENT', `DTSTART:${day}T140000`, `DTEND:${day}T160000`, 'SUMMARY:Client: A. Person', 'LOCATION:Hotel Grand', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n'));
+  });
+  await new Promise<void>((resolve) => other.listen(0, '127.0.0.1', resolve));
+  const link = `http://127.0.0.1:${(other.address() as AddressInfo).port}/busy/key123.ics`;
+  try {
+    const off = (await admin.get('/api/calendar/others')).json;
+    expect([off.available, off.calendars, off.service.name]).toEqual([false, [], 'Other calendars']); // this test's Life Is has no way out for calendars
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+  server = createServer(createApp({ db: database.db, calendars: { fetcher: webFetcher, sealer: vault(path.join(folder, 'keys'), 'calendar_source') } }));
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const again = visitor();
+  expect((await again.post('/api/auth/login', { username: 'owner', password: PASSWORD })).status).toBe(200);
+  try {
+    expect((await again.post('/api/calendar/others', { name: 'Work', url: link.replace('key123', 'wrong') })).status).toBe(400);
+    const made = await again.post('/api/calendar/others', { name: 'Work', url: link, zone: 'America/Chicago' });
+    expect([made.status, made.json.calendars[0]]).toEqual([201, expect.objectContaining({ name: 'Work', show: 'busy', events: 1, problem: null })]);
+    expect(JSON.stringify(made.json)).not.toContain('key123');
+    const iso = `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6)}`;
+    const seen = (await again.get(`/api/calendar?start=${iso}&days=1`)).json;
+    expect(seen).toEqual([{ kind: 'outside', day: iso, time: '14:00', title: 'Work', detail: 'until 16:00', link: null, id: null }]);
+    const id = made.json.calendars[0].id;
+    expect((await again.post(`/api/calendar/others/${id}/refresh`)).json.calendars[0].problem).toBeNull();
+    expect((await again.delete(`/api/calendar/others/${id}`)).json.calendars).toEqual([]);
+    expect((await visitor().get('/api/calendar/others')).status).toBe(401);
+  } finally {
+    await new Promise((resolve) => other.close(resolve));
+  }
 });

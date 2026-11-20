@@ -11,6 +11,7 @@ import { createServer } from 'node:http';
 import path from 'node:path';
 import { createApp } from './app.ts';
 import { syncDue, webFetcher } from './connectionRoutes.ts';
+import { followedDue } from '../../core/src/index.ts';
 import { openDatabase } from './database.ts';
 import { realPostbox } from './postbox.ts';
 import { vault } from './vault.ts';
@@ -22,10 +23,12 @@ const idle = Number(process.env.SESSION_IDLE_MINUTES || 15);
 
 const database = await openDatabase(dataDir, keyDir);
 const reach = { fetcher: webFetcher, sealer: vault(keyDir, 'media_source') };
+const calendars = { fetcher: webFetcher, sealer: vault(keyDir, 'calendar_source') };
 const server = createServer(createApp({
   db: database.db,
   reach,
   photos: { fetcher: webFetcher, sealer: vault(keyDir, 'photo_library') },
+  calendars,
   mail: { postbox: realPostbox, sealer: vault(keyDir, 'mail_account') },
   staticDir: process.env.STATIC_DIR || undefined,
   idleMinutes: Number.isInteger(idle) && idle >= 0 ? idle : 15,
@@ -39,6 +42,8 @@ const timer = setInterval(async () => {
   syncing = true;
   try {
     await syncDue(database.db, () => new Date(), reach);
+    // Other calendars a person follows are read again once an hour.
+    await followedDue(database.db, () => new Date(), calendars);
   } catch (problem) {
     console.error(problem);
   } finally {

@@ -42,3 +42,5 @@ export type { Store } from './shopping.ts';
 export type { Coupon, CouponInput, LastPrice, MonthSpend, PlanCost, PricePoint, Scanned, Shopping, ShoppingLine, ShoppingOf, Trend } from './shopping.ts';
 export { calendarFeed, calendarFile, feedFor, FEED_KINDS } from './feed.ts';
 export type { CalendarFeed, FeedEvent, FeedStatus } from './feed.ts';
+export { followedCalendars, followedDue, readCalendar, FOLLOW_SERVICE, SHOWS } from './follow.ts';
+export type { Followed, FollowedCalendars, FollowInput, ReadEvent, Show } from './follow.ts';
