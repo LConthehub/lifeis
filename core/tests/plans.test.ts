@@ -174,7 +174,7 @@ it("a plan's food goes on the week's meals, moves with the plan, and leaves with
   await mine.addItem(plan.id, { kind: 'recipe', ref_id: brownies.id, day: '2046-03-08', meal: 'dinner' });
   let now = await mine.addItem(plan.id, { kind: 'recipe', ref_id: pie.id, day: '2046-03-07', meal: 'snack' }); // made the day before
   expect(now.items_list.map((i) => [i.label, i.on_week])).toEqual([
-    ['Stuffing', { day: '2046-03-08', meal: 'dinner', cooked: false }], ['Brownies', { day: '2046-03-08', meal: 'dinner', cooked: false }], ['Pumpkin pie', { day: '2046-03-07', meal: 'snack', cooked: false }]]);
+    ['Stuffing', { day: '2046-03-08', meal: 'dinner', cooked: false, servings: null }], ['Brownies', { day: '2046-03-08', meal: 'dinner', cooked: false, servings: null }], ['Pumpkin pie', { day: '2046-03-07', meal: 'snack', cooked: false, servings: null }]]);
   expect(await week('2046-03-05', 7)).toEqual(['2046-03-07 snack: Pumpkin pie', '2046-03-08 dinner: Stuffing', '2046-03-08 dinner: Brownies']);
   // So everything the week already does follows: the grocery list, and the dishes that one dinner needs.
   expect((await k.groceryFromPlan('2046-03-05', 7)).items.map((g) => g.label.toLowerCase()).sort()).toEqual(['chocolate', 'loaf bread', 'pumpkin']);
@@ -191,8 +191,8 @@ it("a plan's food goes on the week's meals, moves with the plan, and leaves with
   now = await mine.addItem(plan.id, { kind: 'recipe', ref_id: cake.id });
   const cakeItem = now.items_list[3]!;
   expect(cakeItem.on_week).toBeNull();
-  expect((await mine.updateItem(cakeItem.id, { day: '2046-03-08', meal: 'lunch' })).items_list[3]!.on_week).toEqual({ day: '2046-03-08', meal: 'lunch', cooked: false });
-  expect((await mine.updateItem(cakeItem.id, { day: '2046-03-06', meal: 'snack' })).items_list[3]!.on_week).toEqual({ day: '2046-03-06', meal: 'snack', cooked: false });
+  expect((await mine.updateItem(cakeItem.id, { day: '2046-03-08', meal: 'lunch' })).items_list[3]!.on_week).toEqual({ day: '2046-03-08', meal: 'lunch', cooked: false, servings: null });
+  expect((await mine.updateItem(cakeItem.id, { day: '2046-03-06', meal: 'snack' })).items_list[3]!.on_week).toEqual({ day: '2046-03-06', meal: 'snack', cooked: false, servings: null });
   expect(await week('2046-03-06', 1)).toEqual(['2046-03-06 snack: Cake']);
   expect((await mine.updateItem(cakeItem.id, { day: null })).items_list[3]!.on_week).toBeNull();
   expect(await week('2046-03-06', 1)).toEqual([]);
@@ -213,14 +213,14 @@ it("a plan's food goes on the week's meals, moves with the plan, and leaves with
   time = new Date(2046, 2, 15, 18, 0, 0);
   await k.cooked(stuffingMeal.id);
   now = await mine.get(plan.id);
-  expect(now.items_list[0]!.on_week).toEqual({ day: '2046-03-15', meal: 'dinner', cooked: true });
+  expect(now.items_list[0]!.on_week).toEqual({ day: '2046-03-15', meal: 'dinner', cooked: true, servings: null });
   await expect(mine.updateItem(now.items_list[0]!.id, { day: '2046-03-14' })).rejects.toEqual(problem(409));
   await mine.removeItem(now.items_list[1]!.id); // Brownies, not cooked
   expect(await week('2046-03-15', 1)).toEqual(['2046-03-15 dinner: Stuffing']);
 
   // Next year starts from this one, food on the same days of the new week.
   const next = await mine.copy(plan.id, { name: 'Thanksgiving again', start_day: '2047-03-14' });
-  expect(next.items_list.map((i) => [i.label, i.on_week])).toEqual([['Stuffing', { day: '2047-03-14', meal: 'dinner', cooked: false }], ['Pumpkin pie', null], ['Cake', null]]);
+  expect(next.items_list.map((i) => [i.label, i.on_week])).toEqual([['Stuffing', { day: '2047-03-14', meal: 'dinner', cooked: false, servings: null }], ['Pumpkin pie', null], ['Cake', null]]);
 
   // Removing the plans removes what's still to be cooked, and leaves what was.
   await mine.remove(next.id);
@@ -233,4 +233,23 @@ it("a plan's food goes on the week's meals, moves with the plan, and leaves with
   const theirs = plans(db, await person('other'), clock);
   const theirPlan = await theirs.create({ name: 'Theirs', start_day: '2046-03-08' });
   await expect(theirs.addItem(theirPlan.id, { kind: 'recipe', ref_id: pie.id, day: '2046-03-08' })).rejects.toEqual(problem(404));
+});
+
+it('a plan says how many its food is for, and the grocery list follows', async () => {
+  const k = kitchen(db, owner, clock);
+  const stuffing = await k.createRecipe({ title: 'Stuffing', servings: 4, ingredients_text: '2 loaves bread' });
+  const plan = await mine.create({ name: 'Thanksgiving', start_day: '2046-03-08' });
+  let now = await mine.addItem(plan.id, { kind: 'recipe', ref_id: stuffing.id, day: '2046-03-08', servings: 12 }); // three times the recipe
+  expect(now.items_list[0]!.on_week).toEqual({ day: '2046-03-08', meal: 'dinner', cooked: false, servings: 12 });
+  expect((await k.listPlan('2046-03-08', 1)).map((m) => [m.recipe_title, m.servings])).toEqual([['Stuffing', 12]]);
+  expect((await k.groceryFromPlan('2046-03-08', 1)).items.map((g) => [g.label.toLowerCase(), g.quantity])).toEqual([['loaves bread', 6]]);
+
+  now = await mine.updateItem(now.items_list[0]!.id, { day: '2046-03-08', meal: 'dinner', servings: 8 });
+  expect([now.items_list[0]!.on_week!.servings, (await k.listPlan('2046-03-08', 1))[0]!.servings]).toEqual([8, 8]);
+  now = await mine.updateItem(now.items_list[0]!.id, { day: '2046-03-08', meal: 'dinner', servings: null }); // back to what the recipe says
+  expect(now.items_list[0]!.on_week!.servings).toBeNull();
+  await expect(mine.updateItem(now.items_list[0]!.id, { day: '2046-03-08', servings: 0 })).rejects.toEqual(problem(400));
+
+  await mine.updateItem(now.items_list[0]!.id, { day: '2046-03-08', servings: 12 });
+  expect((await mine.copy(plan.id, { start_day: '2047-03-14' })).items_list[0]!.on_week).toEqual({ day: '2047-03-14', meal: 'dinner', cooked: false, servings: 12 }); // next year, the same crowd
 });

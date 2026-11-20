@@ -29,22 +29,25 @@ function mealDays(plan) {
   }
   return days.sort((a, b) => (a[0] >= plan.start_day) - (b[0] >= plan.start_day) || (a[0] < plan.start_day ? (a[0] < b[0] ? 1 : -1) : (a[0] < b[0] ? -1 : 1)));
 }
-const onWeekText = (w) => `${fromDateInput(w.day).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} ${w.meal}${w.cooked ? ' · cooked' : ''}`;
+const onWeekText = (w) => `${fromDateInput(w.day).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} ${w.meal}${w.servings ? ` · for ${w.servings}` : ''}${w.cooked ? ' · cooked' : ''}`;
 
 /** When a plan's recipe is eaten: a day and a meal puts it on the week's meals; "not on the week" only notes it. */
-function WhenEaten({ plan, day, meal, onChange }) {
+function WhenEaten({ plan, day, meal, servings, onChange }) {
   return (
     <div className="grid grid-cols-2 gap-3">
-      <Field label="On the week's meals">
-        <select value={day} onChange={(e) => onChange(e.target.value, meal)} className={inputClass}>
+      <div className="col-span-2"><Field label="On the week's meals">
+        <select value={day} onChange={(e) => onChange(e.target.value, meal, servings)} className={inputClass}>
           {mealDays(plan).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           <option value="">Not on the week: just note it here</option>
         </select>
-      </Field>
-      <Field label="For">
-        <select value={meal} disabled={!day} onChange={(e) => onChange(day, e.target.value)} className={inputClass}>
+      </Field></div>
+      <Field label="Which meal">
+        <select value={meal} disabled={!day} onChange={(e) => onChange(day, e.target.value, servings)} className={inputClass}>
           {MEALS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
+      </Field>
+      <Field label="How many it's for">
+        <input type="number" min="1" max="1000" step="any" value={servings} disabled={!day} onChange={(e) => onChange(day, meal, e.target.value)} placeholder="as the recipe says" className={inputClass} />
       </Field>
     </div>
   );
@@ -286,7 +289,7 @@ function Picker({ kind, plan, onDone }) {
   const [quantity, setQuantity] = useState('1');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
-  const [eaten, setEaten] = useState({ day: plan.start_day, meal: 'dinner' });
+  const [eaten, setEaten] = useState({ day: plan.start_day, meal: 'dinner', servings: '' });
   useEffect(() => { axios.get(hold.from).then(({ data }) => setChoices(data)).catch(() => setChoices([])); }, [hold.from]);
   if (!choices) return null;
   const taken = new Set(plan.items_list.filter((i) => i.kind === kind).map((i) => i.ref_id));
@@ -296,7 +299,7 @@ function Picker({ kind, plan, onDone }) {
     e.preventDefault();
     try {
       onDone((await axios.post(`/api/plans/${plan.id}/items`, { kind, ref_id: Number(ref), quantity: kind === 'thing' && quantity !== '' ? Number(quantity) : null, note: note || null,
-        ...(kind === 'recipe' && eaten.day ? eaten : {}) })).data);
+        ...(kind === 'recipe' && eaten.day ? { day: eaten.day, meal: eaten.meal, servings: eaten.servings === '' ? null : Number(eaten.servings) } : {}) })).data);
     } catch (err) { setError(errorMessage(err, "Couldn't add it")); }
   };
   return (
@@ -310,7 +313,7 @@ function Picker({ kind, plan, onDone }) {
       {kind === 'thing' && <Field label="How many are needed"><input type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} className={inputClass} /></Field>}
       {kind === 'recipe' && (
         <>
-          <WhenEaten plan={plan} day={eaten.day} meal={eaten.meal} onChange={(day, meal) => setEaten({ day, meal })} />
+          <WhenEaten plan={plan} day={eaten.day} meal={eaten.meal} servings={eaten.servings} onChange={(day, meal, servings) => setEaten({ day, meal, servings })} />
           <p className="text-xs text-gray-500 dark:text-life-300">On the week, it counts towards the grocery list and the pans and dishes that meal needs. It moves if the plan moves.</p>
         </>
       )}
@@ -322,16 +325,16 @@ function Picker({ kind, plan, onDone }) {
 }
 
 function EatenForm({ plan, item, onDone }) {
-  const [eaten, setEaten] = useState({ day: item.on_week?.day ?? plan.start_day, meal: item.on_week?.meal ?? 'dinner' });
+  const [eaten, setEaten] = useState({ day: item.on_week?.day ?? plan.start_day, meal: item.on_week?.meal ?? 'dinner', servings: item.on_week?.servings ?? '' });
   const [error, setError] = useState('');
   if (item.on_week?.cooked) return <p className="text-sm text-gray-700 dark:text-life-100">This was cooked on {onWeekText(item.on_week).replace(' · cooked', '')}. That's done, so it stays where it was.</p>;
   const save = async (e) => {
     e.preventDefault();
-    try { onDone((await axios.put(`/api/plans/items/${item.id}`, { day: eaten.day || null, meal: eaten.meal })).data); } catch (err) { setError(errorMessage(err, "Couldn't change it")); }
+    try { onDone((await axios.put(`/api/plans/items/${item.id}`, { day: eaten.day || null, meal: eaten.meal, servings: eaten.servings === '' ? null : Number(eaten.servings) })).data); } catch (err) { setError(errorMessage(err, "Couldn't change it")); }
   };
   return (
     <form onSubmit={save} className="space-y-3">
-      <WhenEaten plan={plan} day={eaten.day} meal={eaten.meal} onChange={(day, meal) => setEaten({ day, meal })} />
+      <WhenEaten plan={plan} day={eaten.day} meal={eaten.meal} servings={eaten.servings} onChange={(day, meal, servings) => setEaten({ day, meal, servings })} />
       <p className="text-xs text-gray-500 dark:text-life-300">{item.on_week ? 'Changing this moves the meal on the week. "Not on the week" takes it off there and keeps it noted here.' : 'This puts it on the week\'s meals, so the grocery list and the pans it needs follow.'}</p>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="text-right"><button type="submit" className={buttonClass}>Save</button></div>
