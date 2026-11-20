@@ -46,7 +46,7 @@ it('prices add up as things go in the trolley, in whole cents', async () => {
   await k.tickGrocery(bread, { done: true, put_away: false });
   s = await shop.setPrice(bread, 20);
   expect([s.store, s.totals.trolley_cents, s.totals.to_pay_cents, s.totals.left_unknown]).toEqual(['Aldi', 728, 728, 0]);
-  expect(s.lines.find((l) => l.id === chicken)).toEqual({ id: chicken, price_cents: 698, size: '2 lb', assumed: false, last: null, coupons: [] });
+  expect(s.lines.find((l) => l.id === chicken)).toEqual({ id: chicken, price_cents: 698, size: '2 lb', assumed: false, last: null, coupons: [], usual_store: null, usual_size: '', likely_store: null });
 
   // A price is replaced, not added to; and can be taken away again.
   s = await shop.setPrice(chicken, 649);
@@ -315,4 +315,49 @@ it('the size bought goes with the price, so a bag and a tin compare for one ounc
 
   await k.addGrocery({ label: 'tea' });
   await expect(shop.setPrice((await k.listGrocery()).find((g) => !g.done)!.id, 300, false, null, 'a big one')).rejects.toEqual(problem(400));
+});
+
+it('each thing has a usual shop and a usual size, so the list can be read shop by shop', async () => {
+  await k.addGrocery({ label: 'coffee' });
+  await k.addGrocery({ label: 'milk' });
+  await k.addGrocery({ label: '2 lb chicken thighs' });
+  const [coffee, milk, chicken] = [await idOf('coffee'), await idOf('milk'), await idOf('chicken')];
+  const where = (s: Awaited<ReturnType<typeof shop.summary>>) => s.lines.map((l) => [l.usual_store, l.usual_size, l.likely_store]);
+
+  let s = await shop.setUsual(coffee, { store: 'costco', size: '3 lb' }); // a new shop joins the list as typed
+  expect([s.stores, where(s)]).toEqual([['costco'], [['costco', '3 lb', 'costco'], [null, '', null], [null, '', null]]]);
+
+  // With no usual shop, where it was bought last is the best guess.
+  await shop.setStore('Aldi');
+  await k.tickGrocery(milk, { done: true, put_away: false });
+  await shop.setPrice(milk, 329);
+  await k.clearDone();
+  await k.addGrocery({ label: 'milk' });
+  s = await shop.summary();
+  expect(s.lines.find((l) => l.id !== coffee && l.id !== chicken)).toMatchObject({ usual_store: null, likely_store: 'Aldi' });
+
+  // The usual size is what a price is for when the list gives no amount and none is typed.
+  await shop.setStore('costco');
+  await k.tickGrocery(coffee, { done: true, put_away: false });
+  expect((await shop.setPrice(coffee, 1299)).lines.find((l) => l.id === coffee)!.size).toBe('3 lb');
+  expect((await shop.setPrice(coffee, 549, false, null, '12 oz')).lines.find((l) => l.id === coffee)!.size).toBe('12 oz'); // typed wins
+  await k.tickGrocery(chicken, { done: true, put_away: false });
+  await shop.setUsual(chicken, { size: '5 lb' });
+  expect((await shop.setPrice(chicken, 698)).lines.find((l) => l.id === chicken)!.size).toBe('2 lb'); // the list's own amount wins
+
+  // It belongs to the thing, not the line: next week's coffee already knows.
+  await k.clearDone();
+  await k.addGrocery({ label: 'coffee' });
+  expect((await shop.summary()).lines.find((l) => l.usual_size === '3 lb')).toMatchObject({ usual_store: 'costco', likely_store: 'costco' });
+
+  // Renaming the shop renames it here too; either habit can be forgotten.
+  const list = await shop.stores();
+  await shop.updateStore(list.find((x) => x.name === 'costco')!.id, { name: 'Costco' });
+  const again = await idOf('coffee');
+  expect((await shop.summary()).lines.find((l) => l.id === again)!.usual_store).toBe('Costco');
+  expect((await shop.setUsual(again, { store: null, size: null })).lines.find((l) => l.id === again)).toMatchObject({ usual_store: null, usual_size: '' });
+
+  await expect(shop.setUsual(again, { size: 'a big one' })).rejects.toEqual(problem(400));
+  await expect(shop.setUsual(9999, { store: 'Aldi' })).rejects.toEqual(problem(404));
+  await expect(shopping(db, await person('other'), clock).setUsual(again, { store: 'Aldi' })).rejects.toEqual(problem(404));
 });

@@ -41,6 +41,7 @@ export const AREAS: Area[] = [
   { key: 'planning', label: 'The calendar', about: 'Your own dates, with the week’s meals and the time on projects alongside.', group: 'home', sections: ['planning'] },
   { key: 'enjoying', label: 'Films, shows, music, books and games', about: 'What you own on every format, where it is, and what you’ve watched, read or heard.', group: 'home', sections: ['enjoying'] },
   { key: 'cookware', label: 'Cookware and kitchen gear', about: 'Cast iron, pans and baking dishes, so a recipe can say what it is cooked in.', group: 'home', sections: ['eating', 'keeping'], starter: 'cookware' },
+  { key: 'clothing', label: 'Clothes, shoes and linens', about: 'What everyone wears and in what size, and the sheets that fit each bed.', group: 'home', sections: ['keeping'], starter: 'clothing' },
   ...['sewing', 'knitting', 'woodworking', 'gardening', 'home'].map(doing),
 ];
 

@@ -520,6 +520,16 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE ingredient_barcodes ADD COLUMN size_unit TEXT`,
     ],
   },
+  {
+    number: 16,
+    name: 'where each thing is usually bought, and in what size',
+    statements: [
+      // A person's habits for an ingredient: the shop they get it at, and the size they get ("30 oz").
+      `ALTER TABLE ingredients ADD COLUMN usual_store TEXT`,
+      `ALTER TABLE ingredients ADD COLUMN usual_size_quantity REAL`,
+      `ALTER TABLE ingredients ADD COLUMN usual_size_unit TEXT`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

@@ -25,6 +25,9 @@ export default function Groceries() {
   const [typed, setTyped] = useState({});           // prices being typed, by line
   const [sizes, setSizes] = useState({});           // sizes being typed, by line
   const [putAway, setPutAway] = useState(true);
+  // How the list is laid out: by aisle, or by the shop each thing is got at. Remembered on this device.
+  const [by, setBy] = useState(() => { try { return window.localStorage.getItem('grocery-by') === 'shop' ? 'shop' : 'aisle'; } catch { return 'aisle'; } });
+  const layOut = (how) => { setBy(how); try { window.localStorage.setItem('grocery-by', how); } catch { /* remembered for this visit only */ } };
   const [modal, setModal] = useState(null);
   const [message, setMessage] = useState(state?.added != null
     ? `${state.added} thing${state.added === 1 ? '' : 's'} from the week's meals.${state.check?.length ? ` You have some ${state.check.join(', ')}: check there's enough.` : ''}` : '');
@@ -34,7 +37,7 @@ export default function Groceries() {
   if (!items || !shop) return null;
 
   const sign = shop.currency;
-  const lineOf = (g) => shop.lines.find((l) => l.id === g.id) || { price_cents: null, size: '', assumed: false, last: null, coupons: [] };
+  const lineOf = (g) => shop.lines.find((l) => l.id === g.id) || { price_cents: null, size: '', assumed: false, last: null, coupons: [], usual_store: null, usual_size: '', likely_store: null };
   const add = async (e) => {
     e.preventDefault();
     try {
@@ -69,7 +72,11 @@ export default function Groceries() {
 
   const open = items.filter((g) => !g.done);
   const done = items.filter((g) => g.done);
-  const aisles = [...new Set(open.map((g) => g.aisle || 'Everything else'))];
+  // The heading each thing sits under. By shop, where you are now comes first and "any shop" last.
+  const groupOf = (g) => (by === 'shop' ? lineOf(g).likely_store || 'Any shop' : g.aisle || 'Everything else');
+  const here = (shop.store || '').toLowerCase();
+  const aisles = [...new Set(open.map(groupOf))].sort((a, b) => (by !== 'shop' ? 0
+    : (b.toLowerCase() === here) - (a.toLowerCase() === here) || (a === 'Any shop') - (b === 'Any shop') || a.localeCompare(b)));
   const t = shop.totals;
   const anyMoney = t.trolley_cents > 0 || t.left_cents > 0 || shop.coupons.length > 0;
   return (
@@ -107,19 +114,31 @@ export default function Groceries() {
         <datalist id="my-shops">{shop.stores.map((name) => <option key={name} value={name} />)}</datalist>
       </div>
 
+      {open.length > 1 && (
+        <div className="flex items-center gap-1.5 text-sm" role="group" aria-label="How the list is laid out">
+          <span className="text-xs text-gray-500 dark:text-life-300">Laid out</span>
+          {[['aisle', 'by aisle'], ['shop', 'by shop']].map(([how, label]) => (
+            <button key={how} type="button" onClick={() => layOut(how)} aria-pressed={by === how}
+              className={`rounded-full px-3 py-1 ${by === how ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`}>{label}</button>
+          ))}
+        </div>
+      )}
       <div className={cardClass}>
         {open.length === 0 ? <p className="py-4 text-center text-sm text-gray-500 dark:text-life-200">Nothing to buy. Plan the week and press "Make the grocery list", or add things here.</p> : aisles.map((aisle) => (
           <div key={aisle} className="mb-3 last:mb-0">
-            {aisles.length > 1 && <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-life-600 dark:text-life-300">{aisle}</h2>}
+            {(aisles.length > 1 || by === 'shop') && <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-life-600 dark:text-life-300">{aisle}{by === 'shop' && aisle.toLowerCase() === here && <span className="ml-2 normal-case text-gray-500 dark:text-life-300">where you are</span>}</h2>}
             <ul className="divide-y divide-life-50 dark:divide-life-700">
-              {open.filter((g) => (g.aisle || 'Everything else') === aisle).map((g) => {
+              {open.filter((g) => groupOf(g) === aisle).map((g) => {
                 const l = lineOf(g);
                 return (
                   <li key={g.id} className="flex items-center gap-3 py-2">
                     <input type="checkbox" checked={false} onChange={() => tick(g)} aria-label={`Got ${g.label}`} className="h-5 w-5 accent-life-600" />
                     <span className="min-w-0 flex-1 text-sm">
-                      <span className="text-gray-800 dark:text-life-50">{g.label}</span>
-                      {g.amount && <span className="ml-2 text-gray-500 dark:text-life-300">{g.amount}</span>}
+                      {g.ingredient_id
+                        ? <button type="button" onClick={() => setModal({ usual: g })} aria-label={`${g.label}: where and what size`} className="text-left text-gray-800 hover:underline dark:text-life-50">{g.label}</button>
+                        : <span className="text-gray-800 dark:text-life-50">{g.label}</span>}
+                      {(g.amount || l.usual_size) && <span className="ml-2 text-gray-500 dark:text-life-300">{g.amount || l.usual_size}</span>}
+                      {by !== 'shop' && l.usual_store && <span className="ml-2 rounded bg-life-50 px-1.5 text-[11px] text-life-700 dark:bg-life-700 dark:text-life-100">{l.usual_store}</span>}
                       {l.coupons.length > 0 && <span className="ml-2 rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">🎟 coupon</span>}
                       {g.note && <span className="block text-xs text-gray-400">{g.note}</span>}
                       {l.last && (
@@ -130,7 +149,7 @@ export default function Groceries() {
                     </span>
                     {/* The list gives no amount, so the size is whatever was picked up: a 30 oz tin, a dozen. */}
                     {!g.amount && (
-                      <input value={sizes[g.id] ?? ''} onChange={(e) => setSizes({ ...sizes, [g.id]: e.target.value })} placeholder={l.last?.amount || 'size'}
+                      <input value={sizes[g.id] ?? ''} onChange={(e) => setSizes({ ...sizes, [g.id]: e.target.value })} placeholder={l.usual_size || l.last?.amount || 'size'}
                         aria-label={`Size of ${g.label}`} className={`${inputClass} !w-16 !px-2 text-center`} />
                     )}
                     <input inputMode="decimal" value={typed[g.id] ?? ''} onChange={(e) => setTyped({ ...typed, [g.id]: e.target.value })} placeholder={l.last ? (l.last.cents / 100).toFixed(2) : 'price'}
@@ -214,6 +233,11 @@ export default function Groceries() {
       {modal?.scan && (
         <Modal title="Scan a grocery" onClose={() => { setModal(null); load(); }}>
           <ScanGrocery open={open} sign={sign} putAway={putAway} onChanged={load} />
+        </Modal>
+      )}
+      {modal?.usual && (
+        <Modal title={modal.usual.label} onClose={() => setModal(null)}>
+          <UsualForm line={lineOf(modal.usual)} hasAmount={Boolean(modal.usual.amount)} onSave={async (body) => { setShop((await axios.put(`/api/shopping/usual/${modal.usual.id}`, body)).data); setModal(null); }} />
         </Modal>
       )}
       {modal?.history && <Modal title={`${modal.history.label}: what it has cost`} onClose={() => setModal(null)}><History line={modal.history} sign={sign} /></Modal>}
@@ -423,6 +447,28 @@ function ScanGrocery({ open, sign, putAway, onChanged }) {
       {lastLine}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex items-center justify-end gap-2">{another}<button type="submit" className={buttonClass}>In the trolley</button></div>
+    </form>
+  );
+}
+
+/** Where a thing is usually bought, and in what size. Kept for the thing, so it holds every time it's on the list. */
+function UsualForm({ line, hasAmount, onSave }) {
+  const [form, setForm] = useState({ store: line.usual_store || '', size: line.usual_size || '' });
+  const [error, setError] = useState('');
+  const submit = async (e) => {
+    e.preventDefault();
+    try { await onSave({ store: form.store.trim() || null, size: form.size.trim() || null }); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+  };
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <Field label="Usually bought at"><input list="my-shops" value={form.store} onChange={(e) => setForm({ ...form, store: e.target.value })} placeholder={line.likely_store ? `last time: ${line.likely_store}` : 'any shop'} className={inputClass} /></Field>
+      <Field label="Usual size"><input value={form.size} onChange={(e) => setForm({ ...form, size: e.target.value })} placeholder="30 oz, 3 lb, 6" className={inputClass} /></Field>
+      <p className="text-xs text-gray-500 dark:text-life-300">
+        This is remembered for the thing itself, so it's here every time it's on the list. The shop lets the list be laid out by shop.
+        The size shows on the list when a line gives no amount{hasAmount ? ' (this one does, so its own amount is used)' : ''}, and is the size a price is taken to be for unless you type another.
+      </p>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="text-right"><button type="submit" className={buttonClass}>Save</button></div>
     </form>
   );
 }

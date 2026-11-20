@@ -10,7 +10,10 @@
  * amount on the list ("2 lb chicken thighs"), or, when the list only says "coffee", the size on the packet
  * ("30 oz"). Sizes are what let two shops, or a small bag and a big tin, be compared for one ounce.
  *
- * Shops are a list of your own to choose from, so a shop is spelt one way and prices can be set side by side. A line ticked off without a price takes last time's as a stand-in, marked as
+ * Shops are a list of your own to choose from, so a shop is spelt one way and prices can be set side by side.
+ * Each thing can have a usual shop and a usual size ("coffee: Costco, 3 lb"). The usual shop lets the list be
+ * read shop by shop; the usual size shows on a line that gives no amount, and is the size a price is taken
+ * to be for unless another is typed. A line ticked off without a price takes last time's as a stand-in, marked as
  * assumed: it counts in the total, but isn't remembered as a price anyone actually saw.
  *
  * A coupon is money or a percentage off, for one thing on the list or for the whole shop, perhaps only at one
@@ -34,6 +37,12 @@ export type ShoppingLine = {
   last: LastPrice | null;
   /** Coupons that could be used on this line. */
   coupons: number[];
+  /** The shop this is usually bought at, when one has been said. */
+  usual_store: string | null;
+  /** The size it's usually bought in ("30 oz"); empty when none has been said. */
+  usual_size: string;
+  /** Where it will most likely be bought: the usual shop, or else where it was bought last. */
+  likely_store: string | null;
 };
 export type CouponInput = {
   label: string;
@@ -115,6 +124,7 @@ const MAX_CENTS = 100_000_000;
 
 type CouponRow = Omit<Coupon, 'days_left' | 'worth_cents' | 'ingredient'> & { ingredient: string | null };
 type Line = { id: number; ingredient_id: number | null; label: string; quantity: number | null; unit: string | null; done: number };
+type Habit = { id: number; usual_store: string | null; usual_size_quantity: number | null; usual_size_unit: string | null };
 const valueOf = (p: { cents: number; per_cents: number | null }, basis: 'per' | 'line') => (basis === 'per' ? p.per_cents! : p.cents);
 
 /** A size as it's typed ("30 oz", "2 lb", "6"): how much, and of what. Null when nothing was typed. */
@@ -177,6 +187,9 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       `SELECT c.id, c.label, c.ingredient_id, i.name AS ingredient, c.cents_off, c.percent_off, c.store, c.code, c.expires_on, c.note, c.used_on
        FROM coupons c LEFT JOIN ingredients i ON i.id = c.ingredient_id
        WHERE c.owner_id = ? AND (c.used_on IS NULL OR c.used_on = ?) ORDER BY COALESCE(c.expires_on, '9999'), c.id`, [owner, day]);
+    const habits = new Map((await db.all<Habit>(
+      'SELECT id, usual_store, usual_size_quantity, usual_size_unit FROM ingredients WHERE owner_id = ? AND (usual_store IS NOT NULL OR usual_size_quantity IS NOT NULL)', [owner])).map((h) => [h.id, h]));
+    const habitOf = (l: Line) => (l.ingredient_id !== null ? habits.get(l.ingredient_id) : undefined);
     const storeNames = (await db.all<{ name: string }>('SELECT name FROM stores WHERE owner_id = ? ORDER BY name COLLATE NOCASE', [owner])).map((r) => r.name);
     const done = lines.filter((l) => l.done === 1);
     const trolley = done.reduce((sum, l) => sum + (onLine.get(l.id)?.cents ?? 0), 0);
@@ -202,6 +215,8 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
         id: l.id, price_cents: onLine.get(l.id)?.cents ?? null, size: onLine.has(l.id) ? units.amount(onLine.get(l.id)!.quantity, onLine.get(l.id)!.unit) : '',
         assumed: onLine.get(l.id)?.assumed === 1, last: lastFor(l),
         coupons: coupons.filter((c) => c.used_on === null && (c.days_left === null || c.days_left >= 0) && c.ingredient_id !== null && c.ingredient_id === l.ingredient_id).map((c) => c.id),
+        usual_store: habitOf(l)?.usual_store ?? null, usual_size: units.amount(habitOf(l)?.usual_size_quantity, habitOf(l)?.usual_size_unit),
+        likely_store: habitOf(l)?.usual_store ?? lastFor(l)?.store ?? null,
       })),
       coupons,
       totals: {
@@ -226,6 +241,22 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       // Kept as the list spells it, however it was typed this time.
       const listed = tidy ? await db.get<{ name: string }>('SELECT name FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE', [owner, tidy]) : undefined;
       await keep(STORE, listed?.name ?? tidy);
+      return summary();
+    },
+
+    /**
+     * Say where the thing on a line is usually bought, and in what size. Either can be left empty to forget
+     * it. It's kept for the ingredient, so it holds every time that thing is on the list.
+     */
+    async setUsual(groceryId: number, input: { store?: string | null; size?: string | null }): Promise<Shopping> {
+      const l = await line(db, groceryId);
+      if (l.ingredient_id === null) throw new Problem(400, "That line isn't an ingredient Life Is knows, so nothing can be remembered about it");
+      const store = clean(input.store, 100);
+      if (store) await db.run('INSERT OR IGNORE INTO stores (owner_id, name, created_at) VALUES (?, ?, ?)', [owner, store, stamp(clock())]);
+      const listed = store ? await db.get<{ name: string }>('SELECT name FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE', [owner, store]) : undefined;
+      const size = sizeOf(input.size);
+      await db.run('UPDATE ingredients SET usual_store = ?, usual_size_quantity = ?, usual_size_unit = ? WHERE id = ? AND owner_id = ?',
+        [listed?.name ?? store, size?.quantity ?? null, size?.unit ?? null, l.ingredient_id, owner]);
       return summary();
     },
 
@@ -258,6 +289,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       await db.run('UPDATE stores SET name = ?, note = ? WHERE id = ?', [name, clean(input.note, 300), id]);
       await db.run('UPDATE prices SET store = ? WHERE owner_id = ? AND store = ? COLLATE NOCASE', [name, owner, old.name]);
       await db.run('UPDATE coupons SET store = ? WHERE owner_id = ? AND store = ? COLLATE NOCASE', [name, owner, old.name]);
+      await db.run('UPDATE ingredients SET usual_store = ? WHERE owner_id = ? AND usual_store = ? COLLATE NOCASE', [name, owner, old.name]);
       if (((await setting(STORE)) ?? '').toLowerCase() === old.name.toLowerCase()) await keep(STORE, name);
       return this.stores();
     },
@@ -282,7 +314,8 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
      */
     async setPrice(groceryId: number, price: number | null, assumed = false, barcode?: string | null, size?: string | null): Promise<Shopping> {
       const l = await line(db, groceryId);
-      // The size bought: what was typed; else the amount on the list; else the packet's own; else what it was last time.
+      // The size bought: what was typed; else the amount on the list; else the packet's own; else the usual size; else what it was last time.
+      const habit = l.ingredient_id !== null ? await db.get<Habit>('SELECT id, usual_store, usual_size_quantity, usual_size_unit FROM ingredients WHERE id = ? AND owner_id = ?', [l.ingredient_id, owner]) : undefined;
       const typed = sizeOf(size);
       const packet = barcode ? await db.get<{ size_quantity: number | null; size_unit: string | null }>(
         'SELECT size_quantity, size_unit FROM ingredient_barcodes WHERE owner_id = ? AND barcode = ?', [owner, barcodeKey(barcode)]) : undefined;
@@ -292,6 +325,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
         [owner, groceryId, l.ingredient_id ?? l.label.trim().toLowerCase()]);
       const bought = typed ?? (l.quantity !== null ? { quantity: l.quantity, unit: l.unit }
         : packet?.size_quantity != null ? { quantity: packet.size_quantity, unit: packet.size_unit }
+        : habit?.usual_size_quantity != null ? { quantity: habit.usual_size_quantity, unit: habit.usual_size_unit }
         : before?.quantity != null ? { quantity: before.quantity, unit: before.unit } : { quantity: null, unit: null });
       l.quantity = bought.quantity;
       l.unit = bought.unit;

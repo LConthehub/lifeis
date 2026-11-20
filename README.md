@@ -30,6 +30,9 @@ So far: the kitchen, the calendar, the things you keep, the projects that use th
 - **Shops and sizes.** Your shops are a list to pick from, and each price keeps the size you bought: the amount on
   the list, or the size on the packet (a 30 oz tin, a 12 oz bag). So a thing's price is shown for one ounce, pound
   or each, whatever size it came in, and set side by side for each shop, cheapest first.
+- **A usual shop and a usual size for each thing.** "Coffee: Costco, 3 lb." The list can be laid out by shop, with the
+  one you're standing in first; the usual size shows on a line that gives no amount, and is what a price is taken
+  to be for unless you type another.
 - **Scan it in the shop.** Point the camera at a packet. The first time, say which thing on the list it is; after
   that a scan finds its line, shows last time's price, and puts it in the trolley with what you type.
 - **Coupons.** Money or a percentage off, for one thing or the whole shop, perhaps at one shop and until a day. The
@@ -78,7 +81,8 @@ time in Settings; unticking something only puts it out of sight.
 
 - **Your own kinds of things.** Fabric, yarn, tools, seeds, board games: a kind is whatever you say it is, with
   the fields you care about (a fabric's width, a seed packet's sow-by date). Start from a ready-made set (sewing,
-  knitting, woodworking, gardening, around the house, cookware with cast iron) and change it, or make your own
+  knitting, woodworking, gardening, around the house, cookware with cast iron, clothes and shoes with their sizes,
+  bedding by bed size) and change it, or make your own
   from nothing.
 - **Where everything is.** A room, a shelf in it, a bin on the shelf, as far down as helps you find things.
 - **A sticker for every shelf and bin.** Print a sheet of QR stickers for your places. Point a phone at one and

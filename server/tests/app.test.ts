@@ -508,6 +508,8 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   for (const table of ['stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
+  // Columns later added to a table that was already there go back too.
+  for (const column of ['usual_store', 'usual_size_quantity', 'usual_size_unit']) await database.db.run(`ALTER TABLE ingredients DROP COLUMN ${column}`);
   await database.db.run('PRAGMA user_version = 2');
   await stop();
 
@@ -614,5 +616,7 @@ it('prices, the running total and coupons answer over the web, in whole cents', 
   // Clearing the list keeps what things cost.
   await admin.post('/api/kitchen/grocery/clear-done');
   const again = (await admin.post('/api/kitchen/grocery', { label: 'coffee' })).json[0].id;
-  expect((await admin.get('/api/shopping')).json.lines).toEqual([{ id: again, price_cents: null, size: '', assumed: false, last: expect.objectContaining({ cents: 899, amount: '30 oz', store: 'Aldi on Main St' }), coupons: [] }]);
+  expect((await admin.put(`/api/shopping/usual/${again}`, { store: 'Costco', size: '3 lb' })).json.lines).toEqual([{ id: again, price_cents: null, size: '', assumed: false,
+    last: expect.objectContaining({ cents: 899, amount: '30 oz', store: 'Aldi on Main St' }), coupons: [], usual_store: 'Costco', usual_size: '3 lb', likely_store: 'Costco' }]);
+  expect((await admin.put(`/api/shopping/usual/${again}`, { size: 'huge' })).status).toBe(400);
 });

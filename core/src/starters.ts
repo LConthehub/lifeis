@@ -80,6 +80,20 @@ export const STARTERS: Starter[] = [
     ],
   },
   {
+    slug: 'clothing',
+    name: 'Clothes, shoes and linens',
+    about: 'What everyone wears and in what size, and the sheets that fit each bed.',
+    kinds: [
+      { name: 'Clothes', icon: '👕', fields: [
+        text('Size'), text('Whose'), choice('Type', 'Top', 'Bottom', 'Dress', 'Outerwear', 'Underwear', 'Sleepwear', 'Sportswear', 'Other'),
+        text('Brand'), text('Colour'), choice('Season', 'All year', 'Warm weather', 'Cold weather'), text('Care') ] },
+      { name: 'Shoes', icon: '👟', fields: [text('Size'), text('Whose'), text('Brand'), text('Colour'), choice('Season', 'All year', 'Warm weather', 'Cold weather')] },
+      { name: 'Bedding and linens', icon: '🛏', fields: [
+        choice('Size', 'Cot', 'Twin', 'Twin XL', 'Full', 'Queen', 'King', 'Cal King', 'Other'), choice('Type', 'Sheets', 'Duvet cover', 'Blanket', 'Pillowcase', 'Towel', 'Tablecloth', 'Other'),
+        text('For which bed or room'), text('Colour') ] },
+    ],
+  },
+  {
     slug: 'home',
     name: 'Around the house',
     about: 'Tools, paint for each room, filters and bulbs, and what is in storage.',

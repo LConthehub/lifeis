@@ -35,6 +35,7 @@ export function shoppingRoutes(db: Db): Route[] {
       return { json: await mine(c).learn(read.text(c.body, 'code'), line, read.maybeText(c.body, 'product'), read.maybeText(c.body, 'size')) };
     }],
     ['DELETE', at('/scan'), async (c) => (await mine(c).forget(c.query.get('code') ?? ''), { status: 204 })],
+    ['PUT', at('/usual/:id'), async (c) => ({ json: await mine(c).setUsual(c.id, { store: read.maybeText(c.body, 'store'), size: read.maybeText(c.body, 'size') }) })],
     // Your shops.
     ['GET', at('/stores'), async (c) => ({ json: await mine(c).stores() })],
     ['POST', at('/stores'), async (c) => ({ status: 201, json: await mine(c).addStore({ name: read.text(c.body, 'name'), note: read.maybeText(c.body, 'note') }) })],
