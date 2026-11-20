@@ -163,6 +163,11 @@ Your records are kept by Docker, encrypted. **Never run `docker compose down -v`
 
 ## For developers
 
+- **On the device, with no server** (in progress, for the phone apps): everything a signed-in person does is written as
+  handlers that know nothing of how a request arrived (`server/src/everydayRoutes.ts`). The server puts them behind its
+  sign-in; the on-device build (`frontend/src/device`, `npx vite build --config vite.device.config.js`) hands the pages'
+  requests straight to them, with the database inside the app. Today that database is an unencrypted stand-in for
+  trying it in a browser; on a phone it will be SQLCipher through Capacitor.
 - `core/`: the kitchen, in TypeScript, written so the same code runs on the server, in the browser and inside a
   phone app. `kitchen.ts` is the kitchen, `units.ts` reads amounts and converts units, `recipeText.ts` reads
   and writes recipes, `inventory.ts` is the things you keep, `projects.ts` the projects, `calendar.ts` the calendar, `media.ts` the
