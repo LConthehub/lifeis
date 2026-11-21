@@ -4,7 +4,12 @@
 FROM node:24-slim AS pages
 WORKDIR /pages
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+# Some networks (an antivirus that inspects secure connections, an office proxy) re-sign every download with a
+# certificate of their own. If yours does, hand that certificate to the build as the secret "extra_ca" and the
+# downloads below will trust it; without the secret, nothing changes. See docker-compose.override.yml.
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -f /run/secrets/extra_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; fi; \
+    npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 COPY frontend/ .
 RUN npm run build
 
@@ -12,7 +17,9 @@ RUN npm run build
 FROM node:24-slim AS engine
 WORKDIR /app/server
 COPY server/package.json server/package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -f /run/secrets/extra_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; fi; \
+    npm ci --omit=dev --no-audit --no-fund
 
 FROM node:24-slim
 WORKDIR /app/server
