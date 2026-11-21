@@ -55,7 +55,7 @@ are written once and reviewed before anything goes live.
 
     RUN YOUR OWN
 
-    Life Is is also free, open-source software you can run on your own computer for the whole household. The app can connect to it, at no charge, so everyone at home shares what they choose to share.
+    Life Is is also free software you can run on your own computer for the whole household. The app can connect to it, at no charge, so everyone at home shares what they choose to share.
 
 ## Category and tags
 
