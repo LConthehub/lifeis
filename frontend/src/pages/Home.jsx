@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { onDevice } from '../where';
 import { whoText, whenText } from './Mail';
 import Modal, { buttonClass, quietButtonClass, cardClass, fromDateInput, minutesText } from '../components/ui';
 
@@ -65,7 +66,7 @@ export default function Home({ user }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-2">
         <div className="mr-auto">
-          <h1 className="text-2xl font-semibold text-life-800 dark:text-life-50">{greeting()}, {user.username}</h1>
+          <h1 className="text-2xl font-semibold text-life-800 dark:text-life-50">{greeting()}{onDevice() ? '' : `, ${user.username}`}</h1>
           <p className="text-sm text-gray-600 dark:text-life-200">{fromDateInput(today).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
         </div>
         <button type="button" onClick={() => setChoosing(true)} className={quietButtonClass}>Choose what shows</button>

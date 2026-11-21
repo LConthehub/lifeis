@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { LifeAreasPicker } from '../components/LifeAreas';
+import { onDevice } from '../where';
 
 const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 120: '2 hours', 480: '8 hours', 0: 'Stay signed in' };
 
@@ -14,20 +15,27 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
         <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">What Life Is looks after</h2>
         <LifeAreasPicker onSaved={onLifeChanged} />
       </section>
-      <CalendarLink />
+      {/* On the device there is no server for a calendar app to ask, and no accounts: the device's own lock is the door. */}
+      {!onDevice() && <CalendarLink />}
       <OutsideServices />
-      <SignedOut />
-      <PasswordForm />
-      {user.is_admin && <AddPerson />}
-      <section className={cardClass}>
+      {!onDevice() && <SignedOut />}
+      {!onDevice() && <PasswordForm />}
+      {!onDevice() && user.is_admin && <AddPerson />}
+      {onDevice() && (
+        <section className={cardClass}>
+          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Kept on this device</h2>
+          <p className="text-sm text-gray-600 dark:text-life-100">Everything you write in Life Is stays on this device. There is no account and no password: the device's own lock is what keeps it yours.</p>
+        </section>
+      )}
+      {!onDevice() && <section className={cardClass}>
         <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Your recipes, yours to take</h2>
         <p className="mb-3 text-sm text-gray-600 dark:text-life-100">
           Download every recipe as Nextcloud Cookbook folders (each one a <code>recipe.json</code>, with the original text beside it).
           Unzip them into the Recipes folder in your Nextcloud and the Cookbook app shows them.
         </p>
         <a href="/api/kitchen/recipes-export.zip" className={quietButtonClass}>Download recipes</a>
-      </section>
-      <button type="button" onClick={onLogout} className={quietButtonClass}>Sign out ({user.username})</button>
+      </section>}
+      {!onDevice() && <button type="button" onClick={onLogout} className={quietButtonClass}>Sign out ({user.username})</button>}
     </div>
   );
 }

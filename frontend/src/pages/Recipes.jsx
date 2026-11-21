@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import { onDevice } from '../where';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, minutesText, toDateInput } from '../components/ui';
 
 /** The recipe box: search, tags, add, paste in, export. */
@@ -51,9 +52,11 @@ export default function Recipes() {
           ))}
         </ul>
       )}
-      <p className="text-xs text-gray-500 dark:text-life-300">
-        <a href="/api/kitchen/recipes-export.zip" className="underline">Download all recipes</a> as Nextcloud Cookbook folders. Unzip into the Recipes folder in your Nextcloud.
-      </p>
+      {!onDevice() && (
+        <p className="text-xs text-gray-500 dark:text-life-300">
+          <a href="/api/kitchen/recipes-export.zip" className="underline">Download all recipes</a> as Nextcloud Cookbook folders. Unzip into the Recipes folder in your Nextcloud.
+        </p>
+      )}
       {modal === 'new' && (
         <Modal title="New recipe" onClose={() => setModal(null)} wide>
           <RecipeForm onSaved={(r) => navigate(`/recipes/${r.id}`)} />
