@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Life Is</string>
+    <string name="title_activity_main">Life Is</string>
+    <string name="package_name">online.example.lifeis</string>
+    <string name="custom_url_scheme">online.example.lifeis</string>
+</resources>

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { LifeAreasPicker } from '../components/LifeAreas';
-import { onDevice } from '../where';
+import { chooseAgain, inApp, linkedServer, onDevice, serverOrigin } from '../where';
 
 const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 120: '2 hours', 480: '8 hours', 0: 'Stay signed in' };
 
@@ -24,10 +24,19 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
       {onDevice() && (
         <section className={cardClass}>
           <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Kept on this device</h2>
-          <p className="text-sm text-gray-600 dark:text-life-100">Everything you write in Life Is stays on this device. There is no account and no password: the device's own lock is what keeps it yours.</p>
+          <p className="text-sm text-gray-600 dark:text-life-100">Everything you write in Life Is stays on this device, locked with a key only this device holds. There is no account and no password: the device's own lock is what keeps it yours.</p>
+          <p className="mt-2 text-sm text-gray-600 dark:text-life-100">If you run Life Is on a computer of your own, this app can show that one instead. What is on this device stays here, untouched, and is not copied across.</p>
+          <button type="button" onClick={chooseAgain} className={`${quietButtonClass} mt-3`}>Connect to a Life Is I host</button>
         </section>
       )}
-      {!onDevice() && <section className={cardClass}>
+      {linkedServer() && (
+        <section className={cardClass}>
+          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Connected to your Life Is</h2>
+          <p className="text-sm text-gray-600 dark:text-life-100">This app is showing the Life Is at <span className="break-all font-medium">{linkedServer()}</span>. Everything is kept there; this phone holds only that address and your sign-in.</p>
+          <button type="button" onClick={chooseAgain} className={`${quietButtonClass} mt-3`}>Disconnect this phone</button>
+        </section>
+      )}
+      {!inApp() && <section className={cardClass}>
         <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Your recipes, yours to take</h2>
         <p className="mb-3 text-sm text-gray-600 dark:text-life-100">
           Download every recipe as Nextcloud Cookbook folders (each one a <code>recipe.json</code>, with the original text beside it).
@@ -130,11 +139,11 @@ function CalendarLink() {
     // Once the link exists, a tick is saved straight away; before that it waits for "Make a link".
     if (link.on && next.length > 0) ask(() => axios.put('/api/calendar/link', { kinds: next }));
   };
-  const address = link.token ? `${window.location.origin}/cal/${link.token}.ics` : '';
+  const address = link.token ? `${serverOrigin()}/cal/${link.token}.ics` : '';
   const copy = async () => {
     try { await navigator.clipboard.writeText(address); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch { setError('Copying was refused: press and hold the link to copy it instead'); }
   };
-  const onThisComputerOnly = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+  const onThisComputerOnly = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(serverOrigin()).hostname);
   return (
     <section className={cardClass} id="calendar-link">
       <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Your calendar on your phone</h2>

@@ -1,5 +1,6 @@
 /**
- * A Db made from one SQLite connection that answers at once (the server's, and the tests').
+ * A Db made from one SQLite connection: the server's and the tests', which answer at once, or a phone's,
+ * which answers a moment later.
  *
  * One connection can hold one transaction, so an open transaction owns the connection: every other read,
  * write and transaction waits in line until it ends. That is what keeps one person's half-finished change
@@ -7,19 +8,20 @@
  */
 import type { Db, Queries, Row, Tx, Value, Written } from './db.ts';
 
-/** The connection, as plainly as it can be put. Each of these answers straight away. */
+/** The connection, as plainly as it can be put. Each of these may answer straight away or with a promise. */
+type Soon<T> = T | Promise<T>;
 export type Connection = {
-  get(sql: string, params: Value[]): Row | undefined;
-  all(sql: string, params: Value[]): Row[];
-  run(sql: string, params: Value[]): Written;
+  get(sql: string, params: Value[]): Soon<Row | undefined>;
+  all(sql: string, params: Value[]): Soon<Row[]>;
+  run(sql: string, params: Value[]): Soon<Written>;
   /** SQL with nothing to fill in and nothing to give back: BEGIN, COMMIT, ROLLBACK. */
-  exec(sql: string): void;
+  exec(sql: string): Soon<void>;
 };
 
 export function serialDb(connection: Connection): Db {
   const direct: Queries = {
-    get: async <T extends Row>(sql: string, params: Value[] = []) => connection.get(sql, params) as T | undefined,
-    all: async <T extends Row>(sql: string, params: Value[] = []) => connection.all(sql, params) as T[],
+    get: async <T extends Row>(sql: string, params: Value[] = []) => (await connection.get(sql, params)) as T | undefined,
+    all: async <T extends Row>(sql: string, params: Value[] = []) => (await connection.all(sql, params)) as T[],
     run: async (sql: string, params: Value[] = []) => connection.run(sql, params),
   };
 
@@ -39,7 +41,7 @@ export function serialDb(connection: Connection): Db {
       free = new Promise<void>((resolve) => (release = resolve));
       await before;
       try {
-        connection.exec('BEGIN IMMEDIATE');
+        await connection.exec('BEGIN IMMEDIATE');
       } catch (problem) {
         release();
         throw problem;
@@ -52,7 +54,7 @@ export function serialDb(connection: Connection): Db {
       const end = (sql: string) => inside(async () => {
         open = false;
         try {
-          connection.exec(sql);
+          await connection.exec(sql);
         } finally {
           release();
         }

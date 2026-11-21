@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { onDevice } from '../where';
+import { inApp } from '../where';
 
 /**
  * A picture Life Is keeps (a plan's photo, a cover). With a server, the browser fetches it by its address
- * like any picture. On the device there is no address to fetch from, so it is asked for the way everything
- * else is, and shown from memory.
+ * like any picture. In the app there is no address the page itself can fetch from, so it is asked for the way
+ * everything else is, and shown from memory.
  */
 export default function Picture({ src, alt = '', ...rest }) {
-  const [shown, setShown] = useState(onDevice() ? null : src);
+  const [shown, setShown] = useState(inApp() ? null : src);
   useEffect(() => {
-    if (!onDevice()) { setShown(src); return undefined; }
+    if (!inApp()) { setShown(src); return undefined; }
     let made = null;
     let wanted = true;
     axios.get(src, { responseType: 'arraybuffer' }).then(({ data, headers }) => {

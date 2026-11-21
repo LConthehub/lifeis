@@ -10,5 +10,6 @@ export default defineConfig({
   optimizeDeps: { exclude: ['@sqlite.org/sqlite-wasm'] },
   // The core and the handlers live beside this folder, not inside it.
   server: { fs: { allow: ['..'] } },
-  preview: { port: 4179, strictPort: true },
+  // LIFEIS_TRY_SERVER is for trying "connect to a Life Is I host" in a browser: its requests are passed on there.
+  preview: { port: 4179, strictPort: true, proxy: process.env.LIFEIS_TRY_SERVER ? { '/api': process.env.LIFEIS_TRY_SERVER } : undefined },
 });
