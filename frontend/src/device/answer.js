@@ -8,7 +8,7 @@
  * There is no sign-in, because there is nobody to tell apart: the device belongs to one person, and the
  * device's own lock is the front door. So the few addresses about accounts answer for that one person.
  */
-import { kitchen, Problem } from '../../../core/src/index.ts';
+import { kitchen, makeBackup, restoreBackup, Problem } from '../../../core/src/index.ts';
 import { everydayRoutes } from '../../../server/src/everydayRoutes.ts';
 import { Refusal } from '../../../server/src/http.ts';
 
@@ -37,6 +37,14 @@ export async function deviceAnswers(db, outside = {}) {
     ['POST', /^\/api\/users$/, notHere],
     ['GET', /^\/api\/account$/, account],
     ['PUT', /^\/api\/account$/, account],
+    // Everything on this device as one file only a passphrase opens, and bringing such a file back.
+    ['POST', /^\/api\/device\/backup$/, async (c) => ({ body: await makeBackup(db, c.body.passphrase, clock), headers: { 'Content-Type': 'application/octet-stream' } })],
+    ['POST', /^\/api\/device\/restore$/, async (c) => {
+      if (typeof c.body.file !== 'string') throw new Refusal(422, 'Choose the backup file');
+      let bytes;
+      try { bytes = Uint8Array.from(atob(c.body.file), (ch) => ch.charCodeAt(0)); } catch { throw new Refusal(400, "That file isn't a Life Is backup"); }
+      return { json: await restoreBackup(db, bytes, c.body.passphrase) };
+    }],
     ...everydayRoutes(db, outside),
   ];
 

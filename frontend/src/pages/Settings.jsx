@@ -29,6 +29,7 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
           <button type="button" onClick={chooseAgain} className={`${quietButtonClass} mt-3`}>Connect to a Life Is I host</button>
         </section>
       )}
+      {onDevice() && <DeviceBackup />}
       {linkedServer() && (
         <section className={cardClass}>
           <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Connected to your Life Is</h2>
@@ -46,6 +47,78 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
       </section>}
       {!onDevice() && <button type="button" onClick={onLogout} className={quietButtonClass}>Sign out ({user.username})</button>}
     </div>
+  );
+}
+
+/** On the device: everything as one locked file to keep somewhere else, and bringing such a file back. */
+function DeviceBackup() {
+  const [doing, setDoing] = useState(null); // 'save' | 'restore'
+  const [pass, setPass] = useState('');
+  const [again, setAgain] = useState('');
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState('');
+  const [error, setError] = useState('');
+  const start = (what) => { setDoing(what); setPass(''); setAgain(''); setFile(null); setError(''); setSaid(''); };
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (pass !== again) { setError("The two passphrases aren't the same"); return; }
+    setBusy(true); setError('');
+    try {
+      const { data } = await axios.post('/api/device/backup', { passphrase: pass }, { responseType: 'arraybuffer' });
+      const now = new Date(); // the day it is here, not in Greenwich
+      const name = `life-is-backup-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}.lifeis`;
+      const { handOver } = await import('../device/handOver.js');
+      await handOver(new Uint8Array(data), name);
+      setDoing(null);
+      setSaid(`Made ${name}. Keep it wherever you like; without the passphrase it is unreadable.`);
+    } catch (err) { setError(errorMessage(err, "Couldn't make the backup")); }
+    setBusy(false);
+  };
+  const restore = async (e) => {
+    e.preventDefault();
+    setBusy(true); setError('');
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let text = '';
+      for (let at = 0; at < bytes.length; at += 0x8000) text += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+      await axios.post('/api/device/restore', { passphrase: pass, file: btoa(text) });
+      await window.lifeisDevice?.saved?.();
+      window.location.replace('/');
+    } catch (err) { setError(errorMessage(err, "Couldn't bring that backup back")); setBusy(false); }
+  };
+
+  return (
+    <section className={cardClass}>
+      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">A backup you hold</h2>
+      <p className="text-sm text-gray-600 dark:text-life-100">Life Is makes no copies of itself anywhere. If this device is lost, so is what it holds, unless you have made a backup: one file with everything in it, locked with a passphrase you choose. You can put the file anywhere, a cloud drive included; whoever stores it can't read it.</p>
+      {said && <p className="mt-2 rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-800 dark:text-life-50" role="status">{said}</p>}
+      {doing === null && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={() => start('save')} className={buttonClass}>Make a backup</button>
+          <button type="button" onClick={() => start('restore')} className={quietButtonClass}>Bring a backup back</button>
+        </div>
+      )}
+      {doing === 'save' && (
+        <form onSubmit={save} className="mt-3 space-y-3">
+          <Field label="A passphrase for this backup"><input type="password" required minLength={8} autoComplete="new-password" value={pass} onChange={(e) => setPass(e.target.value)} className={inputClass} /></Field>
+          <Field label="The same passphrase again"><input type="password" required minLength={8} autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} className={inputClass} /></Field>
+          <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">Write the passphrase down somewhere safe. Life Is doesn't keep it, and nobody, including whoever made Life Is, can open the backup without it.</p>
+          {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+          <div className="flex justify-end gap-2"><button type="button" onClick={() => setDoing(null)} className={quietButtonClass}>Cancel</button><button type="submit" disabled={busy} className={buttonClass}>{busy ? 'Locking it…' : 'Make the backup'}</button></div>
+        </form>
+      )}
+      {doing === 'restore' && (
+        <form onSubmit={restore} className="mt-3 space-y-3">
+          <Field label="The backup file"><input type="file" required onChange={(e) => setFile(e.target.files[0] ?? null)} className="block w-full text-sm" /></Field>
+          <Field label="Its passphrase"><input type="password" required autoComplete="off" value={pass} onChange={(e) => setPass(e.target.value)} className={inputClass} /></Field>
+          <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">This replaces everything on this device with what the backup holds. What is here now, and isn't in the backup, will be gone.</p>
+          {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+          <div className="flex justify-end gap-2"><button type="button" onClick={() => setDoing(null)} className={quietButtonClass}>Cancel</button><button type="submit" disabled={busy || !file} className={buttonClass}>{busy ? 'Bringing it back…' : 'Replace what is here'}</button></div>
+        </form>
+      )}
+    </section>
   );
 }
 
