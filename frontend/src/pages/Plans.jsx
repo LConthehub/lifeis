@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import Picture from '../components/Picture';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, fromDateInput } from '../components/ui';
 
 const ENTRY_ICONS = { meal: '🍽', session: '🧵', media: '🎞' };
@@ -80,7 +81,7 @@ export default function PlansPage() {
   const tile = (p) => (
     <li key={p.id}>
       <Link to={`/plans/${p.id}`} className={`${cardClass} flex h-full gap-3 hover:ring-life-300`}>
-        {p.cover_photo ? <img src={photoAddress(p.cover_photo)} alt="" loading="lazy" className="h-16 w-16 flex-none rounded-lg object-cover" />
+        {p.cover_photo ? <Picture src={photoAddress(p.cover_photo)} alt="" loading="lazy" className="h-16 w-16 flex-none rounded-lg object-cover" />
           : <span aria-hidden="true" className="flex h-16 w-16 flex-none items-center justify-center rounded-lg bg-life-50 text-2xl dark:bg-life-700">✨</span>}
         <span className="min-w-0 flex-1">
           <span className="block font-medium text-life-800 dark:text-life-50">{p.name}</span>
@@ -433,7 +434,7 @@ function Photos({ plan, onChanged, onOpen }) {
           {plan.photos_list.map((p) => (
             <li key={p.id}>
               <button type="button" onClick={() => onOpen(p)} className="block w-full overflow-hidden rounded-lg ring-1 ring-life-100 hover:ring-life-400 dark:ring-life-700">
-                <img src={photoAddress(p)} alt={p.caption || 'A photo from this plan'} loading="lazy" className="aspect-square w-full object-cover" />
+                <Picture src={photoAddress(p)} alt={p.caption || 'A photo from this plan'} loading="lazy" className="aspect-square w-full object-cover" />
               </button>
             </li>
           ))}
@@ -450,7 +451,7 @@ function PhotoView({ photo, onDone }) {
   const remove = async () => onDone((await axios.delete(`/api/plans/photos/${photo.id}`)).data);
   return (
     <div className="space-y-3">
-      <img src={photoAddress(photo)} alt={photo.caption || ''} className="max-h-[60vh] w-full rounded-lg object-contain" />
+      <Picture src={photoAddress(photo)} alt={photo.caption || ''} className="max-h-[60vh] w-full rounded-lg object-contain" />
       <Field label="What it shows"><input value={caption} onChange={(e) => setCaption(e.target.value)} className={inputClass} /></Field>
       <div className="flex items-center justify-between">
         <button type="button" onClick={remove} className="text-sm text-red-600 hover:underline">{photo.source === 'kept' ? 'Delete this photo' : 'Take it off the plan (it stays in your library)'}</button>
@@ -485,7 +486,7 @@ function LibraryPicker({ plan, onDone }) {
             {photos.map((p) => (
               <li key={p.id}>
                 <label className={`relative block cursor-pointer overflow-hidden rounded-lg ring-2 ${chosen.includes(p.id) ? 'ring-life-500' : 'ring-transparent'} ${p.linked ? 'opacity-50' : ''}`}>
-                  <img src={`/api/photos/thumb?id=${p.id}`} alt={`${p.name}, taken ${p.taken.replace('T', ' at ')}`} loading="lazy" className="aspect-square w-full object-cover" />
+                  <Picture src={`/api/photos/thumb?id=${p.id}`} alt={`${p.name}, taken ${p.taken.replace('T', ' at ')}`} loading="lazy" className="aspect-square w-full object-cover" />
                   <input type="checkbox" disabled={p.linked} checked={p.linked || chosen.includes(p.id)} onChange={() => toggle(p.id)} className="absolute left-1.5 top-1.5 h-4 w-4 accent-life-600" />
                   <span className="absolute inset-x-0 bottom-0 bg-black/50 px-1 text-center text-[10px] text-white">{p.linked ? 'already here' : p.taken.slice(11)}</span>
                 </label>

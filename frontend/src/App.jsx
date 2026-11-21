@@ -18,6 +18,8 @@ import Mail from './pages/Mail';
 import Prices from './pages/Prices';
 import PlansPage, { PlanPage } from './pages/Plans';
 import { PlacePage, StickerLanding, StickersPage } from './pages/Places';
+import AccessNote from './components/AccessNote';
+import Money from './pages/Money';
 
 axios.defaults.withCredentials = true;
 // The server keeps time in UTC, so each request says what day it is here. Without it, something finished at
@@ -38,6 +40,7 @@ const SECTIONS = [
     tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/kinds', 'Kinds', '🏷']] },
   { word: 'making', home: '/projects', owns: (path) => path.startsWith('/projects'),
     tabs: [['/projects', 'Projects', '🧵']] },
+  { word: 'spending', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month', '💵']] },
   { word: 'enjoying', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection', '🎞'], ['/media/servers', 'Servers', '🖥']] },
 ];
 
@@ -110,6 +113,7 @@ function Shell({ user, onLogout }) {
       <main className="mx-auto max-w-5xl px-3 py-4 sm:px-4">
         {/* The page is a sheet of frosted glass over the gradient, so everything on it reads clearly. */}
         <div className="rounded-3xl bg-white/80 p-4 shadow-xl ring-1 ring-white/50 backdrop-blur-md dark:bg-life-900/75 dark:ring-white/10 sm:p-6">
+        <AccessNote show={Boolean(section) && section.word !== 'eating' && pathname !== '/' && pathname !== '/settings'} pathname={pathname} />
         <Routes>
           <Route path="/" element={<Home user={user} />} />
           <Route path="/recipes" element={<Recipes />} />
@@ -133,6 +137,7 @@ function Shell({ user, onLogout }) {
           <Route path="/media" element={<MediaPage />} />
           <Route path="/media/servers" element={<Servers />} />
           <Route path="/media/:id" element={<MediaTitlePage />} />
+          <Route path="/money" element={<Money />} />
           <Route path="/settings" element={<Settings user={user} onLogout={onLogout} onLifeChanged={setLife} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

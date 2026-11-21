@@ -2,7 +2,7 @@
  * What a person wants Life Is to look after.
  *
  * Asked once, the first time they sign in, and theirs to change whenever they like. Their answer does two
- * things: it decides which sections show ("eating", "planning", "keeping", "making", "enjoying"), and for the
+ * things: it decides which sections show ("eating", "planning", "keeping", "making", "enjoying", "spending"), and for the
  * things they make and do
  * (sewing, the garden) it adds the ready-made kinds of things to start from.
  *
@@ -15,7 +15,7 @@ import { Problem } from './problem.ts';
 import type { Clock } from './small.ts';
 import { STARTERS } from './starters.ts';
 
-export const SECTIONS = ['eating', 'planning', 'keeping', 'making', 'enjoying'] as const;
+export const SECTIONS = ['eating', 'planning', 'keeping', 'making', 'enjoying', 'spending'] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export type Area = {
@@ -40,6 +40,7 @@ export const AREAS: Area[] = [
   { key: 'making', label: 'Projects', about: 'Anything made or done over more than a day, what it uses, and the time on it.', group: 'home', sections: ['making'] },
   { key: 'planning', label: 'The calendar', about: 'Your own dates, with the week’s meals and the time on projects alongside.', group: 'home', sections: ['planning'] },
   { key: 'enjoying', label: 'Films, shows, music, books and games', about: 'What you own on every format, where it is, and what you’ve watched, read or heard.', group: 'home', sections: ['enjoying'] },
+  { key: 'spending', label: 'Money: the month’s plan and what was spent', about: 'An amount for each kind of spending each month, and what is left. Private unless you share a category.', group: 'home', sections: ['spending'] },
   { key: 'cookware', label: 'Cookware and kitchen gear', about: 'Cast iron, pans and baking dishes, so a recipe can say what it is cooked in.', group: 'home', sections: ['eating', 'keeping'], starter: 'cookware' },
   { key: 'clothing', label: 'Clothes, shoes and linens', about: 'What everyone wears and in what size, and the sheets that fit each bed.', group: 'home', sections: ['keeping'], starter: 'clothing' },
   ...['sewing', 'knitting', 'woodworking', 'gardening', 'home'].map(doing),

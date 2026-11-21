@@ -7,11 +7,13 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Only Life Is's own scripts may run, the page can't be framed, and no address leaks to other sites.
+// 'wasm-unsafe-eval' lets Life Is's own compiled code run (reading the text off a photo of a recipe, on the
+// person's own device); it does not allow scripts written as text to be run.
 const PAGE_HEADERS: Record<string, string> = {
   'X-Frame-Options': 'DENY',
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
     "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   // The camera is for Life Is's own pages only (scanning a barcode); the browser still asks the person each time.
   'Permissions-Policy': 'camera=(self), microphone=(), geolocation=(), payment=()',
@@ -21,7 +23,7 @@ const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.jpg': 'image/jpeg',
   '.webp': 'image/webp', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.map': 'application/json',
-  '.webmanifest': 'application/manifest+json',
+  '.webmanifest': 'application/manifest+json', '.wasm': 'application/wasm', '.gz': 'application/octet-stream',
 };
 
 export type Page = { headers: Record<string, string>; body: Buffer };

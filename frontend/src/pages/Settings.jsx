@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { LifeAreasPicker } from '../components/LifeAreas';
+import { chooseAgain, inApp, linkedServer, onDevice, serverOrigin } from '../where';
 
 const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 120: '2 hours', 480: '8 hours', 0: 'Stay signed in' };
 
@@ -14,21 +15,138 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
         <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">What Life Is looks after</h2>
         <LifeAreasPicker onSaved={onLifeChanged} />
       </section>
-      <CalendarLink />
+      {/* On the device there is no server for a calendar app to ask, and no accounts: the device's own lock is the door. */}
+      {!onDevice() && <CalendarLink />}
       <OutsideServices />
-      <SignedOut />
-      <PasswordForm />
-      {user.is_admin && <AddPerson />}
-      <section className={cardClass}>
+      {!onDevice() && <SignedOut />}
+      {!onDevice() && <PasswordForm />}
+      {!onDevice() && user.is_admin && <AddPerson />}
+      {onDevice() && (
+        <section className={cardClass}>
+          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Kept on this device</h2>
+          <p className="text-sm text-gray-600 dark:text-life-100">Everything you write in Life Is stays on this device, locked with a key only this device holds. There is no account and no password: the device's own lock is what keeps it yours.</p>
+          <p className="mt-2 text-sm text-gray-600 dark:text-life-100">If you run Life Is on a computer of your own, this app can show that one instead. What is on this device stays here, untouched, and is not copied across.</p>
+          <button type="button" onClick={chooseAgain} className={`${quietButtonClass} mt-3`}>Connect to a Life Is I host</button>
+        </section>
+      )}
+      {onDevice() && <Unlock />}
+      {onDevice() && <DeviceBackup />}
+      {linkedServer() && (
+        <section className={cardClass}>
+          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Connected to your Life Is</h2>
+          <p className="text-sm text-gray-600 dark:text-life-100">This app is showing the Life Is at <span className="break-all font-medium">{linkedServer()}</span>. Everything is kept there; this phone holds only that address and your sign-in.</p>
+          <button type="button" onClick={chooseAgain} className={`${quietButtonClass} mt-3`}>Disconnect this phone</button>
+        </section>
+      )}
+      {!inApp() && <section className={cardClass}>
         <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Your recipes, yours to take</h2>
         <p className="mb-3 text-sm text-gray-600 dark:text-life-100">
           Download every recipe as Nextcloud Cookbook folders (each one a <code>recipe.json</code>, with the original text beside it).
           Unzip them into the Recipes folder in your Nextcloud and the Cookbook app shows them.
         </p>
         <a href="/api/kitchen/recipes-export.zip" className={quietButtonClass}>Download recipes</a>
-      </section>
-      <button type="button" onClick={onLogout} className={quietButtonClass}>Sign out ({user.username})</button>
+      </section>}
+      {!onDevice() && <button type="button" onClick={onLogout} className={quietButtonClass}>Sign out ({user.username})</button>}
     </div>
+  );
+}
+
+/** On the device: what is free, where the trial of the rest stands, and unlocking it. */
+function Unlock() {
+  const [access, setAccess] = useState(null);
+  useEffect(() => { axios.get('/api/access').then(({ data }) => setAccess(data)).catch(() => {}); }, []);
+  useEffect(() => { if (access && window.location.hash === '#unlock') document.getElementById('unlock')?.scrollIntoView(); }, [access]);
+  if (!access) return null;
+  const days = access.days_left;
+  return (
+    <section className={cardClass} id="unlock" data-access={access.state}>
+      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">{access.state === 'unlocked' ? 'Life Is is unlocked' : 'Unlocking Life Is'}</h2>
+      {access.state === 'unlocked' ? (
+        <p className="text-sm text-gray-600 dark:text-life-100">Every part of Life Is is yours on this device, for good. Thank you.</p>
+      ) : (
+        <>
+          <p className="text-sm text-gray-600 dark:text-life-100">The kitchen (recipes, the week, groceries, the pantry, prices) and backups are free for good. Everything else is one payment of {access.price}: no subscription, nothing to renew.</p>
+          <p className="mt-2 text-sm text-gray-600 dark:text-life-100">
+            {access.state === 'unstarted' && `You can try all of it free for ${access.trial_days} days. The days start counting when you first add something outside the kitchen.`}
+            {access.state === 'trial' && `Your free trial has ${days} ${days === 1 ? 'day' : 'days'} left.`}
+            {access.state === 'ended' && 'Your free trial has ended. Nothing you entered has been hidden or removed: it can all still be read and backed up, and can be changed again once unlocked.'}
+          </p>
+          <p className="mt-3 rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-800 dark:text-life-50">Paying is done through the app store, and arrives when Life Is is in the store. This copy isn't from the store yet.</p>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** On the device: everything as one locked file to keep somewhere else, and bringing such a file back. */
+function DeviceBackup() {
+  const [doing, setDoing] = useState(null); // 'save' | 'restore'
+  const [pass, setPass] = useState('');
+  const [again, setAgain] = useState('');
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState('');
+  const [error, setError] = useState('');
+  const start = (what) => { setDoing(what); setPass(''); setAgain(''); setFile(null); setError(''); setSaid(''); };
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (pass !== again) { setError("The two passphrases aren't the same"); return; }
+    setBusy(true); setError('');
+    try {
+      const { data } = await axios.post('/api/device/backup', { passphrase: pass }, { responseType: 'arraybuffer' });
+      const now = new Date(); // the day it is here, not in Greenwich
+      const name = `life-is-backup-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}.lifeis`;
+      const { handOver } = await import('../device/handOver.js');
+      await handOver(new Uint8Array(data), name);
+      setDoing(null);
+      setSaid(`Made ${name}. Keep it wherever you like; without the passphrase it is unreadable.`);
+    } catch (err) { setError(errorMessage(err, "Couldn't make the backup")); }
+    setBusy(false);
+  };
+  const restore = async (e) => {
+    e.preventDefault();
+    setBusy(true); setError('');
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let text = '';
+      for (let at = 0; at < bytes.length; at += 0x8000) text += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+      await axios.post('/api/device/restore', { passphrase: pass, file: btoa(text) });
+      await window.lifeisDevice?.saved?.();
+      window.location.replace('/');
+    } catch (err) { setError(errorMessage(err, "Couldn't bring that backup back")); setBusy(false); }
+  };
+
+  return (
+    <section className={cardClass}>
+      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">A backup you hold</h2>
+      <p className="text-sm text-gray-600 dark:text-life-100">Life Is makes no copies of itself anywhere. If this device is lost, so is what it holds, unless you have made a backup: one file with everything in it, locked with a passphrase you choose. You can put the file anywhere, a cloud drive included; whoever stores it can't read it.</p>
+      {said && <p className="mt-2 rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-800 dark:text-life-50" role="status">{said}</p>}
+      {doing === null && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={() => start('save')} className={buttonClass}>Make a backup</button>
+          <button type="button" onClick={() => start('restore')} className={quietButtonClass}>Bring a backup back</button>
+        </div>
+      )}
+      {doing === 'save' && (
+        <form onSubmit={save} className="mt-3 space-y-3">
+          <Field label="A passphrase for this backup"><input type="password" required minLength={8} autoComplete="new-password" value={pass} onChange={(e) => setPass(e.target.value)} className={inputClass} /></Field>
+          <Field label="The same passphrase again"><input type="password" required minLength={8} autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} className={inputClass} /></Field>
+          <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">Write the passphrase down somewhere safe. Life Is doesn't keep it, and nobody, including whoever made Life Is, can open the backup without it.</p>
+          {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+          <div className="flex justify-end gap-2"><button type="button" onClick={() => setDoing(null)} className={quietButtonClass}>Cancel</button><button type="submit" disabled={busy} className={buttonClass}>{busy ? 'Locking it…' : 'Make the backup'}</button></div>
+        </form>
+      )}
+      {doing === 'restore' && (
+        <form onSubmit={restore} className="mt-3 space-y-3">
+          <Field label="The backup file"><input type="file" required onChange={(e) => setFile(e.target.files[0] ?? null)} className="block w-full text-sm" /></Field>
+          <Field label="Its passphrase"><input type="password" required autoComplete="off" value={pass} onChange={(e) => setPass(e.target.value)} className={inputClass} /></Field>
+          <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">This replaces everything on this device with what the backup holds. What is here now, and isn't in the backup, will be gone.</p>
+          {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+          <div className="flex justify-end gap-2"><button type="button" onClick={() => setDoing(null)} className={quietButtonClass}>Cancel</button><button type="submit" disabled={busy || !file} className={buttonClass}>{busy ? 'Bringing it back…' : 'Replace what is here'}</button></div>
+        </form>
+      )}
+    </section>
   );
 }
 
@@ -122,11 +240,11 @@ function CalendarLink() {
     // Once the link exists, a tick is saved straight away; before that it waits for "Make a link".
     if (link.on && next.length > 0) ask(() => axios.put('/api/calendar/link', { kinds: next }));
   };
-  const address = link.token ? `${window.location.origin}/cal/${link.token}.ics` : '';
+  const address = link.token ? `${serverOrigin()}/cal/${link.token}.ics` : '';
   const copy = async () => {
     try { await navigator.clipboard.writeText(address); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch { setError('Copying was refused: press and hold the link to copy it instead'); }
   };
-  const onThisComputerOnly = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+  const onThisComputerOnly = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(serverOrigin()).hostname);
   return (
     <section className={cardClass} id="calendar-link">
       <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Your calendar on your phone</h2>
@@ -194,6 +312,10 @@ function OutsideServices() {
         <BookLookupService />
         <PhotoLibraryService />
         <OtherCalendarsService />
+        <div className="py-3">
+          <h3 className="font-medium text-gray-800 dark:text-life-50">🍳 Recipes from a website</h3>
+          <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Nothing to turn on. Only when you paste an address under Recipes → "Bring one in", Life Is fetches that one page from that site, as a browser would; nothing about you or your recipes is sent. Reading a recipe off a photo happens on your own device and reaches nowhere.</p>
+        </div>
         <div className="py-3">
           <h3 className="font-medium text-gray-800 dark:text-life-50">📺 Your Jellyfin or Emby</h3>
           <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Brings the films, shows, music and books on a media server you name into your collection. Life Is only reads from that server, using the key you give it, and talks to nowhere else.</p>

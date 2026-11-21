@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import { inApp } from '../where';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, minutesText, toDateInput } from '../components/ui';
 
 /** The recipe box: search, tags, add, paste in, export. */
@@ -19,7 +20,7 @@ export default function Recipes() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Recipes</h1>
-        <button type="button" onClick={() => setModal('import')} className={quietButtonClass}>Paste one in</button>
+        <button type="button" onClick={() => setModal('import')} className={quietButtonClass}>Bring one in</button>
         <button type="button" onClick={() => setModal('new')} className={buttonClass}>+ New recipe</button>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -51,19 +52,118 @@ export default function Recipes() {
           ))}
         </ul>
       )}
-      <p className="text-xs text-gray-500 dark:text-life-300">
-        <a href="/api/kitchen/recipes-export.zip" className="underline">Download all recipes</a> as Nextcloud Cookbook folders. Unzip into the Recipes folder in your Nextcloud.
-      </p>
+      {!inApp() && (
+        <p className="text-xs text-gray-500 dark:text-life-300">
+          <a href="/api/kitchen/recipes-export.zip" className="underline">Download all recipes</a> as Nextcloud Cookbook folders. Unzip into the Recipes folder in your Nextcloud.
+        </p>
+      )}
       {modal === 'new' && (
         <Modal title="New recipe" onClose={() => setModal(null)} wide>
           <RecipeForm onSaved={(r) => navigate(`/recipes/${r.id}`)} />
         </Modal>
       )}
       {modal === 'import' && (
-        <Modal title="Paste a recipe in" onClose={() => setModal(null)} wide>
-          <ImportForm onDone={(made) => (made.length === 1 ? navigate(`/recipes/${made[0].id}`) : (setModal(null), load()))} />
+        <Modal title="Bring a recipe in" onClose={() => setModal(null)} wide>
+          <BringIn onDraft={(draft) => setModal({ draft })} onDone={(made) => (made.length === 1 ? navigate(`/recipes/${made[0].id}`) : (setModal(null), load()))} />
         </Modal>
       )}
+      {modal?.draft && (
+        <Modal title="Look it over, then save" onClose={() => setModal(null)} wide>
+          <p className="mb-3 rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">This is what was read. Nothing is saved until you press Save, so fix anything that came out wrong.</p>
+          <RecipeForm draft={modal.draft} onSaved={(r) => navigate(`/recipes/${r.id}`)} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+const WAYS = [['web', 'From a website'], ['photo', 'From a photo or a book'], ['text', 'Paste the text']];
+
+/** A recipe from somewhere else: a web page, a photo of a page or a card, or text pasted in. */
+function BringIn({ onDraft, onDone }) {
+  const [way, setWay] = useState('web');
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Where the recipe is">
+        {WAYS.map(([key, label]) => (
+          <button key={key} type="button" onClick={() => setWay(key)} aria-pressed={way === key}
+            className={`rounded-full px-3 py-1 text-sm ${way === key ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`}>{label}</button>
+        ))}
+      </div>
+      {way === 'web' && <FromWeb onDraft={onDraft} />}
+      {way === 'photo' && <FromPhoto onDraft={onDraft} />}
+      {way === 'text' && <ImportForm onDone={onDone} />}
+    </div>
+  );
+}
+
+function FromWeb({ onDraft }) {
+  const [url, setUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [about, setAbout] = useState(null);
+  useEffect(() => { axios.get('/api/kitchen/recipes/from-web').then(({ data }) => setAbout(data)).catch(() => {}); }, []);
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true); setError('');
+    try { onDraft((await axios.post('/api/kitchen/recipes/from-web', { url })).data); } catch (err) { setError(errorMessage(err, "Couldn't read that page")); }
+    setBusy(false);
+  };
+  if (about && !about.available) return <p className="text-sm text-gray-600 dark:text-life-100">This copy of Life Is isn't set up to reach outside, so it can't fetch a page. Copy the recipe's text from the page and use "Paste the text".</p>;
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <Field label="The recipe's web address"><input required type="url" inputMode="url" autoFocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" className={inputClass} /></Field>
+      {about && <p className="text-xs text-gray-500 dark:text-life-300"><span className="font-medium">What this does:</span> {about.service.sends}</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex justify-end"><button type="submit" disabled={busy} className={buttonClass}>{busy ? 'Reading the page…' : 'Read it'}</button></div>
+    </form>
+  );
+}
+
+function FromPhoto({ onDraft }) {
+  const [text, setText] = useState(null);
+  const [progress, setProgress] = useState(null);
+  const [error, setError] = useState('');
+  const picked = async (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    if (files.length === 0) return;
+    setError(''); setProgress('Getting ready…');
+    try {
+      const { readPhotos } = await import('../components/readPhoto');
+      const read = await readPhotos(files, setProgress);
+      if (!read.trim()) setError("No words could be read from that. A sharper photo, straight on and in good light, reads best.");
+      setText((before) => [before, read].filter((part) => part && part.trim()).join('\n\n'));
+    } catch (problem) {
+      console.error(problem);
+      setError("The photo couldn't be read on this device.");
+    }
+    setProgress(null);
+  };
+  const next = async () => {
+    setError('');
+    try { onDraft((await axios.post('/api/kitchen/recipes/read', { text })).data); } catch (err) { setError(errorMessage(err, "Couldn't make a recipe of that")); }
+  };
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-gray-600 dark:text-life-100">
+        Take a photo of a recipe card or a page in a book, or choose one you have. The words are read off it <span className="font-medium">here on this device</span>:
+        the photo is not sent anywhere and is not kept. Printed pages read well; handwriting mostly doesn't.
+      </p>
+      <label className={`${quietButtonClass} inline-block cursor-pointer`}>
+        {text ? 'Add another page' : 'Choose or take a photo'}
+        <input type="file" accept="image/*" multiple onChange={picked} disabled={progress !== null} className="sr-only" aria-label="Choose or take a photo of a recipe" />
+      </label>
+      {progress !== null && <p className="text-sm text-life-700 dark:text-life-200" role="status">{progress}</p>}
+      {text !== null && (
+        <>
+          <Field label="What was read (fix anything obvious: the name first, then the ingredients, then the method)">
+            <textarea rows={14} value={text} onChange={(e) => setText(e.target.value)} className={`${inputClass} font-mono text-xs`} />
+          </Field>
+          <div className="flex justify-end"><button type="button" onClick={next} disabled={!text.trim()} className={buttonClass}>Make it a recipe</button></div>
+        </>
+      )}
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }
@@ -94,12 +194,14 @@ function ImportForm({ onDone }) {
   );
 }
 
-export function RecipeForm({ recipe, onSaved }) {
+/** A recipe being changed (`recipe`), a new one, or a new one started from what was read somewhere (`draft`). */
+export function RecipeForm({ recipe, draft, onSaved }) {
+  const from = recipe ?? draft;
   const [form, setForm] = useState({
-    title: recipe?.title || '', description: recipe?.description || '', servings: recipe?.servings ?? '',
-    prep_minutes: recipe?.prep_minutes ?? '', cook_minutes: recipe?.cook_minutes ?? '', source_url: recipe?.source_url || '',
-    ingredients_text: recipe?.ingredients_text || '', steps_text: recipe?.steps_text || '', notes: recipe?.notes || '',
-    tags: (recipe?.tags || []).join(', '),
+    title: from?.title || '', description: from?.description || '', servings: from?.servings ?? '',
+    prep_minutes: from?.prep_minutes ?? '', cook_minutes: from?.cook_minutes ?? '', source_url: from?.source_url || '',
+    ingredients_text: from?.ingredients_text || '', steps_text: from?.steps_text || '', notes: from?.notes || '',
+    tags: (from?.tags || []).join(', '),
   });
   // What it's cooked in: each row is one of your things, or a name typed in.
   const [equipment, setEquipment] = useState(() => (recipe?.equipment || []).map((e) => ({ item_id: e.item_id ?? '', label: e.item_id ? '' : e.label, quantity: e.quantity, note: e.note || '' })));
@@ -111,7 +213,8 @@ export function RecipeForm({ recipe, onSaved }) {
   const num = (v) => (v === '' ? null : Number(v));
   const submit = async (e) => {
     e.preventDefault();
-    const body = { ...form, servings: num(form.servings), prep_minutes: num(form.prep_minutes), cook_minutes: num(form.cook_minutes),
+    // What was read is kept alongside, as it was, so a correction can always be checked against it.
+    const body = { ...form, ...(draft?.original_text ? { original_text: draft.original_text } : {}), servings: num(form.servings), prep_minutes: num(form.prep_minutes), cook_minutes: num(form.cook_minutes),
       tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
       equipment: equipment.filter((row) => row.item_id !== '' || row.label.trim()).map((row) => ({
         item_id: row.item_id === '' ? null : Number(row.item_id), label: row.item_id === '' ? row.label : null,

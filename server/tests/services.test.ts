@@ -280,3 +280,33 @@ it('another calendar is followed over the web addresses, busy only, and its link
     await new Promise((resolve) => other.close(resolve));
   }
 });
+
+it('a recipe is read from a page or from text into a draft, and nothing is saved until asked', async () => {
+  const site = createServer((req, res) => {
+    if (req.url !== '/soup') { res.writeHead(404).end(); return; }
+    res.writeHead(200, { 'Content-Type': 'text/html' }).end(`<html><script type="application/ld+json">${JSON.stringify({ '@type': 'Recipe', name: 'Leek soup', recipeIngredient: ['3 leeks'], recipeInstructions: 'Simmer.' })}</script></html>`);
+  });
+  await new Promise<void>((resolve) => site.listen(0, '127.0.0.1', resolve));
+  const at = `http://127.0.0.1:${(site.address() as AddressInfo).port}`;
+  // This test's Life Is is given the real way out, to reach the stand-in site above.
+  server = createServer(createApp({ db: database.db, reach: { fetcher: webFetcher, sealer: vault(path.join(folder, 'keys'), 'media_source') } }));
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const admin = visitor();
+  expect((await admin.post('/api/auth/setup', { username: 'owner', password: PASSWORD })).status).toBe(201);
+  try {
+    expect((await admin.get('/api/kitchen/recipes/from-web')).json).toMatchObject({ available: true, service: { name: 'Recipes from a website' } });
+    const draft = await admin.post('/api/kitchen/recipes/from-web', { url: `${at}/soup` });
+    expect([draft.status, draft.json]).toEqual([200, expect.objectContaining({ title: 'Leek soup', ingredients_text: '3 leeks', steps_text: 'Simmer.', source_url: `${at}/soup` })]);
+    expect((await admin.post('/api/kitchen/recipes/from-web', { url: `${at}/nothing` })).status).toBe(400);
+    expect((await admin.post('/api/kitchen/recipes/from-web', {})).status).toBe(422);
+    const read = await admin.post('/api/kitchen/recipes/read', { text: 'Toast\n\nIngredients\n2 slices bread\n\nMethod\nToast it.' });
+    expect(read.json).toMatchObject({ title: 'Toast', ingredients_text: '2 slices bread', steps_text: 'Toast it.' });
+    expect((await admin.get('/api/kitchen/recipes')).json).toEqual([]); // drafts only
+    const saved = await admin.post('/api/kitchen/recipes', { ...draft.json, tags: [] });
+    expect([saved.status, saved.json.source_url, saved.json.original_text.includes('recipeIngredient')]).toEqual([201, `${at}/soup`, true]);
+    expect((await visitor().post('/api/kitchen/recipes/from-web', { url: `${at}/soup` })).status).toBe(401);
+  } finally {
+    await new Promise((resolve) => site.close(resolve));
+  }
+});

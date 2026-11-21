@@ -19,12 +19,12 @@ const sent = (body: Body, name: string) => Object.hasOwn(body, name);
 function pictureFrom(body: Body): Uint8Array {
   const text = read.text(body, 'data');
   if (text.length > MAX_PHOTO_BYTES * 1.4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(text)) throw new Refusal(400, 'That photo is too large to keep, or was damaged on the way');
-  return new Uint8Array(Buffer.from(text, 'base64'));
+  return Uint8Array.from(atob(text), (letter) => letter.charCodeAt(0));
 }
 
 export type PhotoTools = { fetcher: Fetcher; sealer: Sealer };
 const picture = (found: { type: string; bytes: Uint8Array }, keepFor: number) =>
-  ({ body: Buffer.from(found.bytes), headers: { 'Content-Type': found.type, 'Cache-Control': `private, max-age=${keepFor}`, 'X-Content-Type-Options': 'nosniff' } });
+  ({ body: found.bytes, headers: { 'Content-Type': found.type, 'Cache-Control': `private, max-age=${keepFor}`, 'X-Content-Type-Options': 'nosniff' } });
 
 export function planRoutes(db: Db, tools?: PhotoTools): Route[] {
   const mine = (c: Context) => plans(db, c.user.id, c.clock);

@@ -3,11 +3,12 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import Scanner from '../components/Scanner';
 import { buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
+import { serverOrigin } from '../where';
 
 const TYPE_ICONS = { film: '🎬', show: '📺', music: '🎵', book: '📚', game: '🎮', other: '🗃' };
 /** The code out of a scanned sticker: the code itself, or an address ending in /p/ and the code. */
 export const stickerCode = (read) => (/(?:^|\/p\/)([2-9A-HJ-NP-Za-hj-np-z]{10})\/?$/.exec(String(read).trim()) || [])[1]?.toUpperCase() || null;
-const stickerAddress = (code) => `${window.location.origin}/p/${code}`;
+const stickerAddress = (code) => `${serverOrigin()}/p/${code}`;
 
 /** One place: the places inside it, and everything kept there, from your things and your collection. */
 export function PlacePage() {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { Field, inputClass, buttonClass, errorMessage } from '../components/ui';
+import { chooseAgain, linkedServer } from '../where';
 
 export default function Login({ setupRequired, local = true, offline, onDone }) {
   const [form, setForm] = useState({ username: '', password: '' });
@@ -36,6 +37,7 @@ export default function Login({ setupRequired, local = true, offline, onDone }) 
         {setupRequired && <p className="text-xs text-gray-500 dark:text-life-200">At least 12 characters. Write it down somewhere safe: nobody can reset it for you.</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button type="submit" disabled={busy} className={`${buttonClass} w-full`}>{setupRequired ? 'Make my account' : 'Sign in'}</button>
+        {linkedServer() && <p className="text-center text-xs text-gray-500 dark:text-life-200">At <span className="break-all">{linkedServer()}</span>. <button type="button" onClick={chooseAgain} className="underline">Use a different one</button></p>}
       </form>
     </div>
   );

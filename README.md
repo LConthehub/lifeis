@@ -116,6 +116,11 @@ time in Settings; unticking something only puts it out of sight.
   run out (each only once you have one). A plan with recipes says roughly what its food will cost, going by the last
   price of each ingredient. The grocery list, laid out by shop, can show just the shop you're in.
 
+- **Bring a recipe in**, three ways (Recipes → "Bring one in"). From a website: paste the address and Life Is reads the
+  recipe the page publishes for search engines, without the story around it. From a photo or a book: the words are read
+  off the picture on your own device (the photo is sent nowhere and not kept). Or paste the text. Each gives a draft
+  to look over; nothing is saved until you press Save, and what was read is kept alongside.
+
 ## The calendar
 
 - **One place to see what's on each day.** Your own dates (a day or several, with a time if it has one), with
@@ -163,6 +168,11 @@ Your records are kept by Docker, encrypted. **Never run `docker compose down -v`
 
 ## For developers
 
+- **On the device, with no server** (in progress, for the phone apps): everything a signed-in person does is written as
+  handlers that know nothing of how a request arrived (`server/src/everydayRoutes.ts`). The server puts them behind its
+  sign-in; the on-device build (`frontend/src/device`, `npx vite build --config vite.device.config.js`) hands the pages'
+  requests straight to them, with the database inside the app. Today that database is an unencrypted stand-in for
+  trying it in a browser; on a phone it will be SQLCipher through Capacitor.
 - `core/`: the kitchen, in TypeScript, written so the same code runs on the server, in the browser and inside a
   phone app. `kitchen.ts` is the kitchen, `units.ts` reads amounts and converts units, `recipeText.ts` reads
   and writes recipes, `inventory.ts` is the things you keep, `projects.ts` the projects, `calendar.ts` the calendar, `media.ts` the

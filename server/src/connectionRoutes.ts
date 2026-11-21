@@ -23,7 +23,7 @@ export const webFetcher: Fetcher = async (url, headers, send) => {
   return {
     status: response.status,
     type: response.headers.get('content-type'),
-    json: async () => JSON.parse(Buffer.from(await body()).toString('utf8')) as unknown,
+    json: async () => JSON.parse(new TextDecoder().decode(await body())) as unknown,
     bytes: body,
   };
 };
@@ -49,7 +49,7 @@ export function connectionRoutes(db: Db, reach: Reach): Route[] {
       const cover = await media(db, c.user.id, c.clock).cover(c.id);
       if (!cover) return { status: 404, json: { detail: 'Not found' } };
       // A cover never changes, and is the person's own: their browser may keep it, nothing in between may.
-      return { body: Buffer.from(cover.bytes), headers: { 'Content-Type': cover.type, 'Cache-Control': 'private, max-age=604800' } };
+      return { body: cover.bytes, headers: { 'Content-Type': cover.type, 'Cache-Control': 'private, max-age=604800' } };
     }],
   ];
 }

@@ -1,0 +1,12 @@
+{
+  "appId": "online.example.lifeis",
+  "appName": "Life Is",
+  "webDir": "dist-device",
+  "plugins": {
+    "CapacitorSQLite": {
+      "androidIsEncryption": true,
+      "iosIsEncryption": true,
+      "iosKeychainPrefix": "lifeis"
+    }
+  }
+}
