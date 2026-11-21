@@ -68,6 +68,6 @@ If this policy changes, the new version will be published at this address with a
 
 ## Contact
 
-Questions about this policy: [CONTACT EMAIL TO BE ADDED]
+Questions about this policy: hello@emailmy.space
 
 Life Is is published by [PUBLISHER NAME TO BE ADDED].

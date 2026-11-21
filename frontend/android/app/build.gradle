@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "online.example.lifeis"
+    namespace = "space.emailmy.lifeis"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "online.example.lifeis"
+        applicationId "space.emailmy.lifeis"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

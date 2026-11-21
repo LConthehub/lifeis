@@ -1,4 +1,4 @@
-package online.example.lifeis;
+package space.emailmy.lifeis;
 
 import com.getcapacitor.BridgeActivity;
 

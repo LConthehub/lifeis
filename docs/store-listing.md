@@ -7,9 +7,9 @@ are written once and reviewed before anything goes live.
 
 - **The name.** "Life Is" has trademark neighbours ("Life is Good", "Life Is Strange"). Decide before the
   first upload; the store title can change later, but reviews and links follow the name.
-- **Contact email** for the listing and the privacy policy. Google shows it publicly.
+- **Contact email:** `hello@emailmy.space`, once that address is created in iCloud. Google shows it publicly.
 - **Publisher name.** A personal account shows the account holder's legal name.
-- **The app ID** is `online.example.lifeis`. It can never change after the first upload.
+- **The app ID** is `space.emailmy.lifeis`. It can never change after the first upload.
 
 ## Title (30 characters at most)
 
@@ -100,4 +100,5 @@ Adults (18 and over). Not designed for children.
 - [ ] Build the purchase step and test it with Google's test accounts
 - [ ] Camera permission for the barcode scanner, checked on a device
 - [ ] Replace the placeholder icon and splash screen in the Android project
-- [ ] Fill in the contact email and publisher name in the privacy policy
+- [ ] Create `hello@emailmy.space` in iCloud and send it a test message
+- [ ] Fill in the publisher name in the privacy policy
