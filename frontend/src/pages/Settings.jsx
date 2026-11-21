@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { LifeAreasPicker } from '../components/LifeAreas';
@@ -8,47 +8,221 @@ import { AssistantService } from '../components/Assistant';
 
 const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 120: '2 hours', 480: '8 hours', 0: 'Stay signed in' };
 
+// ==================== LAYOUT ====================
+
+// Settings are split into groups, one shown at a time, the way Sworkr's are. Each section has an id, so a link
+// like /settings#unlock (or /settings/data#unlock) opens the right group and scrolls to it. `words` are extra
+// search terms for the filter box. `when` leaves a section out where it doesn't apply (the app, a server).
+const server = () => !onDevice();
+const GROUPS = [
+  {
+    id: 'home', label: 'Your home', icon: '🏠',
+    sections: [
+      { id: 'life', title: 'What Life Is looks after', words: 'sections areas sewing garden cookware clothing money spending show hide', render: ({ onLifeChanged }) => <Titled title="What Life Is looks after" hint="Decides which sections show. Nothing is removed by unticking."><LifeAreasPicker onSaved={onLifeChanged} /></Titled> },
+    ],
+  },
+  {
+    id: 'calendars', label: 'Calendars', icon: '📅',
+    sections: [
+      { id: 'calendar-link', title: 'Your phone’s calendar', words: 'apple google ical ics subscribe link feed outlook', when: server, render: () => <CalendarLink /> },
+      { id: 'other-calendars', title: 'Other calendars', words: 'follow ical ics sworkr busy google apple work', render: () => <Plain><OtherCalendarsService /></Plain> },
+    ],
+  },
+  {
+    id: 'connections', label: 'Connections', icon: '🔗',
+    hint: 'Life Is keeps what you write on this computer and works without any of these. Each one is off until you turn it on, says exactly what it sends, and can be turned off again. This list is all of them.',
+    sections: [
+      { id: 'assistant', title: 'AI assistant', words: 'ai llm ollama lm studio chatgpt claude gemini model ask question', render: () => <Plain><AssistantService /></Plain> },
+      { id: 'weather', title: 'Weather', words: 'forecast open-meteo town place', render: () => <Plain><WeatherService /></Plain> },
+      { id: 'mail', title: 'Email', words: 'imap smtp inbox mail gmail icloud', render: () => <Plain><MailService /></Plain> },
+      { id: 'lookups', title: 'Barcode lookups', words: 'isbn book grocery scan open library food facts', render: () => <Plain><BookLookupService /></Plain> },
+      { id: 'photos', title: 'Photos from Immich', words: 'immich pictures plans memories', render: () => <Plain><PhotoLibraryService /></Plain> },
+      { id: 'media', title: 'Jellyfin or Emby', words: 'media server films shows music jellyfin emby', render: () => <MediaServers /> },
+      { id: 'recipe-web', title: 'Recipes from a website', words: 'import url link page photo ocr', render: () => <RecipesFromWeb /> },
+    ],
+  },
+  {
+    id: 'account', label: onDevice() ? 'This device' : 'Account & sign-in', icon: '🔒',
+    sections: [
+      { id: 'kept-here', title: 'Kept on this device', words: 'phone device server connect host', when: onDevice, render: () => <KeptHere /> },
+      { id: 'linked', title: 'Connected to your Life Is', words: 'server disconnect host', when: () => Boolean(linkedServer()), render: () => <Linked /> },
+      { id: 'idle', title: 'Signing out by itself', words: 'idle timeout log out automatic', when: server, render: () => <SignedOut /> },
+      { id: 'password', title: 'Password', words: 'change password', when: server, render: () => <PasswordForm /> },
+      { id: 'people', title: 'People in this Life Is', words: 'user account add family person', when: (user) => server() && user.is_admin, render: () => <AddPerson /> },
+      { id: 'sign-out', title: 'Sign out', words: 'log out leave', when: server, render: ({ user, onLogout }) => <Titled title="Sign out" hint={`Signed in as ${user.username}.`}><button type="button" onClick={onLogout} className={quietButtonClass}>Sign out</button></Titled> },
+    ],
+  },
+  {
+    id: 'data', label: 'Your data', icon: '🗄',
+    sections: [
+      { id: 'unlock', title: 'Unlocking Life Is', words: 'trial pay price purchase buy free', when: onDevice, render: () => <Unlock /> },
+      { id: 'backup', title: 'Backups', words: 'backup restore export file passphrase drive icloud', when: onDevice, render: () => <DeviceBackup /> },
+      { id: 'recipes-out', title: 'Download recipes', words: 'export nextcloud cookbook zip', when: () => !inApp(), render: () => <RecipesOut /> },
+    ],
+  },
+];
+
+function Titled({ title, hint, children }) {
+  return (
+    <section className={cardClass}>
+      <h2 className="font-semibold text-life-800 dark:text-life-50">{title}</h2>
+      {hint && <p className="mt-1 text-sm text-gray-600 dark:text-life-100">{hint}</p>}
+      <div className="mt-3">{children}</div>
+    </section>
+  );
+}
+/** A setting that already says what it is (the outside services each carry their own heading). */
+const Plain = ({ children }) => <div className={`${cardClass} space-y-6 [&>div]:py-0 [&_h3]:font-semibold [&_h3]:text-life-800 dark:[&_h3]:text-life-50`}>{children}</div>;
+
+const visibleGroups = (user) => GROUPS
+  .map((g) => ({ ...g, sections: g.sections.filter((s) => !s.when || s.when(user)) }))
+  .filter((g) => g.sections.length);
+
 export default function Settings({ user, onLogout, onLifeChanged }) {
+  const { group: groupId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const groups = visibleGroups(user);
+  const group = groups.find((g) => g.id === groupId);
+  const [query, setQuery] = useState('');
+
+  // A link straight to a section (/settings#unlock) finds the group it is in.
+  const hash = location.hash.slice(1);
+  const owner = hash && groups.find((g) => g.sections.some((s) => s.id === hash));
+  useEffect(() => {
+    if (!hash || !group) return undefined;
+    // Again a little later: sections above it load their settings and grow, pushing it down.
+    const go = () => document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth' });
+    const timers = [setTimeout(go, 300), setTimeout(go, 1000)];
+    return () => timers.forEach(clearTimeout);
+  }, [hash, group]);
+
+  if (owner && owner.id !== groupId) return <Navigate to={`/settings/${owner.id}#${hash}`} replace />;
+  if (groupId && !group) return <Navigate to="/settings" replace />;
+
+  const q = query.trim().toLowerCase();
+  const matches = q
+    ? groups.flatMap((g) => g.sections.filter((s) => `${s.title} ${s.words || ''} ${g.label}`.toLowerCase().includes(q)).map((s) => ({ group: g, section: s })))
+    : null;
+  const open = (g, s) => { setQuery(''); navigate(s ? `/settings/${g.id}#${s.id}` : `/settings/${g.id}`); };
+  // On a phone, /settings is the list of groups and a group opens on its own page. On a wider screen the
+  // menu is always there and /settings shows the first group.
+  const shown = group || groups[0];
+
+  const search = <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a setting" aria-label="Find a setting" className={inputClass} />;
+  const results = matches && (
+    <ul className="space-y-1">
+      {matches.length === 0 && <li className="px-3 py-2 text-sm text-gray-500 dark:text-life-300">Nothing matches “{query}”.</li>}
+      {matches.map(({ group: g, section: s }) => (
+        <li key={`${g.id}-${s.id}`}>
+          <button type="button" onClick={() => open(g, s)} className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-life-50 dark:hover:bg-life-800">
+            <span className="text-gray-800 dark:text-life-50">{s.title}</span>
+            <span className="block text-xs text-gray-500 dark:text-life-300">{g.label}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">Settings</h1>
-      <section className={cardClass}>
-        <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">What Life Is looks after</h2>
-        <LifeAreasPicker onSaved={onLifeChanged} />
-      </section>
-      {/* On the device there is no server for a calendar app to ask, and no accounts: the device's own lock is the door. */}
-      {!onDevice() && <CalendarLink />}
-      <OutsideServices />
-      {!onDevice() && <SignedOut />}
-      {!onDevice() && <PasswordForm />}
-      {!onDevice() && user.is_admin && <AddPerson />}
-      {onDevice() && (
-        <section className={cardClass}>
-          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Kept on this device</h2>
-          <p className="text-sm text-gray-600 dark:text-life-100">Everything you write in Life Is stays on this device, locked with a key only this device holds. There is no account and no password: the device's own lock is what keeps it yours.</p>
-          <p className="mt-2 text-sm text-gray-600 dark:text-life-100">If you run Life Is on a computer of your own, this app can show that one instead. What is on this device stays here, untouched, and is not copied across.</p>
-          <button type="button" onClick={chooseAgain} className={`${quietButtonClass} mt-3`}>Connect to a Life Is I host</button>
-        </section>
+      <div>
+        <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">Settings</h1>
+        {!onDevice() && <p className="text-sm text-gray-600 dark:text-life-200">Signed in as <span className="font-medium">{user.username}</span>{user.is_admin ? ' (admin)' : ''}</p>}
+      </div>
+
+      {/* Phone: the list of groups, until one is picked. */}
+      {!group && (
+        <div className={`${cardClass} space-y-3 md:hidden`} data-settings-groups>
+          {search}
+          {results || (
+            <ul className="divide-y divide-life-100 dark:divide-life-700">
+              {groups.map((g) => (
+                <li key={g.id}>
+                  <Link to={`/settings/${g.id}`} className="flex items-center gap-3 px-1 py-3 text-gray-800 dark:text-life-50">
+                    <span aria-hidden="true" className="text-xl">{g.icon}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">{g.label}</span>
+                      <span className="block truncate text-xs text-gray-500 dark:text-life-300">{g.sections.map((s) => s.title).join(', ')}</span>
+                    </span>
+                    <span className="text-gray-400" aria-hidden="true">›</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
-      {onDevice() && <Unlock />}
-      {onDevice() && <DeviceBackup />}
-      {linkedServer() && (
-        <section className={cardClass}>
-          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Connected to your Life Is</h2>
-          <p className="text-sm text-gray-600 dark:text-life-100">This app is showing the Life Is at <span className="break-all font-medium">{linkedServer()}</span>. Everything is kept there; this phone holds only that address and your sign-in.</p>
-          <button type="button" onClick={chooseAgain} className={`${quietButtonClass} mt-3`}>Disconnect this phone</button>
-        </section>
-      )}
-      {!inApp() && <section className={cardClass}>
-        <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Your recipes, yours to take</h2>
-        <p className="mb-3 text-sm text-gray-600 dark:text-life-100">
-          Download every recipe as Nextcloud Cookbook folders (each one a <code>recipe.json</code>, with the original text beside it).
-          Unzip them into the Recipes folder in your Nextcloud and the Cookbook app shows them.
-        </p>
-        <a href="/api/kitchen/recipes-export.zip" className={quietButtonClass}>Download recipes</a>
-      </section>}
-      {!onDevice() && <button type="button" onClick={onLogout} className={quietButtonClass}>Sign out ({user.username})</button>}
+
+      <div className={`${group ? 'grid' : 'hidden md:grid'} items-start gap-4 md:grid-cols-[13rem_1fr]`}>
+        {/* Wider screens: the menu beside the settings. */}
+        <nav aria-label="Settings" className={`${cardClass} sticky top-24 hidden space-y-2 !p-2 md:block`}>
+          {search}
+          {results || (
+            <ul className="space-y-1">
+              {groups.map((g) => (
+                <li key={g.id}>
+                  <Link to={`/settings/${g.id}`} aria-current={g.id === shown.id ? 'page' : undefined}
+                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${g.id === shown.id ? 'bg-life-50 font-semibold text-life-800 dark:bg-life-700 dark:text-life-50' : 'text-gray-700 hover:bg-life-50 dark:text-life-100 dark:hover:bg-life-800'}`}>
+                    <span aria-hidden="true">{g.icon}</span>{g.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </nav>
+
+        <div className="min-w-0 max-w-2xl space-y-4" data-settings-group={shown.id}>
+          <Link to="/settings" className="inline-flex items-center gap-1 text-sm text-life-600 hover:underline dark:text-life-200 md:hidden">‹ All settings</Link>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-life-800 dark:text-life-50"><span aria-hidden="true">{shown.icon}</span>{shown.label}</h2>
+          {shown.hint && <p className="text-sm text-gray-600 dark:text-life-100">{shown.hint}</p>}
+          {shown.sections.map((s) => (
+            <div key={s.id} id={s.id} className="scroll-mt-24">{s.render({ user, onLogout, onLifeChanged })}</div>
+          ))}
+        </div>
+      </div>
     </div>
+  );
+}
+
+function KeptHere() {
+  return (
+    <Titled title="Kept on this device">
+      <p className="text-sm text-gray-600 dark:text-life-100">Everything you write in Life Is stays on this device, locked with a key only this device holds. There is no account and no password: the device's own lock is what keeps it yours.</p>
+      <p className="mt-2 text-sm text-gray-600 dark:text-life-100">If you run Life Is on a computer of your own, this app can show that one instead. What is on this device stays here, untouched, and is not copied across.</p>
+      <button type="button" onClick={chooseAgain} className={`${quietButtonClass} mt-3`}>Connect to a Life Is I host</button>
+    </Titled>
+  );
+}
+
+function Linked() {
+  return (
+    <Titled title="Connected to your Life Is">
+      <p className="text-sm text-gray-600 dark:text-life-100">This app is showing the Life Is at <span className="break-all font-medium">{linkedServer()}</span>. Everything is kept there; this phone holds only that address and your sign-in.</p>
+      <button type="button" onClick={chooseAgain} className={`${quietButtonClass} mt-3`}>Disconnect this phone</button>
+    </Titled>
+  );
+}
+
+function RecipesOut() {
+  return (
+    <Titled title="Your recipes, yours to take" hint="Download every recipe as Nextcloud Cookbook folders (each one a recipe.json, with the original text beside it). Unzip them into the Recipes folder in your Nextcloud and the Cookbook app shows them.">
+      <a href="/api/kitchen/recipes-export.zip" className={quietButtonClass}>Download recipes</a>
+    </Titled>
+  );
+}
+
+function MediaServers() {
+  return (
+    <Titled title="📺 Your Jellyfin or Emby" hint="Brings the films, shows, music and books on a media server you name into your collection. Life Is only reads from that server, using the key you give it, and talks to nowhere else.">
+      <Link to="/media/servers" className="text-sm text-life-600 hover:underline dark:text-life-200">Media servers →</Link>
+    </Titled>
+  );
+}
+
+function RecipesFromWeb() {
+  return (
+    <Titled title="🍳 Recipes from a website" hint='Nothing to turn on. Only when you paste an address under Recipes → "Bring one in", Life Is fetches that one page from that site, as a browser would; nothing about you or your recipes is sent. Reading a recipe off a photo happens on your own device and reaches nowhere.' />
   );
 }
 
@@ -56,11 +230,10 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
 function Unlock() {
   const [access, setAccess] = useState(null);
   useEffect(() => { axios.get('/api/access').then(({ data }) => setAccess(data)).catch(() => {}); }, []);
-  useEffect(() => { if (access && window.location.hash === '#unlock') document.getElementById('unlock')?.scrollIntoView(); }, [access]);
   if (!access) return null;
   const days = access.days_left;
   return (
-    <section className={cardClass} id="unlock" data-access={access.state}>
+    <section className={cardClass} data-access={access.state}>
       <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">{access.state === 'unlocked' ? 'Life Is is unlocked' : 'Unlocking Life Is'}</h2>
       {access.state === 'unlocked' ? (
         <p className="text-sm text-gray-600 dark:text-life-100">Every part of Life Is is yours on this device, for good. Thank you.</p>
@@ -230,9 +403,6 @@ function CalendarLink() {
   const [copied, setCopied] = useState(false);
   const took = (data) => { setLink(data); setKinds(data.kinds); setError(''); };
   useEffect(() => { axios.get('/api/calendar/link').then(({ data }) => took(data)).catch(() => {}); }, []);
-  // Coming from the calendar page's link, bring this part into view once it's there.
-  const shown = Boolean(link);
-  useEffect(() => { if (shown && window.location.hash === '#calendar-link') document.getElementById('calendar-link')?.scrollIntoView(); }, [shown]);
   if (!link) return null;
   const ask = async (send) => { try { took((await send()).data); } catch (err) { setError(errorMessage(err, "Couldn't do that")); } };
   const tick = (key, on) => {
@@ -247,7 +417,7 @@ function CalendarLink() {
   };
   const onThisComputerOnly = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(serverOrigin()).hostname);
   return (
-    <section className={cardClass} id="calendar-link">
+    <section className={cardClass}>
       <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Your calendar on your phone</h2>
       <p className="mb-3 text-sm text-gray-600 dark:text-life-100">
         Shows Life Is's calendar inside the calendar app you already use (Apple Calendar, and any other that can follow a link).
@@ -299,34 +469,6 @@ function CalendarLink() {
 }
 
 /** Everything that reaches outside this computer, in one place. Each is off until turned on, and says what it sends. */
-function OutsideServices() {
-  return (
-    <section className={cardClass}>
-      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Outside services</h2>
-      <p className="mb-3 text-sm text-gray-600 dark:text-life-100">
-        Life Is keeps what you write on this computer and works without any of these. Each one is off until you turn it on,
-        says exactly what it sends, and can be turned off again. This list is all of them.
-      </p>
-      <div className="divide-y divide-life-100 dark:divide-life-700">
-        <WeatherService />
-        <MailService />
-        <BookLookupService />
-        <PhotoLibraryService />
-        <OtherCalendarsService />
-        <AssistantService />
-        <div className="py-3">
-          <h3 className="font-medium text-gray-800 dark:text-life-50">🍳 Recipes from a website</h3>
-          <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Nothing to turn on. Only when you paste an address under Recipes → "Bring one in", Life Is fetches that one page from that site, as a browser would; nothing about you or your recipes is sent. Reading a recipe off a photo happens on your own device and reaches nowhere.</p>
-        </div>
-        <div className="py-3">
-          <h3 className="font-medium text-gray-800 dark:text-life-50">📺 Your Jellyfin or Emby</h3>
-          <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Brings the films, shows, music and books on a media server you name into your collection. Life Is only reads from that server, using the key you give it, and talks to nowhere else.</p>
-          <Link to="/media/servers" className="mt-2 inline-block text-sm text-life-600 hover:underline dark:text-life-200">Media servers →</Link>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 const placeLabel = (p) => [p.name, p.region, p.country].filter(Boolean).join(', ');
 

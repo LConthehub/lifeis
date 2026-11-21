@@ -92,10 +92,11 @@ function Shell({ user, onLogout }) {
           <Link to="/" className="flex items-center gap-2 font-semibold text-white">
             <img src="/icon-192.png" alt="" className="h-7 w-7 rounded-lg" /> Life is
           </Link>
-          <nav className="flex gap-1" aria-label="Sections">
+          {/* Six words don't fit across a phone: they wrap onto a second line rather than run off the edge. */}
+          <nav className="flex min-w-0 flex-wrap gap-1" aria-label="Sections">
             {showing.map((s) => (
               <Link key={s.word} to={s.home} aria-current={s === section ? 'page' : undefined}
-                className={`rounded-full px-2.5 py-1 text-sm font-semibold ${s === section ? 'bg-white text-life-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.word}</Link>
+                className={`rounded-full px-2 py-1 text-sm font-semibold sm:px-2.5 ${s === section ? 'bg-white text-life-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.word}</Link>
             ))}
           </nav>
           <NavLink to="/settings" aria-label="Settings" className="ml-auto text-sm text-white/90 hover:text-white hover:underline"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="text-lg sm:hidden">⚙</span></NavLink>
@@ -113,7 +114,7 @@ function Shell({ user, onLogout }) {
       <main className="mx-auto max-w-5xl px-3 py-4 sm:px-4">
         {/* The page is a sheet of frosted glass over the gradient, so everything on it reads clearly. */}
         <div className="rounded-3xl bg-white/80 p-4 shadow-xl ring-1 ring-white/50 backdrop-blur-md dark:bg-life-900/75 dark:ring-white/10 sm:p-6">
-        <AccessNote show={Boolean(section) && section.word !== 'eating' && pathname !== '/' && pathname !== '/settings'} pathname={pathname} />
+        <AccessNote show={Boolean(section) && section.word !== 'eating' && pathname !== '/' && !pathname.startsWith('/settings')} pathname={pathname} />
         <Routes>
           <Route path="/" element={<Home user={user} />} />
           <Route path="/recipes" element={<Recipes />} />
@@ -139,6 +140,7 @@ function Shell({ user, onLogout }) {
           <Route path="/media/:id" element={<MediaTitlePage />} />
           <Route path="/money" element={<Money />} />
           <Route path="/settings" element={<Settings user={user} onLogout={onLogout} onLifeChanged={setLife} />} />
+          <Route path="/settings/:group" element={<Settings user={user} onLogout={onLogout} onLifeChanged={setLife} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </div>
