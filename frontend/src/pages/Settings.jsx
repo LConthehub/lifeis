@@ -4,6 +4,7 @@ import axios from 'axios';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { LifeAreasPicker } from '../components/LifeAreas';
 import { chooseAgain, inApp, linkedServer, onDevice, serverOrigin } from '../where';
+import { AssistantService } from '../components/Assistant';
 
 const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 120: '2 hours', 480: '8 hours', 0: 'Stay signed in' };
 
@@ -312,6 +313,7 @@ function OutsideServices() {
         <BookLookupService />
         <PhotoLibraryService />
         <OtherCalendarsService />
+        <AssistantService />
         <div className="py-3">
           <h3 className="font-medium text-gray-800 dark:text-life-50">🍳 Recipes from a website</h3>
           <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Nothing to turn on. Only when you paste an address under Recipes → "Bring one in", Life Is fetches that one page from that site, as a browser would; nothing about you or your recipes is sent. Reading a recipe off a photo happens on your own device and reaches nowhere.</p>

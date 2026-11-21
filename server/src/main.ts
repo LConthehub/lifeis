@@ -10,7 +10,7 @@
 import { createServer } from 'node:http';
 import path from 'node:path';
 import { createApp } from './app.ts';
-import { syncDue, webFetcher } from './connectionRoutes.ts';
+import { patientFetcher, syncDue, webFetcher } from './connectionRoutes.ts';
 import { followedDue } from '../../core/src/index.ts';
 import { openDatabase } from './database.ts';
 import { realPostbox } from './postbox.ts';
@@ -29,6 +29,7 @@ const server = createServer(createApp({
   reach,
   photos: { fetcher: webFetcher, sealer: vault(keyDir, 'photo_library') },
   calendars,
+  assistant: { fetcher: patientFetcher, sealer: vault(keyDir, 'assistant') },
   mail: { postbox: realPostbox, sealer: vault(keyDir, 'mail_account') },
   staticDir: process.env.STATIC_DIR || undefined,
   idleMinutes: Number.isInteger(idle) && idle >= 0 ? idle : 15,

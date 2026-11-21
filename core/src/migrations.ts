@@ -577,6 +577,7 @@ const MIGRATIONS: Migration[] = [
   {
     // What a project is planned to cost and what it did cost, line by line. Money is whole cents.
     number: 19,
+    name: 'what a project costs',
     statements: [
       `CREATE TABLE project_costs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -595,6 +596,7 @@ const MIGRATIONS: Migration[] = [
     // Life is spending: an amount for each category each month, what was spent, and who a category is
     // shared with. Nobody but its owner sees a category unless it is shared with them by name.
     number: 20,
+    name: 'spending: categories, what was spent, who sees it',
     statements: [
       `CREATE TABLE money_categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

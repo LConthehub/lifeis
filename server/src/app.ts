@@ -37,6 +37,8 @@ export type Options = {
   photos?: Reach;
   /** How Life Is reads another calendar's link and locks it. Left out: none can be followed. */
   calendars?: Reach;
+  /** How the assistant reaches a model and locks its key. Left out: it can't be turned on. */
+  assistant?: Reach;
   /** Told about anything that went wrong inside Life Is itself (never about a person's mistake). */
   onError?: (problem: unknown) => void;
 };
@@ -196,7 +198,7 @@ export function createApp(options: Options) {
       headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="lifeis-recipes.zip"' },
     })],
 
-    ...everydayRoutes(db, { fetcher: outside, reach: options.reach, mail: options.mail, photos: options.photos, calendars: options.calendars }),
+    ...everydayRoutes(db, { fetcher: outside, reach: options.reach, mail: options.mail, photos: options.photos, calendars: options.calendars, assistant: options.assistant }),
   ];
 
   /**

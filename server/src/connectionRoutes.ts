@@ -28,6 +28,17 @@ export const webFetcher: Fetcher = async (url, headers, send) => {
   };
 };
 
+/** The same way out, for a model that may take a minute or two to think. */
+export const patientFetcher: Fetcher = async (url, headers, send) => {
+  const response = await fetch(url, { headers, signal: AbortSignal.timeout(180_000), ...(send ? { method: send.method, body: send.body } : {}) });
+  const body = async () => {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.length > 5_000_000) throw new Error('That answer is too large');
+    return bytes;
+  };
+  return { status: response.status, type: response.headers.get('content-type'), json: async () => JSON.parse(new TextDecoder().decode(await body())) as unknown, bytes: body };
+};
+
 const connectionFrom = (body: Body) => ({
   kind: read.maybeText(body, 'kind') ?? 'jellyfin', url: read.text(body, 'url'), secret: read.maybeText(body, 'secret'),
   name: read.maybeText(body, 'name'), every_hours: read.maybeWhole(body, 'every_hours'),

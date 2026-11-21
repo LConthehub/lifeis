@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { onDevice } from '../where';
+import { AskCard } from '../components/Assistant';
 import { whoText, whenText } from './Mail';
 import Modal, { buttonClass, quietButtonClass, cardClass, fromDateInput, minutesText } from '../components/ui';
 
@@ -71,6 +72,8 @@ export default function Home({ user }) {
         </div>
         <button type="button" onClick={() => setChoosing(true)} className={quietButtonClass}>Choose what shows</button>
       </div>
+
+      <AskCard />
 
       {s.cards.length === 0 && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Every card is out of sight. Use "Choose what shows" to bring some back.</div>}
 

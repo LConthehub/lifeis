@@ -15,6 +15,7 @@ import { notUnderstood, queryNumber, read, type Body, type Context, type Route }
 import { mailRoutes, type MailTools } from './mailRoutes.ts';
 import { makingRoutes } from './makingRoutes.ts';
 import { moneyRoutes } from './moneyRoutes.ts';
+import { assistantRoutes } from './assistantRoutes.ts';
 import { planRoutes } from './planRoutes.ts';
 import { shoppingRoutes } from './shoppingRoutes.ts';
 
@@ -26,6 +27,8 @@ export type Outside = {
   mail?: MailTools;
   photos?: Reach;
   calendars?: Reach;
+  /** How the assistant reaches a model, and locks the model's key. Left out: it can't be turned on. */
+  assistant?: Reach;
 };
 
 function recipeFrom(body: Body) {
@@ -158,6 +161,7 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
 
     ...makingRoutes(db),
     ...moneyRoutes(db),
+    ...assistantRoutes(db, options.assistant),
     ...(options.reach ? connectionRoutes(db, options.reach) : []),
     ...enjoyingRoutes(db, options.calendars),
     ...mailRoutes(db, options.mail),
