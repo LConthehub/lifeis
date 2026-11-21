@@ -591,6 +591,39 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_project_costs ON project_costs(project_id, sort_order)`,
     ],
   },
+  {
+    // Life is spending: an amount for each category each month, what was spent, and who a category is
+    // shared with. Nobody but its owner sees a category unless it is shared with them by name.
+    number: 20,
+    statements: [
+      `CREATE TABLE money_categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        monthly_cents INTEGER NOT NULL DEFAULT 0 CHECK(monthly_cents >= 0),
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_money_categories ON money_categories(owner_id, sort_order)`,
+      `CREATE TABLE money_shares (
+        category_id INTEGER NOT NULL REFERENCES money_categories(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        PRIMARY KEY (category_id, user_id)
+      )`,
+      `CREATE TABLE money_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        category_id INTEGER REFERENCES money_categories(id) ON DELETE SET NULL,
+        label TEXT NOT NULL,
+        cents INTEGER NOT NULL CHECK(cents >= 0),
+        day TEXT NOT NULL,
+        note TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_money_entries ON money_entries(category_id, day)`,
+      `CREATE INDEX idx_money_entries_owner ON money_entries(owner_id, day)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

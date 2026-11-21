@@ -1,0 +1,203 @@
+/**
+ * Life is spending: what was planned for the month, and what was spent.
+ *
+ * A category ("Groceries", "House", "Fun") has an amount for each month. Spending is written down as it
+ * happens, in a category or in none. Each category then says what is left this month, and so does the month
+ * as a whole. What was paid on projects shows alongside, read from the projects themselves, so it is never
+ * typed twice.
+ *
+ * Private unless shared: a category belongs to whoever made it and nobody else sees it, or anything in it,
+ * unless its owner shares it with people by name. Those people see the category and its spending and can add
+ * to it; only the owner can change its amount, its name, or who it is shared with. Spending in no category is
+ * only ever its writer's. So a surprise stays a surprise: keep it in a category that isn't shared.
+ *
+ * Money is whole cents. Nothing here knows about income, bills or savings; this is spending against a plan.
+ */
+import { atomic, type Db, type Queries } from './db.ts';
+import { Problem } from './problem.ts';
+import { clean, dayOrNull, stamp, todayOf, type Clock } from './small.ts';
+
+export type Person = { id: number; username: string };
+export type Category = {
+  id: number;
+  name: string;
+  monthly_cents: number;
+  /** Spent in it this month, by everyone it is shared with. */
+  spent: number;
+  left: number;
+  /** Whether it is yours (you can change it) or shared with you. */
+  mine: boolean;
+  owner: string;
+  shared_with: Person[];
+};
+export type Entry = {
+  id: number;
+  label: string;
+  cents: number;
+  day: string;
+  note: string | null;
+  category_id: number | null;
+  category: string | null;
+  /** Who wrote it down. */
+  by: string;
+  mine: boolean;
+};
+export type ProjectSpend = { project_id: number; project: string; label: string; cents: number; day: string };
+export type Month = {
+  month: string;
+  currency: string;
+  categories: Category[];
+  /** Your spending in no category. */
+  uncategorised: number;
+  /** What you paid on projects this month, read from the projects. */
+  projects: { spent: number; lines: ProjectSpend[] };
+  total: { planned: number; spent: number; left: number };
+  entries: Entry[];
+  /** Other people in this Life Is a category could be shared with. Empty when there is nobody else. */
+  people: Person[];
+};
+export type CategoryInput = { name?: string | null; monthly_cents?: number | null; shared_with?: number[] };
+export type EntryInput = { label?: string | null; cents?: number | null; day?: string | null; note?: string | null; category_id?: number | null };
+
+const MOST = 100_000_000_00;
+function cents(value: number | null | undefined, what: string): number {
+  if (value === null || value === undefined || !Number.isFinite(value) || value < 0 || value > MOST) throw new Problem(422, `${what} should be an amount of money, not below zero`);
+  return Math.round(value);
+}
+
+export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
+  const now = () => stamp(clock());
+
+  /** The categories this person can see: their own, and those shared with them. */
+  // Plain `?` marks only: each use of SEEN takes the person twice (`seen`), in the order the marks appear.
+  const SEEN = `SELECT c.id FROM money_categories c WHERE c.owner_id = ? OR EXISTS (SELECT 1 FROM money_shares s WHERE s.category_id = c.id AND s.user_id = ?)`;
+  const seen = [owner, owner];
+
+  async function seenCategory(q: Queries, id: number): Promise<{ id: number; owner_id: number }> {
+    const row = await q.get<{ id: number; owner_id: number }>(
+      `SELECT c.id, c.owner_id FROM money_categories c WHERE c.id = ? AND (c.owner_id = ? OR EXISTS (SELECT 1 FROM money_shares s WHERE s.category_id = c.id AND s.user_id = ?))`, [id, owner, owner]);
+    if (!row) throw new Problem(404, 'Not found');
+    return row;
+  }
+  async function ownCategory(q: Queries, id: number) {
+    const row = await seenCategory(q, id);
+    if (row.owner_id !== owner) throw new Problem(403, 'Only the person who made this category can change it');
+    return row;
+  }
+  async function share(q: Queries, id: number, people: number[] | undefined) {
+    if (people === undefined) return;
+    await q.run('DELETE FROM money_shares WHERE category_id = ?', [id]);
+    for (const person of new Set(people)) {
+      if (person === owner) continue;
+      if (!(await q.get('SELECT 1 AS x FROM users WHERE id = ?', [person]))) throw new Problem(400, "One of those people isn't in this Life Is");
+      await q.run('INSERT INTO money_shares (category_id, user_id) VALUES (?, ?)', [id, person]);
+    }
+  }
+  /** An entry this person may change: their own, or any in a category they own. */
+  async function changeable(q: Queries, id: number) {
+    const row = await q.get<{ id: number }>(
+      `SELECT e.id FROM money_entries e LEFT JOIN money_categories c ON c.id = e.category_id WHERE e.id = ? AND (e.owner_id = ? OR c.owner_id = ?)`, [id, owner, owner]);
+    if (!row) throw new Problem(404, 'Not found');
+  }
+  async function checkedEntry(q: Queries, input: EntryInput) {
+    const label = clean(input.label, 200);
+    if (!label) throw new Problem(400, 'Say what it was spent on');
+    const category = input.category_id ?? null;
+    if (category !== null) await seenCategory(q, category);
+    return { label, cents: cents(input.cents, 'The amount'), day: dayOrNull(input.day) ?? todayOf(clock), note: clean(input.note, 1000), category };
+  }
+
+  return {
+    /** A month ("2046-03"; this month when left out): every category you can see, and what was spent. */
+    async month(given?: string | null): Promise<Month> {
+      const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(given ?? '') ? given! : todayOf(clock).slice(0, 7);
+      const within = [`${month}-01`, `${month}-31`];
+      const sign = await db.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'shopping_currency'", [owner]);
+      const rows = await db.all<{ id: number; name: string; monthly_cents: number; owner_id: number; owner: string; spent: number }>(
+        `SELECT c.id, c.name, c.monthly_cents, c.owner_id, u.username AS owner,
+                COALESCE((SELECT SUM(e.cents) FROM money_entries e WHERE e.category_id = c.id AND e.day BETWEEN ? AND ?), 0) AS spent
+         FROM money_categories c JOIN users u ON u.id = c.owner_id WHERE c.id IN (${SEEN}) ORDER BY c.sort_order, c.id`, [...within, ...seen]);
+      const shares = await db.all<{ category_id: number; id: number; username: string }>(
+        `SELECT s.category_id, u.id, u.username FROM money_shares s JOIN users u ON u.id = s.user_id WHERE s.category_id IN (${SEEN}) ORDER BY u.username`, seen);
+      const categories = rows.map((c): Category => ({
+        id: c.id, name: c.name, monthly_cents: c.monthly_cents, spent: c.spent, left: c.monthly_cents - c.spent, mine: c.owner_id === owner, owner: c.owner,
+        shared_with: shares.filter((s) => s.category_id === c.id).map((s) => ({ id: s.id, username: s.username })),
+      }));
+      const entries = await db.all<Omit<Entry, 'mine'> & { owner_id: number }>(
+        `SELECT e.id, e.label, e.cents, e.day, e.note, e.category_id, c.name AS category, u.username AS by, e.owner_id
+         FROM money_entries e LEFT JOIN money_categories c ON c.id = e.category_id JOIN users u ON u.id = e.owner_id
+         WHERE e.day BETWEEN ? AND ? AND ((e.category_id IS NULL AND e.owner_id = ?) OR e.category_id IN (${SEEN}))
+         ORDER BY e.day DESC, e.id DESC`, [...within, owner, ...seen]);
+      const lines = await db.all<ProjectSpend>(
+        `SELECT p.id AS project_id, p.name AS project, k.label, k.actual_cents AS cents, k.paid_on AS day
+         FROM project_costs k JOIN projects p ON p.id = k.project_id
+         WHERE p.owner_id = ? AND k.paid_on BETWEEN ? AND ? ORDER BY k.paid_on DESC, k.id DESC`, [owner, ...within]);
+      const uncategorised = entries.filter((e) => e.category_id === null).reduce((sum, e) => sum + e.cents, 0);
+      const onProjects = lines.reduce((sum, l) => sum + l.cents, 0);
+      const planned = categories.reduce((sum, c) => sum + c.monthly_cents, 0);
+      const spent = categories.reduce((sum, c) => sum + c.spent, 0) + uncategorised + onProjects;
+      return {
+        month, currency: sign?.value ?? '$', categories, uncategorised, projects: { spent: onProjects, lines },
+        total: { planned, spent, left: planned - spent },
+        entries: entries.map(({ owner_id, ...e }) => ({ ...e, mine: owner_id === owner })),
+        people: await db.all<Person>('SELECT id, username FROM users WHERE id != ? ORDER BY username', [owner]),
+      };
+    },
+
+    async addCategory(input: CategoryInput): Promise<{ id: number }> {
+      const name = clean(input.name, 80);
+      if (!name) throw new Problem(400, 'Give the category a name');
+      return atomic(db, async (tx) => {
+        const next = (await tx.get<{ n: number }>('SELECT COALESCE(MAX(sort_order) + 1, 0) AS n FROM money_categories WHERE owner_id = ?', [owner]))!.n;
+        const made = await tx.run('INSERT INTO money_categories (owner_id, name, monthly_cents, sort_order, created_at) VALUES (?, ?, ?, ?, ?)',
+          [owner, name, cents(input.monthly_cents ?? 0, 'The amount for the month'), next, now()]);
+        await share(tx, made.lastId, input.shared_with);
+        return { id: made.lastId };
+      });
+    },
+
+    /** Change a category's name, its amount, or who it is shared with. Only its owner can. */
+    async updateCategory(id: number, input: CategoryInput): Promise<void> {
+      await atomic(db, async (tx) => {
+        await ownCategory(tx, id);
+        const name = clean(input.name, 80);
+        if (name) await tx.run('UPDATE money_categories SET name = ? WHERE id = ?', [name, id]);
+        if (input.monthly_cents !== undefined) await tx.run('UPDATE money_categories SET monthly_cents = ? WHERE id = ?', [cents(input.monthly_cents, 'The amount for the month'), id]);
+        await share(tx, id, input.shared_with);
+      });
+    },
+
+    /** Remove a category. What was spent in it is kept, in no category, and goes back to being only its writer's. */
+    async removeCategory(id: number): Promise<void> {
+      await atomic(db, async (tx) => {
+        await ownCategory(tx, id);
+        await tx.run('UPDATE money_entries SET category_id = NULL WHERE category_id = ?', [id]);
+        await tx.run('DELETE FROM money_categories WHERE id = ?', [id]);
+      });
+    },
+
+    async addEntry(input: EntryInput): Promise<{ id: number }> {
+      return atomic(db, async (tx) => {
+        const e = await checkedEntry(tx, input);
+        const made = await tx.run('INSERT INTO money_entries (owner_id, category_id, label, cents, day, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [owner, e.category, e.label, e.cents, e.day, e.note, now()]);
+        return { id: made.lastId };
+      });
+    },
+
+    async updateEntry(id: number, input: EntryInput): Promise<void> {
+      await atomic(db, async (tx) => {
+        await changeable(tx, id);
+        const e = await checkedEntry(tx, input);
+        await tx.run('UPDATE money_entries SET category_id = ?, label = ?, cents = ?, day = ?, note = ? WHERE id = ?', [e.category, e.label, e.cents, e.day, e.note, id]);
+      });
+    },
+
+    async removeEntry(id: number): Promise<void> {
+      await atomic(db, async (tx) => {
+        await changeable(tx, id);
+        await tx.run('DELETE FROM money_entries WHERE id = ?', [id]);
+      });
+    },
+  };
+}

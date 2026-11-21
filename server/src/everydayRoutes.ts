@@ -14,6 +14,7 @@ import { enjoyingRoutes } from './enjoyingRoutes.ts';
 import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
 import { mailRoutes, type MailTools } from './mailRoutes.ts';
 import { makingRoutes } from './makingRoutes.ts';
+import { moneyRoutes } from './moneyRoutes.ts';
 import { planRoutes } from './planRoutes.ts';
 import { shoppingRoutes } from './shoppingRoutes.ts';
 
@@ -156,6 +157,7 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ['DELETE', /^\/api\/kitchen\/grocery\/(\d{1,15})$/, async (c) => (await c.kitchen.deleteGrocery(c.id), { status: 204 })],
 
     ...makingRoutes(db),
+    ...moneyRoutes(db),
     ...(options.reach ? connectionRoutes(db, options.reach) : []),
     ...enjoyingRoutes(db, options.calendars),
     ...mailRoutes(db, options.mail),
