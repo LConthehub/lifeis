@@ -8,7 +8,7 @@
  * What reaches outside is handed in (`fetcher`, and the tools for each service), and is left out where
  * Life Is can't or shouldn't reach out.
  */
-import { home, life, lookups, weather, BOOK_SERVICE, GROCERY_SERVICE, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
+import { home, life, lookups, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
 import { enjoyingRoutes } from './enjoyingRoutes.ts';
 import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
@@ -103,6 +103,11 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
       return { json: await c.kitchen.listRecipes({ q, tag }) };
     }],
     ['POST', /^\/api\/kitchen\/recipes$/, async (c) => ({ status: 201, json: await c.kitchen.createRecipe(recipeFrom(c.body)) })],
+    // A recipe read from text (typed, pasted, or read off a photo) or from a web page, given back as a draft
+    // to look over. Nothing is saved by these two.
+    ['POST', /^\/api\/kitchen\/recipes\/read$/, async (c) => ({ json: recipeText.readImport(read.text(c.body, 'text'))[0] })],
+    ['POST', /^\/api\/kitchen\/recipes\/from-web$/, async (c) => ({ json: await recipeFromWeb(outside, read.text(c.body, 'url')) })],
+    ['GET', /^\/api\/kitchen\/recipes\/from-web$/, async () => ({ json: { available: Boolean(outside), service: RECIPE_WEB_SERVICE } })],
     ['POST', /^\/api\/kitchen\/recipes\/import$/, async (c) => ({ status: 201, json: await c.kitchen.importRecipes(read.text(c.body, 'text')) })],
     ['GET', /^\/api\/kitchen\/recipes\/(\d{1,15})$/, async (c) => ({ json: await c.kitchen.getRecipe(c.id, queryNumber(c.query, 'servings')) })],
     ['PUT', /^\/api\/kitchen\/recipes\/(\d{1,15})$/, async (c) => ({ json: await c.kitchen.updateRecipe(c.id, recipeFrom(c.body)) })],

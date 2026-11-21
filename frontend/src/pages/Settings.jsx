@@ -203,6 +203,10 @@ function OutsideServices() {
         <PhotoLibraryService />
         <OtherCalendarsService />
         <div className="py-3">
+          <h3 className="font-medium text-gray-800 dark:text-life-50">🍳 Recipes from a website</h3>
+          <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Nothing to turn on. Only when you paste an address under Recipes → "Bring one in", Life Is fetches that one page from that site, as a browser would; nothing about you or your recipes is sent. Reading a recipe off a photo happens on your own device and reaches nowhere.</p>
+        </div>
+        <div className="py-3">
           <h3 className="font-medium text-gray-800 dark:text-life-50">📺 Your Jellyfin or Emby</h3>
           <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Brings the films, shows, music and books on a media server you name into your collection. Life Is only reads from that server, using the key you give it, and talks to nowhere else.</p>
           <Link to="/media/servers" className="mt-2 inline-block text-sm text-life-600 hover:underline dark:text-life-200">Media servers →</Link>

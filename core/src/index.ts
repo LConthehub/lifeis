@@ -44,3 +44,4 @@ export { calendarFeed, calendarFile, feedFor, FEED_KINDS } from './feed.ts';
 export type { CalendarFeed, FeedEvent, FeedStatus } from './feed.ts';
 export { followedCalendars, followedDue, readCalendar, FOLLOW_SERVICE, SHOWS } from './follow.ts';
 export type { Followed, FollowedCalendars, FollowInput, ReadEvent, Show } from './follow.ts';
+export { recipeFromPage, recipeFromWeb, RECIPE_WEB_SERVICE } from './recipeWeb.ts';

@@ -6,3 +6,4 @@ backend/data/
 .env
 private/
 dist-device/
+frontend/public/ocr/

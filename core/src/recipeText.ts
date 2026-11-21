@@ -122,7 +122,8 @@ export function readPasted(text: string): RecipeInput {
     title: title || 'Untitled recipe',
     description: sections.intro.join('\n').trim() || null,
     servings,
-    ingredients_text: sections.ingredients.join('\n').trim(),
+    // An ingredient is a line, so the gaps between them (text read off a photo is full of them) say nothing.
+    ingredients_text: sections.ingredients.filter((line) => line.trim()).join('\n').trim(),
     steps_text: sections.steps.join('\n').trim(),
     notes: sections.notes.join('\n').trim() || null,
     original_text: text,

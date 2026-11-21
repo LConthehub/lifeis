@@ -116,6 +116,11 @@ time in Settings; unticking something only puts it out of sight.
   run out (each only once you have one). A plan with recipes says roughly what its food will cost, going by the last
   price of each ingredient. The grocery list, laid out by shop, can show just the shop you're in.
 
+- **Bring a recipe in**, three ways (Recipes → "Bring one in"). From a website: paste the address and Life Is reads the
+  recipe the page publishes for search engines, without the story around it. From a photo or a book: the words are read
+  off the picture on your own device (the photo is sent nowhere and not kept). Or paste the text. Each gives a draft
+  to look over; nothing is saved until you press Save, and what was read is kept alongside.
+
 ## The calendar
 
 - **One place to see what's on each day.** Your own dates (a day or several, with a time if it has one), with
