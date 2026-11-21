@@ -300,3 +300,37 @@ it('each place has a sticker code that stays the same and finds it again', async
   const other = (await db.run("INSERT INTO users (username, password_hash, created_at) VALUES ('nosy', 'x', 'now')")).lastId;
   await expect(things2(db, other, clock).placeForSticker(bin.code)).rejects.toMatchObject({ status: 404 });
 });
+
+it('a project has a budget: what each thing is planned to cost, and what it came to once paid', async () => {
+  let dress = await making.createProject({ name: 'Shirt dress', activity: 'Sewing' });
+  expect(dress.budget).toEqual({ currency: '$', planned: 0, spent: 0, expected: 0, left: 0, unpaid: 0 });
+  dress = await making.addCost(dress.id, { label: 'Linen, 3 yd', planned_cents: 4500 });
+  dress = await making.addCost(dress.id, { label: 'Buttons', planned_cents: 800, note: 'shell, 12' });
+  dress = await making.addCost(dress.id, { label: 'Pattern' }); // no idea yet what it costs
+  expect(dress.costs.map((c) => [c.label, c.planned_cents, c.paid_on])).toEqual([['Linen, 3 yd', 4500, null], ['Buttons', 800, null], ['Pattern', null, null]]);
+  expect(dress.budget).toMatchObject({ planned: 5300, spent: 0, expected: 5300, left: 0, unpaid: 3 });
+
+  // The linen cost more than planned; the buttons cost what was planned.
+  dress = await making.payCost(dress.costs[0]!.id, 5200);
+  dress = await making.payCost(dress.costs[1]!.id);
+  expect(dress.costs.map((c) => [c.actual_cents, c.paid_on])).toEqual([[5200, '2046-03-05'], [800, '2046-03-05'], [null, null]]);
+  expect(dress.budget).toMatchObject({ planned: 5300, spent: 6000, expected: 6000, left: -700, unpaid: 1 });
+
+  // A correction keeps it paid; un-paying goes back to the plan; a line can go.
+  dress = await making.updateCost(dress.costs[0]!.id, { actual_cents: 5000 });
+  expect([dress.costs[0]!.actual_cents, dress.costs[0]!.paid_on, dress.budget.left]).toEqual([5000, '2046-03-05', -500]);
+  dress = await making.unpayCost(dress.costs[0]!.id);
+  expect([dress.costs[0]!.actual_cents, dress.budget.spent, dress.budget.left]).toEqual([null, 800, 0]);
+  dress = await making.removeCost(dress.costs[2]!.id);
+  expect(dress.costs).toHaveLength(2);
+
+  await expect(making.addCost(dress.id, { label: '  ' })).rejects.toMatchObject({ status: 400 });
+  await expect(making.addCost(dress.id, { label: 'Zip', planned_cents: -1 })).rejects.toMatchObject({ status: 422 });
+  // Somebody else's project and its costs are not there to be touched.
+  const other = projects(db, (await db.run("INSERT INTO users (username, password_hash, created_at) VALUES ('other', 'x', 'now')")).lastId, clock);
+  await expect(other.addCost(dress.id, { label: 'Mine now' })).rejects.toMatchObject({ status: 404 });
+  await expect(other.payCost(dress.costs[0]!.id)).rejects.toMatchObject({ status: 404 });
+  // Removing the project takes its costs with it.
+  await making.deleteProject(dress.id);
+  expect((await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM project_costs'))!.n).toBe(0);
+});

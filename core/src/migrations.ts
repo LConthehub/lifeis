@@ -574,6 +574,23 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_followed_events ON followed_events(calendar_id, day)`,
     ],
   },
+  {
+    // What a project is planned to cost and what it did cost, line by line. Money is whole cents.
+    number: 19,
+    statements: [
+      `CREATE TABLE project_costs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        label TEXT NOT NULL,
+        planned_cents INTEGER CHECK(planned_cents IS NULL OR planned_cents >= 0),
+        actual_cents INTEGER CHECK(actual_cents IS NULL OR actual_cents >= 0),
+        paid_on TEXT,
+        note TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )`,
+      `CREATE INDEX idx_project_costs ON project_costs(project_id, sort_order)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

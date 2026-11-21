@@ -8,7 +8,7 @@
  * There is no sign-in, because there is nobody to tell apart: the device belongs to one person, and the
  * device's own lock is the front door. So the few addresses about accounts answer for that one person.
  */
-import { kitchen, makeBackup, restoreBackup, Problem } from '../../../core/src/index.ts';
+import { accessNow, decide, kitchen, makeBackup, restoreBackup, ENDED_MESSAGE, Problem } from '../../../core/src/index.ts';
 import { everydayRoutes } from '../../../server/src/everydayRoutes.ts';
 import { Refusal } from '../../../server/src/http.ts';
 
@@ -26,11 +26,19 @@ async function owner(db) {
   return { id: made.lastId, username: 'me', is_admin: true };
 }
 
-export async function deviceAnswers(db, outside = {}) {
+/**
+ * `held` is where the app remembers, outside the database, when the free trial began and whether Life Is has
+ * been unlocked: { read(): Promise<{trial_started, unlocked}>, begin(iso): Promise<void> }. Without it (the
+ * tests of other things), everything is open.
+ */
+export async function deviceAnswers(db, outside = {}, held = null) {
   const user = await owner(db);
+  let standing = held ? await held.read() : { trial_started: null, unlocked: true };
+  const access = () => accessNow(standing, new Date());
   const account = async () => ({ json: { idle_minutes: 0, idle_choices: [0] } });
   const routes = [
     ['GET', /^\/api\/health$/, async () => ({ json: { status: 'ok' } })],
+    ['GET', /^\/api\/access$/, async () => ({ json: access() })],
     ['GET', /^\/api\/auth\/status$/, async () => ({ json: { setup_required: false, local: true, on_device: true, user } })],
     ['POST', /^\/api\/auth\/logout$/, async () => ({ status: 204 })],
     ['POST', /^\/api\/auth\/(setup|login|change-password)$/, notHere],
@@ -58,6 +66,11 @@ export async function deviceAnswers(db, outside = {}) {
       if (here.length === 0) throw new Refusal(404, 'Not found');
       const route = here.find(([m]) => m === method);
       if (!route) throw new Refusal(405, 'Method not allowed');
+      // The parts the unlock covers: the trial begins at the first thing written, and once it has ended they
+      // can be read but not changed. Nothing is ever hidden.
+      const allowed = decide(access(), method, path);
+      if (allowed === 'read_only') throw new Refusal(402, ENDED_MESSAGE);
+      if (allowed === 'start') { standing = { ...standing, trial_started: new Date().toISOString() }; await held.begin(standing.trial_started); }
       reply = await route[2]({
         path, query: url.searchParams, id: Number(route[1].exec(path)[1] ?? 0), body: body && typeof body === 'object' ? body : {},
         user, kitchen: kitchen(db, user.id, clock), clock, token: undefined, ip: '', https: true, local: true,

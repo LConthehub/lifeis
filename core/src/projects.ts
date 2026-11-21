@@ -91,7 +91,24 @@ export type ProjectSummary = {
   /** How many of its lines are short of something. */
   short_count: number;
 };
-export type Project = ProjectSummary & { lines: Line[]; sessions: Session[] };
+/** One thing a project costs: what was planned, and once paid, what it came to. */
+export type Cost = {
+  id: number;
+  project_id: number;
+  label: string;
+  planned_cents: number | null;
+  actual_cents: number | null;
+  paid_on: string | null;
+  note: string | null;
+};
+export type CostInput = { label?: string | null; planned_cents?: number | null; actual_cents?: number | null; note?: string | null };
+/**
+ * A project's money, in whole cents. `planned` is every line's plan. `spent` is what paid lines came to.
+ * `expected` is the best guess at the final cost: what was paid, plus the plan for what isn't paid yet.
+ * `left` is the plan less what is expected, so it goes below zero when the project is running over.
+ */
+export type Budget = { currency: string; planned: number; spent: number; expected: number; left: number; unpaid: number };
+export type Project = ProjectSummary & { lines: Line[]; sessions: Session[]; costs: Cost[]; budget: Budget };
 
 type ProjectRow = Omit<ProjectSummary, 'minutes' | 'sessions_count' | 'short_count'>;
 type LineRow = Omit<Line, 'amount' | 'have' | 'place' | 'short' | 'short_text'> & {
@@ -158,8 +175,14 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
     const row = await projectRow(q, id);
     const lines = await linesOf(q, row);
     const sessions = await sessionsOf(q, id);
+    const costs = await q.all<Cost>('SELECT id, project_id, label, planned_cents, actual_cents, paid_on, note FROM project_costs WHERE project_id = ? ORDER BY sort_order, id', [id]);
+    const sign = await q.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'shopping_currency'", [owner]);
+    const planned = costs.reduce((sum, c) => sum + (c.planned_cents ?? 0), 0);
+    const spent = costs.reduce((sum, c) => sum + (c.paid_on ? c.actual_cents ?? 0 : 0), 0);
+    const expected = costs.reduce((sum, c) => sum + (c.paid_on ? c.actual_cents ?? 0 : c.planned_cents ?? 0), 0);
     return {
-      ...row, lines, sessions,
+      ...row, lines, sessions, costs,
+      budget: { currency: sign?.value ?? '$', planned, spent, expected, left: planned - expected, unpaid: costs.filter((c) => !c.paid_on).length },
       minutes: sessions.reduce((sum, s) => sum + (s.minutes ?? 0), 0),
       sessions_count: sessions.length,
       short_count: lines.filter((line) => line.short).length,
@@ -205,6 +228,20 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
     const row = await q.get<{ id: number; project_id: number; item_id: number | null; label: string; quantity: number | null; unit: string | null; used_on: string | null }>(
       `SELECT l.id, l.project_id, l.item_id, l.label, l.quantity, l.unit, l.used_on FROM project_items l JOIN projects p ON p.id = l.project_id
        WHERE l.id = ? AND p.owner_id = ?`, [id, owner]);
+    if (!row) throw new Problem(404, 'Not found');
+    return row;
+  }
+
+  const MOST = 100_000_000_00; // a hundred million, in cents: more than any household project
+  function cents(value: number | null | undefined, what: string): number | null {
+    if (value === null || value === undefined) return null;
+    if (!Number.isFinite(value) || value < 0 || value > MOST) throw new Problem(422, `${what} should be an amount of money, not below zero`);
+    return Math.round(value);
+  }
+  async function costRow(q: Queries, id: number): Promise<Cost> {
+    const row = await q.get<Cost>(
+      `SELECT c.id, c.project_id, c.label, c.planned_cents, c.actual_cents, c.paid_on, c.note FROM project_costs c JOIN projects p ON p.id = c.project_id
+       WHERE c.id = ? AND p.owner_id = ?`, [id, owner]);
     if (!row) throw new Problem(404, 'Not found');
     return row;
   }
@@ -327,6 +364,60 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
       return atomic(db, async (tx) => {
         const before = await lineRow(tx, id);
         await tx.run('DELETE FROM project_items WHERE id = ?', [id]);
+        return project(tx, before.project_id);
+      });
+    },
+
+    // ---------- what it costs ----------
+
+    async addCost(projectId: number, input: CostInput): Promise<Project> {
+      return atomic(db, async (tx) => {
+        await projectRow(tx, projectId);
+        const label = clean(input.label, 200);
+        if (!label) throw new Problem(400, 'Say what the money is for');
+        const next = (await tx.get<{ n: number }>('SELECT COALESCE(MAX(sort_order) + 1, 0) AS n FROM project_costs WHERE project_id = ?', [projectId]))!.n;
+        await tx.run('INSERT INTO project_costs (project_id, label, planned_cents, note, sort_order) VALUES (?, ?, ?, ?, ?)',
+          [projectId, label, cents(input.planned_cents, 'The planned cost'), clean(input.note, 1000), next]);
+        return project(tx, projectId);
+      });
+    },
+
+    /** Change a cost line. Changing what a paid line came to keeps it paid. */
+    async updateCost(id: number, input: CostInput): Promise<Project> {
+      return atomic(db, async (tx) => {
+        const before = await costRow(tx, id);
+        const label = clean(input.label, 200) ?? before.label;
+        const planned = input.planned_cents === undefined ? before.planned_cents : cents(input.planned_cents, 'The planned cost');
+        const actual = input.actual_cents === undefined ? before.actual_cents : cents(input.actual_cents, 'What it came to');
+        await tx.run('UPDATE project_costs SET label = ?, planned_cents = ?, actual_cents = ?, note = ? WHERE id = ?',
+          [label, planned, before.paid_on ? actual ?? 0 : null, input.note === undefined ? before.note : clean(input.note, 1000), id]);
+        return project(tx, before.project_id);
+      });
+    },
+
+    async removeCost(id: number): Promise<Project> {
+      return atomic(db, async (tx) => {
+        const before = await costRow(tx, id);
+        await tx.run('DELETE FROM project_costs WHERE id = ?', [id]);
+        return project(tx, before.project_id);
+      });
+    },
+
+    /** It has been paid for. What it came to is what was planned, unless a different amount is given. */
+    async payCost(id: number, actualCents?: number | null): Promise<Project> {
+      return atomic(db, async (tx) => {
+        const before = await costRow(tx, id);
+        const actual = cents(actualCents, 'What it came to') ?? before.planned_cents ?? 0;
+        await tx.run('UPDATE project_costs SET actual_cents = ?, paid_on = ? WHERE id = ?', [actual, today(), id]);
+        return project(tx, before.project_id);
+      });
+    },
+
+    /** Not paid after all: back to only a plan. */
+    async unpayCost(id: number): Promise<Project> {
+      return atomic(db, async (tx) => {
+        const before = await costRow(tx, id);
+        await tx.run('UPDATE project_costs SET actual_cents = NULL, paid_on = NULL WHERE id = ?', [id]);
         return project(tx, before.project_id);
       });
     },

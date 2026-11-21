@@ -30,6 +30,13 @@ const lineFrom = (body: Body) => ({
   unit: read.maybeText(body, 'unit'), note: read.maybeText(body, 'note'),
 });
 
+const costFrom = (body: Body) => ({
+  ...(sent(body, 'label') ? { label: read.maybeText(body, 'label') } : {}),
+  ...(sent(body, 'planned_cents') ? { planned_cents: read.maybeNumber(body, 'planned_cents') } : {}),
+  ...(sent(body, 'actual_cents') ? { actual_cents: read.maybeNumber(body, 'actual_cents') } : {}),
+  ...(sent(body, 'note') ? { note: read.maybeText(body, 'note') } : {}),
+});
+
 /** Whether a field was sent at all: left out means "leave it as it is", where null means "clear it". */
 const sent = (body: Body, name: string) => Object.hasOwn(body, name);
 
@@ -114,6 +121,12 @@ export function makingRoutes(db: Db): Route[] {
     ['POST', at('projects/:id/lines'), async (c) => ({ status: 201, json: await making(c).addLine(c.id, lineFrom(c.body)) })],
     ['PUT', at('projects/lines/:id'), async (c) => ({ json: await making(c).updateLine(c.id, lineFrom(c.body)) })],
     ['DELETE', at('projects/lines/:id'), async (c) => ({ json: await making(c).removeLine(c.id) })],
+    // What it costs: planned, and once paid, what it came to.
+    ['POST', at('projects/:id/costs'), async (c) => ({ status: 201, json: await making(c).addCost(c.id, costFrom(c.body)) })],
+    ['PUT', at('projects/costs/:id'), async (c) => ({ json: await making(c).updateCost(c.id, costFrom(c.body)) })],
+    ['DELETE', at('projects/costs/:id'), async (c) => ({ json: await making(c).removeCost(c.id) })],
+    ['POST', at('projects/costs/:id/pay'), async (c) => ({ json: await making(c).payCost(c.id, read.maybeNumber(c.body, 'actual_cents')) })],
+    ['POST', at('projects/costs/:id/unpay'), async (c) => ({ json: await making(c).unpayCost(c.id) })],
     ['POST', at('projects/lines/:id/use'), async (c) => ({ json: await making(c).useLine(c.id) })],
 
     ['POST', at('projects/:id/sessions'), async (c) => ({

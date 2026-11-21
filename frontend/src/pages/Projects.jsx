@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import Budget from '../components/Budget';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
 const STATUSES = [['idea', 'An idea'], ['planned', 'Planned'], ['active', 'Working on it'], ['paused', 'Paused'], ['done', 'Finished'], ['dropped', 'Dropped']];
@@ -178,6 +179,8 @@ export function ProjectPage() {
             </ul>
           )}
         </section>
+
+        <Budget project={project} onChange={setProject} />
 
         <section className={cardClass}>
           <div className="mb-1 flex items-center gap-2">

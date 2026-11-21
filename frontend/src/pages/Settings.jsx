@@ -29,6 +29,7 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
           <button type="button" onClick={chooseAgain} className={`${quietButtonClass} mt-3`}>Connect to a Life Is I host</button>
         </section>
       )}
+      {onDevice() && <Unlock />}
       {onDevice() && <DeviceBackup />}
       {linkedServer() && (
         <section className={cardClass}>
@@ -47,6 +48,33 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
       </section>}
       {!onDevice() && <button type="button" onClick={onLogout} className={quietButtonClass}>Sign out ({user.username})</button>}
     </div>
+  );
+}
+
+/** On the device: what is free, where the trial of the rest stands, and unlocking it. */
+function Unlock() {
+  const [access, setAccess] = useState(null);
+  useEffect(() => { axios.get('/api/access').then(({ data }) => setAccess(data)).catch(() => {}); }, []);
+  useEffect(() => { if (access && window.location.hash === '#unlock') document.getElementById('unlock')?.scrollIntoView(); }, [access]);
+  if (!access) return null;
+  const days = access.days_left;
+  return (
+    <section className={cardClass} id="unlock" data-access={access.state}>
+      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">{access.state === 'unlocked' ? 'Life Is is unlocked' : 'Unlocking Life Is'}</h2>
+      {access.state === 'unlocked' ? (
+        <p className="text-sm text-gray-600 dark:text-life-100">Every part of Life Is is yours on this device, for good. Thank you.</p>
+      ) : (
+        <>
+          <p className="text-sm text-gray-600 dark:text-life-100">The kitchen (recipes, the week, groceries, the pantry, prices) and backups are free for good. Everything else is one payment of {access.price}: no subscription, nothing to renew.</p>
+          <p className="mt-2 text-sm text-gray-600 dark:text-life-100">
+            {access.state === 'unstarted' && `You can try all of it free for ${access.trial_days} days. The days start counting when you first add something outside the kitchen.`}
+            {access.state === 'trial' && `Your free trial has ${days} ${days === 1 ? 'day' : 'days'} left.`}
+            {access.state === 'ended' && 'Your free trial has ended. Nothing you entered has been hidden or removed: it can all still be read and backed up, and can be changed again once unlocked.'}
+          </p>
+          <p className="mt-3 rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-800 dark:text-life-50">Paying is done through the app store, and arrives when Life Is is in the store. This copy isn't from the store yet.</p>
+        </>
+      )}
+    </section>
   );
 }
 

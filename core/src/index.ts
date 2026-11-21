@@ -46,3 +46,4 @@ export { followedCalendars, followedDue, readCalendar, FOLLOW_SERVICE, SHOWS } f
 export type { Followed, FollowedCalendars, FollowInput, ReadEvent, Show } from './follow.ts';
 export { recipeFromPage, recipeFromWeb, RECIPE_WEB_SERVICE } from './recipeWeb.ts';
 export { makeBackup, restoreBackup, PASSPHRASE_MIN } from './backup.ts';
+export { accessNow, decide, isPaidPath, ENDED_MESSAGE, PAID_PARTS, PRICE, TRIAL_DAYS, type Access, type Held } from './access.ts';

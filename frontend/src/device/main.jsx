@@ -23,7 +23,13 @@ async function onThisPhone() {
   await migrate(db);
   const { deviceAnswers } = await import('./answer.js');
   const outside = onPhone ? { fetcher: (await import('./outside.js')).phoneFetcher } : {};
-  const answer = await deviceAnswers(db, outside);
+  // When the free trial began is kept in the phone's keystore, not the database, so bringing a backup back
+  // neither restarts it nor ends it. Whether it is unlocked will come from the app store, once it is in one.
+  const held = {
+    read: async () => ({ trial_started: await kept.get('trial_started'), unlocked: (await kept.get('unlocked')) === true }),
+    begin: (iso) => kept.set('trial_started', iso),
+  };
+  const answer = await deviceAnswers(db, outside, held);
 
   // Every request the pages make with axios comes here instead of going out.
   axios.defaults.adapter = async (config) => {
