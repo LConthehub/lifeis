@@ -4,7 +4,7 @@ blurb: Places, things, filling a shelf by scanning, stickers, and where everythi
 ---
 # Your home
 
-**keeping** is the whole-house inventory: what you own, where it is, what it is for, and where it has been.
+The **organized** section is the whole-house inventory: what you own, where it is, what it is for, and where it has been.
 
 ## Places
 

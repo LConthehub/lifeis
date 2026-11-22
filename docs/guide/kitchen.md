@@ -4,7 +4,7 @@ blurb: Recipes kept as you wrote them, the week's meals, groceries, the pantry a
 ---
 # The kitchen
 
-**eating** is recipes, the week, the grocery list and the pantry. In the phone app, all of it is free for good.
+The **delicious** section is recipes, the week, the grocery list and the pantry. In the phone app, all of it is free for good.
 
 ## Recipes
 

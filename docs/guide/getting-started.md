@@ -17,7 +17,7 @@ The quickest way to see it is the [demo](https://demo.lifeis.living): a made-up 
 ## Three things worth doing on day one
 
 - **Add a few recipes.** Paste the text, bring one in from a website, or take a photo of a card. Life Is keeps what you wrote exactly as you wrote it.
-- **Fill one shelf.** Open **keeping**, add a place such as "Garage › Tool shelf", choose **Fill this place**, and scan or type what is on it. See [Your home](home.html).
+- **Fill one shelf.** Open **organized**, add a place such as "Garage › Tool shelf", choose **Fill this place**, and scan or type what is on it. See [Your home](home.html).
 - **Add one thing that comes round.** In **Upkeep**, tap a common one, like "Change the furnace filter" or your rent. Life Is will tell you when it is due. See [Upkeep](upkeep.html).
 
 ## Finding things

@@ -21,7 +21,7 @@ await page.getByRole('button', { name: 'Sign in' }).click();
 await wait(1000);
 { const skip = page.getByRole('dialog').getByRole('button', { name: 'Skip, show me everything' }); if (await skip.isVisible().catch(() => false)) { await skip.click(); await wait(900); } }
 const header = flat(await page.locator('nav[aria-label="Sections"]').innerText());
-say('the header has its sections: ' + header, /eating\s+keeping\s+spending\s+planning\s+making\s+entertaining/.test(header));
+say('the header has its sections: ' + header, /delicious\s+organized\s+budgeted\s+planned\s+projects\s+entertaining/.test(header));
 
 // A place for the tapes, then the collection.
 await page.goto(base + '/things/places'); await wait();
@@ -66,7 +66,7 @@ await page.getByRole('button', { name: /Everything/ }).click(); await wait(300);
 await page.screenshot({ path: shots + '/media.png' });
 
 // Watched while sewing.
-await page.getByRole('link', { name: 'making' }).click(); await wait();
+await page.getByRole('link', { name: 'projects' }).click(); await wait();
 await page.getByRole('button', { name: '+ New project' }).click();
 await field('What it is').fill('Shirt dress'); await field('Where it').selectOption('active');
 await page.getByRole('button', { name: 'Save' }).click(); await wait(1000);
@@ -83,7 +83,7 @@ await time.getByRole('link', { name: 'Alien' }).click(); await wait(900);
 say('and the film says it was watched while working on the dress', /while working on Shirt dress/.test(await text()));
 
 // The calendar gathers it all.
-await page.getByRole('link', { name: 'planning' }).click(); await wait(900);
+await page.getByRole('link', { name: 'planned' }).click(); await wait(900);
 await page.getByRole('button', { name: '+ Add' }).first().click();
 await field('What').fill('Dentist'); await field('Time').fill('14:30');
 await page.getByRole('button', { name: 'Save' }).click(); await wait(900);

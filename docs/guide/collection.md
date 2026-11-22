@@ -4,7 +4,7 @@ blurb: Everything you own on every format, in one list. Shelves, servers, Kindle
 ---
 # Films, music and books
 
-**entertaining** is what you own and what you have watched, read or heard. A title is the work itself. What you own of it is its copies: the paperback on the shelf, the audiobook on your server, the one on your Kindle. One book on three formats is one title with three copies.
+The **entertaining** section is what you own and what you have watched, read or heard. A title is the work itself. What you own of it is its copies: the paperback on the shelf, the audiobook on your server, the one on your Kindle. One book on three formats is one title with three copies.
 
 ## Adding
 
