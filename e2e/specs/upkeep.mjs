@@ -103,4 +103,42 @@ check("the ladder's history says what it was used for", hist.includes('Used for 
 check('the ladder lists the job that needs it', (await page.getByRole('region', { name: 'Upkeep' }).innerText()).includes('needs this'));
 await page.goto(`${base}/things/activities?name=Car`); await page.waitForTimeout(1000);
 check('the activity lists its upkeep', (await page.getByRole('region', { name: 'Its upkeep' }).innerText().catch(() => '')).includes('Change the oil'));
+
+// A ready-made set: look inside, uncheck one job, add it, and see that pressing add again adds nothing.
+const apiJobs = () => page.evaluate(() => fetch('/api/things/upkeep').then((r) => r.json()));
+const before = (await apiJobs()).length;
+await page.goto(`${base}/things/upkeep`); await page.waitForTimeout(1000);
+const sets = page.getByRole('region', { name: 'Ready-made sets' });
+check('the page offers a ready-made set', await sets.getByText('Add a ready-made set').isVisible());
+await sets.getByText('Add a ready-made set').click(); await page.waitForTimeout(400);
+await sets.getByRole('button', { name: /Around the house/ }).click(); await page.waitForTimeout(400);
+const house = await sets.getByRole('list', { name: 'Jobs in Around the house' }).innerText();
+check('a set lists its jobs, with how often and when first due', house.includes('Clean the dryer vent') && house.includes('every month') && house.includes('first due') && house.includes('(you have this)'), house.replace(/\s+/g, ' ').slice(0, 200));
+await sets.getByRole('checkbox', { name: /Test the sump pump/ }).uncheck();
+await page.screenshot({ path: `${shots}/upkeep-sets.png`, fullPage: true });
+const total = await sets.getByRole('list', { name: 'Jobs in Around the house' }).getByRole('checkbox').count();
+await sets.getByRole('button', { name: `Add these ${total - 1} jobs` }).click(); await page.waitForTimeout(1500);
+const added = await sets.getByRole('status').innerText();
+check('adding says how many were added and how many were there', added === `Added ${total - 2} jobs. 1 was already there.`, added);
+const after = await apiJobs();
+const dayOf = (name) => after.find((j) => j.name === name)?.due.next_day ?? '';
+check('the unchecked job was not added, the rest were', after.length === before + total - 2 && !after.some((j) => j.name === 'Test the sump pump') && after.some((j) => j.name === 'Clean the dryer vent'), `${before} -> ${after.length}`);
+check('fixed days are on their day', dayOf('Service the furnace').endsWith('-10-01') && dayOf('Change smoke alarm batteries (fall)').endsWith('-11-01') && dayOf('Winterize the outdoor faucets and sprinklers').endsWith('-10-25'), [dayOf('Service the furnace'), dayOf('Change smoke alarm batteries (fall)')].join(' '));
+check('a job with no fixed day is due now', dayOf('Flush the water heater') === after.find((j) => j.name === 'Flush the water heater').due.next_day && after.find((j) => j.name === 'Flush the water heater').due.state === 'due');
+check('the added jobs are on the list', (await page.getByText('Service the furnace').count()) > 0);
+await sets.getByRole('button', { name: `Add these ${total - 1} jobs` }).click(); await page.waitForTimeout(1200);
+const again = await sets.getByRole('status').innerText();
+check('pressing add again adds nothing', again === `Nothing new was added: ${total - 1} jobs already there.` && (await apiJobs()).length === after.length, again);
+
+await page.setViewportSize({ width: 375, height: 812 });
+await page.goto(`${base}/things/upkeep`); await page.waitForTimeout(1000);
+await sets.getByText('Add a ready-made set').click(); await page.waitForTimeout(300);
+await sets.getByRole('button', { name: /Papers and money/ }).click(); await page.waitForTimeout(400);
+await page.screenshot({ path: `${shots}/upkeep-sets-phone.png`, fullPage: true });
+const fit = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+check('at phone width nothing scrolls sideways', fit);
+const small = await sets.locator('button, label').evaluateAll((els) => els.filter((e) => e.offsetParent && e.getBoundingClientRect().height < 44).map((e) => e.innerText.slice(0, 30)));
+check('its buttons and rows are at least 44px tall', small.length === 0, small.join(' | '));
+const papers = await sets.getByRole('list', { name: 'Jobs in Papers and money' }).innerText();
+check('the papers set leaves the person\'s own dates to them, and keeps estimated taxes out', papers.includes('the date is yours to set') && papers.includes('first due') && !/estimated/i.test(papers));
 await browser.close();

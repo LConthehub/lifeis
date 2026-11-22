@@ -519,6 +519,23 @@ it('upkeep over the web: a job with its tools, done, on the calendar, and given 
   expect((await admin.delete(`/api/things/upkeep/${made.json.id}`)).status).toBe(204);
 });
 
+it('upkeep ready-made sets are listed, added with the jobs the person kept, and added only once', async () => {
+  const admin = await owner();
+  const sets = (await admin.get('/api/things/upkeep/sets')).json;
+  expect(sets.map((s: { slug: string }) => s.slug)).toEqual(['house', 'car', 'papers', 'health', 'yard']);
+  const taxes = sets.find((s: { slug: string }) => s.slug === 'papers').jobs.find((j: { name: string }) => j.name === 'File federal and state taxes');
+  expect([taxes.kind, taxes.every_n, taxes.every_unit, /^\d{4}-04-15$/.test(taxes.first_due)]).toEqual(['renewal', 1, 'year', true]);
+  const first = await admin.post('/api/things/upkeep/sets', { slug: 'yard', only: ['Clean the grill', 'Store the hoses'] });
+  expect([first.status, first.json.added, first.json.already, first.json.added_names]).toEqual([201, 2, 0, ['Clean the grill', 'Store the hoses']]);
+  const again = await admin.post('/api/things/upkeep/sets', { slug: 'yard' });
+  expect([again.json.added_names, again.json.already_names]).toEqual([['Service the lawn mower'], ['Clean the grill', 'Store the hoses']]);
+  const third = await admin.post('/api/things/upkeep/sets', { slug: 'yard' });
+  expect([third.json.added, third.json.already]).toEqual([0, 3]);
+  expect((await admin.get('/api/things/upkeep')).json).toHaveLength(3);
+  expect((await admin.post('/api/things/upkeep/sets', { slug: 'boat' })).status).toBe(404);
+  expect((await admin.post('/api/things/upkeep/sets', { slug: 'yard', only: 'all' })).status).toBe(422);
+});
+
 it('what Life Is looks after is asked once, and sets up what fits', async () => {
   const admin = await owner();
   expect((await admin.get('/api/life')).json).toMatchObject({ areas: null, sections: ['eating', 'planning', 'keeping', 'making', 'enjoying', 'spending'] });
@@ -772,4 +789,30 @@ it('prices, the running total and coupons answer over the web, in whole cents', 
   expect((await admin.put(`/api/shopping/usual/${again}`, { store: 'Costco', size: '3 lb' })).json.lines).toEqual([{ id: again, price_cents: null, size: '', assumed: false,
     last: expect.objectContaining({ cents: 899, amount: '30 oz', store: 'Aldi on Main St' }), coupons: [], usual_store: 'Costco', usual_size: '3 lb', likely_store: 'Costco' }]);
   expect((await admin.put(`/api/shopping/usual/${again}`, { size: 'huge' })).status).toBe(400);
+});
+
+it('a bank statement is looked over, then brought in once, privately, over the web', async () => {
+  const admin = await owner();
+  const other = await member(admin, 'ben');
+  const text = 'Account summary,,\nDate,Description,Amount\n03/02/2046,"Market, Main St",-20.00\n03/03/2046,Pay,500.00\n';
+  const house = (await admin.post('/api/money/categories', { name: 'House', monthly_cents: 50000 })).json.id;
+  const seen = await admin.post('/api/money/statement/read', { text });
+  expect(seen.status).toBe(200);
+  expect(seen.json).toMatchObject({ spending_is: 'negative', guessed: true, first_day: '2046-03-02', last_day: '2046-03-03', spent_cents: 2000, received_cents: 50000, already: 0 });
+  expect(seen.json.rows.map((r: { label: string; kind: string }) => [r.label, r.kind])).toEqual([['Market, Main St', 'spent'], ['Pay', 'received']]);
+  // Said the other way round, the same file reads the other way.
+  expect((await admin.post('/api/money/statement/read', { text, spending_is: 'positive' })).json.spent_cents).toBe(50000);
+  expect((await admin.post('/api/money/statement/read', { text, spending_is: 'sideways' })).status).toBe(422);
+  expect((await admin.post('/api/money/statement/read', { text: 'OFXHEADER:100\n<OFX>' })).json.detail).toBe('That is a Quicken/OFX file. Download the CSV version from your bank instead.');
+  expect((await admin.post('/api/money/statement/read', { text: '' })).status).toBe(400);
+
+  const brought = await admin.post('/api/money/statement', { text, keep: [0], categories: { 0: house } });
+  expect([brought.status, brought.json]).toEqual([201, { listed: 2, added: 1, already: 0, left_out: 1, months: [{ month: '2046-03', added: 1 }] }]);
+  expect((await admin.post('/api/money/statement', { text, keep: [0], categories: { 0: house } })).json).toMatchObject({ added: 0, already: 1 });
+  const march = (await admin.get('/api/money?month=2046-03')).json;
+  expect(march.entries.map((e: { label: string; category: string }) => [e.label, e.category])).toEqual([['Market, Main St', 'House']]);
+  // Another person sees none of it, can't use the category, and is told nothing is already there.
+  expect((await other.get('/api/money?month=2046-03')).json.entries).toEqual([]);
+  expect((await other.post('/api/money/statement', { text, categories: { 0: house } })).status).toBe(404);
+  expect((await other.post('/api/money/statement/read', { text })).json.already).toBe(0);
 });

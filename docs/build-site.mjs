@@ -29,7 +29,11 @@ function html(markdown) {
     const line = lines[i];
     if (!line.trim()) continue;
     const heading = /^(#{1,3}) (.+)$/.exec(line);
-    if (heading) { parts.push(`<h${heading[1].length}>${inline(heading[2])}</h${heading[1].length}>`); continue; }
+    if (heading) {
+      const id = heading[2].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      parts.push(`<h${heading[1].length}${id ? ` id="${id}"` : ''}>${inline(heading[2])}</h${heading[1].length}>`);
+      continue;
+    }
     // A fenced block of code: shown as written, and given a Copy button by copy.js. A leading "$ " prompt is not part of the command.
     const fence = /^(\s*)```\s*([\w-]*)\s*$/.exec(line);
     if (fence) {
@@ -233,7 +237,9 @@ ${shots.length > 1 ? `<div class="shots">\n${shots.slice(1).map(([file, caption]
 const RELEASED = false;
 const IMAGE = 'ghcr.io/lconthehub/lifeis:latest';
 // The order the guides are listed in.
-const GUIDES = ['getting-started', 'install', 'home', 'records', 'upkeep', 'kitchen', 'collection', 'pets-and-manual', 'reminders', 'phone', 'your-data', 'troubleshooting'];
+const GUIDES = ['getting-started', 'install', 'home', 'upkeep', 'kitchen', 'collection', 'phone', 'your-data', 'troubleshooting'];
+// Pages that were folded into another guide. Each old address stays, as a small page that sends the reader on.
+const MOVED = { records: ['home', 'receipts-serial-numbers-and-warranties'], 'pets-and-manual': ['home', 'pets'], reminders: ['upkeep', 'what-comes-due'] };
 
 const guideDir = path.join(here, 'guide');
 const guides = GUIDES.filter((slug) => existsSync(path.join(guideDir, `${slug}.md`))).map((slug) => {
@@ -335,7 +341,25 @@ for (const guide of guides) writeFileSync(path.join(docsOut, `${guide.slug}.html
 writeFileSync(path.join(docsOut, 'index.html'), docPage({ slug: 'index', title: 'Guides', blurb: 'How Life Is works, part by part.',
   body: `<h1>Guides</h1>\n<p>How Life Is works, part by part. New here? Start with the first one, or <a href="https://demo.lifeis.living">try the demo</a> and come back when you have a question.</p>\n<div class="cards">\n${
     guides.map((g) => `  <a href="${g.slug}.html"><b>${safe(g.title)}</b><span>${safe(g.blurb)}</span></a>`).join('\n')}\n</div>` }));
-copyFileSync(path.join(here, 'site-src', 'setup.js'), path.join(docsOut, 'setup.js'));
+for (const [old, [slug, section]] of Object.entries(MOVED)) {
+  const to = `${slug}.html#${section}`;
+  writeFileSync(path.join(docsOut, `${old}.html`), `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="refresh" content="0; url=${to}">
+<meta name="robots" content="noindex">
+<title>This page has moved · Life Is</title>
+</head>
+<body>
+<p>This page has moved. <a href="${to}">Go on to the new page</a>.</p>
+</body>
+</html>
+`);
+}
+copyFileSync(path.join(here, 'site-src', 'setup.js'),path.join(docsOut, 'setup.js'));
 copyFileSync(path.join(here, 'site-src', 'copy.js'), path.join(docsOut, 'copy.js'));
 writeFileSync(path.join(docsOut, 'docs.css'), `:root { --ink: #1f2d33; --soft: #5b6b72; --paper: #fbfaf7; --card: #ffffff; --line: #dfe5e3; --deep: #264653; --teal: #2a9d8f; }
 @media (prefers-color-scheme: dark) { :root { --ink: #e9efee; --soft: #a3b3b5; --paper: #14201f; --card: #1b2b2b; --line: #2b3b3c; --teal: #6cc5b8; } }

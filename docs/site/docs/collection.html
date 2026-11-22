@@ -20,38 +20,35 @@
   <a href="getting-started.html">Get started</a>
   <a href="install.html">Install with Docker</a>
   <a href="home.html">Your home</a>
-  <a href="records.html">Home records</a>
   <a href="upkeep.html">Upkeep</a>
   <a href="kitchen.html">The kitchen</a>
   <a href="collection.html" aria-current="page">Films, music and books</a>
-  <a href="pets-and-manual.html">Pets and the house manual</a>
-  <a href="reminders.html">Reminders</a>
   <a href="phone.html">On your phone</a>
   <a href="your-data.html">Your data</a>
   <a href="troubleshooting.html">Troubleshooting</a>
 </nav>
 <main>
-<h1>Films, music and books</h1>
+<h1 id="films-music-and-books">Films, music and books</h1>
 <p>The <strong>entertaining</strong> section is what you own and what you have watched, read or heard. A title is the work itself. What you own of it is its copies: the paperback on the shelf, the audiobook on your server, the one on your Kindle. One book on three formats is one title with three copies.</p>
-<h2>Adding</h2>
+<h2 id="adding">Adding</h2>
 <ul><li><strong>Scan the barcode.</strong> A book's ISBN fills in its title and author. This looks it up outside, so it is off until you turn it on.</li><li><strong>Type it.</strong> A title is enough. What it is on can be any word: VHS, Vinyl, Kindle.</li><li><strong>Say where it is kept.</strong> A room, and a shelf in it. You can add a place while you add the book.</li></ul>
-<h2>Books, eBooks and Audiobooks</h2>
+<h2 id="books-ebooks-and-audiobooks">Books, eBooks and Audiobooks</h2>
 <p>Each has its own tab. A book you have on paper and as an audiobook is in both.</p>
-<h2>A library on your own server</h2>
+<h2 id="a-library-on-your-own-server">A library on your own server</h2>
 <p>Under <strong>Servers</strong>, connect a server you run and its library is brought in and kept in step:</p>
 <ul><li><strong>Jellyfin</strong> and <strong>Emby</strong> for films, shows and music.</li><li><strong>Audiobookshelf</strong> for audiobooks and eBooks. It asks for an API token.</li><li><strong>Calibre</strong> itself, through its Content server (Connect/share, then Start Content server). A username and password only if you set it to ask.</li><li><strong>Calibre-Web</strong> for eBooks. It asks for your username and password, and reads the catalog at <code>/opds</code>.</li><li><strong>Kavita</strong> for eBooks and comics. It asks for your API key.</li><li><strong>Any other OPDS catalog</strong> (Komga, COPS). Give the address of a list of books, not of a menu.</li></ul>
 <p>Life Is only reads from a server. Nothing on it is ever changed. The sign-in is stored locked on your own computer and is never shown again. Each book keeps a link that opens it on its server.</p>
 <p>If the server is on the same computer as Life Is, and Life Is runs in Docker, use <code class="cmd" data-what="address">http://host.docker.internal</code> and the port, not <code>localhost</code>.</p>
-<h2>Kindle, Apple Books and Google Play Books</h2>
+<h2 id="kindle-apple-books-and-google-play-books">Kindle, Apple Books and Google Play Books</h2>
 <p>These offer no way for another program to read your library, so Life Is cannot link to them as it does to a server. Two ways round it:</p>
 <ul><li><strong>Bring in a list.</strong> On Books, eBooks or Audiobooks, choose <strong>Bring in a list</strong>. It takes the file Goodreads gives you (My Books, then Import and export), one from StoryGraph, any spreadsheet saved as CSV with a Title column, or plain lines such as <code>Dune by Frank Herbert</code>. You see what was found before anything is added. Books on a to-read shelf can become books you want. A book you already have is not added twice, so you can bring the same list in again later.</li><li><strong>Keep a link on a copy.</strong> Open the book in Kindle, Apple Books or Google Play Books, copy its address or use Share, and paste it into the copy. Life Is shows an <strong>Open in Kindle</strong> button. The link is only followed when you press it.</li></ul>
 <p>Nothing in a list is looked up or sent anywhere.</p>
 <p>Life Is does not read books itself. It keeps track of them and opens them where they live.</p>
-<h2>Lending and the log</h2>
+<h2 id="lending-and-the-log">Lending and the log</h2>
 <p>A copy can be lent to someone, with the day. Each time you watch, read or listen can go in the title's log, and a log line can belong to a project session: "listened while sewing".</p>
 <script src="copy.js"></script>
 
-<p class="next">Next: <a href="pets-and-manual.html">Pets and the house manual</a></p>
+<p class="next">Next: <a href="phone.html">On your phone</a></p>
 </main>
 </div>
 <footer><a href="../">Life Is</a> · <a href="../privacy">Privacy policy</a> · <a href="mailto:hello@lifeis.living">hello@lifeis.living</a></footer>

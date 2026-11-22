@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { money, toCents } from '../components/Budget';
+import Statement from '../components/Statement';
 
 const pad = (n) => String(n).padStart(2, '0');
 const thisMonth = () => { const now = new Date(); return `${now.getFullYear()}-${pad(now.getMonth() + 1)}`; };
@@ -31,6 +32,12 @@ export default function Money() {
   if (!data) return null;
   const sign = data.currency;
   const done = () => { setModal(null); load(); };
+  // A statement can span months; the page goes to the latest month it added to, and the others are a step back.
+  const broughtIn = (result) => {
+    setModal(null);
+    const latest = result.months.length ? result.months[result.months.length - 1].month : null;
+    if (latest && latest !== month) setMonth(latest); else load();
+  };
   const remove = async (entry) => {
     setError('');
     try { await axios.delete(`/api/money/entries/${entry.id}`); load(); } catch (err) { setError(errorMessage(err, "Couldn't remove that")); }
@@ -40,6 +47,7 @@ export default function Money() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="flex-1 text-xl font-semibold text-life-800 dark:text-life-50">Spending</h1>
+        <button type="button" onClick={() => setModal({ statement: true })} className="min-h-[44px] px-2 text-sm text-life-600 hover:underline dark:text-life-200">Bring in a statement</button>
         <button type="button" onClick={() => setModal({ entry: {} })} className={buttonClass}>+ Spent</button>
       </div>
       <div className="flex items-center justify-between gap-2">
@@ -107,8 +115,8 @@ export default function Money() {
         </ul>
         {error && <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>}
       </section>
-
       {modal?.entry && <Modal title="Something spent" onClose={() => setModal(null)}><EntryForm categories={data.categories} onDone={done} /></Modal>}
+      {modal?.statement && <Modal title="Bring in a statement" wide onClose={() => { setModal(null); load(); }}><Statement categories={data.categories} currency={sign} onDone={broughtIn} /></Modal>}
       {modal?.category && <Modal title={modal.category.id ? modal.category.name : 'A category'} onClose={() => setModal(null)}><CategoryForm category={modal.category} people={data.people} onDone={done} /></Modal>}
     </div>
   );

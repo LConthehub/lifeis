@@ -23,7 +23,7 @@ Life Is works without the internet. A few things reach outside, and each one is 
 | The weather | The town you chose |
 | A recipe from a website | A request for that page |
 | Email | Only between Life Is and your own mail provider |
-| Reminders | What you choose, the ways you choose. See [Reminders](reminders.html) |
+| Reminders | What you choose, the ways you choose. See [Upkeep](upkeep.html#how-you-are-told) |
 | An AI assistant | Only when you ask it a question. A model you run yourself, or a cloud one with a plain warning |
 
 All of them are listed in one place: **Settings › Connections**.

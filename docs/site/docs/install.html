@@ -20,24 +20,21 @@
   <a href="getting-started.html">Get started</a>
   <a href="install.html" aria-current="page">Install with Docker</a>
   <a href="home.html">Your home</a>
-  <a href="records.html">Home records</a>
   <a href="upkeep.html">Upkeep</a>
   <a href="kitchen.html">The kitchen</a>
   <a href="collection.html">Films, music and books</a>
-  <a href="pets-and-manual.html">Pets and the house manual</a>
-  <a href="reminders.html">Reminders</a>
   <a href="phone.html">On your phone</a>
   <a href="your-data.html">Your data</a>
   <a href="troubleshooting.html">Troubleshooting</a>
 </nav>
 <main>
-<h1>Install on your own computer</h1>
+<h1 id="install-on-your-own-computer">Install on your own computer</h1>
 <p>Pick your options, copy one file, start it. This page writes the setup file for you.</p>
 <p>Life Is on your own computer is free, with every part included. It runs in Docker, a free program that keeps Life Is and everything it needs in one tidy box.</p>
 <p class="note"><strong>Not released yet.</strong> Life Is for your own computer comes out with the app. This page already makes the file you will use, so you can see what is involved; it will not start until then. Meanwhile, <a href="https://demo.lifeis.living">try the demo</a>.</p>
-<h2>Before you start</h2>
+<h2 id="before-you-start">Before you start</h2>
 <ol><li>Install <strong>Docker Desktop</strong> (Windows, Mac) or <strong>Docker Engine</strong> (Linux) from docker.com, and open it once.</li><li>Make a folder for Life Is, such as <code>Documents/lifeis</code>.</li></ol>
-<h2>Make your setup file</h2>
+<h2 id="make-your-setup-file">Make your setup file</h2>
 <p>The whole setup is one file, <code>docker-compose.yml</code>: where your records live, and who can open it. Fill in what you want; the file below changes as you type. Nothing you type here is sent anywhere.</p>
 <p id="no-script" class="note">This builder needs JavaScript. Without it, copy the file below as it is: it works without any changes.</p>
 <form id="setup" class="builder" data-image="ghcr.io/lconthehub/lifeis:latest" onsubmit="return false">
@@ -86,22 +83,22 @@ volumes:
 </textarea>
   <p><button type="button" class="copy" id="copy-compose" aria-label="Copy the setup file" hidden>Copy</button> <button type="button" id="download-compose">Download docker-compose.yml</button></p>
 </div>
-<h2>Start it</h2>
+<h2 id="start-it">Start it</h2>
 <ol id="steps"><li>Save the file above as <code>docker-compose.yml</code> in your Life Is folder.</li><li>Open a terminal in that folder and run <code class="cmd" data-what="command">docker compose up -d</code>.</li><li>On this computer, open <a href="http://localhost:8020">http://localhost:8020</a> and make your account.</li></ol>
-<h2>What the choices mean</h2>
-<h3>Where your records are kept</h3>
+<h2 id="what-the-choices-mean">What the choices mean</h2>
+<h3 id="where-your-records-are-kept">Where your records are kept</h3>
 <p><strong>Kept by Docker</strong> is the simplest: Docker looks after two named stores. Never run <code class="cmd" data-what="command">docker compose down -v</code>: the <code>-v</code> deletes them.</p>
 <p><strong>In folders you choose</strong> puts your records where you can see them and copy them. Pick one folder for the records and another for the keys. Keep both: one is no use without the other.</p>
-<h3>Who can open it</h3>
+<h3 id="who-can-open-it">Who can open it</h3>
 <p><strong>This computer only</strong> is the safest, and the default.</p>
 <p><strong>Other devices on my home network</strong> lets a phone or tablet at home open it, at this computer's address.</p>
 <p><strong>A web address of its own</strong> adds a small web server (Caddy) that gets a certificate by itself, so Life Is opens at <code>https://</code> your address from anywhere. The address must already point at this computer, and ports 80 and 443 must reach it. Life Is is then on the public internet, behind your password. The first account is still made on this computer itself.</p>
-<h2>Updating</h2>
+<h2 id="updating">Updating</h2>
 <p>Run these two in the folder with your setup file. Your records stay.</p>
 <p><code class="cmd" data-what="command">docker compose pull</code></p>
 <p><code class="cmd" data-what="command">docker compose up -d</code></p>
 <p>Life Is saves a copy of its database by itself before each upgrade.</p>
-<h2>What's next</h2>
+<h2 id="what-s-next">What's next</h2>
 <p><a href="getting-started.html">Get started</a>: make your account and do the three things worth doing on day one.</p>
 <script src="copy.js"></script>
 <script src="setup.js"></script>

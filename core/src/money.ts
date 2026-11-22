@@ -15,7 +15,7 @@
  */
 import { atomic, type Db, type Queries } from './db.ts';
 import { Problem } from './problem.ts';
-import { clean, dayOrNull, stamp, todayOf, type Clock } from './small.ts';
+import { clean, dayOrNull, labelKey, stamp, todayOf, type Clock } from './small.ts';
 
 export type Person = { id: number; username: string };
 export type Category = {
@@ -58,6 +58,11 @@ export type Month = {
 };
 export type CategoryInput = { name?: string | null; monthly_cents?: number | null; shared_with?: number[] };
 export type EntryInput = { label?: string | null; cents?: number | null; day?: string | null; note?: string | null; category_id?: number | null };
+
+/** One line of a bank's statement on its way in. `category_id` left out means "the one an earlier entry with this label used". */
+export type StatementItem = { label: string; cents: number; day: string; keep: boolean; category_id?: number | null };
+export type StatementMark = { already: boolean; suggested: number | null };
+export type StatementBrought = { added: number; already: number; left_out: number; months: { month: string; added: number }[] };
 
 const MOST = 100_000_000_00;
 function cents(value: number | null | undefined, what: string): number {
@@ -107,7 +112,64 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
     return { label, cents: cents(input.cents, 'The amount'), day: dayOrNull(input.day) ?? todayOf(clock), note: clean(input.note, 1000), category };
   }
 
+  /**
+   * For each line of a statement: whether an entry like it is already written down (same day, same amount, same
+   * label as names are compared), and the category an earlier entry with that label was in. Only entries this
+   * person can see are looked at. Two identical lines in one statement are two purchases, so each existing
+   * entry accounts for one line, the first in the file, and no more.
+   */
+  async function marked(q: Queries, items: { label: string; cents: number; day: string }[]): Promise<StatementMark[]> {
+    if (items.length === 0) return [];
+    const days = items.map((i) => i.day).sort();
+    const key = (label: string, cents: number, day: string) => `${day}|${cents}|${labelKey(label)}`;
+    const have = new Map<string, number>();
+    for (const e of await q.all<{ label: string; cents: number; day: string }>(
+      `SELECT e.label, e.cents, e.day FROM money_entries e WHERE e.day BETWEEN ? AND ? AND (e.owner_id = ? OR e.category_id IN (${SEEN}))`,
+      [days[0]!, days[days.length - 1]!, owner, ...seen])) have.set(key(e.label, e.cents, e.day), (have.get(key(e.label, e.cents, e.day)) ?? 0) + 1);
+    const earlier = new Map<string, number>();
+    for (const e of await q.all<{ label: string; category_id: number }>(
+      `SELECT e.label, e.category_id FROM money_entries e WHERE e.category_id IN (${SEEN}) ORDER BY e.day DESC, e.id DESC LIMIT 20000`, seen)) {
+      if (!earlier.has(labelKey(e.label))) earlier.set(labelKey(e.label), e.category_id);
+    }
+    return items.map((item) => {
+      const label = clean(item.label, 200) ?? '';
+      const k = key(label, item.cents, item.day);
+      const n = have.get(k) ?? 0;
+      if (n > 0) have.set(k, n - 1);
+      return { already: n > 0, suggested: earlier.get(labelKey(label)) ?? null };
+    });
+  }
+
   return {
+    /** What a statement's lines would do, before anything is written. See bankStatement.ts. */
+    lookOver(items: { label: string; cents: number; day: string }[]): Promise<StatementMark[]> {
+      return marked(db, items);
+    },
+
+    /**
+     * Write down the lines of a statement that are kept, each in its own day's month. A line already written
+     * down is skipped. Each goes through the same checks as addEntry, so a category that isn't yours to use refuses the whole
+     * statement, and nothing is written. One change: all of it or none.
+     */
+    async bringIn(items: StatementItem[]): Promise<StatementBrought> {
+      return atomic(db, async (tx) => {
+        const marks = await marked(tx, items);
+        const result: StatementBrought = { added: 0, already: 0, left_out: 0, months: [] };
+        const months = new Map<string, number>();
+        for (const [i, item] of items.entries()) {
+          if (marks[i]!.already) { result.already += 1; continue; }
+          if (!item.keep) { result.left_out += 1; continue; }
+          const e = await checkedEntry(tx, { label: item.label, cents: item.cents, day: item.day, category_id: item.category_id === undefined ? marks[i]!.suggested : item.category_id });
+          await tx.run('INSERT INTO money_entries (owner_id, category_id, label, cents, day, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [owner, e.category, e.label, e.cents, e.day, e.note, now()]);
+          result.added += 1;
+          months.set(e.day.slice(0, 7), (months.get(e.day.slice(0, 7)) ?? 0) + 1);
+        }
+        result.months = [...months].sort(([a], [b]) => (a < b ? -1 : 1)).map(([month, added]) => ({ month, added }));
+        return result;
+      });
+    },
+
     /** A month ("2046-03"; this month when left out): every category you can see, and what was spent. */
     async month(given?: string | null): Promise<Month> {
       const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(given ?? '') ? given! : todayOf(clock).slice(0, 7);

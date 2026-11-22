@@ -74,3 +74,5 @@ export type { Library, LibraryInput, LibraryKind, Libraries } from './libraries.
 export { openLink } from './media.ts';
 export { readBookList, importBookList, csvRows, formatOf } from './bookList.ts';
 export type { ListedBook, ListChoices, ListResult } from './bookList.ts';
+export { readStatement, lookOverStatement, importStatement } from './bankStatement.ts';
+export type { Statement, StatementRow, StatementChoices, StatementResult, LookedOver } from './bankStatement.ts';

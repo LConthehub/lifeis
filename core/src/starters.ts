@@ -112,10 +112,86 @@ export const STARTERS: Starter[] = [
       { name: 'Spares', icon: '💡', fields: [text('Fits'), text('Size or model')] },
     ],
   },
+  {
+    slug: 'car',
+    name: 'Car & garage',
+    about: 'Cars and trucks, oil and filters, spare parts, and the tools to work on them.',
+    group: 'Garage',
+    kinds: [
+      { name: 'Vehicles', icon: '🚗', fields: [
+        text('Make'), text('Model'), number('Year'), text('VIN'), text('License plate'), text('Tire size'), text('Oil type'),
+        number('Mileage', 'mi'), date('Registration expires') ] },
+      { name: 'Fluids and filters', icon: '🛢️', unit: 'qt', fields: [
+        choice('Type', 'Motor oil', 'Coolant', 'Brake fluid', 'Transmission fluid', 'Washer fluid', 'Oil filter', 'Air filter', 'Cabin filter', 'Other'),
+        text('Grade or part number'), text('Fits'), text('Brand') ] },
+      { name: 'Car parts and spares', icon: '⚙️', fields: [text('Part'), text('Part number'), text('Fits'), text('Brand'), yesNo('New'), date('Bought on')] },
+      { name: 'Car tools', icon: '🔧', fields: [text('Brand'), text('Size'), choice('Type', 'Wrench', 'Socket', 'Jack', 'Jack stands', 'Diagnostic', 'Other'), text('Lent to')] },
+    ],
+  },
+  {
+    slug: 'art',
+    name: 'Art & crafts',
+    about: 'Paints and inks, paper and canvas, brushes, and beads, clay and other craft supplies.',
+    group: 'Crafts',
+    kinds: [
+      { name: 'Paints and inks', icon: '🖌️', unit: 'tube', fields: [
+        choice('Type', 'Watercolor', 'Acrylic', 'Oil', 'Gouache', 'Ink', 'Pastel', 'Other'), text('Brand'), text('Color'), text('Size'), date('Opened on') ] },
+      { name: 'Paper and canvas', icon: '🖼️', unit: 'sheet', fields: [
+        choice('Type', 'Watercolor paper', 'Drawing paper', 'Cardstock', 'Canvas', 'Panel', 'Sketchbook', 'Other'), text('Size'), number('Weight', 'lb'), text('Surface') ] },
+      { name: 'Brushes and art tools', icon: '✏️', fields: [text('Type'), text('Size'), text('Brand'), text('Used for')] },
+      { name: 'Craft supplies', icon: '📿', fields: [
+        choice('Type', 'Beads', 'Clay', 'Resin', 'Wax', 'Leather', 'Glue', 'Findings', 'Other'), text('Color'), text('Brand'), text('Size') ] },
+    ],
+  },
+  {
+    slug: 'electronics',
+    name: 'Electronics & computers',
+    about: 'Computers and gadgets with their warranties, cables, parts, and batteries.',
+    group: 'Electronics',
+    kinds: [
+      { name: 'Devices', icon: '💻', fields: [
+        text('Maker'), text('Model'), text('Serial number'), date('Bought on'), date('Warranty until'), text('Used by'), link('Manual') ] },
+      { name: 'Cables and adapters', icon: '🔌', fields: [
+        choice('Type', 'USB', 'HDMI', 'Ethernet', 'Power', 'Audio', 'Video', 'Adapter', 'Other'), text('Connectors'), number('Length', 'ft') ] },
+      { name: 'Components', icon: '🎛️', unit: 'pc', fields: [
+        choice('Type', 'Resistor', 'Capacitor', 'LED', 'Chip', 'Sensor', 'Board', 'Switch', 'Other'), text('Value'), text('Part number'), text('Where it is from') ] },
+      { name: 'Batteries and chargers', icon: '🔋', fields: [
+        choice('Type', 'AA', 'AAA', 'C', 'D', '9V', 'Coin cell', 'Rechargeable pack', 'Charger', 'Other'), text('Fits'), yesNo('Rechargeable') ] },
+    ],
+  },
+  {
+    slug: 'music',
+    name: 'Music',
+    about: 'Instruments, strings and reeds, sheet music, and audio gear.',
+    group: 'Music',
+    kinds: [
+      { name: 'Instruments', icon: '🎸', fields: [
+        text('Maker'), text('Model'), text('Serial number'), choice('Kind', 'Guitar', 'Bass', 'Keyboard', 'Violin', 'Winds', 'Brass', 'Drums', 'Other'),
+        date('Bought on'), text('Played by') ] },
+      { name: 'Strings, reeds and supplies', icon: '🎵', fields: [
+        choice('Type', 'Strings', 'Reeds', 'Picks', 'Rosin', 'Sticks', 'Cables', 'Other'), text('Fits'), text('Gauge or strength'), text('Brand') ] },
+      { name: 'Sheet music and books', icon: '🎼', fields: [text('Title'), text('Composer'), text('Instrument'), choice('Format', 'Paper', 'PDF', 'Book')] },
+      { name: 'Audio gear', icon: '🎧', fields: [text('Maker'), text('Model'), text('Serial number'), date('Bought on')] },
+    ],
+  },
+  {
+    slug: 'outdoors',
+    name: 'Outdoors',
+    about: 'Camping gear, fishing tackle, sports gear, and bikes.',
+    group: 'Outdoors',
+    kinds: [
+      { name: 'Camping gear', icon: '⛺', fields: [
+        choice('Type', 'Tent', 'Sleeping bag', 'Stove', 'Pack', 'Cooler', 'Lantern', 'Other'), text('Brand'), text('Size'), number('Weight', 'lb'), date('Last checked') ] },
+      { name: 'Fishing tackle', icon: '🎣', fields: [
+        choice('Type', 'Rod', 'Reel', 'Lures', 'Hooks', 'Line', 'Net', 'Tackle box', 'Other'), text('Brand'), text('Size'), text('For which fish') ] },
+      { name: 'Sports gear', icon: '⚽', fields: [text('Sport'), text('Whose'), text('Size'), text('Brand')] },
+      { name: 'Bikes', icon: '🚲', fields: [text('Maker'), text('Model'), text('Frame size'), text('Serial number'), text('Whose'), date('Last serviced')] },
+    ],
+  },
 ];
 
 /** The headings the Things page uses, in the order it shows them. Kinds that fit no set go under "Other", last. */
-export const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garden', 'Around the house', 'Clothes and linens'] as const;
+export const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garage', 'Garden', 'Outdoors', 'Electronics', 'Music', 'Around the house', 'Clothes and linens'] as const;
 
 /** Which heading a kind belongs under, by its name (capitals and spacing don't matter), or null if no ready-made set has it. */
 export function groupOfKind(name: string): string | null {

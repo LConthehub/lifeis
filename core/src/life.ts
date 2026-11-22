@@ -43,7 +43,7 @@ export const AREAS: Area[] = [
   { key: 'spending', label: 'Money: the month’s plan and what was spent', about: 'An amount for each kind of spending each month, and what is left. Private unless you share a category.', group: 'home', sections: ['spending'] },
   { key: 'cookware', label: 'Cookware and kitchen gear', about: 'Cast iron, pans and baking dishes, so a recipe can say what it is cooked in.', group: 'home', sections: ['eating', 'keeping'], starter: 'cookware' },
   { key: 'clothing', label: 'Clothes, shoes and linens', about: 'What everyone wears and in what size, and the sheets that fit each bed.', group: 'home', sections: ['keeping'], starter: 'clothing' },
-  ...['sewing', 'knitting', 'woodworking', 'gardening', 'home'].map(doing),
+  ...['sewing', 'knitting', 'woodworking', 'gardening', 'home', 'car', 'art', 'electronics', 'music', 'outdoors'].map(doing),
 ];
 
 export type LifeProfile = {

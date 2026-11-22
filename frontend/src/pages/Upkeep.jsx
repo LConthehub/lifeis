@@ -43,12 +43,85 @@ export function DueBadge({ job }) {
   return <span className={`max-w-[9.5rem] shrink rounded px-1.5 py-0.5 text-right text-[11px] leading-tight ${tone}`} data-state={job.due.state}>{text}</span>;
 }
 
+/** The form of a name used to tell whether two are the same: case and spacing don't count. */
+const nameKey = (name) => name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** What a job in a ready-made set says about when it is first due. */
+const firstText = (job) => (job.first_due ? `first due ${dayText(job.first_due)}` : job.kind === 'renewal' ? 'the date is yours to set' : 'due as soon as you add it');
+
+/** The ready-made sets: pick one, see its jobs, uncheck any, add. A job already kept (by name) is not added twice. */
+function ReadySets({ sets, jobs, onAdded }) {
+  const [open, setOpen] = useState('');            // the slug of the set being looked at
+  const [picked, setPicked] = useState({});        // slug -> the names left checked
+  const [said, setSaid] = useState({});            // slug -> what happened when it was added
+  const [busy, setBusy] = useState(false);
+  const have = new Set(jobs.map((j) => nameKey(j.name)));
+  const checked = (set) => picked[set.slug] ?? set.jobs.map((j) => j.name);
+  const toggle = (set, name) => { const now = checked(set); setPicked({ ...picked, [set.slug]: now.includes(name) ? now.filter((n) => n !== name) : [...now, name] }); };
+  const add = async (set) => {
+    setBusy(true);
+    try {
+      const { data } = await axios.post('/api/things/upkeep/sets', { slug: set.slug, only: checked(set) });
+      const s = (n) => (n === 1 ? '' : 's');
+      setSaid({ ...said, [set.slug]: data.added === 0 ? `Nothing new was added: ${data.already} job${s(data.already)} already there.` : `Added ${data.added} job${s(data.added)}.${data.already ? ` ${data.already} ${data.already === 1 ? 'was' : 'were'} already there.` : ''}` });
+      onAdded();
+    } catch (err) { setSaid({ ...said, [set.slug]: errorMessage(err, "Couldn't add them") }); }
+    setBusy(false);
+  };
+  return (
+    <ul className="space-y-2">
+      {sets.map((set) => {
+        const here = open === set.slug;
+        const mine = checked(set);
+        const kept = set.jobs.filter((j) => have.has(nameKey(j.name))).length;
+        return (
+          <li key={set.slug} className="rounded-lg border border-life-100 dark:border-life-700" data-set={set.slug}>
+            <button type="button" onClick={() => setOpen(here ? '' : set.slug)} aria-expanded={here} className="flex min-h-[44px] w-full items-center gap-2 px-3 py-2 text-left">
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium text-life-800 dark:text-life-50">{set.name}</span>
+                <span className="block text-xs text-gray-500 dark:text-life-300">{set.about}</span>
+              </span>
+              <span className="shrink-0 text-xs text-gray-500 dark:text-life-300">{set.jobs.length} jobs{kept > 0 ? ` · ${kept} yours` : ''}</span>
+              <span aria-hidden="true" className="shrink-0 text-life-600">{here ? '▾' : '▸'}</span>
+            </button>
+            {here && (
+              <div className="space-y-2 border-t border-life-50 px-3 py-2 dark:border-life-700">
+                <ul className="divide-y divide-life-50 dark:divide-life-700" aria-label={`Jobs in ${set.name}`}>
+                  {set.jobs.map((j) => (
+                    <li key={j.name}>
+                      <label className="flex min-h-[44px] cursor-pointer items-start gap-3 py-2">
+                        <input type="checkbox" checked={mine.includes(j.name)} onChange={() => toggle(set, j.name)} className="mt-0.5 h-5 w-5 shrink-0 accent-life-600" />
+                        <span className="min-w-0 flex-1 break-words">
+                          <span className="block text-sm text-gray-800 dark:text-life-50"><span aria-hidden="true">{j.kind !== 'job' ? `${KINDS[j.kind][1]} ` : ''}</span>{j.name}{have.has(nameKey(j.name)) && <span className="ml-1 text-xs text-life-600 dark:text-life-200">(you have this)</span>}</span>
+                          <span className="block text-xs text-gray-500 dark:text-life-300">{scheduleText({ every: j.every_n ? { n: j.every_n, unit: j.every_unit } : null, every_reading: j.every_reading, reading_unit: j.reading_unit })} · {firstText(j)}</span>
+                          {j.note && <span className="block text-xs text-gray-500 dark:text-life-300">{j.note}</span>}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => add(set)} disabled={busy || mine.length === 0} className={`${buttonClass} min-h-[44px]`}>Add these {mine.length} job{mine.length === 1 ? '' : 's'}</button>
+                  <button type="button" onClick={() => setPicked({ ...picked, [set.slug]: mine.length === set.jobs.length ? [] : set.jobs.map((j) => j.name) })} className={`${quietButtonClass} min-h-[44px]`}>{mine.length === set.jobs.length ? 'Uncheck all' : 'Check all'}</button>
+                </div>
+                {said[set.slug] && <p className="text-sm text-life-700 dark:text-life-100" role="status">{said[set.slug]}</p>}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 const GROUPS = [['Late or due', ['overdue', 'due']], ['Coming up', ['soon']], ['Later', ['later']], ['When it needs it', ['unscheduled']]];
 
 /** Every upkeep job, the most pressing first, with the common ones to start from when there are none. */
 export default function UpkeepPage() {
   const [jobs, setJobs] = useState(null);
   const [starters, setStarters] = useState([]);
+  const [sets, setSets] = useState([]);
+  const [setsOpen, setSetsOpen] = useState(null);  // null until the person opens or closes the sets: then open when there are no jobs yet
   const [modal, setModal] = useState(null);       // { job: {} } to make one, { done: job } to mark one done
   const [kind, setKind] = useState('');           // '' for everything, or one kind
   const [scores, setScores] = useState(null);
@@ -59,7 +132,7 @@ export default function UpkeepPage() {
     axios.get('/api/things/upkeep/scores').then(({ data }) => setScores(data)).catch(() => {});
     axios.get('/api/things/upkeep/members').then(({ data }) => setMembers(data)).catch(() => {});
   }, []);
-  useEffect(() => { load(); axios.get('/api/things/upkeep/starters').then(({ data }) => setStarters(data)).catch(() => {}); }, [load]);
+  useEffect(() => { load(); axios.get('/api/things/upkeep/starters').then(({ data }) => setStarters(data)).catch(() => {}); axios.get('/api/things/upkeep/sets').then(({ data }) => setSets(data)).catch(() => {}); }, [load]);
   if (!jobs) return null;
   const have = new Set(jobs.map((j) => j.name.toLowerCase()));
   const addStarter = async (s) => { const { data } = await axios.post('/api/things/upkeep', s); if (s.kind === 'bill' || s.kind === 'renewal') navigate(`/things/upkeep/${data.id}?edit=1`); else load(); };
@@ -127,6 +200,13 @@ export default function UpkeepPage() {
           </section>
         );
       })}
+      {sets.length > 0 && !kind && (
+        <details className={cardClass} role="region" aria-label="Ready-made sets" open={setsOpen ?? jobs.length === 0} onToggle={(e) => setSetsOpen(e.currentTarget.open)}>
+          <summary className="flex min-h-[44px] cursor-pointer items-center font-semibold text-life-800 dark:text-life-50">Add a ready-made set</summary>
+          <p className="mb-2 text-xs text-gray-500 dark:text-life-300">Each set is a group of jobs and renewals for an American household. Look inside, uncheck what you don't need, then add it. You can change or remove each one afterward. Dates that vary by state or plan are left for you to set.</p>
+          <ReadySets sets={sets} jobs={jobs} onAdded={load} />
+        </details>
+      )}
       {offered.length > 0 && (
         <details className={cardClass} role="region" aria-label="Common jobs" open={shown.length === 0 || Boolean(kind)} key={`${kind}-${shown.length === 0}`}>
           <summary className="cursor-pointer font-semibold text-life-800 dark:text-life-50">Common ones to start from <span className="text-sm font-normal text-gray-500 dark:text-life-300">{offered.length}</span></summary>

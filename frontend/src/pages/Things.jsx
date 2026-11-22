@@ -5,7 +5,7 @@ import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, err
 import { ScanSticker } from './Places';
 import PlacePicker from '../components/PlacePicker';
 // The headings kinds sit under, in the order shown. Which heading a kind belongs to comes with the kind (its `group`).
-const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garden', 'Around the house', 'Clothes and linens'];
+const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garage', 'Garden', 'Outdoors', 'Electronics', 'Music', 'Around the house', 'Clothes and linens'];
 
 const OTHER = 'Other';
 

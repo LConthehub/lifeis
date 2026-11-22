@@ -1,6 +1,6 @@
 ---
 title: Upkeep
-blurb: Jobs, bills, renewals and chores: everything that comes round again.
+blurb: Jobs, bills, renewals and chores, and how Life Is tells you what is due.
 ---
 # Upkeep
 
@@ -45,6 +45,29 @@ People without a sign-in of their own can be added by name alone, under **Chores
 
 A job can be given to someone else in your Life Is. They see it in their own Upkeep and can mark it done. Only its owner can change it.
 
-## Where it shows
+## What comes due
 
-Due jobs are on the calendar and the front page, and in your morning reminder. Each thing lists the upkeep it is part of.
+Due jobs are on the calendar and the front page. Each thing lists the upkeep it is part of.
+
+You are also told. Each morning, at a time you pick, Life Is works out what needs you:
+
+- upkeep that is late, due, or coming up in the next few days
+- things running low, and food to use soon
+- birthdays, plans starting, and today's events
+- coupons about to run out, and things lent out for a long time
+- warranties about to end
+
+It goes once a day, and **only on days there is something to say**. The time you pick is in your own time zone, wherever your Life Is runs.
+
+Set it up under **Settings › Reminders**. That page shows a preview of this morning's digest, and each way has a **Send one now** button so you can see it work. Check or uncheck each kind of reminder to turn off what you do not want to hear about.
+
+## How you are told
+
+Every way is off until you turn it on, and says what it sends.
+
+| Way | What it sends, and to whom |
+|---|---|
+| **On this phone** | Made on the phone from what is kept on it. Nothing leaves the phone. |
+| **Email to yourself** | Sent from your own connected email account to that same address. Nobody new is involved. |
+| **Your browser** | Locked so only your browser can read it, carried by your browser maker's push service. They see that a message went, not what it says. |
+| **ntfy** | To the ntfy server you choose. ntfy messages are not locked, so by default it says only how many things there are, not what they are. |

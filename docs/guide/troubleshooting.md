@@ -34,7 +34,7 @@ Look-ups are off until you turn them on. When they are on and still find nothing
 - Use **Send one now** under Settings › Reminders to test each way.
 - Browser reminders need Life Is opened over https, and the browser allowed to show notifications.
 
-See [Reminders](reminders.html).
+See [Upkeep](upkeep.html#how-you-are-told).
 
 ## It was signed out
 

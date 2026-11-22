@@ -209,6 +209,85 @@ export const STARTER_JOBS: { name: string; activity: string; kind?: JobKind; poi
   { name: 'Sharpen the mower blade', activity: 'Garden', every_n: 1, every_unit: 'year' },
 ];
 
+/** One job in a ready-made set. `on` is the day or days of the year it falls on, as [month, day]; left out, the person sets the date. */
+type SetJob = { name: string; activity: string; kind?: JobKind; every_n?: number; every_unit?: EveryUnit; every_reading?: number; reading_unit?: string; steps?: string; note?: string; on?: [number, number][] };
+type SetDef = { slug: string; name: string; about: string; jobs: SetJob[] };
+
+const YEAR = { every_n: 1, every_unit: 'year' } as const;
+const SET_DEFS: SetDef[] = [
+  { slug: 'house', name: 'Around the house', about: 'The yearly round of an American home: alarms, filters, gutters, the furnace and the pipes before winter.', jobs: [
+    { name: 'Test the smoke and CO alarms', activity: 'Home maintenance', every_n: 1, every_unit: 'month', note: 'Press the test button on each one.' },
+    { name: 'Change smoke alarm batteries (spring)', activity: 'Home maintenance', ...YEAR, on: [[3, 8]], note: 'Clocks go forward the second Sunday in March. Alarms with sealed batteries have none to change: replace the whole alarm when it says to, about every 10 years.' },
+    { name: 'Change smoke alarm batteries (fall)', activity: 'Home maintenance', ...YEAR, on: [[11, 1]], note: 'Clocks go back the first Sunday in November. Alarms with sealed batteries have none to change.' },
+    { name: 'Change the furnace filter', activity: 'Home maintenance', every_n: 3, every_unit: 'month', steps: 'Turn the system off.\nNote the size printed on the old filter.\nArrow on the new one points toward the furnace.' },
+    { name: 'Clean the gutters', activity: 'Home maintenance', every_n: 6, every_unit: 'month', on: [[4, 15], [10, 15]], note: 'Spring, and again in fall once the leaves are down.' },
+    { name: 'Flush the water heater', activity: 'Home maintenance', ...YEAR, note: 'Drain a few gallons from the valve at the bottom to clear the sediment. Your heater\'s manual says how.' },
+    { name: 'Clean the dryer vent', activity: 'Home maintenance', ...YEAR, note: 'Lint in the vent is a fire risk. Clear the whole duct, not only the trap.' },
+    { name: 'Service the furnace', activity: 'Home maintenance', ...YEAR, on: [[10, 1]], note: 'Before the cold weather. A heating company can do it.' },
+    { name: 'Service the air conditioning', activity: 'Home maintenance', ...YEAR, on: [[4, 1]], note: 'Before the hot weather. A cooling company can do it.' },
+    { name: 'Check the weatherstripping and reverse the ceiling fans', activity: 'Home maintenance', ...YEAR, on: [[10, 8]], note: 'In fall, run the fans clockwise on low to push warm air down from the ceiling.' },
+    { name: 'Winterize the outdoor faucets and sprinklers', activity: 'Home maintenance', ...YEAR, on: [[10, 25]], note: 'Shut off and drain them before the first hard freeze. Skip it where it never freezes.' },
+    { name: 'Test the sump pump', activity: 'Home maintenance', ...YEAR, on: [[4, 8]], note: 'Pour a bucket of water into the pit: the pump should start and empty it. Remove this one if you have no sump pump.' },
+    { name: 'Check the fire extinguishers', activity: 'Home maintenance', ...YEAR, note: 'The gauge should be in the green and the pin in place. Replace one that is not, or past the date on it.' },
+    { name: 'Clean the fridge coils', activity: 'Home maintenance', ...YEAR, note: 'Unplug it, and vacuum the dust from the coils, at the back or under the front.' },
+  ] },
+  { slug: 'car', name: 'Car', about: 'Oil, tires, wipers, and the yearly papers a car needs.', jobs: [
+    { name: 'Change the oil', activity: 'Car', every_n: 6, every_unit: 'month', every_reading: 5000, reading_unit: 'miles', note: 'Your owner\'s manual says how far apart: many newer cars go 7,500 miles or more.' },
+    { name: 'Rotate the tires', activity: 'Car', every_reading: 6000, reading_unit: 'miles' },
+    { name: 'Check the tire pressure', activity: 'Car', every_n: 1, every_unit: 'month', note: 'When the tires are cold, to the number on the sticker inside the driver\'s door.' },
+    { name: 'Replace the wiper blades', activity: 'Car', ...YEAR },
+    { name: 'State inspection', activity: 'Car', kind: 'renewal', ...YEAR, note: 'Your state sets whether you need one, and how often. Set the date from your sticker, or remove this if your state has none.' },
+    { name: 'Car registration', activity: 'Car', kind: 'renewal', ...YEAR, note: 'Set the date to when yours runs out. Your state sets how often.' },
+    { name: 'Emissions test', activity: 'Car', kind: 'renewal', every_n: 2, every_unit: 'year', note: 'Only some states and counties ask for one, and your state sets how often. Set the date and how often, or remove this.' },
+    { name: 'Car insurance', activity: 'Car', kind: 'renewal', every_n: 6, every_unit: 'month', note: 'Set the date to when your policy renews.' },
+  ] },
+  { slug: 'papers', name: 'Papers and money', about: 'Taxes, insurance, the papers that run out, and the dates that come once a year.', jobs: [
+    { name: 'File federal and state taxes', activity: 'Papers', kind: 'renewal', ...YEAR, on: [[4, 15]], note: 'Federal returns are due April 15, or the next business day when it falls on a weekend or holiday. Check your state\'s date.' },
+    { name: 'Property tax', activity: 'Papers', kind: 'renewal', ...YEAR, note: 'Your county sets when it is due, and some bill twice a year. Set the date from your bill, or remove this if you rent.' },
+    { name: "Driver's license", activity: 'Papers', kind: 'renewal', every_n: 4, every_unit: 'year', note: 'Your state sets how often: from 4 to 8 years. Set the date and how often to your state\'s.' },
+    { name: 'Passport', activity: 'Papers', kind: 'renewal', every_n: 10, every_unit: 'year', note: 'An adult passport lasts 10 years; one for a child under 16, 5. Set the date to when yours runs out.' },
+    { name: 'Health insurance open enrollment', activity: 'Papers', kind: 'renewal', ...YEAR, on: [[11, 1]], note: 'Healthcare.gov enrollment opens November 1 and ends in mid-January. A plan from your job sets its own dates: check them.' },
+    { name: 'Use up the FSA', activity: 'Papers', kind: 'renewal', ...YEAR, on: [[12, 31]], note: 'Money left in a flexible spending account can be lost at the end of the plan year. Plans differ: some give extra time or carry money over. Check yours, or remove this if you have none.' },
+    { name: 'Review your credit report', activity: 'Papers', ...YEAR, note: 'You can get your reports free at annualcreditreport.com.' },
+    { name: 'Home or renters insurance', activity: 'Papers', kind: 'renewal', ...YEAR, note: 'Set the date to when your policy renews.' },
+  ] },
+  { slug: 'health', name: 'Health and family', about: 'Checkups and shots for people. Pets have their own care.', jobs: [
+    { name: 'Dentist checkup', activity: 'Health', every_n: 6, every_unit: 'month' },
+    { name: 'Annual physical', activity: 'Health', ...YEAR },
+    { name: 'Eye exam', activity: 'Health', ...YEAR, note: 'Some people go every two years: ask your eye doctor.' },
+    { name: 'Flu shot', activity: 'Health', ...YEAR, on: [[10, 1]], note: 'Fall is the usual time to get it.' },
+  ] },
+  { slug: 'yard', name: 'Yard and seasons', about: 'A few seasonal jobs outside. Lawn care depends too much on where you live to list here.', jobs: [
+    { name: 'Service the lawn mower', activity: 'Garden', ...YEAR, on: [[3, 15]], note: 'Before the first mow: sharpen the blade, change the oil and the spark plug.' },
+    { name: 'Clean the grill', activity: 'Garden', ...YEAR, on: [[4, 22]], note: 'A good scrub before the first cookout.' },
+    { name: 'Store the hoses', activity: 'Garden', ...YEAR, on: [[10, 22]], note: 'Drain and coil them before freezing weather.' },
+  ] },
+];
+
+/** The next time a day of the year comes round, today included. */
+function nextOn(today: string, [month, day]: [number, number]): string {
+  const year = Number(today.slice(0, 4));
+  const this_year = `${year}-${pad(month)}-${pad(day)}`;
+  return this_year >= today ? this_year : `${year + 1}-${pad(month)}-${pad(day)}`;
+}
+
+export type ReadyJob = { name: string; activity: string; kind: JobKind; every_n: number | null; every_unit: EveryUnit | null; every_reading: number | null; reading_unit: string | null; steps: string | null; note: string | null; first_due: string | null };
+export type ReadySet = { slug: string; name: string; about: string; jobs: ReadyJob[] };
+
+/** The ready-made sets, each job as the input to `create`, with a day it falls on as its first due date counted from `today`. */
+export function readySets(today: string): ReadySet[] {
+  return SET_DEFS.map((s) => ({
+    slug: s.slug, name: s.name, about: s.about,
+    jobs: s.jobs.map((j) => ({
+      name: j.name, activity: j.activity, kind: j.kind ?? 'job', every_n: j.every_n ?? null, every_unit: j.every_unit ?? null,
+      every_reading: j.every_reading ?? null, reading_unit: j.reading_unit ?? null, steps: j.steps ?? null, note: j.note ?? null,
+      first_due: j.on?.length ? j.on.map((d) => nextOn(today, d)).sort()[0]! : null,
+    })),
+  }));
+}
+
+export type SetAdded = { set: string; added: number; already: number; added_names: string[]; already_names: string[] };
+
 export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) {
   const now = () => stamp(clock());
   const today = () => todayOf(clock);
@@ -367,6 +446,31 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
     /** Everyone else in this Life Is a job can be given to. */
     async people(): Promise<{ id: number; name: string }[]> {
       return db.all<{ id: number; name: string }>('SELECT id, username AS name FROM users ORDER BY username COLLATE NOCASE');
+    },
+
+    /** The ready-made sets, with the dates counted from today. */
+    sets: (): ReadySet[] => readySets(today()),
+
+    /**
+     * Add a ready-made set (or only the jobs of it named in `only`). A job the person already has, by name, is
+     * left alone, so pressing it again adds nothing.
+     */
+    async addSet(slug: string, only?: string[] | null): Promise<SetAdded> {
+      const set = readySets(today()).find((s) => s.slug === slug);
+      if (!set) throw new Problem(404, 'There is no such set');
+      const wanted = only ? new Set(only.map(labelKey)) : null;
+      const have = new Set((await rows(db)).map((r) => labelKey(r.name)));
+      const out: SetAdded = { set: set.name, added: 0, already: 0, added_names: [], already_names: [] };
+      for (const j of set.jobs) {
+        if (wanted && !wanted.has(labelKey(j.name))) continue;
+        if (have.has(labelKey(j.name))) { out.already_names.push(j.name); continue; }
+        await this.create(j);
+        have.add(labelKey(j.name));
+        out.added_names.push(j.name);
+      }
+      out.added = out.added_names.length;
+      out.already = out.already_names.length;
+      return out;
     },
 
     /** Every job this person owns or has been given, the most pressing first. */

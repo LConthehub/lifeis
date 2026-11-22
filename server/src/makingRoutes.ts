@@ -218,6 +218,9 @@ export function makingRoutes(db: Db): Route[] {
     ['PUT', at('things/upkeep/points'), async (c) => (await jobs(c).setPointValue(read.maybeWhole(c.body, 'cents')), { json: await jobs(c).scores() })],
     ['GET', at('things/upkeep/scores'), async (c) => ({ json: await jobs(c).scores() })],
     ['GET', at('things/upkeep/starters'), async () => ({ json: STARTER_JOBS })],
+    // Ready-made sets of jobs, with their dates counted from today; adding one skips the jobs already there.
+    ['GET', at('things/upkeep/sets'), async (c) => ({ json: jobs(c).sets() })],
+    ['POST', at('things/upkeep/sets'), async (c) => ({ status: 201, json: await jobs(c).addSet(read.text(c.body, 'slug'), sent(c.body, 'only') && c.body.only !== null ? read.texts(c.body, 'only') : null) })],
     ['POST', at('things/upkeep'), async (c) => ({ status: 201, json: await jobs(c).create(jobFrom(c.body)) })],
     ['GET', at('things/upkeep/:id'), async (c) => ({ json: await jobs(c).get(c.id) })],
     ['PUT', at('things/upkeep/:id'), async (c) => ({ json: await jobs(c).update(c.id, jobFrom(c.body)) })],
