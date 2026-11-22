@@ -1,0 +1,88 @@
+import { browserChoice } from '../browser.mjs';
+import { createServer } from 'node:http';
+import { chromium } from 'playwright-core';
+const [base, shots] = process.argv.slice(2);
+const PASS = 'trial-only-password-8031';
+
+// A stand-in model server, speaking the OpenAI-style language Ollama and LM Studio speak. It keeps what it is sent.
+const received = [];
+const model = createServer((req, res) => {
+  let body = '';
+  req.on('data', (c) => { body += c; });
+  req.on('end', () => {
+    if (req.url === '/v1/models') { res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ data: [{ id: 'llama3.2' }, { id: 'qwen3' }] })); return; }
+    if (req.url === '/v1/chat/completions') {
+      received.push(JSON.parse(body));
+      const said = received.at(-1).messages[1].content;
+      const answer = /Omelette/.test(said) ? '<think>eggs are in the pantry</think>You could make the Omelette: you have eggs and butter.' : "I don't see that in your records.";
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: answer } }] }));
+      return;
+    }
+    res.writeHead(404).end();
+  });
+});
+await new Promise((resolve) => model.listen(4191, '127.0.0.1', resolve));
+
+const browser = await chromium.launch({ ...browserChoice, headless: true });
+const page = await (await browser.newContext({ viewport: { width: 420, height: 900 } })).newPage();
+const bad = [];
+page.on('pageerror', (e) => bad.push('page error: ' + e.message));
+const say = (what, ok) => console.log((ok ? 'ok   ' : 'FAIL ') + what);
+const wait = (ms = 800) => page.waitForTimeout(ms);
+const text = async () => (await page.locator('main').innerText()).replace(/\s+/g, ' ');
+
+await page.goto(base + '/'); await wait(1200);
+await page.getByRole('textbox').first().fill('ana');
+await page.locator('input[type=password]').fill(PASS);
+await page.getByRole('button', { name: /Make my account|Sign in/ }).click(); await wait(2500);
+const dialog = page.getByRole('dialog');
+if (await dialog.isVisible().catch(() => false)) { await dialog.getByRole('button', { name: 'Set up Life Is' }).click(); await wait(1500); }
+// Something to ask about, and something private that must not be sent.
+await page.evaluate(async () => {
+  const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  await post('/api/kitchen/recipes', { title: 'Omelette', ingredients_text: '3 eggs\n1 tbsp butter', steps_text: 'Whisk and fry.', tags: [] });
+  const cat = await (await post('/api/money/categories', { name: 'Secret gift', monthly_cents: 20000 })).json();
+  await post('/api/money/entries', { label: 'Necklace', cents: 15000, category_id: cat.id });
+});
+
+await page.goto(base + '/'); await wait(1500);
+say('nothing to ask on the front page while the assistant is off', (await page.locator('[data-ask]').count()) === 0);
+await page.goto(base + '/settings/connections'); await wait(1500);
+const card = page.locator('[data-assistant-settings]');
+say('Settings lists the assistant as off, and says what it sends', /Off/.test(await card.innerText()) && /Only when you ask a question/.test(await card.innerText()));
+await card.getByRole('button', { name: 'Set it up' }).click(); await wait(400);
+
+// A cloud address is refused without the tick.
+await card.getByLabel("The model's address *").fill('https://api.example-ai.com/v1');
+await wait(300);
+say('a cloud address is refused until allowed', /isn't on this computer or your own network/.test(await card.innerText()) && await card.getByRole('button', { name: 'Save and turn on' }).isDisabled());
+say('and the warning says plainly what leaves', /would leave this computer/.test(await card.innerText()));
+await page.screenshot({ path: shots + '/assistant-cloud-warning.png', fullPage: true });
+
+// A model at home is fine.
+await card.getByLabel("The model's address *").fill('http://127.0.0.1:4191/v1');
+await card.getByRole('button', { name: /Check it answers/ }).click();
+const picker = card.getByRole('combobox', { name: 'Model' });
+await picker.waitFor({ timeout: 10000 }).catch(async () => console.log('   settings said: ' + (await card.innerText()).replace(/\s+/g, ' ').slice(0, 600)));
+await picker.selectOption('llama3.2');
+say('it reaches the model and lists what it has', (await picker.locator('option').count()) === 3);
+await card.getByRole('button', { name: 'Save and turn on' }).click(); await wait(1200);
+say('saved, it shows as on, at home', /On, at home/.test(await card.innerText()) && /llama3\.2/.test(await card.innerText()));
+
+await page.goto(base + '/'); await wait(1500);
+const ask = page.locator('[data-ask]');
+say('the front page now offers to ask, and says nothing leaves home', /nothing leaves home/.test(await ask.innerText()));
+await ask.getByLabel('Ask about your household').fill('What can I make for dinner?');
+await ask.getByRole('button', { name: 'Ask' }).click();
+await page.locator('[data-answer]').waitFor({ timeout: 15000 });
+const answer = await page.locator('[data-answer]').innerText();
+say('it answers, without the model\'s thinking: ' + answer, /Omelette/.test(answer) && !/think|eggs are in the pantry/.test(answer));
+await ask.getByText('What was sent to the model').click(); await wait(300);
+say('what was sent can be seen', /"Omelette"/.test(await ask.innerText()));
+await page.screenshot({ path: shots + '/assistant-answer.png', fullPage: true });
+const sent = JSON.stringify(received.at(-1));
+say('the model got the kitchen and the question', received.at(-1).model === 'llama3.2' && /Omelette/.test(sent) && /What can I make for dinner/.test(sent));
+say('and nothing from the parts not ticked', !/Secret gift|Necklace/.test(sent));
+console.log(bad.length ? 'PROBLEMS SEEN:\n' + [...new Set(bad)].join('\n') : 'no page errors');
+await browser.close();
+model.close();

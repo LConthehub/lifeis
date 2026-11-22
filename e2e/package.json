@@ -1,0 +1,13 @@
+{
+  "name": "lifeis-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Life Is clicked through in a real browser, each walk-through against a fresh copy of its own.",
+  "scripts": {
+    "test": "node run.mjs",
+    "test:all": "node run.mjs --online --slow"
+  },
+  "devDependencies": {
+    "playwright-core": "1.65.1"
+  }
+}
