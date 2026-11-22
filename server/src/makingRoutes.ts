@@ -2,7 +2,7 @@
  * The addresses for the things you keep (/api/things) and the projects that use them (/api/projects).
  * What they do is core/'s inventory.ts and projects.ts; this only reads what was sent and passes it on.
  */
-import { inventory, pets, projects, upkeep, whatIsThis, MAX_PET_PHOTO, MAX_DOCUMENT, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
+import { inventory, packing, pets, projects, upkeep, whatIsThis, MAX_PET_PHOTO, MAX_DOCUMENT, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
 import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -93,6 +93,7 @@ export function makingRoutes(db: Db): Route[] {
   const making = (c: Context) => projects(db, c.user.id, c.clock);
   const jobs = (c: Context) => upkeep(db, c.user.id, c.clock);
   const animals = (c: Context) => pets(db, c.user.id, c.clock);
+  const boxes = (c: Context) => packing(db, c.user.id, c.clock);
   const petFrom = (body: Body) => ({
     name: read.text(body, 'name'), species: read.maybeText(body, 'species'), breed: read.maybeText(body, 'breed'), born_on: read.maybeText(body, 'born_on'),
     microchip: read.maybeText(body, 'microchip'), vet_name: read.maybeText(body, 'vet_name'), vet_phone: read.maybeText(body, 'vet_phone'),
@@ -232,6 +233,25 @@ export function makingRoutes(db: Db): Route[] {
       return { json: await jobs(c).reading(c.id, value, read.maybeText(c.body, 'day')) };
     }],
     ['DELETE', at('things/upkeep/done/:id'), async (c) => ({ json: await jobs(c).undo(c.id) })],
+
+    // ==================== PACKING ====================
+    // Boxes for moving or putting away: places that say how far along they are. See core/'s packing.ts.
+
+    ['GET', at('things/packing'), async (c) => ({ json: await boxes(c).list() })],
+    ['POST', at('things/packing/boxes'), async (c) => {
+      const count = read.maybeWhole(c.body, 'count');
+      if (count === null) throw notUnderstood('count');
+      return { status: 201, json: await boxes(c).makeBoxes({ count, destination: read.maybeText(c.body, 'destination'), parent_id: read.maybeWhole(c.body, 'parent_id') }) };
+    }],
+    ['PUT', at('things/packing/boxes/:id'), async (c) => ({
+      json: await boxes(c).setBox(c.id, { state: read.maybeText(c.body, 'state'), ...(sent(c.body, 'destination') ? { destination: read.maybeText(c.body, 'destination') } : {}) }),
+    })],
+    ['DELETE', at('things/packing/boxes/:id'), async (c) => ({ json: await boxes(c).notABox(c.id) })],
+    ['POST', at('things/packing/boxes/:id/unpack'), async (c) => {
+      const to = read.maybeWhole(c.body, 'place_id');
+      if (to === null) throw notUnderstood('place_id');
+      return { json: await boxes(c).unpack(c.id, to) };
+    }],
 
     // ==================== PETS ====================
     // Who they are, how their weight goes, and their care (upkeep that is theirs). See core/'s pets.ts.

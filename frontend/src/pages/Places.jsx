@@ -124,6 +124,7 @@ const SIZES = { small: ['Small, 4 across', 'grid-cols-4', 'text-[9px]'], medium:
 /** A sheet of stickers to print: one for each place you tick, each a code your camera reads to show what's inside. */
 export function StickersPage() {
   const only = new URLSearchParams(window.location.search).get('only');
+  const boxesOnly = new URLSearchParams(window.location.search).get('boxes');
   const [stickers, setStickers] = useState(null);
   const [chosen, setChosen] = useState([]);
   const [pictures, setPictures] = useState({});
@@ -131,7 +132,9 @@ export function StickersPage() {
   useEffect(() => {
     axios.get('/api/things/places/stickers').then(async ({ data }) => {
       setStickers(data);
-      setChosen(only ? data.filter((s) => String(s.id) === only).map((s) => s.id) : data.map((s) => s.id));
+      // Asked for the boxes alone (from Packing): only those still to be moved are ticked.
+      const boxes = boxesOnly ? new Set((await axios.get('/api/things/packing').catch(() => ({ data: { boxes: [] } }))).data.boxes.filter((b) => b.state !== 'unpacked').map((b) => b.id)) : null;
+      setChosen(boxes ? data.filter((s) => boxes.has(s.id)).map((s) => s.id) : only ? data.filter((s) => String(s.id) === only).map((s) => s.id) : data.map((s) => s.id));
       // The drawing is done here, in the browser: nothing about your places goes to a code-making website.
       const { default: QRCode } = await import('qrcode');
       const made = {};

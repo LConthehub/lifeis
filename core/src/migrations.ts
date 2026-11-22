@@ -862,6 +862,15 @@ const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    // Moving and packing: a place can be a box, which says how far along it is and which room it's going to.
+    number: 28,
+    name: 'boxes, for moving and packing',
+    statements: [
+      `ALTER TABLE places ADD COLUMN box_state TEXT CHECK(box_state IS NULL OR box_state IN ('packing', 'packed', 'moved', 'unpacked'))`,
+      `ALTER TABLE places ADD COLUMN box_destination TEXT`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

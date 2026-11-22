@@ -474,6 +474,24 @@ it('the house manual is written signed in, and read by its link without signing 
   expect((await reader.get(`/m/${share.token}`)).status).toBe(404);
 });
 
+it('packing over the web: boxes made, filled, marked and unpacked', async () => {
+  const admin = await owner();
+  const kind = (await admin.post('/api/things/kinds', { name: 'Kitchen' })).json[0];
+  const made = await admin.post('/api/things/packing/boxes', { count: 2, destination: 'Kitchen' });
+  expect([made.status, made.json.boxes.map((b: { name: string; state: string }) => [b.name, b.state])]).toEqual([201, [['Box 1', 'packing'], ['Box 2', 'packing']]]);
+  expect((await admin.post('/api/things/packing/boxes', { destination: 'Kitchen' })).status).toBe(422);
+  const box = made.json.boxes[0].id;
+  await admin.post('/api/things/items', { kind_id: kind.id, name: 'Kettle', place_id: box });
+  expect((await admin.put(`/api/things/packing/boxes/${box}`, { state: 'packed' })).json.counts).toEqual({ packing: 1, packed: 1, moved: 0, unpacked: 0 });
+  expect((await admin.put(`/api/things/packing/boxes/${box}`, { state: 'lost' })).status).toBe(400);
+  const places = (await admin.post('/api/things/places', { name: 'Cupboard' })).json;
+  const cupboard = places.find((p: { name: string }) => p.name === 'Cupboard').id;
+  const done = (await admin.post(`/api/things/packing/boxes/${box}/unpack`, { place_id: cupboard })).json;
+  expect([done.moved, done.boxes[0].state]).toEqual([1, 'unpacked']);
+  expect((await admin.get('/api/things/items')).json[0].place).toBe('Cupboard');
+  expect((await (await member(admin, 'partner')).get('/api/things/packing')).json.boxes).toEqual([]);
+});
+
 it('upkeep over the web: a job with its tools, done, on the calendar, and given to someone else', async () => {
   const admin = await owner();
   const kind = (await admin.post('/api/things/kinds', { name: 'Tools' })).json[0];

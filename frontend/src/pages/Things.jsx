@@ -363,6 +363,7 @@ export function PlacesPage() {
         {places.length > 0 && <button type="button" onClick={() => setScanning(true)} className={quietButtonClass}>📷 Scan a sticker</button>}
         {places.length > 0 && <Link to="/things/places/stickers" className={quietButtonClass}>Print stickers</Link>}
         <Link to="/things/stickers?blank=40" className={quietButtonClass}>Blank stickers for things</Link>
+        <Link to="/things/packing" className={quietButtonClass}>📦 Packing</Link>
         <button type="button" onClick={() => setEditing({})} className={buttonClass}>+ New place</button>
       </div>
       {places.length === 0 ? (

@@ -15,7 +15,7 @@ const SIZES = [
 ];
 const PAGES = ['/', '/recipes', '/recipes/1', '/week', '/groceries', '/pantry', '/prices', '/calendar', '/plans', '/mail', '/things', '/things/places', '/things/kinds',
   '/projects', '/projects/1', '/money', '/media', '/media/servers', '/settings', '/settings/connections', '/settings/reminders',
-  '/things/upkeep', '/things/activities', '/media/books', '/do/add-to-groceries?item=eggs'];
+  '/things/upkeep', '/things/activities', '/things/pets', '/things/packing', '/things/report', '/manual', '/media/books', '/do/add-to-groceries?item=eggs'];
 const PICTURES = new Set(['iPhone SE', 'Foldable iPhone, open (rumoured)', 'iPad, a third of the screen', 'iPad Pro 13" sideways', 'iPhone sideways']);
 
 const browser = await chromium.launch({ ...browserChoice, headless: true });

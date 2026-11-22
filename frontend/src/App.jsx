@@ -25,6 +25,7 @@ import Search from './components/Search';
 import HomeReport from './pages/HomeReport';
 import PetsPage, { PetPage } from './pages/Pets';
 import ManualPage from './pages/Manual';
+import PackingPage from './pages/Packing';
 import UpkeepPage, { JobPage } from './pages/Upkeep';
 import { ThingStickersPage, ThingStickerLanding } from './pages/ThingStickers';
 import AccessNote from './components/AccessNote';
@@ -146,6 +147,7 @@ function Shell({ user, onLogout }) {
           <Route path="/things/upkeep/:id" element={<JobPage />} />
           <Route path="/things/stickers" element={<ThingStickersPage />} />
           <Route path="/things/report" element={<HomeReport />} />
+          <Route path="/things/packing" element={<PackingPage />} />
           <Route path="/manual" element={<ManualPage />} />
           <Route path="/things/pets" element={<PetsPage />} />
           <Route path="/things/pets/:id" element={<PetPage />} />

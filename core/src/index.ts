@@ -67,3 +67,5 @@ export { pets, careName, PET_CARE, WEIGHT_UNITS, MAX_PET_PHOTO } from './pets.ts
 export type { Pet, PetInput, PetSummary, PetWeight, Pets } from './pets.ts';
 export { manual, manualFor, manualHtml, MANUAL_SECTIONS } from './manual.ts';
 export type { Manual, ManualEntry, SharedManual } from './manual.ts';
+export { packing, BOX_STATES } from './packing.ts';
+export type { Box, BoxState, Packing } from './packing.ts';
