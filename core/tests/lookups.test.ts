@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookGenres, readProduct } from '../src/lookups.ts';
+import { bookGenres, readProduct, shopsOwnBarcode } from '../src/lookups.ts';
 
 describe('reading what a shop calls a product', () => {
   it('finds the title and the format, and what kind of thing it is', () => {
@@ -21,5 +21,12 @@ describe("a library's subjects as genres", () => {
     expect(bookGenres(['a', 'b', 'c', 'd', 'e', 'f'])).toHaveLength(5);
     // What Open Library really sends for Dune.
     expect(bookGenres(['Dune (Imaginary place)', 'Fiction', 'Fiction, science fiction, general', 'New York Times reviewed', 'Science fiction', 'Science-fiction'])).toEqual(['Fiction', 'Science fiction']);
+  });
+});
+
+describe("a shop's own barcode", () => {
+  it('is told apart from one a maker prints', () => {
+    expect(['2000000000015', '0212345678906', '412345678908', '0000000000017'].map(shopsOwnBarcode)).toEqual([true, true, true, true]);
+    expect(['0883929106509', '9780441172719', '5012345678900', '012345678905', '12345670'].map(shopsOwnBarcode)).toEqual([false, false, false, false, false]);
   });
 });

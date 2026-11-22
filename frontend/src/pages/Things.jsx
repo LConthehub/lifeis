@@ -108,7 +108,7 @@ export default function Things() {
                     const details = k.fields.map((f) => shown(f, item.values[f.id])).filter(Boolean).slice(0, 4);
                     return (
                       <li key={item.id}>
-                        <button type="button" onClick={() => setEditing(item)} className="flex w-full items-start gap-2 py-2 text-left">
+                        <Link to={`/things/${item.id}`} className="flex w-full items-start gap-2 py-2 text-left">
                           <span className="flex-1">
                             <span className="block text-sm text-gray-800 dark:text-life-50">{item.name}</span>
                             {(details.length > 0 || item.place) && (
@@ -118,7 +118,7 @@ export default function Things() {
                           </span>
                           {item.low && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">low</span>}
                           <span className="text-sm text-gray-500 dark:text-life-300">{item.amount}</span>
-                        </button>
+                        </Link>
                       </li>
                     );
                   })}
@@ -160,10 +160,11 @@ function ValueInput({ field, value, onChange }) {
   return <input type={field.type === 'link' ? 'url' : 'text'} value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder={field.type === 'link' ? 'https://' : ''} className={inputClass} />;
 }
 
-function ItemForm({ item, kinds, places, onPlaces, onDone }) {
+export function ItemForm({ item, kinds, places, onPlaces, onDone }) {
   const [form, setForm] = useState({
     kind_id: item.kind_id, name: item.name || '', quantity: item.quantity ?? '', unit: item.unit || '', place_id: item.place_id ?? '',
     low_at: item.low_at ?? '', note: item.note || '', values: { ...(item.values || {}) },
+    activities: (item.activities || []).join(', '), barcode: item.barcode || '',
   });
   const [error, setError] = useState('');
   const kind = kinds.find((k) => k.id === Number(form.kind_id)) || kinds[0];
@@ -176,7 +177,8 @@ function ItemForm({ item, kinds, places, onPlaces, onDone }) {
       if (v !== undefined && v !== '' && v !== null) values[f.id] = f.type === 'number' ? Number(v) : v;
     }
     const body = { name: form.name, quantity: form.quantity === '' ? null : Number(form.quantity), unit: form.unit || null,
-      place_id: form.place_id === '' ? null : Number(form.place_id), low_at: form.low_at === '' ? null : Number(form.low_at), note: form.note || null, values };
+      place_id: form.place_id === '' ? null : Number(form.place_id), low_at: form.low_at === '' ? null : Number(form.low_at), note: form.note || null, values,
+      activities: commaList(form.activities), barcode: form.barcode || null };
     try {
       if (item.id) await axios.put(`/api/things/items/${item.id}`, body);
       else await axios.post('/api/things/items', { ...body, kind_id: kind.id });
@@ -220,6 +222,10 @@ function ItemForm({ item, kinds, places, onPlaces, onDone }) {
           ))}
         </div>
       )}
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="What it's for (with commas between)"><input value={form.activities} onChange={set('activities')} placeholder="Sewing, Camping" className={inputClass} /></Field>
+        <Field label="Barcode on it or its box"><input inputMode="numeric" value={form.barcode} onChange={set('barcode')} className={inputClass} /></Field>
+      </div>
       <Field label="Notes"><textarea rows={2} value={form.note} onChange={set('note')} className={inputClass} /></Field>
       {item.set_aside > 0 && <p className="text-xs text-life-600 dark:text-life-200">{item.set_aside} {item.unit || ''} is set aside for projects, leaving {item.free} free.</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -355,6 +361,7 @@ export function PlacesPage() {
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Places</h1>
         {places.length > 0 && <button type="button" onClick={() => setScanning(true)} className={quietButtonClass}>📷 Scan a sticker</button>}
         {places.length > 0 && <Link to="/things/places/stickers" className={quietButtonClass}>Print stickers</Link>}
+        <Link to="/things/stickers?blank=40" className={quietButtonClass}>Blank stickers for things</Link>
         <button type="button" onClick={() => setEditing({})} className={buttonClass}>+ New place</button>
       </div>
       {places.length === 0 ? (

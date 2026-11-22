@@ -110,6 +110,9 @@ export function ProjectPage() {
   if (project === null) return <p className="text-sm text-gray-600 dark:text-life-200">That project isn't here. <Link to="/projects" className="underline">All projects</Link></p>;
 
   const open = !['done', 'dropped'].includes(project.status);
+  // The things that are for this project's activity, and where each is.
+  const doing = project.activity?.trim().toLowerCase();
+  const gear = doing ? items.filter((t) => (t.activities || []).some((a) => a.toLowerCase() === doing)) : [];
   const byHand = (names) => (names?.length ? `Finished. Check these by hand, they couldn't be taken out of your things: ${names.join(', ')}.` : '');
   const saved = (data) => { setProject(data); setModal(null); setMessage(byHand(data.check_by_hand)); axios.get('/api/things/items').then(({ data: d }) => setItems(d)).catch(() => {}); };
   const setStatus = async (status) => {
@@ -210,6 +213,22 @@ export function ProjectPage() {
         </section>
       </div>
 
+      {gear.length > 0 && (
+        <section className={cardClass} aria-label={`Gear for ${project.activity}`}>
+          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Your gear for {project.activity}</h2>
+          <ul className="divide-y divide-life-50 dark:divide-life-700">
+            {gear.map((t) => (
+              <li key={t.id} className="py-1.5 text-sm">
+                <Link to={`/things/${t.id}`} className="flex items-baseline gap-2 hover:underline">
+                  <span aria-hidden="true">{t.icon}</span>
+                  <span className="flex-1 text-gray-800 dark:text-life-50">{t.name}</span>
+                  <span className="text-xs text-gray-500 dark:text-life-300">{t.place ? `📍 ${t.place}` : 'no place'}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {project.notes && (
         <section className={cardClass}>
           <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Notes</h2>

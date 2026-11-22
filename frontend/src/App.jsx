@@ -18,6 +18,10 @@ import Mail from './pages/Mail';
 import Prices from './pages/Prices';
 import PlansPage, { PlanPage } from './pages/Plans';
 import { PlacePage, StickerLanding, StickersPage } from './pages/Places';
+import FillPlace from './pages/FillPlace';
+import Thing from './pages/Thing';
+import Activities from './pages/Activities';
+import { ThingStickersPage, ThingStickerLanding } from './pages/ThingStickers';
 import AccessNote from './components/AccessNote';
 import Money from './pages/Money';
 import DoAction from './pages/DoAction';
@@ -38,7 +42,7 @@ const SECTIONS = [
     tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫'], ['/prices', 'Prices', '💲']] },
   { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar') || path.startsWith('/plans') || path.startsWith('/mail'), tabs: [['/calendar', 'Calendar', '📅'], ['/plans', 'Plans', '✨'], ['/mail', 'Mail', '✉️']] },
   { word: 'keeping', home: '/things', owns: (path) => path.startsWith('/things'),
-    tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/kinds', 'Kinds', '🏷']] },
+    tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/activities', 'Activities', '🛠'], ['/things/kinds', 'Kinds', '🏷']] },
   { word: 'making', home: '/projects', owns: (path) => path.startsWith('/projects'),
     tabs: [['/projects', 'Projects', '🧵']] },
   { word: 'spending', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month', '💵']] },
@@ -130,6 +134,11 @@ function Shell({ user, onLogout }) {
           <Route path="/things/places" element={<PlacesPage />} />
           <Route path="/things/places/stickers" element={<StickersPage />} />
           <Route path="/things/places/:id" element={<PlacePage />} />
+          <Route path="/things/places/:id/fill" element={<FillPlace />} />
+          <Route path="/things/activities" element={<Activities />} />
+          <Route path="/things/stickers" element={<ThingStickersPage />} />
+          <Route path="/things/:id" element={<Thing />} />
+          <Route path="/t/:code" element={<ThingStickerLanding />} />
           <Route path="/p/:code" element={<StickerLanding />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectPage />} />

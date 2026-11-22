@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import Scanner from '../components/Scanner';
 import PlacePicker from '../components/PlacePicker';
+import { HistoryList } from './Thing';
 import { stickerCode } from './Places';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
@@ -330,8 +331,8 @@ export function MediaTitlePage() {
           {title.copies.length === 0 ? <p className="text-sm text-gray-500 dark:text-life-200">No copies. Add one for each you own: the VHS, the Blu-ray, the file on your media server.</p> : (
             <ul className="divide-y divide-life-50 dark:divide-life-700">
               {title.copies.map((copy) => (
-                <li key={copy.id}>
-                  <button type="button" onClick={() => setModal({ copy })} className="flex w-full items-start gap-2 py-2 text-left">
+                <li key={copy.id} className="flex items-start gap-2">
+                  <button type="button" onClick={() => setModal({ copy })} className="flex min-w-0 flex-1 items-start gap-2 py-2 text-left">
                     <span className="flex-1">
                       <span className="block text-sm text-gray-800 dark:text-life-50">{copy.format}</span>
                       <span className="block text-xs text-gray-500 dark:text-life-300">
@@ -340,6 +341,7 @@ export function MediaTitlePage() {
                     </span>
                     {copy.lent_to && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">with {copy.lent_to} since {copy.lent_on}</span>}
                   </button>
+                  <button type="button" onClick={() => setModal({ history: copy })} className="py-2 text-xs text-life-600 hover:underline dark:text-life-200">History</button>
                 </li>
               ))}
             </ul>
@@ -371,10 +373,18 @@ export function MediaTitlePage() {
       </div>
       <p className="text-right"><button type="button" onClick={remove} className="text-xs text-red-600 hover:underline">Remove from the collection</button></p>
       {modal?.edit && <Modal title={title.title} onClose={() => setModal(null)}><TitleForm title={title} onDone={saved} /></Modal>}
+      {modal?.history && <Modal title={`Where the ${modal.history.format.toLowerCase()} has been`} onClose={() => setModal(null)}><CopyHistory copy={modal.history} /></Modal>}
       {modal?.copy && <Modal title={modal.copy.id ? modal.copy.format : 'A copy'} onClose={() => setModal(null)}><CopyForm title={title} copy={modal.copy} onDone={saved} /></Modal>}
       {modal?.log && <Modal title={did} onClose={() => setModal(null)}><LogForm mediaId={title.id} onDone={saved} /></Modal>}
     </div>
   );
+}
+
+/** Where one copy has been, as a thing's history shows it. */
+function CopyHistory({ copy }) {
+  const [history, setHistory] = useState(null);
+  useEffect(() => { axios.get(`/api/media/copies/${copy.id}/history`).then(({ data }) => setHistory(data)).catch(() => setHistory([])); }, [copy.id]);
+  return history ? <HistoryList history={history} /> : null;
 }
 
 function CopyForm({ title, copy, onDone }) {

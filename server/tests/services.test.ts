@@ -245,7 +245,10 @@ it('films, music and games are looked up by barcode only once that is turned on:
   expect(asked).toEqual(['https://musicbrainz.org/ws/2/release/?query=barcode:0602547288288&fmt=json&limit=1']); // known as music: nothing more asked
   expect((await admin.get('/api/lookups/title?code=0883929106509')).json).toEqual({ title: { barcode: '0883929106509', type: 'film', title: 'The Matrix', creator: null, year: null, format: 'Blu-ray', from: 'UPCitemdb' } });
   expect(asked.slice(1)).toEqual(['https://musicbrainz.org/ws/2/release/?query=barcode:0883929106509&fmt=json&limit=1', 'https://api.upcitemdb.com/prod/trial/lookup?upc=0883929106509']);
-  expect((await admin.get('/api/lookups/title?code=0000000000017')).json).toEqual({ title: null }); // neither knows it
+  expect((await admin.get('/api/lookups/title?code=0012345000065')).json).toEqual({ title: null }); // neither knows it
+  const before = asked.length;
+  expect((await admin.get('/api/lookups/title?code=2000000000015')).json).toEqual({ title: null }); // a shop's own number: not even asked
+  expect(asked).toHaveLength(before);
   expect((await admin.get('/api/lookups/title?code=0883929106508')).json.title?.title).toBe('The Matrix'); // MusicBrainz too busy: UPCitemdb answers
   expect((await admin.get('/api/lookups/title?code=abc')).status).toBe(400);
   expect((await admin.put('/api/lookups', { titles: false })).json.titles).toBe(false);

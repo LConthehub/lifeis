@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import { shrink } from '../components/shrink';
 import Picture from '../components/Picture';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, fromDateInput } from '../components/ui';
 
@@ -56,16 +57,6 @@ function WhenEaten({ plan, day, meal, servings, onChange }) {
 
 export const photoAddress = (photo) => `/api/plans/photos/${photo.id ?? photo}`;
 
-/** Makes a picked photo small enough to keep: at most 1600 across, as a JPEG. Done here, on the device. */
-async function shrink(file) {
-  const picture = await createImageBitmap(file, { imageOrientation: 'from-image' });
-  const scale = Math.min(1, 1600 / Math.max(picture.width, picture.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(picture.width * scale);
-  canvas.height = Math.round(picture.height * scale);
-  canvas.getContext('2d').drawImage(picture, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
-}
 
 /** Plans ahead, and the ones to look back on. */
 export default function PlansPage() {

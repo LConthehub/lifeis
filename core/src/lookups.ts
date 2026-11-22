@@ -92,6 +92,8 @@ export function lookups(db: Db, owner: number, _clock: Clock = () => new Date(),
       const barcode = read.replace(/[\s-]/g, '');
       if (!/^\d{8,14}$/.test(barcode)) throw new Problem(400, "That isn't a product's barcode");
       if (!fetcher || !(await isOn(TITLES))) throw new Problem(400, 'Looking films, music and games up is turned off. Turn it on in Settings, under "Outside services".');
+      // A shop's own number means nothing anywhere else: asking would only bring back something unrelated.
+      if (shopsOwnBarcode(barcode)) return null;
       const ask = async (url: string, who: string): Promise<Record<string, unknown> | null> => {
         let answer: Answer;
         try {
@@ -222,4 +224,16 @@ export function readProduct(name: string, category: string): { type: 'film' | 'm
   const title = clean(name.replace(/\s*[([][^)\]]*[)\]]/g, '').replace(/\s+-\s+(blu-?ray|dvd|4k.*|nintendo switch|playstation \d|xbox.*)$/i, '')
     .replace(/(\s+(blu-?ray|dvd|cd|vinyl|lp))+$/i, ''), 300) || clean(name, 300)!;
   return { type, title, format };
+}
+
+/**
+ * Whether a barcode is one a shop prints itself (on things it weighs or labels: numbers starting 2, or 02 and
+ * 04 on a 12-digit one) or a placeholder of zeros. Such numbers are reused by every shop for its own things,
+ * so no list anywhere can say what one is.
+ */
+export function shopsOwnBarcode(barcode: string): boolean {
+  const digits = barcode.replace(/\D/g, '');
+  if (/^0{7,}/.test(digits)) return true;
+  const ean = digits.length === 12 ? `0${digits}` : digits;
+  return ean.length === 13 && /^(02|04|2)/.test(ean);
 }

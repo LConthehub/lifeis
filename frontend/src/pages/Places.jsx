@@ -37,7 +37,9 @@ export function PlacePage() {
           {above && <p className="text-xs text-gray-500 dark:text-life-300">{place.path}</p>}
           {place.note && <p className="text-sm text-gray-600 dark:text-life-100">{place.note}</p>}
         </div>
+        <Link to={`/things/places/${id}/fill`} className={buttonClass}>📷 Fill this place</Link>
         <Link to={`/things/places/stickers?only=${id}`} className={quietButtonClass}>Print its sticker</Link>
+        {things.length > 0 && <Link to={`/things/stickers?place=${id}`} className={quietButtonClass}>Stickers for what's here</Link>}
       </div>
       {inside.length > 0 && (
         <section className={cardClass}>
@@ -91,17 +93,19 @@ export function StickerLanding() {
   return <Navigate to={`/things/places/${place.id}`} replace />;
 }
 
-/** Scan a sticker with the camera and go to its place. */
+/** Scan a sticker (or a barcode on something you have) with the camera and go to its place or thing. */
 export function ScanSticker() {
   const [round, setRound] = useState(0);
   const [problem, setProblem] = useState('');
   const navigate = useNavigate();
   const look = useCallback(async (read) => {
-    const code = stickerCode(read);
-    if (!code) { setProblem("That isn't a Life Is sticker. To look up a barcode, scan it from the collection."); return; }
     try {
-      const { data } = await axios.get('/api/things/places/sticker', { params: { code } });
-      navigate(`/things/places/${data.id}`);
+      const { data } = await axios.get('/api/things/scan', { params: { code: read } });
+      if (data.kind === 'place') navigate(`/things/places/${data.place.id}`);
+      else if (data.kind === 'thing') navigate(`/things/${data.item.id}`);
+      else if (data.kind === 'copies') navigate(`/media/${data.copies[0].media_id}`);
+      else if (data.kind === 'new-sticker') setProblem("This sticker isn't on anything yet. Open the place the thing is kept, choose Fill this place, and scan it there.");
+      else setProblem(stickerCode(read) ? "That sticker isn't for one of your places." : "That isn't on anything you have yet. To add it, open its place and choose Fill this place.");
     } catch (err) { setProblem(errorMessage(err, "Couldn't look that up")); }
   }, [navigate]);
   if (problem) {
