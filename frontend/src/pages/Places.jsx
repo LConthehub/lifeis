@@ -56,7 +56,7 @@ export function PlacePage() {
             {things.map((t) => (
               <li key={t.id} className="flex items-baseline gap-2 py-1.5 text-sm">
                 <span aria-hidden="true">{t.icon}</span>
-                <span className="flex-1 text-gray-800 dark:text-life-50">{t.name} <span className="text-xs text-gray-500 dark:text-life-300">{[t.kind, deeper(t.place)].filter(Boolean).join(' · ')}</span></span>
+                <span className="flex-1 text-gray-800 dark:text-life-50"><Link to={`/things/${t.id}`} className="hover:underline">{t.name}</Link> <span className="text-xs text-gray-500 dark:text-life-300">{[t.kind, deeper(t.place)].filter(Boolean).join(' · ')}</span></span>
                 <span className="text-gray-500 dark:text-life-300">{t.amount}</span>
               </li>
             ))}

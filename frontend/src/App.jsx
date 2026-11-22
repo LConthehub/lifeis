@@ -21,6 +21,7 @@ import { PlacePage, StickerLanding, StickersPage } from './pages/Places';
 import FillPlace from './pages/FillPlace';
 import Thing from './pages/Thing';
 import Activities from './pages/Activities';
+import Search from './components/Search';
 import UpkeepPage, { JobPage } from './pages/Upkeep';
 import { ThingStickersPage, ThingStickerLanding } from './pages/ThingStickers';
 import AccessNote from './components/AccessNote';
@@ -106,7 +107,8 @@ function Shell({ user, onLogout }) {
                 className={`rounded-full px-2 py-1 text-sm font-semibold sm:px-2.5 ${s === section ? 'bg-white text-life-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.word}</Link>
             ))}
           </nav>
-          <NavLink to="/settings" aria-label="Settings" className="order-2 ml-auto text-sm text-white/90 hover:text-white hover:underline sm:order-3"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="text-lg sm:hidden">⚙</span></NavLink>
+          <div className="order-2 ml-auto sm:order-3"><Search /></div>
+          <NavLink to="/settings" aria-label="Settings" className="order-2 text-sm text-white/90 hover:text-white hover:underline sm:order-3"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="text-lg sm:hidden">⚙</span></NavLink>
           {tabs.length > 1 && (
             <nav className="order-4 hidden w-full gap-1 sm:flex" aria-label={`Life is ${section.word}`}>
               {tabs.map(([to, label]) => (

@@ -13,7 +13,18 @@ function startOfWeek(d) {
 
 /** The week, a day at a time: your own dates, with the meals, projects and everything else alongside. */
 export default function Calendar() {
-  const [start, setStart] = useState(() => startOfWeek(new Date()));
+  // Opened at a day (/calendar?day=2046-03-05, or 03-05 for a date that comes every year): its week shows.
+  const [start, setStart] = useState(() => {
+    const asked = new URLSearchParams(window.location.search).get('day') ?? '';
+    const now = new Date();
+    let at = now;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(asked)) at = new Date(`${asked}T12:00:00`);
+    else if (/^\d{2}-\d{2}$/.test(asked)) {
+      at = new Date(`${now.getFullYear()}-${asked}T12:00:00`);
+      if (at < new Date(now.getFullYear(), now.getMonth(), now.getDate())) at = new Date(`${now.getFullYear() + 1}-${asked}T12:00:00`);
+    }
+    return startOfWeek(Number.isNaN(at.getTime()) ? now : at);
+  });
   const [entries, setEntries] = useState(null);
   const [editing, setEditing] = useState(null);
   const startText = toDateInput(start);

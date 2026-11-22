@@ -14,7 +14,8 @@ const SIZES = [
   ['Android tablet', 800, 1280], ['Laptop', 1440, 900],
 ];
 const PAGES = ['/', '/recipes', '/recipes/1', '/week', '/groceries', '/pantry', '/prices', '/calendar', '/plans', '/mail', '/things', '/things/places', '/things/kinds',
-  '/projects', '/projects/1', '/money', '/media', '/media/servers', '/settings', '/settings/connections', '/do/add-to-groceries?item=eggs'];
+  '/projects', '/projects/1', '/money', '/media', '/media/servers', '/settings', '/settings/connections', '/settings/reminders',
+  '/things/upkeep', '/things/activities', '/media/books', '/do/add-to-groceries?item=eggs'];
 const PICTURES = new Set(['iPhone SE', 'Foldable iPhone, open (rumoured)', 'iPad, a third of the screen', 'iPad Pro 13" sideways', 'iPhone sideways']);
 
 const browser = await chromium.launch({ ...browserChoice, headless: true });
@@ -61,6 +62,6 @@ for (const [name, width, height] of SIZES) {
 }
 // Gathered by kind of problem, each with every place it happened.
 const kinds = Object.entries(problems);
-if (!kinds.length) console.log('nothing wider than the screen, and no tiny text, at any size');
-for (const [what, where] of kinds) console.log(`\n${where.length} × ${what.split(' ⟶ ')[1] ?? what}\n   at: ${[...new Set(where)].slice(0, 8).join('; ')}${where.length > 8 ? ' …' : ''}`);
+if (!kinds.length) console.log(`PASS nothing wider than the screen, and no tiny text, on ${PAGES.length} pages at ${SIZES.length} sizes`);
+for (const [what, where] of kinds) console.log(`FAIL ${where.length} × ${what.split(' ⟶ ')[1] ?? what} — at: ${[...new Set(where)].slice(0, 8).join('; ')}${where.length > 8 ? ' …' : ''}`);
 await browser.close();

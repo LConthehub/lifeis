@@ -32,6 +32,7 @@ const SUITE = [
   { specs: ['books-and-places'] },
   { specs: ['fill-a-place', 'gear-and-copy-history'], online: true },
   { specs: ['upkeep'] },
+  { specs: ['search'] },
   { specs: ['reminders'], fixtures: [['ntfy', 8098]] },
   { specs: ['spending'] },
   { specs: ['backup'], phone: true },

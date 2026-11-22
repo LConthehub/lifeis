@@ -166,7 +166,7 @@ export function ProjectPage() {
               {project.lines.map((line) => (
                 <li key={line.id} className="flex items-start gap-2 py-2">
                   <span className="flex-1">
-                    <span className={`block text-sm ${line.used_on ? 'text-gray-400 line-through' : 'text-gray-800 dark:text-life-50'}`}>{line.amount ? `${line.amount} · ` : ''}{line.label}</span>
+                    <span className={`block text-sm ${line.used_on ? 'text-gray-400 line-through' : 'text-gray-800 dark:text-life-50'}`}>{line.amount ? `${line.amount} · ` : ''}{line.item_id ? <Link to={`/things/${line.item_id}`} className="hover:underline">{line.label}</Link> : line.label}</span>
                     <span className="block text-xs text-gray-500 dark:text-life-300">
                       {[line.used_on ? `used ${line.used_on}` : line.have === null ? (line.item_id === null && line.quantity === null ? null : "not one of your things yet") : `you have ${line.have}`,
                         line.place && `📍 ${line.place}`, line.note].filter(Boolean).join(' · ')}

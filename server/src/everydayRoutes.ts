@@ -9,6 +9,7 @@
  * Life Is can't or shouldn't reach out.
  */
 import { addDays, todayOf } from '../../core/src/small.ts';
+import { search, type SearchKind } from '../../core/src/index.ts';
 import { reminders, COVERS, EMAIL_SERVICE, NTFY_SERVICE, PUSH_SERVICE, type PushSender, type ReminderSettings } from '../../core/src/index.ts';
 import { home, life, lookups, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
@@ -106,6 +107,9 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ['GET', /^\/api\/lookups\/book$/, async (c) => ({ json: { book: await finder(c).book(c.query.get('code') ?? '') } })],
     ['GET', /^\/api\/lookups\/title$/, async (c) => ({ json: { title: await finder(c).title(c.query.get('code') ?? '') } })],
     ['DELETE', /^\/api\/weather$/, async (c) => ({ json: { ...await skies(c).turnOff(), service: WEATHER_SERVICE } })],
+
+    // One search across everything the person keeps. See core/'s search.ts.
+    ['GET', /^\/api\/search$/, async (c) => ({ json: await search(db, c.user.id, c.query.get('q') ?? '', (c.query.get('kind') || null) as SearchKind | null) })],
 
     // Reminders that reach you: a morning digest, sent only the ways the person turns on. See core/'s reminders.ts.
     ['GET', /^\/api\/reminders$/, async (c) => ({ json: await reminderState(c) })],

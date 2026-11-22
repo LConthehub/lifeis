@@ -289,7 +289,7 @@ export default function Home({ user }) {
               <ul className="space-y-1 text-sm">
                 {s.things.low.map((t) => (
                   <li key={t.id} className="flex items-baseline gap-2">
-                    <span className="flex-1 text-gray-800 dark:text-life-50">{t.name} <span className="text-xs text-gray-500 dark:text-life-300">{t.kind}</span></span>
+                    <span className="flex-1 text-gray-800 dark:text-life-50"><Link to={`/things/${t.id}`} className="hover:underline">{t.name}</Link> <span className="text-xs text-gray-500 dark:text-life-300">{t.kind}</span></span>
                     <Flag>low: {t.amount}</Flag>
                   </li>
                 ))}
