@@ -27,8 +27,8 @@ export const LIBRARIES = {
     empty: "No books yet. Scan the barcode on the back (its ISBN) and Life Is looks up the title and author, then asks where it's kept: a room, and a shelf in it.",
   },
   ebooks: {
-    type: 'book', title: 'Ebooks', format: 'Ebook', fits: (m) => m.formats.some(isEbook),
-    empty: "No ebooks yet. Add one and say what it's on: Ebook, Kindle, Kobo, or anything you like.",
+    type: 'book', title: 'eBooks', format: 'eBook', fits: (m) => m.formats.some(isEbook),
+    empty: "No eBooks yet. Add one and say what it's on: eBook, Kindle, Kobo, or anything you like.",
   },
   audiobooks: {
     type: 'book', title: 'Audiobooks', format: 'Audiobook', fits: (m) => m.formats.some(isAudio),

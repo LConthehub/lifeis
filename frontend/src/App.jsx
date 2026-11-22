@@ -54,7 +54,7 @@ const SECTIONS = [
   { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar') || path.startsWith('/plans') || path.startsWith('/mail') || path.startsWith('/manual'), tabs: [['/calendar', 'Calendar', '📅'], ['/plans', 'Plans', '✨'], ['/manual', 'House manual', '📒'], ['/mail', 'Mail', '✉️']] },
   { word: 'making', home: '/projects', owns: (path) => path.startsWith('/projects'),
     tabs: [['/projects', 'Projects', '🧵']] },
-  { word: 'enjoying', shown: 'entertaining', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection', '🎞'], ['/media/books', 'Books', '📚'], ['/media/ebooks', 'Ebooks', '📱'], ['/media/audiobooks', 'Audiobooks', '🎧'], ['/media/servers', 'Servers', '🖥']] },
+  { word: 'enjoying', shown: 'entertaining', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection', '🎞'], ['/media/books', 'Books', '📚'], ['/media/ebooks', 'eBooks', '📱'], ['/media/audiobooks', 'Audiobooks', '🎧'], ['/media/servers', 'Servers', '🖥']] },
 ];
 
 export default function App() {

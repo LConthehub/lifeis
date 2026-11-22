@@ -562,7 +562,7 @@ it('the collection and the calendar answer over the web', async () => {
   expect((await admin.get('/api/media?wanted=1')).json.map((m: { title: string }) => m.title)).toEqual(['Blue']);
   expect((await admin.get('/api/media?lent=1')).json.map((m: { title: string }) => m.title)).toEqual(['Alien']);
   expect((await admin.get(`/api/media?place_id=${room}`)).json.map((m: { title: string }) => m.title)).toEqual(['Alien']);
-  expect((await admin.get('/api/media/formats?type=book')).json).toEqual(['Hardcover', 'Paperback', 'Ebook', 'Audiobook']);
+  expect((await admin.get('/api/media/formats?type=book')).json).toEqual(['Hardcover', 'Paperback', 'eBook', 'Audiobook']);
 
   // Watched while sewing: kept with the session, and seen from the film and from the calendar.
   const dress = (await admin.post('/api/projects', { name: 'Shirt dress', status: 'active' })).json;
