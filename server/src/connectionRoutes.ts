@@ -12,9 +12,24 @@ const at = (path: string) => new RegExp(`^/api/${path.replaceAll(':id', ID)}$`);
 
 export type Reach = { fetcher: Fetcher; sealer: Sealer };
 
+/**
+ * A question that only reads is asked once more when the line itself failed (the first connection to a host
+ * after starting up sometimes does). Never something posted, which might then arrive twice, and never after
+ * waiting the whole time out.
+ */
+async function reach(url: string, init: RequestInit, wait: number): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(wait) });
+  } catch (problem) {
+    if (init.method || (problem as Error).name === 'TimeoutError') throw problem;
+    await new Promise((r) => setTimeout(r, 400));
+    return fetch(url, { ...init, signal: AbortSignal.timeout(wait) });
+  }
+}
+
 /** Asks a web address for its answer, giving up after half a minute and never taking in more than 20 MB. */
 export const webFetcher: Fetcher = async (url, headers, send) => {
-  const response = await fetch(url, { headers, signal: AbortSignal.timeout(30_000), ...(send ? { method: send.method, body: send.body } : {}) });
+  const response = await reach(url, { headers, ...(send ? { method: send.method, body: send.body } : {}) }, 30_000);
   const body = async () => {
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.length > 20_000_000) throw new Error('That answer is too large');
@@ -30,7 +45,7 @@ export const webFetcher: Fetcher = async (url, headers, send) => {
 
 /** The same way out, for a model that may take a minute or two to think. */
 export const patientFetcher: Fetcher = async (url, headers, send) => {
-  const response = await fetch(url, { headers, signal: AbortSignal.timeout(180_000), ...(send ? { method: send.method, body: send.body } : {}) });
+  const response = await reach(url, { headers, ...(send ? { method: send.method, body: send.body } : {}) }, 180_000);
   const body = async () => {
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.length > 5_000_000) throw new Error('That answer is too large');

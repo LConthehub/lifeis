@@ -46,8 +46,12 @@ const scan = async (code, wait = 3500) => {
   await page.waitForTimeout(wait);
 };
 const lines = () => page.locator('[aria-label="What happened"] li').allInnerTexts();
+// A look-up on the internet can take a good while: wait until no line is still "looking it up".
+const settled = async () => { for (let i = 0; i < 80 && (await lines()).some((l) => l.includes('looking it up')); i += 1) await page.waitForTimeout(500); };
 
-await scan('9780441172719', 5000);
+await scan('9780441172719', 800);
+check('a scan shows at once, while it is looked up', (await lines())[0]?.includes('looking it up') || (await lines())[0]?.includes('Dune'), (await lines())[0]);
+await settled();
 check('a book is looked up and added here', (await lines())[0]?.includes('Dune') && (await lines())[0]?.includes('Paperback'), (await lines())[0]);
 await page.getByLabel('Something with no barcode').fill('Lego bin');
 await page.getByLabel('Something with no barcode').press('Enter'); await page.waitForTimeout(1200);

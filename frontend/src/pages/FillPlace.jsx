@@ -41,7 +41,11 @@ export default function FillPlace() {
   }, [loadKinds]);
 
   const place = places?.find((p) => p.id === placeId);
-  const note = (entry) => setLog((list) => [{ key: `${Date.now()}-${Math.random()}`, ...entry }, ...list].slice(0, 200));
+  const note = (entry) => {
+    const key = `${Date.now()}-${Math.random()}`;
+    setLog((list) => [{ key, ...entry }, ...list].slice(0, 200));
+    return key;
+  };
   const change = (key, patch) => setLog((list) => list.map((e) => (e.key === key ? { ...e, ...patch } : e)));
 
   /** A new thing, here. */
@@ -89,21 +93,32 @@ export default function FillPlace() {
       return;
     }
     // Not yours yet: looked up if that's turned on, else a name is asked for, keeping the barcode.
+    // A look-up can take a while, so the scan shows at once and its line is filled in when the answer comes.
+    const looking = (data.isbn ? can?.books : can?.titles) && true;
+    const line = looking ? note({ icon: '🔎', text: `Barcode ${data.barcode}`, note: 'looking it up…', tone: 'quiet' }) : null;
+    const say = (entry) => (line ? change(line, entry) : note(entry));
     let found = null;
-    try { found = await lookUp(data.barcode, data.isbn); } catch { found = null; }
-    if (found && found.type !== 'other') {
-      const format = found.type === 'book' ? bookFormat : (found.format || USUAL_FORMAT[found.type]);
-      const { format: _f, ...start } = found;
-      const made = await addTitle(start, format, data.barcode);
-      note({ icon: ICONS[found.type], text: found.title, note: `added · ${format}`, tone: 'added', media_id: made.id });
+    let trouble = null;
+    try { found = await lookUp(data.barcode, data.isbn); } catch (err) { trouble = errorMessage(err, "It couldn't be looked up just now"); }
+    try {
+      if (found && found.type !== 'other') {
+        const format = found.type === 'book' ? bookFormat : (found.format || USUAL_FORMAT[found.type]);
+        const { format: _f, ...start } = found;
+        const made = await addTitle(start, format, data.barcode);
+        say({ icon: ICONS[found.type], text: found.title, note: `added · ${format}`, tone: 'added', media_id: made.id });
+        return;
+      }
+      if (found) {
+        const made = await addThing(found.title, { barcode: data.barcode });
+        say({ icon: made.icon || '📦', text: made.name, note: 'added', tone: 'added', item_id: made.id, photo: true });
+        return;
+      }
+    } catch (err) {
+      say({ icon: '⚠️', text: `Barcode ${data.barcode}`, note: errorMessage(err, "Couldn't put that here"), tone: 'trouble' });
       return;
     }
-    if (found) {
-      const made = await addThing(found.title, { barcode: data.barcode });
-      note({ icon: made.icon || '📦', text: made.name, note: 'added', tone: 'added', item_id: made.id, photo: true });
-      return;
-    }
-    note({ icon: '❔', text: `Barcode ${data.barcode}`, note: 'not known: what is it?', tone: 'ask', ask: { barcode: data.barcode, isbn: data.isbn } });
+    // Not looked up is not the same as not known: say which, and ask its name either way.
+    say({ icon: '❔', text: `Barcode ${data.barcode}`, note: trouble ? `${trouble.replace(/\.$/, '')}. What is it?` : 'not known: what is it?', tone: 'ask', ask: { barcode: data.barcode, isbn: data.isbn } });
   };
 
   // One at a time, in the order they were scanned, and the same code twice in a moment only once.
