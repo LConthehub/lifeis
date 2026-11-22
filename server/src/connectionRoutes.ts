@@ -3,7 +3,7 @@
  * What they do is core/'s connections.ts; this reads what was sent, and is where Life Is reaches out to the
  * server you named. It reaches nowhere else.
  */
-import { connections, connectionsDue, media, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
+import { connections, connectionsDue, libraries, librariesDue, media, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
 import type * as auth from './auth.ts';
 import { read, type Body, type Context, type Route } from './http.ts';
 
@@ -59,9 +59,26 @@ const connectionFrom = (body: Body) => ({
   name: read.maybeText(body, 'name'), every_hours: read.maybeWhole(body, 'every_hours'),
 });
 
+const libraryFrom = (body: Body) => ({
+  kind: read.maybeText(body, 'kind') ?? '', url: read.text(body, 'url'), key: read.maybeText(body, 'key'),
+  username: read.maybeText(body, 'username'), password: typeof body.password === 'string' ? body.password : null,
+  name: read.maybeText(body, 'name'), every_hours: read.maybeWhole(body, 'every_hours'),
+});
+
 export function connectionRoutes(db: Db, reach: Reach): Route[] {
   const servers = (c: Context) => connections(db, c.user.id, c.clock, reach);
+  const books = (c: Context) => libraries(db, c.user.id, c.clock, reach);
   return [
+    // Book servers: Audiobookshelf, Calibre-Web, Kavita, or any OPDS catalogue. See core/'s libraries.ts.
+    ['GET', at('libraries'), async (c) => ({ json: await books(c).list() })],
+    ['POST', at('libraries'), async (c) => ({ status: 201, json: await books(c).create(libraryFrom(c.body)) })],
+    ['PUT', at('libraries/:id'), async (c) => ({ json: await books(c).update(c.id, libraryFrom(c.body)) })],
+    ['DELETE', at('libraries/:id'), async (c) => ({ json: await books(c).remove(c.id, c.query.get('with_copies') === '1') })],
+    ['POST', at('libraries/:id/sync'), async (c) => {
+      const result = await books(c).sync(c.id);
+      return { json: { ...result, libraries: await books(c).list() } };
+    }],
+
     ['GET', at('connections'), async (c) => ({ json: await servers(c).list() })],
     ['POST', at('connections'), async (c) => ({ status: 201, json: await servers(c).create(connectionFrom(c.body)) })],
     ['PUT', at('connections/:id'), async (c) => ({ json: await servers(c).update(c.id, connectionFrom(c.body)) })],
@@ -89,6 +106,14 @@ export async function syncDue(db: Db, clock: auth.Clock, reach: Reach, onError: 
   for (const due of await connectionsDue(db, clock)) {
     try {
       await connections(db, due.owner_id, clock, reach).sync(due.id);
+      done += 1;
+    } catch (problem) {
+      onError(problem);
+    }
+  }
+  for (const due of await librariesDue(db, clock)) {
+    try {
+      await libraries(db, due.owner_id, clock, reach).sync(due.id);
       done += 1;
     } catch (problem) {
       onError(problem);

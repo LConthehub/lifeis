@@ -69,3 +69,8 @@ export { manual, manualFor, manualHtml, MANUAL_SECTIONS } from './manual.ts';
 export type { Manual, ManualEntry, SharedManual } from './manual.ts';
 export { packing, BOX_STATES } from './packing.ts';
 export type { Box, BoxState, Packing } from './packing.ts';
+export { libraries, librariesDue, readLibrary, readOpdsPage, LIBRARY_KINDS, LIBRARY_NAMES, LIBRARY_NEEDS } from './libraries.ts';
+export type { Library, LibraryInput, LibraryKind, Libraries } from './libraries.ts';
+export { openLink } from './media.ts';
+export { readBookList, importBookList, csvRows, formatOf } from './bookList.ts';
+export type { ListedBook, ListChoices, ListResult } from './bookList.ts';

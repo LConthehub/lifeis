@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
+import BookServers from '../components/BookServers';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 
 const KINDS = [['jellyfin', 'Jellyfin'], ['emby', 'Emby']];
@@ -69,6 +70,8 @@ export default function Servers() {
           <ServerForm server={editing} onDone={(data) => { setServers(data); setEditing(null); }} />
         </Modal>
       )}
+      <hr className="border-life-100 dark:border-life-700" />
+      <BookServers />
     </div>
   );
 }

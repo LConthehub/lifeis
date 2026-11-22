@@ -215,7 +215,7 @@ ${shots.length > 1 ? `<div class="shots">\n${shots.slice(1).map(([file, caption]
 const RELEASED = false;
 const IMAGE = 'ghcr.io/lconthehub/lifeis:latest';
 // The order the guides are listed in.
-const GUIDES = ['getting-started', 'install', 'home', 'records', 'upkeep', 'kitchen', 'pets-and-manual', 'reminders', 'phone', 'your-data', 'troubleshooting'];
+const GUIDES = ['getting-started', 'install', 'home', 'records', 'upkeep', 'kitchen', 'collection', 'pets-and-manual', 'reminders', 'phone', 'your-data', 'troubleshooting'];
 
 const guideDir = path.join(here, 'guide');
 const guides = GUIDES.filter((slug) => existsSync(path.join(guideDir, `${slug}.md`))).map((slug) => {

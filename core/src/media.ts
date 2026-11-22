@@ -56,7 +56,22 @@ export type CopyInput = {
   /** The day it was lent, as 2046-03-05. Left out with lent_to set: today. */
   lent_on?: string | null;
   note?: string | null;
+  /** An address that opens it where it lives: Kindle, Apple Books, a server of your own. Left out: unchanged. */
+  link?: string | null;
 };
+
+/**
+ * A link as it's kept: a web address, or one of the few app addresses reading apps answer to. Anything else
+ * (a script, a file) is refused.
+ */
+export function openLink(given: string | null | undefined): string | null {
+  const text = given?.trim();
+  if (!text) return null;
+  if (text.length > 600 || !/^(https?|kindle|ibooks|applebooks|audible):/i.test(text) || /[\s<>"]/.test(text)) {
+    throw new Problem(400, 'A link starts with https:// (or kindle:// or ibooks://)');
+  }
+  return text;
+}
 export type LogInput = { day: string; note?: string | null; session_id?: number | null };
 
 export type Copy = {
@@ -71,6 +86,8 @@ export type Copy = {
   note: string | null;
   /** Where the copy was brought in from ("jellyfin"), or null for one typed in. */
   source: string | null;
+  /** An address that opens it where it lives. */
+  link: string | null;
 };
 export type LogEntry = { id: number; media_id: number; day: string; note: string | null; session_id: number | null; project_id: number | null; project: string | null };
 export type MediaSummary = {
@@ -138,7 +155,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
   async function copiesOf(q: Queries, where: string, args: Value[]): Promise<Copy[]> {
     const paths = placePaths(await q.all('SELECT id, parent_id, name, note FROM places WHERE owner_id = ?', [owner]));
     const rows = await q.all<Omit<Copy, 'place'>>(
-      `SELECT c.id, c.media_id, c.format, c.place_id, c.barcode, c.lent_to, c.lent_on, c.note, c.source
+      `SELECT c.id, c.media_id, c.format, c.place_id, c.barcode, c.lent_to, c.lent_on, c.note, c.source, c.link
        FROM media_copies c JOIN media m ON m.id = c.media_id WHERE m.owner_id = ? ${where} ORDER BY c.id`, [owner, ...args]);
     return rows.map((row) => ({ ...row, place: row.place_id !== null ? (paths.get(row.place_id) ?? null) : null }));
   }
@@ -212,6 +229,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
   async function addCopyIn(q: Queries, mediaId: number, input: CopyInput): Promise<void> {
     const made = await q.run('INSERT INTO media_copies (media_id, format, place_id, barcode, lent_to, lent_on, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [mediaId, ...(await copyValues(q, input)), now()]);
+    if (input.link !== undefined) await q.run('UPDATE media_copies SET link = ? WHERE id = ?', [openLink(input.link), made.lastId]);
     await noteHistory(q, owner, { copy_id: made.lastId }, { what: 'added', to_place: await placePath(q, owner, input.place_id), day: todayOf(clock), at: now() });
     // Having a copy answers the wanting.
     await q.run('UPDATE media SET wanted = 0, updated_at = ? WHERE id = ?', [now(), mediaId]);
@@ -322,6 +340,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
         const copy = await ownedCopy(tx, id);
         const was = (await tx.get<{ place_id: number | null }>('SELECT place_id FROM media_copies WHERE id = ?', [id]))!.place_id;
         await tx.run('UPDATE media_copies SET format = ?, place_id = ?, barcode = ?, lent_to = ?, lent_on = ?, note = ? WHERE id = ?', [...(await copyValues(tx, input)), id]);
+        if (input.link !== undefined) await tx.run('UPDATE media_copies SET link = ? WHERE id = ?', [openLink(input.link), id]);
         await noteMove(tx, owner, { copy_id: id }, was, input.place_id ?? null, { day: todayOf(clock), at: now() });
         return one(tx, copy.media_id);
       });

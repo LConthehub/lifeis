@@ -890,6 +890,32 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE upkeep_done ADD COLUMN done_name TEXT`,
     ],
   },
+  {
+    // Cataloguing books kept elsewhere: a link on a copy that opens it where it lives (Kindle, Apple Books, a
+    // server of your own), and book servers to bring a library in from (Audiobookshelf, Calibre-Web, Kavita,
+    // or any OPDS catalogue). How each signs in differs, so the sign-in is stored locked, as one piece.
+    number: 30,
+    name: 'a link on each copy, and book servers to bring a library in from',
+    statements: [
+      `ALTER TABLE media_copies ADD COLUMN link TEXT`,
+      `CREATE TABLE library_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        secret TEXT,
+        every_hours INTEGER NOT NULL DEFAULT 0,
+        last_sync_at TEXT,
+        last_ok INTEGER,
+        last_message TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_library_sources ON library_sources(owner_id)`,
+      `ALTER TABLE media_copies ADD COLUMN library_source_id INTEGER REFERENCES library_sources(id) ON DELETE SET NULL`,
+      `CREATE INDEX idx_media_copies_library ON media_copies(library_source_id, source_id)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

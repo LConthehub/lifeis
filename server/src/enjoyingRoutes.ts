@@ -2,7 +2,7 @@
  * The addresses for the calendar (/api/calendar) and the collection of films, shows, music, books and games
  * (/api/media). What they do is core/'s calendar.ts and media.ts; this only reads what was sent and passes it on.
  */
-import { calendar, calendarFeed, followedCalendars, media, FOLLOW_SERVICE, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
+import { calendar, calendarFeed, followedCalendars, importBookList, media, readBookList, FOLLOW_SERVICE, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
 import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -30,6 +30,7 @@ function titleFrom(body: Body) {
 const copyFrom = (body: Body) => ({
   format: read.text(body, 'format'), place_id: read.maybeWhole(body, 'place_id'), barcode: read.maybeText(body, 'barcode'),
   lent_to: read.maybeText(body, 'lent_to'), lent_on: read.maybeText(body, 'lent_on'), note: read.maybeText(body, 'note'),
+  ...(Object.hasOwn(body, 'link') ? { link: read.maybeText(body, 'link') } : {}),
 });
 
 export type FollowTools = { fetcher: Fetcher; sealer: Sealer };
@@ -95,6 +96,19 @@ export function enjoyingRoutes(db: Db, follow?: FollowTools): Route[] {
     ['POST', at('media/copies/:id/move'), async (c) => ({ json: await shelf(c).moveCopy(c.id, read.maybeWhole(c.body, 'place_id')) })],
     ['GET', at('media/copies/:id/history'), async (c) => ({ json: await shelf(c).copyHistory(c.id) })],
     ['DELETE', at('media/copies/:id'), async (c) => ({ json: await shelf(c).removeCopy(c.id) })],
+
+    // A list of books brought in at once (from Goodreads, a spreadsheet, or typed). Nothing is looked up. See bookList.ts.
+    ['POST', at('media/list/read'), async (c) => {
+      const { books, skipped } = readBookList(typeof c.body.text === 'string' ? c.body.text : '');
+      return { json: { count: books.length, skipped, first: books.slice(0, 8), to_read: books.filter((b) => b.shelf === 'to-read').length, dated: books.filter((b) => b.read_on).length, says_format: books.filter((b) => b.format).length } };
+    }],
+    ['POST', at('media/list'), async (c) => ({
+      status: 201,
+      json: await importBookList(db, c.user.id, c.clock, readBookList(typeof c.body.text === 'string' ? c.body.text : '').books, {
+        format: read.maybeText(c.body, 'format'), otherwise: read.maybeText(c.body, 'otherwise'),
+        to_read_as_wanted: read.yesNo(c.body, 'to_read_as_wanted', true), log_read: read.yesNo(c.body, 'log_read', true),
+      }),
+    })],
 
     ['POST', at('media/:id/log'), async (c) => ({
       status: 201,

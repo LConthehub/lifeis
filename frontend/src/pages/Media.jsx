@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import Scanner from '../components/Scanner';
 import PlacePicker from '../components/PlacePicker';
+import BookList from '../components/BookList';
+import { bookServerName } from '../components/BookServers';
 import { HistoryList } from './Thing';
 import { stickerCode } from './Places';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
@@ -13,6 +15,21 @@ const CREATOR = { film: 'Director', show: 'Made by', music: 'Artist', book: 'Aut
 const DID = { film: 'Watched', show: 'Watched', music: 'Listened', book: 'Read', game: 'Played', other: 'Enjoyed' };
 // Covers are only shown when Life Is keeps them itself: pictures are never fetched from other sites by the page.
 const localCover = (cover) => typeof cover === 'string' && cover.startsWith('/api/');
+/**
+ * What the button that follows a copy's link says: where it opens. A link is only ever followed when pressed.
+ */
+export function opensIn(link, source) {
+  if (!link) return null;
+  if (/^kindle:|read\.amazon\.|amazon\.[a-z.]+\/(kindle|gp\/product|dp)/i.test(link)) return 'Kindle';
+  if (/^(ibooks|applebooks):|books\.apple\.com/i.test(link)) return 'Apple Books';
+  if (/play\.google\.com\/(store\/)?books/i.test(link)) return 'Google Play Books';
+  if (/^audible:|audible\.[a-z.]+\//i.test(link)) return 'Audible';
+  if (/kobo\.com/i.test(link)) return 'Kobo';
+  if (source && source !== 'list') return sourceName(source);
+  try { return new URL(link).host; } catch { return 'its app'; }
+}
+const SOURCES = { jellyfin: 'Jellyfin', emby: 'Emby', list: 'a list' };
+const sourceName = (source) => SOURCES[source] ?? bookServerName(source);
 const commaList = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
 const isAudio = (format) => /audio/i.test(format);
 const isEbook = (format) => /e-?book|kindle|kobo|epub|nook/i.test(format);
@@ -28,11 +45,11 @@ export const LIBRARIES = {
   },
   ebooks: {
     type: 'book', title: 'eBooks', format: 'eBook', fits: (m) => m.formats.some(isEbook),
-    empty: "No eBooks yet. Add one and say what it's on: eBook, Kindle, Kobo, or anything you like.",
+    empty: "No eBooks yet. Add one and say what it's on (eBook, Kindle, Kobo, anything you like), bring in a list from Goodreads, or connect Calibre-Web or Kavita under Servers.",
   },
   audiobooks: {
     type: 'book', title: 'Audiobooks', format: 'Audiobook', fits: (m) => m.formats.some(isAudio),
-    empty: 'No audiobooks yet. Add one and say what it\'s on: Audiobook, Audible, CD, or anything with "audio" in it.',
+    empty: 'No audiobooks yet. Add one and say what it\'s on (Audiobook, Audible, CD, or anything with "audio" in it), bring in a list, or connect Audiobookshelf under Servers.',
   },
 };
 
@@ -48,6 +65,7 @@ export default function MediaPage({ library = null }) {
   const [q, setQ] = useState('');
   const [adding, setAdding] = useState(null);       // null, or what the new title starts with
   const [scanning, setScanning] = useState(false);
+  const [listing, setListing] = useState(false);
   const navigate = useNavigate();
   const load = useCallback(() => { axios.get('/api/media').then(({ data }) => setTitles(data)).catch(() => setTitles([])); }, []);
   useEffect(() => { load(); }, [load]);
@@ -62,6 +80,7 @@ export default function MediaPage({ library = null }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">{lib ? lib.title : 'Collection'}</h1>
+        {lib && <button type="button" onClick={() => setListing(true)} className={quietButtonClass}>Bring in a list</button>}
         <button type="button" onClick={() => setScanning(true)} className={quietButtonClass}>📷 Scan a barcode</button>
         <button type="button" onClick={() => setAdding({ type: type || 'film', format: lib?.format || '' })} className={buttonClass}>+ Add</button>
       </div>
@@ -110,6 +129,11 @@ export default function MediaPage({ library = null }) {
       {adding && (
         <Modal title="Add to the collection" onClose={() => setAdding(null)}>
           <TitleForm title={adding} withCopy onDone={(m) => navigate(`/media/${m.id}`)} />
+        </Modal>
+      )}
+      {listing && (
+        <Modal title="Bring in a list of books" onClose={() => { setListing(false); load(); }}>
+          <BookList format={lib?.format || ''} onDone={() => { setListing(false); load(); }} />
         </Modal>
       )}
       {scanning && (
@@ -336,11 +360,12 @@ export function MediaTitlePage() {
                     <span className="flex-1">
                       <span className="block text-sm text-gray-800 dark:text-life-50">{copy.format}</span>
                       <span className="block text-xs text-gray-500 dark:text-life-300">
-                        {[copy.place && `📍 ${copy.place}`, copy.source && `from ${copy.source}`, copy.barcode && `barcode ${copy.barcode}`, copy.note].filter(Boolean).join(' · ') || 'no place'}
+                        {[copy.place && `📍 ${copy.place}`, copy.source && `from ${sourceName(copy.source)}`, copy.barcode && `barcode ${copy.barcode}`, copy.note].filter(Boolean).join(' · ') || 'no place'}
                       </span>
                     </span>
                     {copy.lent_to && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">with {copy.lent_to} since {copy.lent_on}</span>}
                   </button>
+                  {copy.link && <a href={copy.link} target="_blank" rel="noopener noreferrer" className="py-2 text-xs font-medium text-life-600 hover:underline dark:text-life-200">Open in {opensIn(copy.link, copy.source)}</a>}
                   <button type="button" onClick={() => setModal({ history: copy })} className="py-2 text-xs text-life-600 hover:underline dark:text-life-200">History</button>
                 </li>
               ))}
@@ -389,7 +414,7 @@ function CopyHistory({ copy }) {
 
 function CopyForm({ title, copy, onDone }) {
   const [scanning, setScanning] = useState(false);
-  const [form, setForm] = useState({ format: copy.format || '', place_id: copy.place_id ?? '', barcode: copy.barcode || '', lent_to: copy.lent_to || '', lent_on: copy.lent_on || '', note: copy.note || '' });
+  const [form, setForm] = useState({ format: copy.format || '', place_id: copy.place_id ?? '', barcode: copy.barcode || '', lent_to: copy.lent_to || '', lent_on: copy.lent_on || '', note: copy.note || '', link: copy.link || '' });
   const [formats, setFormats] = useState([]);
   const [places, setPlaces] = useState([]);
   const [error, setError] = useState('');
@@ -400,7 +425,7 @@ function CopyForm({ title, copy, onDone }) {
   }, [title.type]);
   const submit = async (e) => {
     e.preventDefault();
-    const body = { format: form.format, place_id: form.place_id === '' ? null : Number(form.place_id), barcode: form.barcode || null, lent_to: form.lent_to || null, lent_on: form.lent_on || null, note: form.note || null };
+    const body = { format: form.format, place_id: form.place_id === '' ? null : Number(form.place_id), barcode: form.barcode || null, lent_to: form.lent_to || null, lent_on: form.lent_on || null, note: form.note || null, link: form.link.trim() || null };
     try { onDone((copy.id ? await axios.put(`/api/media/copies/${copy.id}`, body) : await axios.post(`/api/media/${title.id}/copies`, body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   const remove = async () => { try { onDone((await axios.delete(`/api/media/copies/${copy.id}`)).data); } catch (err) { setError(errorMessage(err, "Couldn't remove it")); } };
@@ -427,6 +452,12 @@ function CopyForm({ title, copy, onDone }) {
         {scanning && <div className="col-span-2"><Scanner onCode={(code) => { setForm((f) => ({ ...f, barcode: code })); setScanning(false); }} /></div>}
         <Field label="A note"><input value={form.note} onChange={set('note')} placeholder="the steelbook, ex-rental…" className={inputClass} /></Field>
       </div>
+      <Field label="A link that opens it (for one kept in an app or on a server)">
+        <input type="text" inputMode="url" value={form.link} onChange={set('link')} placeholder="https://read.amazon.com/…" className={inputClass} />
+      </Field>
+      <p className="text-xs text-gray-500 dark:text-life-300">
+        Open the book in Kindle, Apple Books or Google Play Books, use Share or copy its address, and paste it here. Life Is only keeps it: it's followed when you press it.
+      </p>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex items-center justify-between">
         {copy.id ? <button type="button" onClick={remove} className="text-sm text-red-600 hover:underline">Remove this copy</button> : <span />}

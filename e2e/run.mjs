@@ -50,6 +50,7 @@ const SUITE = [
   { specs: ['collection'], account: TRIAL },
   { specs: ['mail'], account: TRIAL, docker: true },
   { specs: ['media-servers'], account: TRIAL, fixtures: [['jellyfin', 8097]] },
+  { specs: ['book-servers'], account: TRIAL, fixtures: [['books', 8099]] },
   { specs: ['photo-library'], account: TRIAL, docker: true },
   { specs: ['touch-targets'], account: TRIAL },
   { specs: ['trial'], phone: true },

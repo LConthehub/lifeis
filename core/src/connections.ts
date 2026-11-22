@@ -41,7 +41,13 @@ export type Imported = {
   ids: Record<string, string>;
   /** Where the server keeps a picture of the cover, if it has one. */
   coverUrl: string | null;
+  /** What this copy is on, when it isn't simply the server's name: "eBook", "Audiobook". */
+  format?: string;
+  /** An address that opens it where it lives. */
+  link?: string | null;
 };
+/** Which kind of source copies belong to: a media server (the default) or a book server. */
+export type ImportAs = { column: 'connection_id' | 'library_source_id'; source: string; format: string };
 
 export type ConnectionInput = { kind: string; url: string; secret?: string | null; name?: string | null; every_hours?: number | null };
 export type Connection = {
@@ -160,8 +166,8 @@ const MATCH_IDS = ['tmdb', 'imdb', 'tvdb', 'isbn', 'musicbrainzalbum', 'musicbra
  * Make the collection's copies from one connection match what the server has now. Runs inside a transaction:
  * the collection is never left half-synced.
  */
-export async function applyImport(q: Queries, owner: number, connection: { id: number; kind: ServerKind }, items: Imported[], now: string) {
-  const format = NAMES[connection.kind];
+export async function applyImport(q: Queries, owner: number, connection: { id: number; kind: string }, items: Imported[], now: string, as?: ImportAs) {
+  const where: ImportAs = as ?? { column: 'connection_id', source: connection.kind, format: NAMES[connection.kind as ServerKind] };
   const titles = await q.all<{ id: number; type: string; title: string; year: number | null; ids: string | null }>(
     'SELECT id, type, title, year, ids FROM media WHERE owner_id = ?', [owner]);
   const byId = new Map<string, number>();
@@ -180,8 +186,8 @@ export async function applyImport(q: Queries, owner: number, connection: { id: n
     }
     remember(title.id, title.type, title.title, title.year, ids);
   }
-  const have = new Map((await q.all<{ id: number; media_id: number; source_id: string }>(
-    'SELECT id, media_id, source_id FROM media_copies WHERE connection_id = ?', [connection.id])).map((copy) => [copy.source_id, copy]));
+  const have = new Map((await q.all<{ id: number; media_id: number; source_id: string; link: string | null }>(
+    `SELECT id, media_id, source_id, link FROM media_copies WHERE ${where.column} = ?`, [connection.id])).map((copy) => [copy.source_id, copy]));
 
   const seen = new Set<string>();
   const result = { total: 0, added: 0, titles_added: 0, removed: 0 };
@@ -190,7 +196,10 @@ export async function applyImport(q: Queries, owner: number, connection: { id: n
     if (seen.has(item.sourceId)) continue;
     seen.add(item.sourceId);
     result.total += 1;
-    let mediaId = have.get(item.sourceId)?.media_id;
+    const had = have.get(item.sourceId);
+    let mediaId = had?.media_id;
+    // Where it opens may have moved (a server given a new address).
+    if (had && item.link && had.link !== item.link) await q.run('UPDATE media_copies SET link = ? WHERE id = ?', [item.link, had.id]);
     if (mediaId === undefined) {
       mediaId = MATCH_IDS.map((name) => (item.ids[name] ? byId.get(`${item.type}|${name}|${item.ids[name]}`) : undefined)).find((id) => id !== undefined)
         ?? byTitle.get(titleKey(item.type, item.title, item.year));
@@ -206,8 +215,8 @@ export async function applyImport(q: Queries, owner: number, connection: { id: n
         await q.run('UPDATE media SET wanted = 0 WHERE id = ? AND wanted = 1', [mediaId]); // having it answers the wanting
       }
       remember(mediaId, item.type, item.title, item.year, item.ids);
-      await q.run('INSERT INTO media_copies (media_id, format, source, source_id, connection_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        [mediaId, format, connection.kind, item.sourceId, connection.id, now]);
+      await q.run(`INSERT INTO media_copies (media_id, format, source, source_id, ${where.column}, link, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [mediaId, item.format ?? where.format, where.source, item.sourceId, connection.id, item.link ?? null, now]);
       result.added += 1;
     }
     if (item.coverUrl) wantsCover.push({ mediaId, url: item.coverUrl });
