@@ -58,17 +58,17 @@ async function fill(db: Db, me: number): Promise<void> {
 
   // ---- eating ----
   const k = kitchen(db, me);
-  const soup = await k.createRecipe({ title: 'Leek and potato soup', servings: 4, ingredients_text: '3 leeks, sliced\n2 large potatoes, diced\n1 onion\n4 cups vegetable stock\n1/2 cup cream', steps_text: 'Soften the leeks and onion in butter.\nAdd the potatoes and stock; simmer 20 minutes.\nBlend, then stir in the cream.', tags: ['soup', 'winter'] });
+  const soup = await k.createRecipe({ title: 'Leek and potato soup', servings: 4, ingredients_text: '3 leeks, sliced\n2 large potatoes, diced\n1 onion\n4 cups vegetable broth\n1/2 cup heavy cream', steps_text: 'Soften the leeks and onion in butter.\nAdd the potatoes and broth; simmer 20 minutes.\nBlend, then stir in the cream.', tags: ['soup', 'winter'] });
   const tacos = await k.createRecipe({ title: 'Sheet-pan chicken tacos', servings: 4, ingredients_text: '1.5 lb chicken thighs\n2 bell peppers\n1 red onion\n2 tbsp taco seasoning\n8 tortillas\n1 lime', steps_text: 'Toss everything but the tortillas with the seasoning.\nRoast at 425°F for 25 minutes.\nServe in warm tortillas with lime.', tags: ['weeknight'] });
   const muffins = await k.createRecipe({ title: 'Blueberry muffins', servings: 12, ingredients_text: '2 cups flour\n3/4 cup sugar\n2 tsp baking powder\n1 egg\n1 cup milk\n1/3 cup oil\n1.5 cups blueberries', steps_text: 'Mix dry and wet separately, then fold together with the berries.\nBake at 400°F for 20 minutes.', tags: ['baking', 'breakfast'] });
-  await k.createRecipe({ title: "Grandma's Sunday pot roast", servings: 6, ingredients_text: '3 lb chuck roast\n4 carrots\n3 potatoes\n1 onion\n2 cups beef stock\n2 sprigs rosemary', steps_text: 'Brown the roast on all sides.\nAdd everything else, cover, and cook low for 3 hours.', tags: ['sunday'] });
+  await k.createRecipe({ title: "Grandma's Sunday pot roast", servings: 6, ingredients_text: '3 lb chuck roast\n4 carrots\n3 potatoes\n1 onion\n2 cups beef broth\n2 sprigs rosemary', steps_text: 'Brown the roast on all sides.\nAdd everything else, cover, and cook low for 3 hours.', tags: ['sunday'] });
   await k.addPlan({ day: day(0), meal: 'dinner', recipe_id: tacos.id });
   await k.addPlan({ day: day(1), meal: 'dinner', recipe_id: soup.id });
   await k.addPlan({ day: day(2), meal: 'breakfast', recipe_id: muffins.id });
-  for (const item of ['2 litres milk', '1 dozen eggs', 'Tortillas', 'Limes', 'Dish soap']) await k.addGrocery({ label: item });
+  for (const item of ['1 gallon milk', '1 dozen eggs', 'Tortillas', 'Limes', 'Dish soap']) await k.addGrocery({ label: item });
   await k.savePantry({ name: 'Flour', quantity: 3, unit: 'lb', low_at: 1 });
   await k.savePantry({ name: 'Cream', quantity: 1, unit: 'cup', expires_on: day(2) });
-  await k.savePantry({ name: 'Vegetable stock', quantity: 2, unit: 'cup', low_at: 4 });
+  await k.savePantry({ name: 'Vegetable broth', quantity: 2, unit: 'cup', low_at: 4 });
 
   // ---- keeping: places, things with their records ----
   const things = inventory(db, me);
@@ -90,7 +90,7 @@ async function fill(db: Db, me: number): Promise<void> {
 
   const tv = await things.createItem({ kind_id: household, name: 'Television', place_id: living, records: { bought_on: day(-400), bought_at: 'Costco', price_cents: 79900, value_cents: 55000, model: 'QN55', serial: 'SN-48213-A', warranty_until: day(30) } });
   await things.createItem({ kind_id: household, name: 'Stand mixer', place_id: kitchenRoom, records: { bought_on: day(-900), price_cents: 32900, serial: 'KM-77120' }, activities: ['Baking'] });
-  const drill = await things.createItem({ kind_id: household, name: 'Cordless drill', place_id: toolShelf, records: { price_cents: 12900, model: 'DCD771' }, activities: ['DIY', 'Home maintenance'] });
+  const drill = await things.createItem({ kind_id: household, name: 'Cordless drill', place_id: toolShelf, records: { price_cents: 12900, model: 'DCD771' }, activities: ['Woodworking', 'Home maintenance'] });
   const ladder = await things.createItem({ kind_id: household, name: 'Step ladder', place_id: garage, activities: ['Home maintenance', 'Painting'] });
   const filters = await things.createItem({ kind_id: household, name: 'Furnace filter 16x25', quantity: 1, low_at: 1, place_id: basement });
   const car = await things.createItem({ kind_id: household, name: 'The car', place_id: garage, records: { model: 'Outback 2019' } });
@@ -115,10 +115,10 @@ async function fill(db: Db, me: number): Promise<void> {
   const making = projects(db, me);
   const dress = await making.createProject({ name: 'Linen summer dress', activity: 'Sewing', status: 'active', due_on: day(21) });
   await making.addLine(dress.id, { item_id: linen.id, quantity: 3 });
-  await making.addLine(dress.id, { label: '9 inch zip', quantity: 1 });
+  await making.addLine(dress.id, { label: '9 inch zipper', quantity: 1 });
   await making.addSession(dress.id, { day: day(-3), minutes: 90, note: 'Cut out the pieces' });
   await things.logUse(machine.id, { project_id: dress.id, day: day(-3) });
-  await making.createProject({ name: 'Garage shelves', activity: 'DIY', status: 'planned' });
+  await making.createProject({ name: 'Garage shelves', activity: 'Woodworking', status: 'planned' });
 
   // ---- upkeep: jobs, bills, renewals, chores ----
   const jobs = upkeep(db, me);
@@ -136,7 +136,7 @@ async function fill(db: Db, me: number): Promise<void> {
   const leo = family[0]!.id;
   const mia = (await jobs.addMember('Mia')).find((m) => m.name === 'Mia')!.id;
   await jobs.setPointValue(50);
-  const room = await jobs.create({ name: 'Tidy your room', kind: 'chore', points: 2, every_n: 1, every_unit: 'week', assigned_member: leo });
+  const room = await jobs.create({ name: 'Clean your room', kind: 'chore', points: 2, every_n: 1, every_unit: 'week', assigned_member: leo });
   const dishes = await jobs.create({ name: 'Do the dishes', kind: 'chore', points: 1, every_n: 1, every_unit: 'day' });
   const trash = await jobs.create({ name: 'Take out the trash', kind: 'chore', points: 2, every_n: 1, every_unit: 'week', assigned_member: mia });
   await jobs.done(room.id, { by_member: leo });
@@ -146,20 +146,20 @@ async function fill(db: Db, me: number): Promise<void> {
 
   // ---- pets ----
   const animals = pets(db, me);
-  const biscuit = await animals.create({ name: 'Biscuit', species: 'dog', breed: 'Beagle mix', born_on: day(-365 * 4 - 60), vet_name: 'Oak Lane Vets', vet_phone: '555 0100', microchip: '985112004512345', food: 'One cup, morning and evening', note: 'Scared of fireworks. No chicken treats.' });
+  const biscuit = await animals.create({ name: 'Biscuit', species: 'dog', breed: 'Beagle mix', born_on: day(-365 * 4 - 60), vet_name: 'Oak Lane Veterinary Clinic', vet_phone: '555 0100', microchip: '985112004512345', food: 'One cup, morning and evening', note: 'Scared of fireworks. No chicken treats.' });
   await animals.addCare(biscuit.id, { name: 'Vaccinations', every_n: 1, every_unit: 'year', last_done: day(-340) });
   await animals.addCare(biscuit.id, { name: 'Flea and tick treatment', every_n: 1, every_unit: 'month', last_done: day(-33) });
   await animals.addWeight(biscuit.id, { value: 27.5, unit: 'lb', day: day(-90) });
   await animals.addWeight(biscuit.id, { value: 28.2, unit: 'lb', day: day(-5) });
-  const pepper = await animals.create({ name: 'Pepper', species: 'cat', born_on: day(-365 * 7), vet_name: 'Oak Lane Vets', vet_phone: '555 0100', food: 'Half a tin twice a day; dry food always out' });
+  const pepper = await animals.create({ name: 'Pepper', species: 'cat', born_on: day(-365 * 7), vet_name: 'Oak Lane Veterinary Clinic', vet_phone: '555 0100', food: 'Half a can twice a day; dry food always out' });
   await animals.addCare(pepper.id, { name: 'Vet check-up', every_n: 1, every_unit: 'year', last_done: day(-200) });
 
   // ---- the house manual ----
   const book = manual(db, me);
-  await book.addEntry({ section: 'emergency', title: 'Water shut-off', body: 'Red lever behind the boiler.\nTurn it a quarter until it stops.', place_id: basement });
-  await book.addEntry({ section: 'emergency', title: 'Breaker box', body: 'Grey panel by the side door. Each switch is labelled.', place_id: garage });
+  await book.addEntry({ section: 'emergency', title: 'Water shut-off', body: 'Red lever behind the water heater.\nTurn it a quarter until it stops.', place_id: basement });
+  await book.addEntry({ section: 'emergency', title: 'Breaker box', body: 'Gray panel by the side door. Each switch is labeled.', place_id: garage });
   await book.addEntry({ section: 'contacts', title: 'Plumber', phone: '555 0142', body: 'Ask for Dana.' });
-  await book.addEntry({ section: 'contacts', title: 'A neighbor with a key', phone: '555 0177', body: 'The Okafors, at number 14.' });
+  await book.addEntry({ section: 'contacts', title: 'A neighbor with a key', phone: '555 0177', body: 'The Okafors, two doors down.' });
   await book.addEntry({ section: 'house', title: 'Wi-Fi', body: 'Network: SampleHome\nPassword: made-up-for-the-demo' });
   await book.addEntry({ section: 'house', title: 'Alarm', body: 'A code would go here. It is marked private, so it never appears on a shared link.', private: true });
   await book.addEntry({ section: 'routines', title: 'Trash and recycling days', body: 'Trash on Tuesday. Recycling every other Friday.' });
@@ -177,13 +177,13 @@ async function fill(db: Db, me: number): Promise<void> {
   const house = await spend.addCategory({ name: 'House', monthly_cents: 25000 });
   await spend.addCategory({ name: 'Fun', monthly_cents: 15000 });
   await spend.addEntry({ label: 'Farmers market', cents: 4250, category_id: groceries.id, day: day(-2) });
-  await spend.addEntry({ label: 'Weekly shop', cents: 11830, category_id: groceries.id, day: day(-5) });
+  await spend.addEntry({ label: 'Weekly grocery run', cents: 11830, category_id: groceries.id, day: day(-5) });
   await spend.addEntry({ label: 'Furnace filters (pack of 4)', cents: 3999, category_id: house.id, day: day(-6) });
 
   // ---- planning ----
   const cal = calendar(db, me);
-  await cal.createEvent({ title: 'Dentist', day: day(1), time: '15:30' });
-  await cal.createEvent({ title: "Mum's birthday", day: `1958-${day(9).slice(5)}`, yearly: true });
+  await cal.createEvent({ title: 'Dentist appointment', day: day(1), time: '15:30' });
+  await cal.createEvent({ title: "Mom's birthday", day: `1958-${day(9).slice(5)}`, yearly: true });
   await cal.createEvent({ title: 'School concert', day: day(11), time: '18:00' });
   const trip = await plans(db, me).create({ name: 'Cabin weekend', start_day: day(18), end_day: day(20), note: 'Bring the camping stove.' });
   await plans(db, me).addItem(trip.id, { kind: 'recipe', ref_id: soup.id }).catch(() => {});

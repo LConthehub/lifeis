@@ -121,7 +121,7 @@ export function ScanSticker() {
 
 const SIZES = { small: ['Small, 4 across', 'grid-cols-4', 'text-[9px]'], medium: ['Medium, 3 across', 'grid-cols-3', 'text-[11px]'], large: ['Large, 2 across', 'grid-cols-2', 'text-sm'] };
 
-/** A sheet of stickers to print: one for each place you tick, each a code your camera reads to show what's inside. */
+/** A sheet of stickers to print: one for each place you check, each a code your camera reads to show what's inside. */
 export function StickersPage() {
   const only = new URLSearchParams(window.location.search).get('only');
   const boxesOnly = new URLSearchParams(window.location.search).get('boxes');
@@ -132,7 +132,7 @@ export function StickersPage() {
   useEffect(() => {
     axios.get('/api/things/places/stickers').then(async ({ data }) => {
       setStickers(data);
-      // Asked for the boxes alone (from Packing): only those still to be moved are ticked.
+      // Asked for the boxes alone (from Packing): only those still to be moved are checked.
       const boxes = boxesOnly ? new Set((await axios.get('/api/things/packing').catch(() => ({ data: { boxes: [] } }))).data.boxes.filter((b) => b.state !== 'unpacked').map((b) => b.id)) : null;
       setChosen(boxes ? data.filter((s) => boxes.has(s.id)).map((s) => s.id) : only ? data.filter((s) => String(s.id) === only).map((s) => s.id) : data.map((s) => s.id));
       // The drawing is done here, in the browser: nothing about your places goes to a code-making website.
@@ -163,8 +163,8 @@ export function StickersPage() {
         {stickers.length === 0 ? <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>No places yet. Add a room, a shelf or a bin first.</div> : (
           <div className={`${cardClass} space-y-1`}>
             <div className="mb-1 flex gap-3 text-xs">
-              <button type="button" onClick={() => setChosen(stickers.map((s) => s.id))} className="text-life-600 hover:underline dark:text-life-200">Tick all</button>
-              <button type="button" onClick={() => setChosen([])} className="text-life-600 hover:underline dark:text-life-200">Untick all</button>
+              <button type="button" onClick={() => setChosen(stickers.map((s) => s.id))} className="text-life-600 hover:underline dark:text-life-200">Check all</button>
+              <button type="button" onClick={() => setChosen([])} className="text-life-600 hover:underline dark:text-life-200">Uncheck all</button>
             </div>
             {stickers.map((s) => (
               <label key={s.id} className="flex cursor-pointer items-center gap-2 text-sm text-gray-800 dark:text-life-50">

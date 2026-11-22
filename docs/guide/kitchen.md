@@ -24,7 +24,7 @@ Put recipes on days and meals. The front page shows today's, and the calendar sh
 
 ## Groceries
 
-Fill the list from the week's meals, less what the pantry already has, or add anything by hand. Scan a packet to add it. The list can be shown by shop, with each thing's usual size.
+Fill the list from the week's meals, less what the pantry already has, or add anything by hand. Scan a package to add it. The list can be shown by store, with each thing's usual size.
 
 ## The pantry
 

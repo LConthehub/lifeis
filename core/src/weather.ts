@@ -16,7 +16,7 @@ import { clean, rounded, type Clock } from './small.ts';
 export const WEATHER_SERVICE = {
   name: 'Open-Meteo',
   site: 'https://open-meteo.com',
-  sends: 'The words you type when looking for your town, and then the position of the place you choose (rounded to about a kilometre) each time the forecast is fetched. No account, no key, and nothing else about you.',
+  sends: 'The words you type when looking for your town, and then the position of the place you choose (rounded to about half a mile) each time the forecast is fetched. No account, no key, and nothing else about you.',
 };
 
 export type Units = 'c' | 'f';

@@ -138,7 +138,7 @@ function AddMeal({ day, onDone }) {
           {recipes.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
         </select>
       </Field>
-      {!form.recipe_id && <Field label="Or just say what it is"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Leftovers, eating out, takeaway" className={inputClass} /></Field>}
+      {!form.recipe_id && <Field label="Or just say what it is"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Leftovers, eating out, takeout" className={inputClass} /></Field>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex justify-end"><button type="submit" className={buttonClass}>Add</button></div>
     </form>

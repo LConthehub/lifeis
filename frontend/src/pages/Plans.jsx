@@ -322,7 +322,7 @@ function Picker({ kind, plan, onDone }) {
       {kind === 'recipe' && (
         <>
           <WhenEaten plan={plan} day={eaten.day} meal={eaten.meal} servings={eaten.servings} onChange={(day, meal, servings) => setEaten({ day, meal, servings })} />
-          <p className="text-xs text-gray-500 dark:text-life-300">On the week, it counts towards the grocery list and the pans and dishes that meal needs. It moves if the plan moves.</p>
+          <p className="text-xs text-gray-500 dark:text-life-300">On the week, it counts toward the grocery list and the pans and dishes that meal needs. It moves if the plan moves.</p>
         </>
       )}
       <Field label="A note"><input value={note} onChange={(e) => setNote(e.target.value)} className={inputClass} /></Field>
@@ -359,7 +359,7 @@ function AgainForm({ plan, onDone }) {
   };
   return (
     <form onSubmit={submit} className="space-y-3">
-      <p className="text-sm text-gray-600 dark:text-life-100">A new plan with the same food, things, titles and checklist (unticked). Food that was on the week goes on the new week, the same days in. This one stays as it is, with its story and photos.</p>
+      <p className="text-sm text-gray-600 dark:text-life-100">A new plan with the same food, things, titles and checklist (unchecked). Food that was on the week goes on the new week, the same days in. This one stays as it is, with its story and photos.</p>
       <Field label="Call the new one"><input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} /></Field>
       <Field label="Its first day"><input required type="date" value={form.start_day} onChange={(e) => setForm({ ...form, start_day: e.target.value })} className={inputClass} /></Field>
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -452,7 +452,7 @@ function PhotoView({ photo, onDone }) {
   );
 }
 
-/** The photos your library has from the plan's days. Tick the ones that belong; they are linked, not copied. */
+/** The photos your library has from the plan's days. Check the ones that belong; they are linked, not copied. */
 function LibraryPicker({ plan, onDone }) {
   const [photos, setPhotos] = useState(null);
   const [chosen, setChosen] = useState([]);
@@ -472,7 +472,7 @@ function LibraryPicker({ plan, onDone }) {
       {!error && photos.length === 0 && <p className="text-sm text-gray-600 dark:text-life-100">Your library has no photos taken on {plan.end_day === plan.start_day ? 'that day' : 'those days'}.</p>}
       {photos.length > 0 && (
         <>
-          <p className="text-sm text-gray-600 dark:text-life-100">Taken on {plan.end_day === plan.start_day ? 'its day' : 'its days'}. Tick the ones that belong here. They stay in Immich; the plan only remembers which they are.</p>
+          <p className="text-sm text-gray-600 dark:text-life-100">Taken on {plan.end_day === plan.start_day ? 'its day' : 'its days'}. Check the ones that belong here. They stay in Immich; the plan only remembers which they are.</p>
           <ul className="grid max-h-[55vh] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4 md:grid-cols-5">
             {photos.map((p) => (
               <li key={p.id}>
@@ -485,7 +485,7 @@ function LibraryPicker({ plan, onDone }) {
             ))}
           </ul>
           <div className="flex items-center justify-end gap-2">
-            {fresh.length > 1 && <button type="button" onClick={() => setChosen(fresh.map((p) => p.id))} className={quietButtonClass}>Tick all</button>}
+            {fresh.length > 1 && <button type="button" onClick={() => setChosen(fresh.map((p) => p.id))} className={quietButtonClass}>Check all</button>}
             <button type="button" disabled={chosen.length === 0} onClick={link} className={buttonClass}>Link {chosen.length || ''}</button>
           </div>
         </>

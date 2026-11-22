@@ -23,11 +23,11 @@ import { clean, stamp, type Clock } from './small.ts';
 
 export const LIBRARY_KINDS = ['audiobookshelf', 'calibre-web', 'kavita', 'opds'] as const;
 export type LibraryKind = (typeof LIBRARY_KINDS)[number];
-export const LIBRARY_NAMES: Record<LibraryKind, string> = { audiobookshelf: 'Audiobookshelf', 'calibre-web': 'Calibre-Web', kavita: 'Kavita', opds: 'An OPDS catalogue' };
+export const LIBRARY_NAMES: Record<LibraryKind, string> = { audiobookshelf: 'Audiobookshelf', 'calibre-web': 'Calibre-Web', kavita: 'Kavita', opds: 'An OPDS catalog' };
 /** What each asks for, so the page can ask the right questions. */
 export const LIBRARY_NEEDS: Record<LibraryKind, { address: string; key?: string; login?: boolean; hint: string }> = {
   audiobookshelf: { address: 'http://192.168.1.20:13378', key: 'API token', hint: 'In Audiobookshelf: Settings, Users, your user, then copy the API token.' },
-  'calibre-web': { address: 'http://192.168.1.20:8083', login: true, hint: 'Your Calibre-Web username and password. Life Is reads its catalogue at /opds.' },
+  'calibre-web': { address: 'http://192.168.1.20:8083', login: true, hint: 'Your Calibre-Web username and password. Life Is reads its catalog at /opds.' },
   kavita: { address: 'http://192.168.1.20:5000', key: 'API key', hint: 'In Kavita: your user settings, then 3rd Party Clients, then copy the API key.' },
   opds: { address: 'http://192.168.1.20:8080/opds/books', login: true, hint: 'The address of a list of books, not a menu. A username and password only if it asks for them.' },
 };
@@ -70,7 +70,7 @@ export type OpdsPage = { entries: OpdsEntry[]; next: string | null };
 
 /** One page of an OPDS catalogue, read. `at` is the page's own address, which the links in it are relative to. */
 export function readOpdsPage(xml: string, at: string): OpdsPage {
-  if (!/<feed[\s>]/i.test(xml)) throw new Problem(400, "That address answered, but not with a catalogue of books (an OPDS feed)");
+  if (!/<feed[\s>]/i.test(xml)) throw new Problem(400, "That address answered, but not with a catalog of books (an OPDS feed)");
   const resolve = (href: string) => { try { return new URL(href, at).href; } catch { return null; } };
   const entries: OpdsEntry[] = [];
   for (const [entry] of xml.matchAll(/<entry[\s>][\s\S]*?<\/entry>/gi)) {
@@ -117,7 +117,7 @@ async function get(fetcher: Fetcher, who: string, url: string, headers: Record<s
     throw new Problem(400, `Couldn't reach ${who} at that address. If it's on the same computer as Life Is, and Life Is runs in Docker, use http://host.docker.internal and its port instead of localhost.`);
   }
   if (answer.status === 401 || answer.status === 403) throw new Problem(400, `${who} didn't accept that sign-in`);
-  if (answer.status === 404) throw new Problem(400, `${who} has nothing at that address. Check the address, and that its catalogue is turned on.`);
+  if (answer.status === 404) throw new Problem(400, `${who} has nothing at that address. Check the address, and that its catalog is turned on.`);
   if (answer.status !== 200) throw new Problem(400, `${who} answered with an error (${answer.status})`);
   return answer;
 }

@@ -24,7 +24,7 @@ export default function Prices() {
       <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">Prices</h1>
       {data.trends.length === 0 ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
-          Nothing yet. On the <Link to="/groceries" className="underline">grocery list</Link>, type what each thing costs as it goes in the trolley. This page then shows how its price moves, where it was cheapest, and what you spend each month.
+          Nothing yet. On the <Link to="/groceries" className="underline">grocery list</Link>, type what each thing costs as it goes in the buggy. This page then shows how its price moves, where it was cheapest, and what you spend each month.
         </div>
       ) : (
         <>
@@ -75,10 +75,10 @@ export default function Prices() {
       )}
       <section className={cardClass}>
         <div className="mb-2 flex items-baseline gap-2">
-          <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">Your shops</h2>
-          <button type="button" onClick={() => setShop({})} className="text-sm text-life-600 hover:underline dark:text-life-200">+ Add a shop</button>
+          <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">Your stores</h2>
+          <button type="button" onClick={() => setShop({})} className="text-sm text-life-600 hover:underline dark:text-life-200">+ Add a store</button>
         </div>
-        {shops.length === 0 ? <p className="text-sm text-gray-400 dark:text-life-400">None yet. Add the shops you use, or just type one in "Shopping at" on the grocery list and it joins this list.</p> : (
+        {shops.length === 0 ? <p className="text-sm text-gray-400 dark:text-life-400">None yet. Add the stores you use, or just type one in "Shopping at" on the grocery list and it joins this list.</p> : (
           <ul className="divide-y divide-life-50 dark:divide-life-700">
             {shops.map((s) => (
               <li key={s.id}>
@@ -91,7 +91,7 @@ export default function Prices() {
           </ul>
         )}
       </section>
-      {shop && <Modal title={shop.id ? shop.name : 'A shop'} onClose={() => setShop(null)}><ShopForm shop={shop} onDone={(list) => { setShops(list); setShop(null); axios.get('/api/shopping/trends').then(({ data: d }) => setData(d)).catch(() => {}); }} /></Modal>}
+      {shop && <Modal title={shop.id ? shop.name : 'A store'} onClose={() => setShop(null)}><ShopForm shop={shop} onDone={(list) => { setShops(list); setShop(null); axios.get('/api/shopping/trends').then(({ data: d }) => setData(d)).catch(() => {}); }} /></Modal>}
       {open && <Modal title={open.name} wide onClose={() => setOpen(null)}><TrendView trend={open} sign={sign} /></Modal>}
     </div>
   );
@@ -113,7 +113,7 @@ function TrendView({ trend: t, sign }) {
       {t.points.length > 1 && <PriceChart trend={t} sign={sign} />}
       {t.shops.length > 1 && (
         <div>
-          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-life-700 dark:text-life-200">By shop, latest price at each</h3>
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-life-700 dark:text-life-200">By store, latest price at each</h3>
           <ul className="flex flex-wrap gap-2">
             {t.shops.map((p, i) => (
               <li key={p.store} className="rounded-lg bg-life-50/70 px-3 py-1.5 text-sm dark:bg-life-700/60">

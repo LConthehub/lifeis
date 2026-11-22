@@ -17,7 +17,7 @@ export const MANUAL_SECTIONS = [
   { id: 'emergency', title: 'In an emergency', hint: 'Where to shut things off, and what to grab.', ideas: ['Water shut-off', 'Gas shut-off', 'Breaker box', 'Fire extinguisher', 'First-aid kit', 'Where to meet outside'] },
   { id: 'contacts', title: 'Who to call', hint: 'People and their numbers.', ideas: ['Emergency contact', 'Doctor', 'Plumber', 'Electrician', 'Landlord', 'A neighbor with a key'] },
   { id: 'house', title: 'How the house works', hint: 'The things that are obvious only to you.', ideas: ['Wi-Fi', 'Thermostat', 'Alarm', 'Spare key', 'Hot water', 'TV and remotes'] },
-  { id: 'routines', title: 'Day to day', hint: 'What happens when.', ideas: ['Trash and recycling days', 'Plants to water', 'Mail and parcels', 'Bedtimes', 'Allergies and medicines'] },
+  { id: 'routines', title: 'Day to day', hint: 'What happens when.', ideas: ['Trash and recycling days', 'Plants to water', 'Mail and packages', 'Bedtimes', 'Allergies and medicines'] },
 ] as const;
 export type ManualSection = (typeof MANUAL_SECTIONS)[number]['id'];
 

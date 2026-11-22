@@ -18,13 +18,13 @@ export const STARTERS: Starter[] = [
   {
     slug: 'sewing',
     name: 'Sewing',
-    about: 'Fabric by the yard or metre, notions, and patterns.',
+    about: 'Fabric by the yard or meter, notions, and patterns.',
     kinds: [
       { name: 'Fabric', icon: '🧵', unit: 'yd', fields: [
-        choice('Type', 'Woven', 'Knit', 'Other'), text('Fibre'), number('Width', 'in'), text('Colour'), text('Print'),
+        choice('Type', 'Woven', 'Knit', 'Other'), text('Fiber'), number('Width', 'in'), text('Color'), text('Print'),
         number('Weight', 'gsm'), yesNo('Prewashed'), text('Bought from') ] },
       { name: 'Notions', icon: '🪡', fields: [
-        choice('Type', 'Thread', 'Zipper', 'Buttons', 'Elastic', 'Interfacing', 'Bias tape', 'Needles', 'Other'), text('Size'), text('Colour') ] },
+        choice('Type', 'Thread', 'Zipper', 'Buttons', 'Elastic', 'Interfacing', 'Bias tape', 'Needles', 'Other'), text('Size'), text('Color') ] },
       { name: 'Sewing patterns', icon: '✂️', fields: [
         text('Designer'), text('Pattern number'), text('Sizes'), text('Garment'), choice('Format', 'Paper', 'PDF', 'Traced'),
         yesNo('Cut out'), link('Link') ] },
@@ -39,7 +39,7 @@ export const STARTERS: Starter[] = [
         text('Maker'), text('Made'), text('Size'), text('Pattern or model number'),
         choice('Kind', 'Skillet', 'Dutch oven', 'Griddle', 'Grill pan', 'Bakeware', 'Other'),
         choice('Condition', 'Daily user', 'Good', 'Needs restoring', 'Display only'), date('Last seasoned'), text('Care notes'), text('Bought from'), number('Paid') ] },
-      { name: 'Pots and pans', icon: '🥘', fields: [text('Maker'), text('Size'), choice('Material', 'Stainless', 'Non-stick', 'Carbon steel', 'Copper', 'Enamel', 'Aluminium', 'Other'), yesNo('Oven safe'), text('Care notes')] },
+      { name: 'Pots and pans', icon: '🥘', fields: [text('Maker'), text('Size'), choice('Material', 'Stainless', 'Non-stick', 'Carbon steel', 'Copper', 'Enamel', 'Aluminum', 'Other'), yesNo('Oven safe'), text('Care notes')] },
       { name: 'Baking dishes', icon: '🥧', fields: [text('Size'), choice('Material', 'Glass', 'Ceramic', 'Metal', 'Stoneware', 'Silicone'), text('Maker'), yesNo('Has a lid')] },
       { name: 'Kitchen tools', icon: '🔪', fields: [text('Maker'), text('Size or model'), text('Care notes')] },
     ],
@@ -50,7 +50,7 @@ export const STARTERS: Starter[] = [
     about: 'Yarn, needles and hooks, and patterns.',
     kinds: [
       { name: 'Yarn', icon: '🧶', unit: 'skein', fields: [
-        text('Brand'), text('Colourway'), text('Fibre'),
+        text('Brand'), text('Colorway'), text('Fiber'),
         choice('Weight', 'Lace', 'Fingering', 'Sport', 'DK', 'Worsted', 'Aran', 'Bulky', 'Super bulky'),
         number('Length per skein', 'm'), text('Dye lot') ] },
       { name: 'Needles & hooks', icon: '🥢', fields: [
@@ -65,7 +65,7 @@ export const STARTERS: Starter[] = [
     kinds: [
       { name: 'Wood', icon: '🪵', unit: 'ft', fields: [text('Species'), number('Thickness', 'in'), number('Width', 'in'), choice('Form', 'Board', 'Sheet', 'Dowel', 'Offcut')] },
       { name: 'Hardware', icon: '🔩', fields: [choice('Type', 'Screws', 'Nails', 'Bolts', 'Hinges', 'Brackets', 'Other'), text('Size'), text('Finish')] },
-      { name: 'Finishes & glue', icon: '🧴', fields: [choice('Type', 'Stain', 'Oil', 'Varnish', 'Paint', 'Glue', 'Other'), text('Colour'), date('Opened on')] },
+      { name: 'Finishes & glue', icon: '🧴', fields: [choice('Type', 'Stain', 'Oil', 'Varnish', 'Paint', 'Glue', 'Other'), text('Color'), date('Opened on')] },
       { name: 'Plans', icon: '📐', fields: [text('From'), link('Link')] },
     ],
   },
@@ -86,11 +86,11 @@ export const STARTERS: Starter[] = [
     kinds: [
       { name: 'Clothes', icon: '👕', fields: [
         text('Size'), text('Whose'), choice('Type', 'Top', 'Bottom', 'Dress', 'Outerwear', 'Underwear', 'Sleepwear', 'Sportswear', 'Other'),
-        text('Brand'), text('Colour'), choice('Season', 'All year', 'Warm weather', 'Cold weather'), text('Care') ] },
-      { name: 'Shoes', icon: '👟', fields: [text('Size'), text('Whose'), text('Brand'), text('Colour'), choice('Season', 'All year', 'Warm weather', 'Cold weather')] },
+        text('Brand'), text('Color'), choice('Season', 'All year', 'Warm weather', 'Cold weather'), text('Care') ] },
+      { name: 'Shoes', icon: '👟', fields: [text('Size'), text('Whose'), text('Brand'), text('Color'), choice('Season', 'All year', 'Warm weather', 'Cold weather')] },
       { name: 'Bedding and linens', icon: '🛏', fields: [
         choice('Size', 'Cot', 'Twin', 'Twin XL', 'Full', 'Queen', 'King', 'Cal King', 'Other'), choice('Type', 'Sheets', 'Duvet cover', 'Blanket', 'Pillowcase', 'Towel', 'Tablecloth', 'Other'),
-        text('For which bed or room'), text('Colour') ] },
+        text('For which bed or room'), text('Color') ] },
     ],
   },
   {
@@ -99,7 +99,7 @@ export const STARTERS: Starter[] = [
     about: 'Tools, paint for each room, filters and bulbs, and what is in storage.',
     kinds: [
       { name: 'Tools', icon: '🧰', fields: [text('Brand'), text('Model'), date('Bought on'), text('Lent to')] },
-      { name: 'Paint', icon: '🎨', fields: [text('Brand'), text('Colour name'), text('Colour code'), choice('Finish', 'Matt', 'Eggshell', 'Satin', 'Gloss'), text('Used in'), date('Opened on')] },
+      { name: 'Paint', icon: '🎨', fields: [text('Brand'), text('Color name'), text('Color code'), choice('Finish', 'Matt', 'Eggshell', 'Satin', 'Gloss'), text('Used in'), date('Opened on')] },
       { name: 'Spares', icon: '💡', fields: [text('Fits'), text('Size or model')] },
     ],
   },

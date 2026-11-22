@@ -332,7 +332,7 @@ function FieldForm({ field, onDone }) {
   };
   return (
     <form onSubmit={submit} className="space-y-3">
-      <Field label="What it's called *"><input required autoFocus value={form.name} onChange={set('name')} placeholder="e.g. Colour" className={inputClass} /></Field>
+      <Field label="What it's called *"><input required autoFocus value={form.name} onChange={set('name')} placeholder="e.g. Color" className={inputClass} /></Field>
       <Field label="What goes in it">
         <select value={form.type} onChange={set('type')} disabled={!!field.id} className={inputClass}>{TYPES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
       </Field>

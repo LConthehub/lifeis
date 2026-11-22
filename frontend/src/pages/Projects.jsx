@@ -27,7 +27,7 @@ export default function Projects() {
       </div>
       {projects.length === 0 && (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
-          No projects yet. A project is anything you make or do over more than a day: a dress, a jumper, a bookshelf, the spring planting.
+          No projects yet. A project is anything you make or do over more than a day: a dress, a sweater, a bookshelf, the spring planting.
           It lists what it uses from <Link to="/things" className="underline">your things</Link>, tells you what you're short of, and keeps the days you worked on it.
         </div>
       )}
@@ -267,7 +267,7 @@ function LineForm({ projectId, items, onDone }) {
           <option value="">Something I don't have yet</option>
         </select>
       </Field>
-      {!item && <Field label="What it is *"><input required value={form.label} onChange={set('label')} placeholder="e.g. 9 inch zip" className={inputClass} /></Field>}
+      {!item && <Field label="What it is *"><input required value={form.label} onChange={set('label')} placeholder="e.g. 9 inch zipper" className={inputClass} /></Field>}
       <div className="grid grid-cols-2 gap-3">
         <Field label="How much it needs"><input type="number" min="0" step="any" value={form.quantity} onChange={set('quantity')} className={inputClass} /></Field>
         <Field label="Unit"><input value={form.unit} onChange={set('unit')} placeholder={item?.unit || ''} className={inputClass} /></Field>
@@ -283,7 +283,7 @@ function LineForm({ projectId, items, onDone }) {
 function SessionForm({ projectId, onDone }) {
   const [form, setForm] = useState({ day: toDateInput(new Date()), hours: '', minutes: '', note: '' });
   const [error, setError] = useState('');
-  // What kept the session company, from the collection: found by typing, ticked to add.
+  // What kept the session company, from the collection: found by typing, checked to add.
   const [titles, setTitles] = useState([]);
   const [chosen, setChosen] = useState([]);
   const [find, setFind] = useState('');

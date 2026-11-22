@@ -54,7 +54,7 @@ function checkedKinds(kinds: string[] | null | undefined): EntryKind[] {
   if (kinds === null || kinds === undefined) return FEED_KINDS.filter((k) => k.usual).map((k) => k.key);
   if (!kinds.every((k) => KNOWN.has(k))) throw new Problem(400, "That isn't something the calendar holds");
   const chosen = FEED_KINDS.map((k) => k.key).filter((k) => kinds.includes(k));
-  if (chosen.length === 0) throw new Problem(400, 'Tick at least one thing to show');
+  if (chosen.length === 0) throw new Problem(400, 'Check at least one thing to show');
   return chosen;
 }
 

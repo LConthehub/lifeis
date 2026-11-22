@@ -32,7 +32,7 @@
   .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 1rem; padding: 1.1rem 1.2rem; }
   .card h3 { margin: 0 0 .3rem; font-size: 1.05rem; } .card p { margin: 0; color: var(--soft); font-size: .95rem; }
-  .card .icon { font-size: 1.5rem; }
+  .card .icon { font-size: 1.5rem; } .card h3 .lifeis { font-weight: 400; color: var(--soft); }
   .shots { display: grid; gap: 1.2rem; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
   figure { margin: 0; } figure img { width: 100%; height: auto; border-radius: .8rem; border: 1px solid var(--line); display: block; } figcaption { font-size: .9rem; color: var(--soft); margin-top: .4rem; }
   .price { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
@@ -64,17 +64,14 @@
 <img class="shot" src="img/demo-home.png" alt="The front page: today, tomorrow and what needs you" width="1280" height="900">
 
 <h2 id="what">What it does</h2>
-<p class="lede">Each part finishes the sentence "Life is…". Use one, or all of them. They know about each other: a tool you scan into the garage is the same tool a job needs and a project uses.</p>
+<p class="lede">Six parts, and each finishes the sentence "Life is…". Use one, or all of them. They know about each other: a tool you scan into the garage is the same tool a job needs and a project uses.</p>
 <div class="grid">
-  <div class="card"><div class="icon" aria-hidden="true">🍳</div><h3>Eating</h3><p>Recipes kept exactly as you wrote them, the week's meals, a grocery list that knows your pantry, and what things cost.</p></div>
-  <div class="card"><div class="icon" aria-hidden="true">📦</div><h3>Keeping</h3><p>Everything you own, room by room. Scan a shelf to fill it in. Each thing remembers where it has been and what it was used for.</p></div>
-  <div class="card"><div class="icon" aria-hidden="true">🔧</div><h3>Upkeep</h3><p>The furnace filter, the oil change, the rent, the passport, the chores. Each comes due, reminds you, and keeps every time it was done.</p></div>
-  <div class="card"><div class="icon" aria-hidden="true">🏠</div><h3>Home records</h3><p>Receipts, manuals, serial numbers and warranties beside each thing, and a home inventory to print for your insurer.</p></div>
-  <div class="card"><div class="icon" aria-hidden="true">🐾</div><h3>Pets</h3><p>Their vet, microchip, food and weight, and care that comes round: vaccinations, flea treatment, the check-up.</p></div>
-  <div class="card"><div class="icon" aria-hidden="true">📒</div><h3>House manual</h3><p>Where the water shuts off, the Wi-Fi, who to call. Print it, or share it with a sitter by a link that stops working when you say.</p></div>
-  <div class="card"><div class="icon" aria-hidden="true">🧵</div><h3>Making</h3><p>Projects with what they use, what they cost and the time on them, tied to the things and tools you already have.</p></div>
-  <div class="card"><div class="icon" aria-hidden="true">📚</div><h3>Enjoying</h3><p>Books, films, music and games on every format, who has borrowed what, and what you watched or read and when.</p></div>
-  <div class="card"><div class="icon" aria-hidden="true">💵</div><h3>Spending</h3><p>A plan for the month by category, private unless you share it. Bills you pay go straight in.</p></div>
+  <div class="card"><div class="icon" aria-hidden="true">🍳</div><h3><span class="lifeis">Life is</span> eating.</h3><p>Recipes kept exactly as you wrote them, the meals for the week, a grocery list that knows your pantry, and what things cost at each store.</p></div>
+  <div class="card"><div class="icon" aria-hidden="true">🏠</div><h3><span class="lifeis">Life is</span> keeping.</h3><p>Everything you own, room by room, with its receipt, manual and warranty. Upkeep that comes due: the furnace filter, the oil change, the bills, the chores. Care for your pets. And a house manual to hand a sitter.</p></div>
+  <div class="card"><div class="icon" aria-hidden="true">💵</div><h3><span class="lifeis">Life is</span> spending.</h3><p>A plan for the month by category, private unless you share it. Bills you pay go straight in.</p></div>
+  <div class="card"><div class="icon" aria-hidden="true">📅</div><h3><span class="lifeis">Life is</span> planning.</h3><p>One calendar for your dates, the meals for the week and what is due. Plans for a trip or a party, with their food, their packing and their photos.</p></div>
+  <div class="card"><div class="icon" aria-hidden="true">🧵</div><h3><span class="lifeis">Life is</span> making.</h3><p>Projects with what they use, what they cost and the time on them, tied to the things and tools you already have.</p></div>
+  <div class="card"><div class="icon" aria-hidden="true">📚</div><h3><span class="lifeis">Life is</span> entertaining.</h3><p>Books, films, music and games on every format, on the shelf or on your own server. Who has borrowed what, and what you watched or read and when.</p></div>
 </div>
 
 <h2>One search, and reminders that reach you</h2>

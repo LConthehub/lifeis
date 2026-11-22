@@ -48,7 +48,7 @@ export function LifeAreasPicker({ onSaved, onSkip, saveLabel = 'Save' }) {
       ))}
       <p className="text-xs text-gray-500 dark:text-life-300">
         Life Is shows the parts that fit. Each thing you make and do adds ready-made kinds of things to start from, which you can rename, change or remove.
-        Unticking something later only puts it out of sight: nothing you've saved is removed.
+        Unchecking something later only puts it out of sight: nothing you've saved is removed.
       </p>
       {message && <p className={`rounded-lg px-3 py-2 text-sm ${message.ok ? 'bg-life-50 text-life-800 dark:bg-life-700 dark:text-life-50' : 'bg-red-50 text-red-700'}`}>{message.ok || message.error}</p>}
       <div className="flex justify-end gap-2">
@@ -64,7 +64,7 @@ export function LifeFirstRun({ open, onDone }) {
   if (!open) return null;
   return (
     <Modal title="What does life need looking after?" onClose={onDone}>
-      <p className="mb-3 text-sm text-gray-600 dark:text-life-100">Tick everything that applies. Life Is sets itself up to match, and you can change it any time in Settings.</p>
+      <p className="mb-3 text-sm text-gray-600 dark:text-life-100">Check everything that applies. Life Is sets itself up to match, and you can change it any time in Settings.</p>
       <LifeAreasPicker saveLabel="Set up Life Is" onSaved={(data) => setTimeout(() => onDone(data), data.added.length ? 1400 : 300)} onSkip={() => onDone()} />
     </Modal>
   );

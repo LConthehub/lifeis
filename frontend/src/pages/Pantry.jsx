@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, cardClass, errorMessage } from '../components/ui';
 
-const LOCATIONS = [['fridge', 'Fridge'], ['freezer', 'Freezer'], ['pantry', 'Cupboard'], ['spices', 'Spices'], ['other', 'Elsewhere']];
+const LOCATIONS = [['fridge', 'Fridge'], ['freezer', 'Freezer'], ['pantry', 'Cabinet'], ['spices', 'Spices'], ['other', 'Elsewhere']];
 const BLANK = { name: '', quantity: '', unit: '', location: 'pantry', expires_on: '', low_at: '' };
 
 /** What's in the house, where, how much, and what's running out or going off. */
@@ -30,7 +30,7 @@ export default function Pantry() {
       )}
       {data.items.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find something" aria-label="Find in the pantry" className={`${inputClass} max-w-sm`} />}
       {data.items.length === 0 ? (
-        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing here yet. Add what you have, or tick things off the grocery list and they land here.</div>
+        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing here yet. Add what you have, or check things off the grocery list and they land here.</div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {LOCATIONS.map(([id, label]) => {

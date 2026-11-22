@@ -122,7 +122,7 @@ function RecordsForm({ item, onDone }) {
     <form onSubmit={submit} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <Field label="Bought on"><input type="date" value={form.bought_on} onChange={set('bought_on')} className={inputClass} /></Field>
-        <Field label="Bought at"><input value={form.bought_at} onChange={set('bought_at')} placeholder="The shop, or who from" className={inputClass} /></Field>
+        <Field label="Bought at"><input value={form.bought_at} onChange={set('bought_at')} placeholder="The store, or who from" className={inputClass} /></Field>
         <Field label="What it cost"><input inputMode="decimal" value={form.price} onChange={set('price')} placeholder="0.00" className={inputClass} /></Field>
         <Field label="Worth now (if different)"><input inputMode="decimal" value={form.value} onChange={set('value')} placeholder="0.00" className={inputClass} /></Field>
         <Field label="Model"><input value={form.model} onChange={set('model')} className={inputClass} /></Field>

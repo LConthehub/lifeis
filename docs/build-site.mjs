@@ -88,16 +88,15 @@ const policy = readFileSync(path.join(here, 'privacy.md'), 'utf8');
 writeFileSync(path.join(out, 'privacy.html'), page('Life Is privacy policy', `<nav><a href="./">Life Is</a></nav>\n${html(policy)}`));
 // The front page has a layout of its own: wider, with pictures of the demo and a way into it.
 const DEMO = 'https://demo.lifeis.living';
+// One card for each section of the app, in the app's order and by the app's names (frontend/src/App.jsx).
+// Each name finishes the sentence "Life is…".
 const FEATURES = [
-  ['🍳', 'Eating', 'Recipes kept exactly as you wrote them, the week\'s meals, a grocery list that knows your pantry, and what things cost.'],
-  ['📦', 'Keeping', 'Everything you own, room by room. Scan a shelf to fill it in. Each thing remembers where it has been and what it was used for.'],
-  ['🔧', 'Upkeep', 'The furnace filter, the oil change, the rent, the passport, the chores. Each comes due, reminds you, and keeps every time it was done.'],
-  ['🏠', 'Home records', 'Receipts, manuals, serial numbers and warranties beside each thing, and a home inventory to print for your insurer.'],
-  ['🐾', 'Pets', 'Their vet, microchip, food and weight, and care that comes round: vaccinations, flea treatment, the check-up.'],
-  ['📒', 'House manual', 'Where the water shuts off, the Wi-Fi, who to call. Print it, or share it with a sitter by a link that stops working when you say.'],
-  ['🧵', 'Making', 'Projects with what they use, what they cost and the time on them, tied to the things and tools you already have.'],
-  ['📚', 'Enjoying', 'Books, films, music and games on every format, who has borrowed what, and what you watched or read and when.'],
-  ['💵', 'Spending', 'A plan for the month by category, private unless you share it. Bills you pay go straight in.'],
+  ['🍳', 'eating', 'Recipes kept exactly as you wrote them, the meals for the week, a grocery list that knows your pantry, and what things cost at each store.'],
+  ['🏠', 'keeping', 'Everything you own, room by room, with its receipt, manual and warranty. Upkeep that comes due: the furnace filter, the oil change, the bills, the chores. Care for your pets. And a house manual to hand a sitter.'],
+  ['💵', 'spending', 'A plan for the month by category, private unless you share it. Bills you pay go straight in.'],
+  ['📅', 'planning', 'One calendar for your dates, the meals for the week and what is due. Plans for a trip or a party, with their food, their packing and their photos.'],
+  ['🧵', 'making', 'Projects with what they use, what they cost and the time on them, tied to the things and tools you already have.'],
+  ['📚', 'entertaining', 'Books, films, music and games on every format, on the shelf or on your own server. Who has borrowed what, and what you watched or read and when.'],
 ];
 const SHOTS = [['demo-home.png', 'The front page: today, tomorrow and what needs you'], ['demo-upkeep.png', 'Upkeep: jobs, bills, renewals and chores, by how soon they are due'],
   ['demo-inventory.png', 'The home inventory, room by room'], ['demo-pets.png', 'Pets, with what is next for each']];
@@ -142,7 +141,7 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
   .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 1rem; padding: 1.1rem 1.2rem; }
   .card h3 { margin: 0 0 .3rem; font-size: 1.05rem; } .card p { margin: 0; color: var(--soft); font-size: .95rem; }
-  .card .icon { font-size: 1.5rem; }
+  .card .icon { font-size: 1.5rem; } .card h3 .lifeis { font-weight: 400; color: var(--soft); }
   .shots { display: grid; gap: 1.2rem; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
   figure { margin: 0; } figure img { width: 100%; height: auto; border-radius: .8rem; border: 1px solid var(--line); display: block; } figcaption { font-size: .9rem; color: var(--soft); margin-top: .4rem; }
   .price { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
@@ -174,9 +173,9 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
 ${shots[0] ? `<img class="shot" src="img/${shots[0][0]}" alt="${safe(shots[0][1])}" width="1280" height="900">` : ''}
 
 <h2 id="what">What it does</h2>
-<p class="lede">Each part finishes the sentence "Life is…". Use one, or all of them. They know about each other: a tool you scan into the garage is the same tool a job needs and a project uses.</p>
+<p class="lede">Six parts, and each finishes the sentence "Life is…". Use one, or all of them. They know about each other: a tool you scan into the garage is the same tool a job needs and a project uses.</p>
 <div class="grid">
-${FEATURES.map(([icon, title, text]) => `  <div class="card"><div class="icon" aria-hidden="true">${icon}</div><h3>${safe(title)}</h3><p>${safe(text)}</p></div>`).join('\n')}
+${FEATURES.map(([icon, title, text]) => `  <div class="card"><div class="icon" aria-hidden="true">${icon}</div><h3><span class="lifeis">Life is</span> ${safe(title)}.</h3><p>${safe(text)}</p></div>`).join('\n')}
 </div>
 
 <h2>One search, and reminders that reach you</h2>

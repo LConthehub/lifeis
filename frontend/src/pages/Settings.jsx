@@ -19,7 +19,7 @@ const GROUPS = [
   {
     id: 'home', label: 'Your home', icon: '🏠',
     sections: [
-      { id: 'life', title: 'What Life Is looks after', words: 'sections areas sewing garden cookware clothing money spending show hide', render: ({ onLifeChanged }) => <Titled title="What Life Is looks after" hint="Decides which sections show. Nothing is removed by unticking."><LifeAreasPicker onSaved={onLifeChanged} /></Titled> },
+      { id: 'life', title: 'What Life Is looks after', words: 'sections areas sewing garden cookware clothing money spending show hide', render: ({ onLifeChanged }) => <Titled title="What Life Is looks after" hint="Decides which sections show. Nothing is removed by unchecking."><LifeAreasPicker onSaved={onLifeChanged} /></Titled> },
     ],
   },
   {
@@ -440,7 +440,7 @@ function CalendarLink() {
             </label>
           ))}
         </div>
-        {kinds.length === 0 && <p className="mt-1 text-xs text-red-600">Tick at least one.</p>}
+        {kinds.length === 0 && <p className="mt-1 text-xs text-red-600">Check at least one.</p>}
       </fieldset>
       {!link.on ? (
         <button type="button" disabled={kinds.length === 0} onClick={() => ask(() => axios.put('/api/calendar/link', { kinds }))} className={buttonClass}>Make a link</button>
@@ -459,7 +459,7 @@ function CalendarLink() {
             </p>
           )}
           <ul className="list-disc space-y-1 pl-5 text-xs text-gray-600 dark:text-life-200">
-            <li>Anyone who has this link can read what's ticked above, without a password. Treat it like a key, and don't post it anywhere.</li>
+            <li>Anyone who has this link can read what's checked above, without a password. Treat it like a key, and don't post it anywhere.</li>
             <li>It reaches from {link.days_back} days back to a year ahead, and a calendar app looks again about once an hour, so a change takes a little while to show.</li>
             <li>A calendar app on your own phone or computer fetches it straight from your Life Is. An online calendar (Google Calendar, Outlook on the web) fetches it from that company's computers, so they would see what's in it.</li>
             <li>{link.read_at ? `Last fetched ${new Date(link.read_at).toLocaleString()}.` : 'Nothing has fetched it yet.'}</li>
@@ -729,7 +729,7 @@ function BookLookupService() {
         <span className={`rounded px-1.5 text-[11px] ${l.groceries ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.groceries ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
-        Scan a packet Life Is hasn't seen and its name is filled in for you to check, from <a href={l.grocery_service.site} target="_blank" rel="noreferrer" className="underline">{l.grocery_service.name}</a>.
+        Scan a package Life Is hasn't seen and its name is filled in for you to check, from <a href={l.grocery_service.site} target="_blank" rel="noreferrer" className="underline">{l.grocery_service.name}</a>.
         {' '}<span className="font-medium">What it's sent:</span> {l.grocery_service.sends} Scanning works without it; you just type the name yourself the first time.
       </p>
       {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p>

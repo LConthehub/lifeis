@@ -36,7 +36,7 @@ The app reaches outside your device only when you use a feature that needs to, a
 
 | When you | The app contacts | And sends |
 | --- | --- | --- |
-| Turn on the weather | Open-Meteo | The town name you type, then the rounded position (to about a kilometre) of the place you pick |
+| Turn on the weather | Open-Meteo | The town name you type, then the rounded position (to about half a mile) of the place you pick |
 | Scan a book's barcode | Open Library | The number under the barcode |
 | Scan a grocery's barcode | Open Food Facts | The number under the barcode |
 | Bring in a recipe from a website | The website whose address you paste | A request for that one page, as a browser would make |

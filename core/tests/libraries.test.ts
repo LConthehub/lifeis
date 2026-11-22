@@ -60,7 +60,7 @@ it('a page of a catalogue is read: titles, authors, the year, the ISBN, and word
   });
   expect(page.entries[0]!.summary).toBe('<p>A novel of <b>manners</b>.</p>');
   expect(page.entries[1]).toMatchObject({ title: 'By author', book: false, leads: 'http://shelf.test/opds/author' });
-  expect(() => readOpdsPage('<html><body>Sign in</body></html>', 'http://shelf.test')).toThrow(/catalogue/);
+  expect(() => readOpdsPage('<html><body>Sign in</body></html>', 'http://shelf.test')).toThrow(/catalog/);
 });
 
 // ---------- Calibre-Web ----------

@@ -165,7 +165,7 @@ function CategoryForm({ category, people, onDone }) {
       {people.length > 0 ? (
         <fieldset>
           <legend className="text-sm font-medium text-gray-700 dark:text-life-100">Who sees it</legend>
-          <p className="mb-1 text-xs text-gray-500 dark:text-life-300">Only you, unless you tick someone. They see this category and what's spent in it, and can add to it. They can't change its amount or see any other category.</p>
+          <p className="mb-1 text-xs text-gray-500 dark:text-life-300">Only you, unless you check someone. They see this category and what's spent in it, and can add to it. They can't change its amount or see any other category.</p>
           {people.map((p) => (
             <label key={p.id} className="flex items-center gap-2 py-1 text-sm text-gray-800 dark:text-life-50">
               <input type="checkbox" checked={shared.includes(p.id)} onChange={() => toggle(p.id)} /> {p.username}

@@ -5,9 +5,9 @@ import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, err
 // What each book server asks for. The same words are in core/'s libraries.ts.
 export const BOOK_SERVERS = {
   audiobookshelf: { name: 'Audiobookshelf', address: 'http://192.168.1.20:13378', key: 'API token', hint: 'In Audiobookshelf: Settings, then Users, then your user. Copy the API token.' },
-  'calibre-web': { name: 'Calibre-Web', address: 'http://192.168.1.20:8083', login: true, hint: 'Your Calibre-Web username and password. Life Is reads its catalogue at /opds, which that user must be allowed to see.' },
+  'calibre-web': { name: 'Calibre-Web', address: 'http://192.168.1.20:8083', login: true, hint: 'Your Calibre-Web username and password. Life Is reads its catalog at /opds, which that user must be allowed to see.' },
   kavita: { name: 'Kavita', address: 'http://192.168.1.20:5000', key: 'API key', hint: 'In Kavita: your user settings, then 3rd Party Clients (or API key / OPDS). Copy the API key.' },
-  opds: { name: 'Another catalogue (OPDS)', address: 'http://192.168.1.20:8080/opds/books', login: true, optional: true, hint: 'For Calibre, Komga, COPS and others: the address of a list of books, not of a menu. A username and password only if it asks for them.' },
+  opds: { name: 'Another catalog (OPDS)', address: 'http://192.168.1.20:8080/opds/books', login: true, optional: true, hint: 'For Calibre, Komga, COPS and others: the address of a list of books, not of a menu. A username and password only if it asks for them.' },
 };
 const EVERY = [[0, 'Only when I ask'], [1, 'Every hour'], [6, 'Every 6 hours'], [24, 'Once a day'], [168, 'Once a week']];
 const when = (stamp) => (stamp ? new Date(stamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : null);

@@ -167,7 +167,7 @@ function EntryForm({ entry, sections, places, onPlaces, onDone }) {
         </Field>
       </div>
       <Field label={person ? 'Anything to know about them' : 'What to know'}>
-        <textarea rows={4} autoFocus={Boolean(form.title) && !entry.id} value={form.body} onChange={set('body')} placeholder={person ? 'Ask for Dana. Has a key.' : 'The red lever behind the boiler: turn it a quarter.'} className={inputClass} />
+        <textarea rows={4} autoFocus={Boolean(form.title) && !entry.id} value={form.body} onChange={set('body')} placeholder={person ? 'Ask for Dana. Has a key.' : 'The red lever behind the water heater: turn it a quarter.'} className={inputClass} />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="A phone number"><input type="tel" value={form.phone} onChange={set('phone')} className={inputClass} /></Field>

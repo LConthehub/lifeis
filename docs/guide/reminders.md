@@ -29,7 +29,7 @@ Every way is off until you turn it on, and says what it sends.
 
 ## Choosing what it covers
 
-Tick or untick each kind of reminder. Turn off what you do not want to hear about.
+Check or uncheck each kind of reminder. Turn off what you do not want to hear about.
 
 ## Time zones
 

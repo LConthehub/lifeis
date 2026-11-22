@@ -11,7 +11,7 @@ The quickest way to see it is the [demo](https://demo.lifeis.living): a made-up 
 ## Your first five minutes
 
 1. **Make your account.** On a computer, the first account is made on that computer itself, at `http://localhost:8020`. That first account is the admin. Use a password of 12 or more characters and keep it somewhere safe: nobody can reset it for you.
-2. **Say what Life Is should look after.** It asks once: cooking, the things you keep, projects, films and books, money. Tick what you want; the rest stays out of your way. You can change this later in Settings.
+2. **Say what Life Is should look after.** It asks once: cooking, the things you keep, projects, films and books, money. Check what you want; the rest stays out of your way. You can change this later in Settings.
 3. **Look at the front page.** It shows today and the next two days, and what needs you. Each card can be hidden with **Choose what shows**.
 
 ## Three things worth doing on day one

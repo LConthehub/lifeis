@@ -76,13 +76,13 @@ export default function Groceries() {
   const open = items.filter((g) => !g.done);
   const done = items.filter((g) => g.done);
   // The heading each thing sits under. By shop, where you are now comes first and "any shop" last.
-  const groupOf = (g) => (by === 'shop' ? lineOf(g).likely_store || 'Any shop' : g.aisle || 'Everything else');
+  const groupOf = (g) => (by === 'shop' ? lineOf(g).likely_store || 'Any store' : g.aisle || 'Everything else');
   const here = (shop.store || '').toLowerCase();
   const aisles = [...new Set(open.map(groupOf))].sort((a, b) => (by !== 'shop' ? 0
-    : (b.toLowerCase() === here) - (a.toLowerCase() === here) || (a === 'Any shop') - (b === 'Any shop') || a.localeCompare(b)));
+    : (b.toLowerCase() === here) - (a.toLowerCase() === here) || (a === 'Any store') - (b === 'Any store') || a.localeCompare(b)));
   const isHere = (group) => group.toLowerCase() === here;
-  const canNarrow = by === 'shop' && aisles.some(isHere) && aisles.some((a) => !isHere(a) && a !== 'Any shop');
-  const shownGroups = canNarrow && justHere ? aisles.filter((a) => isHere(a) || a === 'Any shop') : aisles;
+  const canNarrow = by === 'shop' && aisles.some(isHere) && aisles.some((a) => !isHere(a) && a !== 'Any store');
+  const shownGroups = canNarrow && justHere ? aisles.filter((a) => isHere(a) || a === 'Any store') : aisles;
   const elsewhere = open.filter((g) => !shownGroups.includes(groupOf(g))).length;
   const t = shop.totals;
   const anyMoney = t.trolley_cents > 0 || t.left_cents > 0 || shop.coupons.length > 0;
@@ -99,13 +99,13 @@ export default function Groceries() {
       {items.length > 0 && (
         <div className="sticky top-14 z-20 rounded-2xl bg-life-700 px-4 py-3 text-white shadow-lg sm:top-24" aria-live="polite">
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <p className="mr-auto"><span className="text-xs uppercase tracking-wide text-white/70">In the trolley</span> <span className="text-2xl font-semibold" data-total="trolley">{money(t.trolley_cents, sign)}</span></p>
+            <p className="mr-auto"><span className="text-xs uppercase tracking-wide text-white/70">In the buggy</span> <span className="text-2xl font-semibold" data-total="trolley">{money(t.trolley_cents, sign)}</span></p>
             {t.coupons_cents > 0 && <p className="text-sm">coupons −{money(t.coupons_cents, sign)} · <span className="font-semibold" data-total="to-pay">to pay {money(t.to_pay_cents, sign)}</span></p>}
           </div>
           <p className="text-xs text-white/80">
             {open.length === 0 ? 'Everything is in.' : t.left_cents > 0 ? `About ${money(t.left_cents, sign)} still to get, going by last time` : 'Type a price as each thing goes in'}
             {open.length > 0 && t.left_unknown > 0 && t.left_cents > 0 && `, and ${t.left_unknown} with no price yet`}
-            {t.trolley_unpriced > 0 && ` · ${t.trolley_unpriced} in the trolley with no price`}
+            {t.trolley_unpriced > 0 && ` · ${t.trolley_unpriced} in the buggy with no price`}
           </p>
         </div>
       )}
@@ -116,7 +116,7 @@ export default function Groceries() {
           <button type="submit" disabled={!text.trim()} className={buttonClass}>Add</button>
         </form>
         <label className="w-full text-xs text-gray-600 dark:text-life-200 sm:w-40">Shopping at
-          <input key={shop.store || ''} list="my-shops" defaultValue={shop.store || ''} onBlur={saveStore} placeholder="which shop" aria-label="Shopping at" className={`${inputClass} mt-0.5`} />
+          <input key={shop.store || ''} list="my-shops" defaultValue={shop.store || ''} onBlur={saveStore} placeholder="which store" aria-label="Shopping at" className={`${inputClass} mt-0.5`} />
         </label>
         <datalist id="my-shops">{shop.stores.map((name) => <option key={name} value={name} />)}</datalist>
       </div>
@@ -124,7 +124,7 @@ export default function Groceries() {
       {open.length > 1 && (
         <div className="flex items-center gap-1.5 text-sm" role="group" aria-label="How the list is laid out">
           <span className="text-xs text-gray-500 dark:text-life-300">Laid out</span>
-          {[['aisle', 'by aisle'], ['shop', 'by shop']].map(([how, label]) => (
+          {[['aisle', 'by aisle'], ['shop', 'by store']].map(([how, label]) => (
             <button key={how} type="button" onClick={() => layOut(how)} aria-pressed={by === how}
               className={`rounded-full px-3 py-1 ${by === how ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`}>{label}</button>
           ))}
@@ -174,10 +174,10 @@ export default function Groceries() {
             </ul>
           </div>
         ))}
-        {elsewhere > 0 && <p className="mt-2 text-xs text-gray-500 dark:text-life-300">{elsewhere} more for other shops. Untick "Just {shop.store}" to see {elsewhere === 1 ? 'it' : 'them'}.</p>}
+        {elsewhere > 0 && <p className="mt-2 text-xs text-gray-500 dark:text-life-300">{elsewhere} more for other stores. Uncheck "Just {shop.store}" to see {elsewhere === 1 ? 'it' : 'them'}.</p>}
       </div>
       <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-life-200">
-        <input type="checkbox" checked={putAway} onChange={(e) => setPutAway(e.target.checked)} className="accent-life-600" /> Ticking something off adds it to the pantry
+        <input type="checkbox" checked={putAway} onChange={(e) => setPutAway(e.target.checked)} className="accent-life-600" /> Checking something off adds it to the pantry
       </label>
 
       {done.length > 0 && (
@@ -219,7 +219,7 @@ export default function Groceries() {
                   <span className={c.days_left !== null && c.days_left < 0 ? 'text-gray-400 line-through' : 'text-gray-800 dark:text-life-50'}>{c.label}</span>
                   <span className="ml-2 font-medium text-life-700 dark:text-life-200">{couponWorth(c, sign)}</span>
                   <span className="block text-xs text-gray-500 dark:text-life-300">
-                    {[c.ingredient ? `for ${c.ingredient}` : 'for the whole shop', c.store && `at ${c.store}`, c.code && `code ${c.code}`, c.note].filter(Boolean).join(' · ')}
+                    {[c.ingredient ? `for ${c.ingredient}` : 'for the whole trip', c.store && `at ${c.store}`, c.code && `code ${c.code}`, c.note].filter(Boolean).join(' · ')}
                   </span>
                 </button>
                 {c.used_on ? <span className="text-xs text-life-700 dark:text-life-200">−{money(c.worth_cents, sign)}</span>
@@ -228,7 +228,7 @@ export default function Groceries() {
             ))}
           </ul>
         )}
-        {shop.coupons.length > 0 && <p className="mt-1 text-xs text-gray-500 dark:text-life-300">Tick one to use it on today's shop.</p>}
+        {shop.coupons.length > 0 && <p className="mt-1 text-xs text-gray-500 dark:text-life-300">Check one to use it on today's trip.</p>}
       </div>
 
       {anyMoney && (
@@ -275,7 +275,7 @@ function PriceForm({ line, fixedSize, sign, onSave }) {
         {fixedSize ? <Field label="For"><input value={fixedSize} disabled className={inputClass} /></Field>
           : <Field label="The size you bought"><input value={size} onChange={(e) => setSize(e.target.value)} placeholder="30 oz, 2 lb, 6" className={inputClass} /></Field>}
       </div>
-      {!fixedSize && <p className="text-xs text-gray-500 dark:text-life-300">With a size, shops and pack sizes can be compared for one ounce, pound or each.</p>}
+      {!fixedSize && <p className="text-xs text-gray-500 dark:text-life-300">With a size, stores and package sizes can be compared for one ounce, pound or each.</p>}
       {line.assumed && <p className="text-xs text-gray-500 dark:text-life-300">This is last time's price, standing in. Saving it here records it as what you paid today.</p>}
       <div className="flex items-center justify-between">
         <button type="button" onClick={() => onSave(null)} className="text-sm text-red-600 hover:underline">No price</button>
@@ -328,17 +328,17 @@ function CouponForm({ coupon, sign, lines, store, onDone }) {
       {!coupon.id ? (
         <Field label="What it's for">
           <select value={form.grocery_id} onChange={set('grocery_id')} className={inputClass}>
-            <option value="">The whole shop</option>
+            <option value="">The whole trip</option>
             {lines.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
           </select>
         </Field>
-      ) : <p className="text-xs text-gray-500 dark:text-life-300">{coupon.ingredient ? `For ${coupon.ingredient}.` : 'For the whole shop.'}</p>}
+      ) : <p className="text-xs text-gray-500 dark:text-life-300">{coupon.ingredient ? `For ${coupon.ingredient}.` : 'For the whole trip.'}</p>}
       <div className="grid grid-cols-2 gap-3">
         <Field label="It takes off">
           <select value={form.kind} onChange={set('kind')} className={inputClass}><option value="money">An amount ({sign})</option><option value="percent">A percentage (%)</option></select>
         </Field>
         <Field label={form.kind === 'money' ? `How much (${sign}) *` : 'How much (%) *'}><input required inputMode="decimal" value={form.value} onChange={set('value')} placeholder={form.kind === 'money' ? '2.00' : '10'} className={inputClass} /></Field>
-        <Field label="Only at"><input list="my-shops" value={form.store} onChange={set('store')} placeholder="any shop" className={inputClass} /></Field>
+        <Field label="Only at"><input list="my-shops" value={form.store} onChange={set('store')} placeholder="any store" className={inputClass} /></Field>
         <Field label="Good until"><input type="date" value={form.expires_on} onChange={set('expires_on')} className={inputClass} /></Field>
         <Field label="Code, if it has one"><input value={form.code} onChange={set('code')} className={inputClass} /></Field>
         <Field label="A note"><input value={form.note} onChange={set('note')} placeholder="in the app, in the drawer…" className={inputClass} /></Field>
@@ -383,7 +383,7 @@ function ScanGrocery({ open, sign, putAway, onChanged }) {
       }
     } catch (err) { setError(errorMessage(err, "Couldn't look that up")); setSeen({ failed: true }); }
   }, []);
-  if (!seen) return <div className="space-y-2">{done && <p className="rounded-lg bg-life-100 px-3 py-2 text-sm text-life-800">{done}</p>}<Scanner key={round} onCode={look} label="Point the camera at the barcode on the packet" /></div>;
+  if (!seen) return <div className="space-y-2">{done && <p className="rounded-lg bg-life-100 px-3 py-2 text-sm text-life-800">{done}</p>}<Scanner key={round} onCode={look} label="Point the camera at the barcode on the package" /></div>;
   const another = <button type="button" onClick={again} className={quietButtonClass}>Scan another</button>;
   if (seen.failed) return <div className="space-y-3"><p className="text-sm text-red-600">{error}</p>{another}</div>;
 
@@ -395,7 +395,7 @@ function ScanGrocery({ open, sign, putAway, onChanged }) {
       if (cents !== null) await axios.put(`/api/shopping/prices/${line.id}`, { cents, barcode, size: bought });
       else if (seen.last) await axios.put(`/api/shopping/prices/${line.id}`, { cents: seen.last.cents, assumed: true, barcode, size: bought });
       onChanged();
-      setDone(`${line.label} is in the trolley${cents !== null ? ` at ${money(cents, sign)}` : seen.last ? ` (≈ ${money(seen.last.cents, sign)}, last time's price)` : ''}.`);
+      setDone(`${line.label} is in the buggy${cents !== null ? ` at ${money(cents, sign)}` : seen.last ? ` (≈ ${money(seen.last.cents, sign)}, last time's price)` : ''}.`);
       again();
     } catch (err) { setError(errorMessage(err, "Couldn't do that")); }
   };
@@ -428,7 +428,7 @@ function ScanGrocery({ open, sign, putAway, onChanged }) {
           </select>
         </Field>
         {which === '' && <Field label="What to call it on the list *"><input required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. coffee" className={inputClass} /></Field>}
-        <Field label="The size on the packet"><input value={size} onChange={(e) => setSize(e.target.value)} placeholder="30 oz, 400 g, 6" className={inputClass} /></Field>
+        <Field label="The size on the package"><input value={size} onChange={(e) => setSize(e.target.value)} placeholder="30 oz, 400 g, 6" className={inputClass} /></Field>
         {which === '' && <p className="text-xs text-gray-500 dark:text-life-300">Use the everyday name ("coffee", not the brand), so recipes and the pantry know it as the same thing. It's added to the list.</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex items-center justify-end gap-2">{another}<button type="submit" className={buttonClass}>That's what it is</button></div>
@@ -437,7 +437,7 @@ function ScanGrocery({ open, sign, putAway, onChanged }) {
   }
   const what = <p className="text-sm text-gray-800 dark:text-life-50"><span className="font-medium">{seen.ingredient.name}</span>{(seen.ingredient.product || seen.ingredient.size) && <span className="block text-xs text-gray-500 dark:text-life-300">{[seen.ingredient.product, seen.ingredient.size].filter(Boolean).join(' · ')}</span>}</p>;
   const lastLine = seen.last && <p className="text-xs text-gray-500 dark:text-life-300">Last time {money(seen.last.cents, sign)}{seen.last.amount ? ` for ${seen.last.amount}` : ''}{seen.last.store ? ` at ${seen.last.store}` : ''}, {shortDay(seen.last.day)}.</p>;
-  if (seen.line?.done) return <div className="space-y-3">{what}<p className="text-sm text-gray-600 dark:text-life-100">That's already in the trolley.</p>{lastLine}{another}</div>;
+  if (seen.line?.done) return <div className="space-y-3">{what}<p className="text-sm text-gray-600 dark:text-life-100">That's already in the buggy.</p>{lastLine}{another}</div>;
   if (!seen.line) {
     return (
       <div className="space-y-3">
@@ -460,7 +460,7 @@ function ScanGrocery({ open, sign, putAway, onChanged }) {
       </div>
       {lastLine}
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex items-center justify-end gap-2">{another}<button type="submit" className={buttonClass}>In the trolley</button></div>
+      <div className="flex items-center justify-end gap-2">{another}<button type="submit" className={buttonClass}>In the buggy</button></div>
     </form>
   );
 }
@@ -475,10 +475,10 @@ function UsualForm({ line, hasAmount, onSave }) {
   };
   return (
     <form onSubmit={submit} className="space-y-3">
-      <Field label="Usually bought at"><input list="my-shops" value={form.store} onChange={(e) => setForm({ ...form, store: e.target.value })} placeholder={line.likely_store ? `last time: ${line.likely_store}` : 'any shop'} className={inputClass} /></Field>
+      <Field label="Usually bought at"><input list="my-shops" value={form.store} onChange={(e) => setForm({ ...form, store: e.target.value })} placeholder={line.likely_store ? `last time: ${line.likely_store}` : 'any store'} className={inputClass} /></Field>
       <Field label="Usual size"><input value={form.size} onChange={(e) => setForm({ ...form, size: e.target.value })} placeholder="30 oz, 3 lb, 6" className={inputClass} /></Field>
       <p className="text-xs text-gray-500 dark:text-life-300">
-        This is remembered for the thing itself, so it's here every time it's on the list. The shop lets the list be laid out by shop.
+        This is remembered for the thing itself, so it's here every time it's on the list. The store lets the list be laid out by store.
         The size shows on the list when a line gives no amount{hasAmount ? ' (this one does, so its own amount is used)' : ''}, and is the size a price is taken to be for unless you type another.
       </p>
       {error && <p className="text-sm text-red-600">{error}</p>}

@@ -138,9 +138,9 @@ it('things are found by name, by note, and by what was typed into their fields',
   const kinds = await things.addStarter('sewing');
   const fabric = kindNamed(kinds, 'Fabric');
   const notions = kindNamed(kinds, 'Notions');
-  await things.createItem({ kind_id: fabric.id, name: 'Blue linen', quantity: 5, low_at: 1, values: { [fieldId(fabric, 'Fibre')]: 'Flax' } });
+  await things.createItem({ kind_id: fabric.id, name: 'Blue linen', quantity: 5, low_at: 1, values: { [fieldId(fabric, 'Fiber')]: 'Flax' } });
   await things.createItem({ kind_id: fabric.id, name: 'Canvas', quantity: 0.5, low_at: 1, note: 'for the tote bag' });
-  await things.createItem({ kind_id: notions.id, name: 'Zips', quantity: 3, values: { [fieldId(notions, 'Colour')]: 'navy blue' } });
+  await things.createItem({ kind_id: notions.id, name: 'Zips', quantity: 3, values: { [fieldId(notions, 'Color')]: 'navy blue' } });
   const names = async (find: Parameters<Inventory['listItems']>[0]) => (await things.listItems(find)).map((i) => i.name);
   expect(await names({ q: 'blue' })).toEqual(['Blue linen', 'Zips']);
   expect(await names({ q: 'flax' })).toEqual(['Blue linen']);

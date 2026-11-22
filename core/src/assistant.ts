@@ -26,7 +26,7 @@ import { addDays, clean, todayOf, type Clock } from './small.ts';
 
 export const ASSISTANT_SERVICE = {
   name: 'An AI assistant',
-  sends: 'Only when you ask a question: your question, and what Life Is holds in the parts you tick below, go to the model at the address you give. ' +
+  sends: 'Only when you ask a question: your question, and what Life Is holds in the parts you check below, go to the model at the address you give. ' +
     'Nothing is sent at any other time, and the assistant can\'t change anything in Life Is. With a model on your own computer or network, nothing leaves home.',
 };
 /** LM Studio on the computer running Docker, as Sworkr starts with. Ollama is the same address with port 11434. */
@@ -214,7 +214,7 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
       const cloudOk = input.cloud_ok ?? before.cloud_ok;
       // The address only matters when answers come from it; choosing the phone's own model never needs the tick.
       if (source === 'address' && !isLocal(url) && !cloudOk) {
-        throw new Problem(400, "That address isn't on this computer or your own network. Tick the box to allow a cloud AI, knowing what you ask about leaves this computer.");
+        throw new Problem(400, "That address isn't on this computer or your own network. Check the box to allow a cloud AI, knowing what you ask about leaves this computer.");
       }
       const typedKey = clean(input.key, 500);
       const next: Kept = {
@@ -251,7 +251,7 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
       const k = await kept();
       if (!k.enabled) throw new Problem(409, 'Turn the assistant on in Settings, under "Outside services"');
       if (k.source === 'address' && !isLocal(k.url) && !k.cloud_ok) throw new Problem(409, "The assistant's address isn't on this computer or your network, and a cloud AI hasn't been allowed");
-      if (k.areas.length === 0) throw new Problem(409, 'The assistant has been given nothing to look at. Tick what it may see in Settings.');
+      if (k.areas.length === 0) throw new Problem(409, 'The assistant has been given nothing to look at. Check what it may see in Settings.');
       const prompt = (data: Record<string, unknown>) => `Facts:\n${JSON.stringify(data)}\n\nQuestion: ${question}`;
       if (k.source === 'phone') {
         const phone = tools!.phone!;
@@ -259,7 +259,7 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
         if (!state.ready) throw new Problem(409, state.why ?? `${phone.name} isn't ready on this device.`);
         const data = await facts(k.areas, PHONE_FACTS_LIMIT);
         let text: string;
-        try { text = await phone.answer(SYSTEM, prompt(data)); } catch { throw new Problem(400, `${phone.name} couldn't answer that. Try a shorter question, or tick fewer things for it to look at.`); }
+        try { text = await phone.answer(SYSTEM, prompt(data)); } catch { throw new Problem(400, `${phone.name} couldn't answer that. Try a shorter question, or check fewer things for it to look at.`); }
         return { answer: answerOnly(text) || '(The model gave no answer.)', given: data };
       }
       const data = await facts(k.areas);

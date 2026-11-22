@@ -35,11 +35,11 @@ say('with no plans or coupons, the front page has no card for them', !/Plans com
 await page.goto(base + '/groceries'); await wait(1000);
 for (const what of ['leeks', 'potatoes', 'coffee', 'soap']) await addLine(what);
 await usual('leeks', 'Aldi'); await usual('potatoes', 'Aldi'); await usual('coffee', 'Costco');
-await page.getByRole('button', { name: 'by shop' }).click(); await wait(400);
+await page.getByRole('button', { name: 'by store' }).click(); await wait(400);
 await page.getByLabel('Shopping at').fill('Aldi'); await page.getByLabel('Shopping at').blur(); await wait(800);
 await page.getByLabel('Just Aldi').check(); await wait(500);
 let t = await text();
-say('"Just Aldi" leaves Aldi and what can be got anywhere, and says what is hidden', /ALDI[\s\S]*leeks[\s\S]*potatoes[\s\S]*ANY SHOP[\s\S]*soap/i.test(t) && !/coffee/.test(t.split('Coupons')[0]) && /1 more for other shops/.test(t));
+say('"Just Aldi" leaves Aldi and what can be got anywhere, and says what is hidden', /ALDI[\s\S]*leeks[\s\S]*potatoes[\s\S]*ANY STORE[\s\S]*soap/i.test(t) && !/coffee/.test(t.split('Coupons')[0]) && /1 more for other stores/.test(t));
 await page.screenshot({ path: shots + '/just-here.png', fullPage: true });
 await page.getByLabel('Price of leeks').fill('2.49'); await page.getByLabel('Got leeks').click(); await wait(800);
 await page.getByLabel('Price of potatoes').fill('3.99'); await page.getByLabel('Got potatoes').click(); await wait(800);

@@ -21,7 +21,7 @@ The house manual is what someone else needs to know to look after your home: a s
 It has four parts, each with ideas to start from:
 
 - **In an emergency:** where the water and gas shut off, the breaker box
-- **Who to call:** the plumber, a neighbour with a key
+- **Who to call:** the plumber, a neighbor with a key
 - **How the house works:** the Wi-Fi, the thermostat, the alarm
 - **Day to day:** trash days, plants, bedtimes
 

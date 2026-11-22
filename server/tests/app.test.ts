@@ -316,7 +316,7 @@ it('things and projects answer over the web', async () => {
   expect((await admin.get('/api/things/starters')).json.map((s: { slug: string }) => s.slug)).toContain('sewing');
   let kinds = (await admin.post('/api/things/starters', { slug: 'sewing' })).json;
   const fabric = kinds.find((k: { name: string }) => k.name === 'Fabric');
-  const fibre = fabric.fields.find((f: { name: string }) => f.name === 'Fibre').id;
+  const fibre = fabric.fields.find((f: { name: string }) => f.name === 'Fiber').id;
 
   // A kind of the person's own, with their own fields.
   const made = await admin.post('/api/things/kinds', { name: 'Board games', icon: '🎲', fields: [{ name: 'Players', type: 'text' }, { name: 'Wear', type: 'choice', choices: ['None', 'Some'] }] });

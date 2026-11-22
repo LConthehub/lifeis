@@ -284,8 +284,8 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
 
     async addStore(input: { name: string; note?: string | null }): Promise<Store[]> {
       const name = clean(input.name, 100);
-      if (!name) throw new Problem(400, 'Give the shop a name');
-      if (await db.get('SELECT id FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE', [owner, name])) throw new Problem(409, "That shop is already on your list");
+      if (!name) throw new Problem(400, 'Give the store a name');
+      if (await db.get('SELECT id FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE', [owner, name])) throw new Problem(409, "That store is already on your list");
       await db.run('INSERT INTO stores (owner_id, name, note, created_at) VALUES (?, ?, ?, ?)', [owner, name, clean(input.note, 300), stamp(clock())]);
       return this.stores();
     },
@@ -293,10 +293,10 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
     /** Rename a shop, or change its note. Its prices and coupons follow the new name. */
     async updateStore(id: number, input: { name: string; note?: string | null }): Promise<Store[]> {
       const name = clean(input.name, 100);
-      if (!name) throw new Problem(400, 'Give the shop a name');
+      if (!name) throw new Problem(400, 'Give the store a name');
       const old = await db.get<{ name: string }>('SELECT name FROM stores WHERE id = ? AND owner_id = ?', [id, owner]);
       if (!old) throw new Problem(404, 'Not found');
-      if (await db.get('SELECT id FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE AND id != ?', [owner, name, id])) throw new Problem(409, "Another shop already has that name");
+      if (await db.get('SELECT id FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE AND id != ?', [owner, name, id])) throw new Problem(409, "Another store already has that name");
       await db.run('UPDATE stores SET name = ?, note = ? WHERE id = ?', [name, clean(input.note, 300), id]);
       await db.run('UPDATE prices SET store = ? WHERE owner_id = ? AND store = ? COLLATE NOCASE', [name, owner, old.name]);
       await db.run('UPDATE coupons SET store = ? WHERE owner_id = ? AND store = ? COLLATE NOCASE', [name, owner, old.name]);
@@ -474,7 +474,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
     async addCoupon(input: CouponInput): Promise<Shopping> {
       const v = couponValues(input);
       const target = input.grocery_id != null ? await line(db, input.grocery_id) : null;
-      if (target && target.ingredient_id === null) throw new Problem(400, "That line isn't an ingredient Life Is knows, so a coupon can't be tied to it. Leave it for the whole shop and say what it's for.");
+      if (target && target.ingredient_id === null) throw new Problem(400, "That line isn't an ingredient Life Is knows, so a coupon can't be tied to it. Leave it for the whole trip and say what it's for.");
       await db.run(
         'INSERT INTO coupons (owner_id, label, ingredient_id, cents_off, percent_off, store, code, expires_on, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [owner, v.label, target?.ingredient_id ?? null, v.money, v.percent, v.store, v.code, v.expires, v.note, stamp(clock())]);

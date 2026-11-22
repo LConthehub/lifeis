@@ -158,7 +158,7 @@ export default function Home({ user }) {
 
         {shows('dates') && (
           <Card title="Coming round" to="/calendar" link="Calendar">
-            {s.dates.length === 0 ? <Quiet>No birthdays or yearly dates in the next two months. Add one on the calendar and tick "Every year".</Quiet> : (
+            {s.dates.length === 0 ? <Quiet>No birthdays or yearly dates in the next two months. Add one on the calendar and check "Every year".</Quiet> : (
               <ul className="space-y-1 text-sm">
                 {s.dates.map((d) => (
                   <li key={`${d.id}-${d.day}`} className="flex items-baseline gap-2">
@@ -285,7 +285,7 @@ export default function Home({ user }) {
 
         {shows('things') && (
           <Card title="Things" to="/things">
-            {s.things.low.length === 0 ? <Quiet>{s.things.total === 0 ? 'Nothing catalogued yet.' : `${s.things.total} things kept, none running low.`}</Quiet> : (
+            {s.things.low.length === 0 ? <Quiet>{s.things.total === 0 ? 'Nothing cataloged yet.' : `${s.things.total} things kept, none running low.`}</Quiet> : (
               <ul className="space-y-1 text-sm">
                 {s.things.low.map((t) => (
                   <li key={t.id} className="flex items-baseline gap-2">
@@ -352,7 +352,7 @@ function CardChooser({ choices, onDone }) {
   };
   return (
     <div className="space-y-3">
-      <p className="text-sm text-gray-600 dark:text-life-100">Untick a card to put it out of sight. Nothing in it is removed.</p>
+      <p className="text-sm text-gray-600 dark:text-life-100">Uncheck a card to put it out of sight. Nothing in it is removed.</p>
       <div className="space-y-2">
         {choices.map((c) => (
           <label key={c.key} className="flex cursor-pointer items-start gap-2 text-sm text-gray-800 dark:text-life-50">

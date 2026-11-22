@@ -6,7 +6,7 @@ are written once and reviewed before anything goes live.
 ## Still to decide
 
 - **The name** is Life Is (decided 2026-11-22), shown in stores with what it is: "Life Is: Home Organizer".
-  It has trademark neighbours ("Life is Good", "Life Is Strange"), so a short attorney check is worth having
+  It has trademark neighbors ("Life is Good", "Life Is Strange"), so a short attorney check is worth having
   before filing a mark or selling in earnest.
 - **Website:** https://lifeis.living  **Privacy policy:** https://lifeis.living/privacy (both live).
 - **Contact email:** `hello@lifeis.living`, once that address is created in iCloud. Google shows it publicly.

@@ -32,7 +32,7 @@ Open a place and choose **Fill this place**. Then keep scanning:
 
 No barcode? Type the name and press Enter.
 
-Looking a barcode up asks an outside catalogue, so it is off until you turn it on, and the page says exactly what is sent: the number under the barcode, and nothing else.
+Looking a barcode up asks an outside catalog, so it is off until you turn it on, and the page says exactly what is sent: the number under the barcode, and nothing else.
 
 ## Stickers
 

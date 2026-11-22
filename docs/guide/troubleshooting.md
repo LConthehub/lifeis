@@ -26,7 +26,7 @@ Nobody can reset it for you, and that is deliberate too: there is no back door, 
 
 ## A barcode was not found
 
-Look-ups are off until you turn them on. When one is on and still finds nothing, the catalogue does not know that barcode: type the name, and Life Is keeps the barcode for next time. Numbers that shops print themselves, on things they weigh or label, mean nothing anywhere else and are not looked up.
+Look-ups are off until you turn them on. When one is on and still finds nothing, the catalog does not know that barcode: type the name, and Life Is keeps the barcode for next time. Numbers that stores print themselves, on things they weigh or label, mean nothing anywhere else and are not looked up.
 
 ## A reminder did not arrive
 

@@ -96,7 +96,7 @@ export function AssistantService() {
 
           <fieldset>
             <legend className="text-sm font-medium text-gray-700 dark:text-life-100">What it may look at</legend>
-            <p className="mb-1 text-xs text-gray-500 dark:text-life-300">Only what's ticked is sent, and only when you ask. Each answer shows exactly what was sent. Mail, passwords and calendar notes are never sent.</p>
+            <p className="mb-1 text-xs text-gray-500 dark:text-life-300">Only what's checked is sent, and only when you ask. Each answer shows exactly what was sent. Mail, passwords and calendar notes are never sent.</p>
             {AREAS.map(([key, label, what]) => (
               <label key={key} className="flex items-start gap-2 py-1 text-sm text-gray-800 dark:text-life-50">
                 <input type="checkbox" checked={form.areas.includes(key)} onChange={() => tick(key)} className="mt-1" />
@@ -108,7 +108,7 @@ export function AssistantService() {
           {!onPhone && <details open={!local || form.cloud_ok} className="rounded-lg border border-honey-200 bg-honey-50 p-3 dark:border-honey-700 dark:bg-transparent">
             <summary className="cursor-pointer text-sm font-medium text-honey-700">A cloud AI instead (off unless you allow it)</summary>
             <p className="mt-2 text-sm text-honey-700">
-              A cloud AI (ChatGPT, Claude, Gemini and others) runs on someone else's computers. Whatever you tick above, and your question, would leave this computer and be handled under that company's terms,
+              A cloud AI (ChatGPT, Claude, Gemini and others) runs on someone else's computers. Whatever you check above, and your question, would leave this computer and be handled under that company's terms,
               which may include keeping it. Life Is can't take it back once sent.
             </p>
             <label className="mt-2 flex items-start gap-2 text-sm text-honey-700">
