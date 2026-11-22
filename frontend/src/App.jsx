@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import Login from './pages/Login';
@@ -96,6 +96,11 @@ function Shell({ user, demo = false, onLogout }) {
   useEffect(() => { loadLife(); }, [loadLife]);
   const section = SECTIONS.find((s) => s.owns(pathname));
   const showing = SECTIONS.filter((s) => !life || life.sections.includes(s.word) || s === section);
+  // On a phone the words scroll sideways, so bring the current one into view when the page or section changes.
+  const navRef = useRef(null);
+  useEffect(() => {
+    navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }, [pathname]);
   const tabs = section ? section.tabs : [];
   const exact = (to) => ['/recipes', '/things', '/projects', '/media'].includes(to);
   return (
@@ -106,11 +111,12 @@ function Shell({ user, demo = false, onLogout }) {
             <img src="/icon-192.png" alt="" className="h-7 w-7 rounded-lg" /> Life is
           </Link>
           {/* Six words don't fit across a phone. There, Settings stays up beside the name and the words take
-              the row below, wrapping rather than running off the edge; on a wider screen it is all one row. */}
-          <nav className="order-3 flex w-full min-w-0 flex-wrap gap-1 sm:order-2 sm:w-auto" aria-label="Sections">
+              the row below, on one line that scrolls sideways with no visible scrollbar; the current word is
+              scrolled into view. From the sm breakpoint up it sits in the row with the name, as before. */}
+          <nav ref={navRef} className="order-3 flex w-full min-w-0 flex-nowrap gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:order-2 sm:w-auto sm:flex-wrap sm:overflow-visible" aria-label="Sections">
             {showing.map((s) => (
               <Link key={s.word} to={s.home} aria-current={s === section ? 'page' : undefined}
-                className={`rounded-full px-2 py-1 text-sm font-semibold sm:px-2.5 ${s === section ? 'bg-white text-life-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.shown ?? s.word}</Link>
+                className={`shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-sm font-semibold sm:px-2.5 ${s === section ? 'bg-white text-life-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.shown ?? s.word}</Link>
             ))}
           </nav>
           <div className="order-2 ml-auto sm:order-3"><Search /></div>

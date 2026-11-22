@@ -124,17 +124,30 @@ it('Kavita: each library is followed to its series, with the key in the address'
 
 // ---------- Audiobookshelf ----------
 
-const absItem = (id: string, title: string, author: string, more: object = {}, isbn: string | null = '978-0441172719') => ({ id, mediaType: 'book', media: { metadata: { title, authorName: author, publishedYear: '1965', genres: ['Science Fiction'], isbn }, numAudioFiles: 12, duration: 75600, ...more } });
+// Shaped like Audiobookshelf 2.37.2 answers with minified=1: the year is text, empty things are null, and `ebookFormat` is only there when an eBook file is.
+const absItem = (id: string, title: string, author: string, more: object = {}, isbn: string | null = '978-0441172719', item: object = {}) => ({
+  id, libraryId: 'lib1', path: `/audiobooks/${author}/${title}`, isMissing: false, isInvalid: false, mediaType: 'book', numFiles: 1,
+  media: { id: `m-${id}`, metadata: { title, subtitle: null, authorName: author, authorNameLF: author, narratorName: '', seriesName: '', publishedYear: '1965', publishedDate: null, publisher: null, description: null, genres: ['Science Fiction'], isbn, asin: null, language: null },
+    coverPath: null, numTracks: 1, numAudioFiles: 12, numChapters: 0, duration: 75600, size: 1000, ...more },
+  ...item,
+});
 
 it('Audiobookshelf: audiobooks and eBooks come in as what they are, with how long they run', async () => {
   pages['http://abs.test/api/libraries'] = { type: 'application/json', body: { libraries: [{ id: 'lib1', mediaType: 'book' }, { id: 'pod', mediaType: 'podcast' }] } };
-  pages['http://abs.test/api/libraries/lib1/items?limit=100&page=0&minified=1'] = { type: 'application/json', body: { total: 2, results: [
+  pages['http://abs.test/api/libraries/lib1/items?limit=100&page=0&minified=1'] = { type: 'application/json', body: { total: 4, page: 0, limit: 100, results: [
     absItem('a1', 'Dune', 'Frank Herbert'),
-    absItem('a2', 'Emma', 'Jane Austen', { numAudioFiles: 0, duration: 0, ebookFormat: 'epub' }, null),
+    absItem('a2', 'Emma', 'Jane Austen', { numTracks: 0, numAudioFiles: 0, duration: 0, ebookFormat: 'epub' }, null),
+    // An audio file and an eBook file in one folder: one title, brought in as an Audiobook.
+    absItem('a3', 'Persuasion', 'Jane Austen', { numAudioFiles: 1, duration: 2, ebookFormat: 'epub' }, null),
+    // Gone from the disk: still listed by the server, not brought in.
+    absItem('a4', 'Lost Book', 'Nobody', {}, null, { isMissing: true }),
   ] } };
   const [server] = await servers().create({ kind: 'audiobookshelf', url: 'http://abs.test', key: 'tok' });
   expect(asked[0]!.headers.Authorization).toBe('Bearer tok');
-  expect(await servers().sync(server!.id)).toMatchObject({ total: 2, added: 2 });
+  expect(await servers().sync(server!.id)).toMatchObject({ total: 3, added: 3 });
+  const both = await shelf.get((await shelf.list({ q: 'Persuasion' }))[0]!.id);
+  expect(both).toMatchObject({ minutes: 1 });
+  expect(both.copies[0]!.format).toBe('Audiobook');
   const dune = await shelf.get((await shelf.list({ q: 'Dune' }))[0]!.id);
   expect(dune).toMatchObject({ minutes: 1260, year: 1965, ids: { isbn: '9780441172719' } });
   expect(dune.copies[0]).toMatchObject({ format: 'Audiobook', source: 'audiobookshelf', link: 'http://abs.test/audiobookshelf/item/a1' });

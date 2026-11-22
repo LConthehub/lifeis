@@ -172,6 +172,9 @@ export async function readLibrary(fetcher: Fetcher, kind: LibraryKind, url: stri
           const id = text(item.id);
           const title = text(meta.title);
           if (!id || !title) continue;
+          // Files that have gone from the disk, or can't be read, are still listed by the server.
+          if (item.isMissing === true || item.isInvalid === true) continue;
+          // A title with an audio file is an Audiobook even when an eBook file sits beside it (it then also has media.ebookFormat).
           const seconds = typeof media.duration === 'number' ? media.duration : 0;
           const audio = (typeof media.numAudioFiles === 'number' && media.numAudioFiles > 0) || seconds > 0;
           const year = /\b(1[0-9]|20)\d{2}\b/.exec(String(meta.publishedYear ?? ''))?.[0];
@@ -181,7 +184,7 @@ export async function readLibrary(fetcher: Fetcher, kind: LibraryKind, url: stri
           items.push({
             sourceId: id, type: 'book', title, creator: text(meta.authorName) ?? text(meta.authorNameLF), year: year ? Number(year) : null,
             summary: plain(text(meta.description)), genres: Array.isArray(meta.genres) ? meta.genres.filter((g): g is string => typeof g === 'string') : [],
-            minutes: seconds > 0 ? Math.round(seconds / 60) : null, ids,
+            minutes: seconds > 0 ? Math.max(1, Math.round(seconds / 60)) : null, ids,
             coverUrl: `${url}/api/items/${encodeURIComponent(id)}/cover?width=300`,
             format: audio ? 'Audiobook' : 'eBook', link: `${url}/audiobookshelf/item/${encodeURIComponent(id)}`,
           });

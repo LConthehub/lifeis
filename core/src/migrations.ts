@@ -11,7 +11,7 @@ import { atomic, type Db } from './db.ts';
 
 type Migration = { number: number; name: string; statements: string[] };
 
-const MIGRATIONS: Migration[] = [
+export const MIGRATIONS: Migration[] = [
   {
     number: 1,
     name: 'logins, sessions and settings',
@@ -914,6 +914,26 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_library_sources ON library_sources(owner_id)`,
       `ALTER TABLE media_copies ADD COLUMN library_source_id INTEGER REFERENCES library_sources(id) ON DELETE SET NULL`,
       `CREATE INDEX idx_media_copies_library ON media_copies(library_source_id, source_id)`,
+    ],
+  },
+  {
+    // American spellings for the ready-made kinds: Colour, Fibre, Colourway, Colour name and Colour code lose
+    // the u (and the i), and Aluminium becomes Aluminum. Only fields named exactly that are renamed, and not
+    // where the same kind already has a field with the new name. The choice is renamed as a whole entry in the
+    // list of choices, and in what was chosen, so a word that merely contains it is left alone.
+    number: 31,
+    name: 'American spellings for the ready-made kinds',
+    statements: [
+      `UPDATE item_values SET value = 'Aluminum'
+        WHERE value = 'Aluminium' AND field_id IN (SELECT id FROM kind_fields WHERE type = 'choice')`,
+      `UPDATE kind_fields SET choices = REPLACE(choices, '"Aluminium"', '"Aluminum"')
+        WHERE type = 'choice' AND choices LIKE '%"Aluminium"%'
+          AND NOT (choices LIKE '%"Aluminum"%')`,
+      ...[['Colour', 'Color'], ['Fibre', 'Fiber'], ['Colourway', 'Colorway'], ['Colour name', 'Color name'], ['Colour code', 'Color code']].map(
+        ([from, to]) => `UPDATE kind_fields SET name = '${to}'
+          WHERE name = '${from}'
+            AND NOT EXISTS (SELECT 1 FROM kind_fields other WHERE other.kind_id = kind_fields.kind_id AND other.name = '${to}')`,
+      ),
     ],
   },
 ];

@@ -2,7 +2,7 @@
 import { beforeEach, expect, it } from 'vitest';
 import type { Db } from '../src/db.ts';
 import { inventory, type Inventory, type Kind } from '../src/inventory.ts';
-import { LATEST, migrate } from '../src/migrations.ts';
+import { LATEST, MIGRATIONS, migrate } from '../src/migrations.ts';
 import { projects, type Projects } from '../src/projects.ts';
 import { memoryDb } from './memoryDb.ts';
 
@@ -333,4 +333,38 @@ it('a project has a budget: what each thing is planned to cost, and what it came
   // Removing the project takes its costs with it.
   await making.deleteProject(dress.id);
   expect((await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM project_costs'))!.n).toBe(0);
+});
+
+it('renames the British spellings in ready-made kinds, and only those', async () => {
+  const owner = (await db.get<{ id: number }>("SELECT id FROM users WHERE username = 'owner'"))!.id;
+  const kind = async (key: string) => (await db.run("INSERT INTO kinds (owner_id, name, key, created_at) VALUES (?, ?, ?, 'now')", [owner, key, key])).lastId;
+  let made = 0;
+  const field = async (kindId: number, name: string, type: string, choices: string | null = null) =>
+    (await db.run('INSERT INTO kind_fields (kind_id, name, key, type, choices, sort_order) VALUES (?, ?, ?, ?, ?, 0)', [kindId, name, `f${++made}`, type, choices])).lastId;
+  const names = async (kindId: number) => (await db.all<{ name: string }>('SELECT name FROM kind_fields WHERE kind_id = ? ORDER BY id', [kindId])).map((r) => r.name);
+
+  const yarn = await kind('old-yarn');
+  for (const name of ['Colour', 'Fibre', 'Colourway', 'Colour name', 'Colour code', 'Colour of thread', 'colour']) await field(yarn, name, 'text');
+  const both = await kind('both');
+  await field(both, 'Colour', 'text');
+  await field(both, 'Color', 'text');
+  const pots = await kind('old-pots');
+  const material = await field(pots, 'Material', 'choice', JSON.stringify(['Copper', 'Aluminium', 'Other']));
+  const note = await field(pots, 'Note', 'text');
+  const pan = (await db.run("INSERT INTO items (owner_id, kind_id, name, created_at, updated_at) VALUES (?, ?, 'Pan', 'now', 'now')", [owner, pots])).lastId;
+  await db.run("INSERT INTO item_values (item_id, field_id, value) VALUES (?, ?, 'Aluminium')", [pan, material]);
+  await db.run("INSERT INTO item_values (item_id, field_id, value) VALUES (?, ?, 'Aluminium')", [pan, note]);
+
+  const upgrade = MIGRATIONS.find((m) => m.number === 31)!;
+  for (const statement of upgrade.statements) await db.run(statement);
+
+  expect(await names(yarn)).toEqual(['Color', 'Fiber', 'Colorway', 'Color name', 'Color code', 'Colour of thread', 'colour']);
+  expect(await names(both)).toEqual(['Colour', 'Color']);
+  expect((await db.get<{ choices: string }>('SELECT choices FROM kind_fields WHERE id = ?', [material]))!.choices).toBe('["Copper","Aluminum","Other"]');
+  expect((await db.get<{ value: string }>('SELECT value FROM item_values WHERE field_id = ?', [material]))!.value).toBe('Aluminum');
+  // A plain text field that happens to say the same thing is not a choice, so it is left as written.
+  expect((await db.get<{ value: string }>('SELECT value FROM item_values WHERE field_id = ?', [note]))!.value).toBe('Aluminium');
+  // Running it again changes nothing and breaks nothing.
+  for (const statement of upgrade.statements) await db.run(statement);
+  expect(await names(both)).toEqual(['Colour', 'Color']);
 });
