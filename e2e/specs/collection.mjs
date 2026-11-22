@@ -34,7 +34,8 @@ await page.getByRole('button', { name: '+ Add' }).click();
 await field('Title').fill('Alien'); await field('Director').fill('Ridley Scott'); await field('Year').fill('1979');
 await page.getByPlaceholder('VHS, DVD, Blu-ray').fill('VHS'); await field('Where it is').selectOption({ label: 'Tape cabinet' });
 await field('Genres').fill('Horror, Science fiction'); await field('Runs for').fill('117');
-await page.getByRole('button', { name: 'Save' }).click(); await wait(1000);
+// Saving opens the film's own page; on a busy computer that can take longer than any fixed wait.
+await page.getByRole('button', { name: 'Save' }).click(); await page.waitForURL(/media\/[0-9]+/, { timeout: 15000 }).catch(() => {}); await wait(600);
 let t = await text();
 say('a film opens on its own page with its VHS copy in the cabinet: ' + flat(t).slice(0, 110), page.url().includes('/media/') && /VHS/.test(t) && /Tape cabinet/.test(t) && /1 h 57 min/.test(t));
 
