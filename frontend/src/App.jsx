@@ -24,6 +24,7 @@ import Activities from './pages/Activities';
 import Search from './components/Search';
 import HomeReport from './pages/HomeReport';
 import PetsPage, { PetPage } from './pages/Pets';
+import ManualPage from './pages/Manual';
 import UpkeepPage, { JobPage } from './pages/Upkeep';
 import { ThingStickersPage, ThingStickerLanding } from './pages/ThingStickers';
 import AccessNote from './components/AccessNote';
@@ -44,7 +45,7 @@ axios.interceptors.request.use((config) => {
 const SECTIONS = [
   { word: 'eating', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
     tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫'], ['/prices', 'Prices', '💲']] },
-  { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar') || path.startsWith('/plans') || path.startsWith('/mail'), tabs: [['/calendar', 'Calendar', '📅'], ['/plans', 'Plans', '✨'], ['/mail', 'Mail', '✉️']] },
+  { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar') || path.startsWith('/plans') || path.startsWith('/mail') || path.startsWith('/manual'), tabs: [['/calendar', 'Calendar', '📅'], ['/plans', 'Plans', '✨'], ['/manual', 'House manual', '📒'], ['/mail', 'Mail', '✉️']] },
   { word: 'keeping', home: '/things', owns: (path) => path.startsWith('/things'),
     tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/upkeep', 'Upkeep', '🔧'], ['/things/pets', 'Pets', '🐾'], ['/things/activities', 'Activities', '🛠'], ['/things/kinds', 'Kinds', '🏷']] },
   { word: 'making', home: '/projects', owns: (path) => path.startsWith('/projects'),
@@ -145,6 +146,7 @@ function Shell({ user, onLogout }) {
           <Route path="/things/upkeep/:id" element={<JobPage />} />
           <Route path="/things/stickers" element={<ThingStickersPage />} />
           <Route path="/things/report" element={<HomeReport />} />
+          <Route path="/manual" element={<ManualPage />} />
           <Route path="/things/pets" element={<PetsPage />} />
           <Route path="/things/pets/:id" element={<PetPage />} />
           <Route path="/things/:id" element={<Thing />} />

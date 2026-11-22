@@ -65,3 +65,5 @@ export { JOB_KINDS } from './upkeep.ts';
 export type { JobKind } from './upkeep.ts';
 export { pets, careName, PET_CARE, WEIGHT_UNITS, MAX_PET_PHOTO } from './pets.ts';
 export type { Pet, PetInput, PetSummary, PetWeight, Pets } from './pets.ts';
+export { manual, manualFor, manualHtml, MANUAL_SECTIONS } from './manual.ts';
+export type { Manual, ManualEntry, SharedManual } from './manual.ts';

@@ -10,6 +10,7 @@
  */
 import { addDays, todayOf } from '../../core/src/small.ts';
 import { search, type SearchKind } from '../../core/src/index.ts';
+import { manual } from '../../core/src/index.ts';
 import { reminders, COVERS, EMAIL_SERVICE, NTFY_SERVICE, PUSH_SERVICE, type PushSender, type ReminderSettings } from '../../core/src/index.ts';
 import { home, life, lookups, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
@@ -64,6 +65,11 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
   const outside = options.fetcher;
   const skies = (c: Context) => weather(db, c.user.id, c.clock, outside);
   const finder = (c: Context) => lookups(db, c.user.id, c.clock, outside);
+  const book = (c: Context) => manual(db, c.user.id, c.clock);
+  const entryFrom = (body: Body) => ({
+    section: read.text(body, 'section'), title: read.text(body, 'title'), body: read.maybeText(body, 'body'), phone: read.maybeText(body, 'phone'),
+    place_id: read.maybeWhole(body, 'place_id'), private: Object.hasOwn(body, 'private') ? read.yesNo(body, 'private') : false,
+  });
   const remind = (c: Context) => reminders(db, c.user.id, c.clock, { fetcher: outside, mail: options.mail, push: options.push?.send });
   /** The settings, with what each way sends and whether this Life Is can use it. */
   const reminderState = async (c: Context) => {
@@ -107,6 +113,14 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ['GET', /^\/api\/lookups\/book$/, async (c) => ({ json: { book: await finder(c).book(c.query.get('code') ?? '') } })],
     ['GET', /^\/api\/lookups\/title$/, async (c) => ({ json: { title: await finder(c).title(c.query.get('code') ?? '') } })],
     ['DELETE', /^\/api\/weather$/, async (c) => ({ json: { ...await skies(c).turnOff(), service: WEATHER_SERVICE } })],
+
+    // The house manual, and the link it's shared by. See core/'s manual.ts.
+    ['GET', /^\/api\/manual$/, async (c) => ({ json: await book(c).get() })],
+    ['POST', /^\/api\/manual\/entries$/, async (c) => ({ status: 201, json: await book(c).addEntry(entryFrom(c.body)) })],
+    ['PUT', /^\/api\/manual\/entries\/(\d{1,15})$/, async (c) => ({ json: await book(c).updateEntry(c.id, entryFrom(c.body)) })],
+    ['DELETE', /^\/api\/manual\/entries\/(\d{1,15})$/, async (c) => ({ json: await book(c).removeEntry(c.id) })],
+    ['PUT', /^\/api\/manual\/share$/, async (c) => ({ json: await book(c).shareFor(read.maybeWhole(c.body, 'days'), Object.hasOwn(c.body, 'pets') ? read.yesNo(c.body, 'pets') : true) })],
+    ['DELETE', /^\/api\/manual\/share$/, async (c) => ({ json: await book(c).stopSharing() })],
 
     // One search across everything the person keeps. See core/'s search.ts.
     ['GET', /^\/api\/search$/, async (c) => ({ json: await search(db, c.user.id, c.query.get('q') ?? '', (c.query.get('kind') || null) as SearchKind | null) })],

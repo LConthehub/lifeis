@@ -7,6 +7,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BlockList, isIP } from 'node:net';
+import { manualFor, manualHtml } from '../../core/src/index.ts';
 import type { PushSender } from '../../core/src/index.ts';
 import { atomic, feedFor, kitchen, Problem, type Db } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
@@ -255,6 +256,8 @@ export function createApp(options: Options) {
     const api = path === '/api' || path.startsWith('/api/');
     // The calendar link: the long random part of the address is the only key, since a calendar app can't sign in.
     const feed = /^\/cal\/([0-9a-f]{64})\.ics$/.exec(path);
+    // The shared house manual: the same kind of link, for a sitter or a guest, who can't sign in either.
+    const shared = /^\/m\/([0-9a-f]{64})$/.exec(path);
 
     let reply: Reply;
     try {
@@ -265,6 +268,12 @@ export function createApp(options: Options) {
         const text = await feedFor(db, feed[1]!, clock, /^[\w.\-:[\]]+$/.test(host) ? `${isHttps(req) ? 'https' : 'http'}://${host}` : '');
         if (text === null) throw new Refusal(404, 'Not found');
         reply = { body: Buffer.from(text, 'utf8'), headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'private, no-store' } };
+      } else if (shared && (req.method === 'GET' || req.method === 'HEAD')) {
+        const found = await manualFor(db, shared[1]!, clock);
+        if (!found) throw new Refusal(404, 'Not found');
+        // A page of its own with no scripts, kept out of search engines and out of any cache but the reader's.
+        reply = { body: Buffer.from(manualHtml(found), 'utf8'), headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'private, no-store',
+          'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'", 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' } };
       } else if (page && (req.method === 'GET' || req.method === 'HEAD')) {
         const found = await page(url.pathname, isHttps(req));
         reply = { headers: found.headers, body: found.body };

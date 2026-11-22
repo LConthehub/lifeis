@@ -34,6 +34,7 @@ const SUITE = [
   { specs: ['upkeep'] },
   { specs: ['household'] },
   { specs: ['pets'] },
+  { specs: ['manual'] },
   { specs: ['search'] },
   { specs: ['records'] },
   { specs: ['reminders'], fixtures: [['ntfy', 8098]] },

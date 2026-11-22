@@ -833,6 +833,35 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE upkeep_jobs ADD COLUMN pet_id INTEGER REFERENCES pets(id) ON DELETE CASCADE`,
     ],
   },
+  {
+    // The house manual: what someone else needs to know to look after the home, and a link to share it by
+    // that needs no sign-in and stops working on a chosen day.
+    number: 27,
+    name: 'the house manual, and a link to share it by',
+    statements: [
+      `CREATE TABLE manual_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        section TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT,
+        phone TEXT,
+        place_id INTEGER REFERENCES places(id) ON DELETE SET NULL,
+        private INTEGER NOT NULL DEFAULT 0 CHECK(private IN (0, 1)),
+        sort_order INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_manual_entries ON manual_entries(owner_id, sort_order)`,
+      `CREATE TABLE manual_shares (
+        owner_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        expires_on TEXT,
+        pets INTEGER NOT NULL DEFAULT 1 CHECK(pets IN (0, 1)),
+        created_at TEXT NOT NULL
+      )`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

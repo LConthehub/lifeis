@@ -30,7 +30,7 @@ const scan = async (code) => {
 let box = await scan('9780441172719');
 check('off: offers to turn book look-ups on', await box.getByRole('button', { name: 'Turn that on and look it up' }).isVisible());
 await page.screenshot({ path: `${shots}/scan-offer.png` });
-await box.getByRole('button', { name: 'Turn that on and look it up' }).click(); await page.waitForTimeout(4000);
+await box.getByRole('button', { name: 'Turn that on and look it up' }).click(); await page.waitForTimeout(300); await box.getByRole('button', { name: /Looking/ }).waitFor({ state: 'detached', timeout: 45000 }).catch(() => {}); await page.waitForTimeout(500);
 const said = await box.locator('[data-found]').innerText().catch(() => '');
 check('Open Library answered', said.includes('Dune'), said.replace(/\s+/g, ' '));
 await page.screenshot({ path: `${shots}/scan-book.png` });
@@ -49,7 +49,7 @@ check('scanning it again opens it', /\/media\/\d+$/.test(page.url()), page.url()
 box = await scan('634904052126');
 if (await box.getByRole('button', { name: 'Turn that on and look it up' }).isVisible().catch(() => false)) {
   check('off: offers to turn film, music and game look-ups on', true);
-  await box.getByRole('button', { name: 'Turn that on and look it up' }).click(); await page.waitForTimeout(5000);
+  await box.getByRole('button', { name: 'Turn that on and look it up' }).click(); await page.waitForTimeout(300); await box.getByRole('button', { name: /Looking/ }).waitFor({ state: 'detached', timeout: 45000 }).catch(() => {}); await page.waitForTimeout(500);
 }
 const album = (await box.locator('[data-found]').innerText().catch(() => '')) || (await box.innerText());
 check('an album was looked up', /music|🎵/i.test(album) || album.includes('says'), album.replace(/\s+/g, ' ').slice(0, 160));

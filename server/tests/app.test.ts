@@ -450,6 +450,30 @@ it('pets over the web: a profile, care that becomes upkeep, weights and a photo'
   expect((await admin.get('/api/things/upkeep')).json).toEqual([]);
 });
 
+it('the house manual is written signed in, and read by its link without signing in until its day', async () => {
+  const admin = await owner();
+  expect((await admin.get('/api/manual')).json.sections.map((s: { id: string }) => s.id)).toEqual(['emergency', 'contacts', 'house', 'routines']);
+  await admin.post('/api/manual/entries', { section: 'house', title: 'Wi-Fi', body: 'Password: <b>fish</b>' });
+  const made = await admin.post('/api/manual/entries', { section: 'house', title: 'Alarm', body: 'Code 4821', private: true });
+  expect([made.status, made.json.sections[2].entries.map((e: { title: string; private: boolean }) => [e.title, e.private])]).toEqual([201, [['Wi-Fi', false], ['Alarm', true]]]);
+  expect((await admin.post('/api/manual/entries', { section: 'house' })).status).toBe(422);
+
+  const share = (await admin.put('/api/manual/share', { days: 3 })).json.share;
+  expect([share.on, share.token.length]).toEqual([true, 64]);
+  const reader = visitor(); // nobody signed in
+  const page = await reader.get(`/m/${share.token}`);
+  const html = page.bytes.toString('utf8');
+  expect([page.status, page.headers.get('content-type'), page.headers.get('content-security-policy'), page.headers.get('x-robots-tag')])
+    .toEqual([200, 'text/html; charset=utf-8', "default-src 'none'; style-src 'unsafe-inline'", 'noindex, nofollow']);
+  expect([html.includes('Wi-Fi'), html.includes('&lt;b&gt;fish&lt;/b&gt;'), html.includes('4821'), html.includes('<script')]).toEqual([true, true, false, false]);
+  expect((await reader.get(`/m/${'0'.repeat(64)}`)).status).toBe(404);
+  expect((await reader.get('/api/manual')).status).toBe(401);
+  expect((await admin.put('/api/manual/share', { days: 0 })).status).toBe(400);
+
+  expect((await admin.delete('/api/manual/share')).json.share.on).toBe(false);
+  expect((await reader.get(`/m/${share.token}`)).status).toBe(404);
+});
+
 it('upkeep over the web: a job with its tools, done, on the calendar, and given to someone else', async () => {
   const admin = await owner();
   const kind = (await admin.post('/api/things/kinds', { name: 'Tools' })).json[0];
@@ -616,7 +640,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['manual_shares', 'manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.
