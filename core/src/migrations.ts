@@ -972,6 +972,35 @@ export const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    // Three small things. A copy of a book or album can say how many discs or tapes it is. A kind of thing
+    // can name the activity its things are for ("Car & mechanics"), so new things of that kind show up as gear
+    // for projects of that kind without being tagged one by one. And licenses and permits get a place of their
+    // own: whose it is, its number, who gave it, and when it runs out. A license can be tied to the renewal
+    // in upkeep that reminds you of it; if that renewal is removed, the license stays.
+    number: 33,
+    name: 'how many discs a copy is, the activity a kind is for, and licenses',
+    statements: [
+      `ALTER TABLE media_copies ADD COLUMN pieces INTEGER`,
+      `ALTER TABLE kinds ADD COLUMN activity TEXT`,
+      `CREATE TABLE licenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        category TEXT,
+        holder TEXT,
+        number TEXT,
+        issuer TEXT,
+        issued_on TEXT,
+        expires_on TEXT,
+        note TEXT,
+        job_id INTEGER REFERENCES upkeep_jobs(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_licenses_owner ON licenses(owner_id, expires_on)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;
