@@ -760,6 +760,31 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_push_subscriptions_user ON push_subscriptions(user_id)`,
     ],
   },
+  {
+    // Home records: what a thing cost and where it came from, the numbers that identify it, how long its
+    // warranty runs and what it's worth now; and its papers (a receipt, the manual), kept here as files.
+    number: 24,
+    name: 'home records: what things cost, their serial numbers, warranties and papers',
+    statements: [
+      `ALTER TABLE items ADD COLUMN bought_on TEXT`,
+      `ALTER TABLE items ADD COLUMN bought_at TEXT`,
+      `ALTER TABLE items ADD COLUMN price_cents INTEGER CHECK(price_cents IS NULL OR price_cents >= 0)`,
+      `ALTER TABLE items ADD COLUMN value_cents INTEGER CHECK(value_cents IS NULL OR value_cents >= 0)`,
+      `ALTER TABLE items ADD COLUMN serial TEXT`,
+      `ALTER TABLE items ADD COLUMN model TEXT`,
+      `ALTER TABLE items ADD COLUMN warranty_until TEXT`,
+      `CREATE TABLE item_documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL CHECK(kind IN ('receipt', 'manual', 'warranty', 'other')),
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        bytes BLOB NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_item_documents ON item_documents(item_id)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

@@ -127,6 +127,14 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
         lines.push({ kind: 'upkeep', icon: '🔧', title: j.name, detail: [when, who].filter(Boolean).join(' · '), link: `/things/upkeep/${j.id}`, urgent: d.state !== 'soon' });
       }
     }
+    if (s.covers.upkeep) {
+      // A warranty about to end is said a month ahead, a week ahead, the day before and on the day: not every morning.
+      for (const t of await inventory(db, owner, clock).listItems()) {
+        if (t.warranty_days === null || ![30, 7, 1, 0].includes(t.warranty_days)) continue;
+        const when = t.warranty_days === 0 ? 'ends today' : t.warranty_days === 1 ? 'ends tomorrow' : `ends in ${t.warranty_days} days`;
+        lines.push({ kind: 'upkeep', icon: '🛡', title: `Warranty: ${t.name}`, detail: `${when} · anything wrong with it?`, link: `/things/${t.id}`, urgent: t.warranty_days <= 1 });
+      }
+    }
     if (s.covers.low) {
       for (const t of await inventory(db, owner, clock).listItems({ low: true })) {
         lines.push({ kind: 'low', icon: '📦', title: t.name, detail: `running low: ${t.amount} left`, link: `/things/${t.id}`, urgent: false });

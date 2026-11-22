@@ -112,12 +112,15 @@ export function queryNumber(query: URLSearchParams, name: string): number | null
   return value;
 }
 
-export async function readBody(req: IncomingMessage): Promise<Body> {
+/** A paper kept with a thing (a scanned manual) may be larger than anything else that's sent. */
+export const MAX_PAPER_BODY_BYTES = 18 * 1024 * 1024;
+
+export async function readBody(req: IncomingMessage, most = MAX_BODY_BYTES): Promise<Body> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
-    if (size > MAX_BODY_BYTES) throw new Refusal(413, "That's too much to send at once");
+    if (size > most) throw new Refusal(413, "That's too much to send at once");
     chunks.push(chunk as Buffer);
   }
   if (size === 0) return {};

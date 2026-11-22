@@ -53,7 +53,20 @@ export type ItemInput = {
   code?: string | null;
   /** What it's for: Sewing, Camping. Left out: unchanged. */
   activities?: string[];
+  /** Its home records. Left out: unchanged; a field left out of it: unchanged. */
+  records?: RecordsInput;
 };
+/** What a thing cost and where it came from, the numbers that identify it, its warranty and what it's worth. */
+export type Records = {
+  bought_on: string | null; bought_at: string | null; price_cents: number | null; value_cents: number | null;
+  serial: string | null; model: string | null; warranty_until: string | null;
+};
+export type RecordsInput = Partial<Records>;
+export const DOCUMENT_KINDS = ['receipt', 'manual', 'warranty', 'other'] as const;
+export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
+export type ItemDocument = { id: number; item_id: number; kind: DocumentKind; name: string; type: string; size: number; created_at: string };
+export const MAX_DOCUMENT = 12_000_000;
+const DOCUMENT_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 export type Item = {
   id: number;
   kind_id: number;
@@ -81,6 +94,11 @@ export type Item = {
   /** Whether a photo of it is kept: /api/things/items/:id/photo. */
   photo: boolean;
   activities: string[];
+  records: Records;
+  /** How many papers (receipts, manuals) are kept with it. */
+  documents: number;
+  /** Days until its warranty ends: below 0, it has. Null without one. */
+  warranty_days: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -113,7 +131,7 @@ export function stickerCode(read: string): string | null {
   const m = /(?:^|\/p\/)([2-9A-HJ-NP-Za-hj-np-z]{10})\/?$/.exec(read.trim());
   return m ? m[1]!.toUpperCase() : null;
 }
-type ItemRow = Omit<Item, 'amount' | 'place' | 'low' | 'values' | 'set_aside' | 'free' | 'photo' | 'activities'> & { photo: number };
+type ItemRow = Omit<Item, 'amount' | 'place' | 'low' | 'values' | 'set_aside' | 'free' | 'photo' | 'activities' | 'records' | 'warranty_days'> & { photo: number } & Records;
 
 /** The code out of a scanned thing's sticker: a web address ending in /t/ and the code. Null when it isn't one. */
 export function thingStickerCode(read: string): string | null {
@@ -144,6 +162,18 @@ function bestSpelling(names: string[]): string {
   const named = (n: string) => (/^\p{Lu}[^\p{Lu}]*$/u.test(n) ? 1 : 0);
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || named(b[0]) - named(a[0]))[0]![0];
 }
+
+export type ReportLine = {
+  id: number; name: string; kind: string; place: string | null; amount: string; photo: boolean; receipt: boolean;
+  serial: string | null; model: string | null; bought_on: string | null; bought_at: string | null;
+  price_cents: number | null; value_cents: number | null; /** What it's worth now if said, else what it cost. */ worth_cents: number; warranty_until: string | null;
+};
+export type HomeReport = {
+  day: string; things: number; worth_cents: number; /** How many have a price or a value. */ valued: number; with_photo: number; with_receipt: number;
+  rooms: { name: string; worth_cents: number; lines: ReportLine[] }[];
+  /** Warranties ending in the next ninety days, soonest first. */
+  warranties: { id: number; name: string; until: string; days_left: number }[];
+};
 
 export type ThingSticker = { id: number; name: string; place: string | null; code: string };
 export type ActivitySummary = { name: string; things: number; projects: number; jobs: number };
@@ -339,6 +369,8 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
   async function items(q: Queries, where = '', args: Value[] = []): Promise<Item[]> {
     const rows = await q.all<ItemRow>(
       `SELECT i.id, i.kind_id, k.name AS kind, k.icon, i.name, i.quantity, i.unit, i.place_id, i.low_at, i.note, i.code, i.barcode,
+              i.bought_on, i.bought_at, i.price_cents, i.value_cents, i.serial, i.model, i.warranty_until,
+              (SELECT COUNT(*) FROM item_documents d WHERE d.item_id = i.id) AS documents,
               EXISTS (SELECT 1 FROM item_photos ph WHERE ph.item_id = i.id) AS photo, i.created_at, i.updated_at
        FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.owner_id = ? ${where} ORDER BY i.name COLLATE NOCASE, i.id`, [owner, ...args]);
     const doing = new Map<number, string[]>();
@@ -355,10 +387,13 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       if (!values.has(row.item_id)) values.set(row.item_id, {});
       values.get(row.item_id)![String(row.field_id)] = shownValue(row.type, row.value);
     }
-    return rows.map((row) => {
+    const today = todayOf(clock);
+    return rows.map(({ bought_on, bought_at, price_cents, value_cents, serial, model, warranty_until, ...row }) => {
       const setAside = rounded(aside.get(row.id) ?? 0, 4);
       return {
         ...row,
+        records: { bought_on, bought_at, price_cents, value_cents, serial, model, warranty_until },
+        warranty_days: warranty_until ? dayNumber(warranty_until) - dayNumber(today) : null,
         amount: row.quantity !== null ? units.amount(row.quantity, row.unit) : 'some',
         place: row.place_id !== null ? (paths.get(row.place_id) ?? null) : null,
         low: row.low_at !== null && row.quantity !== null && row.quantity <= row.low_at,
@@ -383,6 +418,29 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     if (names === undefined) return;
     await q.run('DELETE FROM item_activities WHERE item_id = ?', [itemId]);
     for (const a of activityList(names)) await q.run('INSERT INTO item_activities (item_id, activity, key) VALUES (?, ?, ?)', [itemId, a.name, a.key]);
+  }
+
+  /** A thing's home records, checked and kept. Only the fields given change. */
+  async function saveRecords(q: Queries, itemId: number, input: RecordsInput | undefined) {
+    if (!input) return;
+    const sets: string[] = [];
+    const args: Value[] = [];
+    const put = (column: keyof Records, value: Value) => { sets.push(`${column} = ?`); args.push(value); };
+    for (const day of ['bought_on', 'warranty_until'] as const) {
+      if (input[day] === undefined) continue;
+      if (input[day] !== null && !dayOrNull(input[day])) throw new Problem(400, day === 'bought_on' ? 'Pick the day it was bought' : 'Pick the day its warranty ends');
+      put(day, dayOrNull(input[day]));
+    }
+    for (const money of ['price_cents', 'value_cents'] as const) {
+      if (input[money] === undefined) continue;
+      const cents = input[money];
+      if (cents !== null && !(Number.isInteger(cents) && cents >= 0 && cents < 1e12)) throw new Problem(400, 'An amount of money is 0 or more');
+      put(money, cents);
+    }
+    if (input.bought_at !== undefined) put('bought_at', clean(input.bought_at, 120));
+    if (input.serial !== undefined) put('serial', clean(input.serial, 120));
+    if (input.model !== undefined) put('model', clean(input.model, 120));
+    if (sets.length) await q.run(`UPDATE items SET ${sets.join(', ')} WHERE id = ?`, [...args, itemId]);
   }
 
   async function ownedItem(q: Queries, id: number): Promise<{ id: number; place_id: number | null; code: string | null }> {
@@ -608,6 +666,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
           [owner, kind.id, ...(await itemValues(tx, input, kind)), code, plainBarcode(input.barcode), now(), now()]);
         await saveValues(tx, made.lastId, kind.id, input.values);
         await saveActivities(tx, made.lastId, input.activities);
+        await saveRecords(tx, made.lastId, input.records);
         await noteHistory(tx, owner, { item_id: made.lastId }, { what: 'added', to_place: await placePath(tx, owner, input.place_id), ...when() });
         return item(tx, made.lastId);
       });
@@ -623,6 +682,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
         if (input.barcode !== undefined) await tx.run('UPDATE items SET barcode = ? WHERE id = ?', [plainBarcode(input.barcode), id]);
         await saveValues(tx, id, kind.id, input.values);
         await saveActivities(tx, id, input.activities);
+        await saveRecords(tx, id, input.records);
         await noteMove(tx, owner, { item_id: id }, before.place_id, input.place_id ?? null, when());
         return item(tx, id);
       });
@@ -687,6 +747,65 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       await ownedItem(db, id);
       await db.run('DELETE FROM item_photos WHERE item_id = ?', [id]);
       return item(db, id);
+    },
+
+    // ---------- papers: receipts, manuals, warranty cards ----------
+
+    async documents(itemId: number): Promise<ItemDocument[]> {
+      await ownedItem(db, itemId);
+      return db.all<ItemDocument>('SELECT id, item_id, kind, name, type, LENGTH(bytes) AS size, created_at FROM item_documents WHERE item_id = ? ORDER BY id', [itemId]);
+    },
+
+    /** Keep a paper with a thing: a PDF or a photo of it. */
+    async addDocument(itemId: number, input: { kind: string; name: string; bytes: Uint8Array }): Promise<ItemDocument[]> {
+      await ownedItem(db, itemId);
+      if (!DOCUMENT_KINDS.includes(input.kind as DocumentKind)) throw new Problem(400, "It's a receipt, a manual, a warranty or something else");
+      const starts = (...head: number[]) => head.every((b, i) => input.bytes[i] === b);
+      const type = starts(0x25, 0x50, 0x44, 0x46) ? 'application/pdf' : pictureType(input.bytes);
+      if (!type || !DOCUMENT_TYPES.includes(type)) throw new Problem(400, 'A paper is kept as a PDF or a photo (JPEG, PNG or WebP)');
+      if (input.bytes.length > MAX_DOCUMENT) throw new Problem(400, 'That file is too large to keep (12 MB at most)');
+      if ((await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM item_documents WHERE item_id = ?', [itemId]))!.n >= 20) throw new Problem(400, 'A thing can keep 20 papers at most');
+      const name = clean(input.name, 120) ?? (input.kind === 'other' ? 'Paper' : input.kind[0]!.toUpperCase() + input.kind.slice(1));
+      await db.run('INSERT INTO item_documents (item_id, kind, name, type, bytes, created_at) VALUES (?, ?, ?, ?, ?, ?)', [itemId, input.kind, name, type, input.bytes, now()]);
+      return this.documents(itemId);
+    },
+
+    async document(id: number): Promise<{ name: string; type: string; bytes: Uint8Array } | null> {
+      return (await db.get<{ name: string; type: string; bytes: Uint8Array }>(
+        'SELECT d.name, d.type, d.bytes FROM item_documents d JOIN items i ON i.id = d.item_id WHERE d.id = ? AND i.owner_id = ?', [id, owner])) ?? null;
+    },
+
+    async removeDocument(id: number): Promise<void> {
+      await db.run('DELETE FROM item_documents WHERE id = ? AND item_id IN (SELECT id FROM items WHERE owner_id = ?)', [id, owner]);
+    },
+
+    /**
+     * The home inventory, for an insurer or for peace of mind: everything kept, room by room, with what each
+     * cost and is worth, its serial number, and whether there's a photo and a receipt to show for it.
+     */
+    async homeReport(): Promise<HomeReport> {
+      const all = await items(db);
+      const roomOf = (place: string | null) => (place ? place.split(' › ')[0]! : 'No place yet');
+      const worth = (t: Item) => (t.records.value_cents ?? t.records.price_cents ?? 0);
+      const rooms = new Map<string, Item[]>();
+      for (const t of all) rooms.set(roomOf(t.place), [...(rooms.get(roomOf(t.place)) ?? []), t]);
+      const receipts = new Set((await db.all<{ item_id: number }>(
+        "SELECT DISTINCT d.item_id FROM item_documents d JOIN items i ON i.id = d.item_id WHERE i.owner_id = ? AND d.kind = 'receipt'", [owner])).map((r) => r.item_id));
+      const line = (t: Item): ReportLine => ({
+        id: t.id, name: t.name, kind: t.kind, place: t.place, amount: t.amount, photo: t.photo, receipt: receipts.has(t.id),
+        serial: t.records.serial, model: t.records.model, bought_on: t.records.bought_on, bought_at: t.records.bought_at,
+        price_cents: t.records.price_cents, value_cents: t.records.value_cents, worth_cents: worth(t), warranty_until: t.records.warranty_until,
+      });
+      const sum = (list: Item[]) => list.reduce((n, t) => n + worth(t), 0);
+      return {
+        day: todayOf(clock),
+        things: all.length, worth_cents: sum(all), valued: all.filter((t) => worth(t) > 0).length,
+        with_photo: all.filter((t) => t.photo).length, with_receipt: all.filter((t) => receipts.has(t.id)).length,
+        rooms: [...rooms.entries()].map(([name, list]) => ({ name, worth_cents: sum(list), lines: list.map(line).sort((a, b) => b.worth_cents - a.worth_cents || a.name.localeCompare(b.name)) }))
+          .sort((a, b) => Number(a.name === 'No place yet') - Number(b.name === 'No place yet') || a.name.localeCompare(b.name)),
+        warranties: all.filter((t) => t.warranty_days !== null && t.warranty_days >= 0 && t.warranty_days <= 90)
+          .sort((a, b) => a.warranty_days! - b.warranty_days!).map((t) => ({ id: t.id, name: t.name, until: t.records.warranty_until!, days_left: t.warranty_days! })),
+      };
     },
 
     /** Stickers for these things: each given a code the first time, and keeping it. */

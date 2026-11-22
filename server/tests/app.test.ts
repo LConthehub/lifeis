@@ -403,6 +403,29 @@ it('a home inventoried over the web: scanning, moving, uses, activities, sticker
   expect((await other.get('/api/things/scan?code=5012345678900')).json.kind).toBe('unknown');
 });
 
+it('home records over the web: what a thing cost, its papers, and the home inventory', async () => {
+  const admin = await owner();
+  const kind = (await admin.post('/api/things/kinds', { name: 'Appliances' })).json[0];
+  const tv = (await admin.post('/api/things/items', { kind_id: kind.id, name: 'Television', records: { price_cents: 79900, serial: 'SN-123', warranty_until: '2099-01-01' } })).json;
+  expect([tv.records.price_cents, tv.records.serial, tv.documents]).toEqual([79900, 'SN-123', 0]);
+  expect((await admin.put(`/api/things/items/${tv.id}`, { name: 'Television', records: { value_cents: 50000 } })).json.records).toMatchObject({ price_cents: 79900, value_cents: 50000 });
+  expect((await admin.put(`/api/things/items/${tv.id}`, { name: 'Television', records: { price_cents: 'lots' } })).status).toBe(422);
+
+  const pdf = Buffer.from('%PDF-1.4 a receipt');
+  const kept = await admin.post(`/api/things/items/${tv.id}/documents`, { kind: 'receipt', name: 'Receipt.pdf', data: pdf.toString('base64') });
+  expect([kept.status, kept.json.map((d: { name: string; type: string }) => [d.name, d.type])]).toEqual([201, [['Receipt.pdf', 'application/pdf']]]);
+  expect((await admin.post(`/api/things/items/${tv.id}/documents`, { kind: 'receipt', name: 'x.html', data: Buffer.from('<script>').toString('base64') })).status).toBe(400);
+  const shown = await admin.get(`/api/things/documents/${kept.json[0].id}`);
+  expect([shown.status, shown.headers.get('content-type'), shown.headers.get('content-security-policy'), shown.bytes.equals(pdf)]).toEqual([200, 'application/pdf', "sandbox; default-src 'none'", true]);
+
+  const report = (await admin.get('/api/things/report')).json;
+  expect([report.things, report.worth_cents, report.with_receipt, report.rooms[0].name]).toEqual([1, 50000, 1, 'No place yet']);
+  const other = await member(admin, 'partner');
+  expect((await other.get(`/api/things/documents/${kept.json[0].id}`)).status).toBe(404);
+  expect((await other.get('/api/things/report')).json.things).toBe(0);
+  expect((await admin.delete(`/api/things/documents/${kept.json[0].id}`)).status).toBe(204);
+});
+
 it('upkeep over the web: a job with its tools, done, on the calendar, and given to someone else', async () => {
   const admin = await owner();
   const kind = (await admin.post('/api/things/kinds', { name: 'Tools' })).json[0];
@@ -569,7 +592,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.

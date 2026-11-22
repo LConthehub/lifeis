@@ -81,6 +81,7 @@ export default function Things() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Things</h1>
+        {items.length > 0 && <Link to="/things/report" className={quietButtonClass}>🏠 Home inventory</Link>}
         <button type="button" onClick={() => setEditing({ kind_id: kind ?? kinds[0].id })} className={buttonClass}>+ Add</button>
       </div>
       {low.length > 0 && <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">Running low: {low.join(', ')}.</p>}

@@ -59,3 +59,5 @@ export { reminders, remindersDue, zoneNow, digestText, newTopic, COVERS, NTFY_SE
 export type { Reminders, ReminderSettings, ReminderTools, Digest, DigestLine, Channel, PushSender, PushSubscription } from './reminders.ts';
 export { search, SEARCH_KINDS } from './search.ts';
 export type { SearchKind, SearchResult } from './search.ts';
+export { DOCUMENT_KINDS, MAX_DOCUMENT } from './inventory.ts';
+export type { Records, RecordsInput, ItemDocument, DocumentKind, HomeReport, ReportLine } from './inventory.ts';

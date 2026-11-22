@@ -54,7 +54,7 @@ export async function search(db: Db, owner: number, query: string, only?: Search
   const where = (id: number | null) => (id !== null ? (paths.get(id) ?? null) : null);
 
   if (wants('thing')) {
-    const w = every(['i.name', 'i.note', 'i.barcode', 'k.name',
+    const w = every(['i.name', 'i.note', 'i.barcode', 'i.serial', 'i.model', 'i.bought_at', 'k.name',
       "(SELECT GROUP_CONCAT(v.value, ' ') FROM item_values v WHERE v.item_id = i.id)",
       "(SELECT GROUP_CONCAT(a.activity, ' ') FROM item_activities a WHERE a.item_id = i.id)"]);
     for (const t of await db.all<{ id: number; name: string; kind: string; icon: string | null; place_id: number | null }>(

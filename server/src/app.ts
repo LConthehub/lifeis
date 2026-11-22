@@ -11,7 +11,7 @@ import type { PushSender } from '../../core/src/index.ts';
 import { atomic, feedFor, kitchen, Problem, type Db } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
 import type { MailTools } from './mailRoutes.ts';
-import { notUnderstood, read, readBody, Refusal, type Context, type Reply, type Route } from './http.ts';
+import { notUnderstood, read, readBody, MAX_PAPER_BODY_BYTES, Refusal, type Context, type Reply, type Route } from './http.ts';
 import type { Reach } from './connectionRoutes.ts';
 import { everydayRoutes } from './everydayRoutes.ts';
 import { pages } from './pages.ts';
@@ -237,7 +237,7 @@ export function createApp(options: Options) {
     const signedIn = user ?? { id: 0, username: '', is_admin: false };
     const theirClock = clockFor(req);
     return route[2]({
-      path, userAgent: String(req.headers['user-agent'] ?? '') || undefined, query: url.searchParams, id: Number(route[1].exec(path)![1] ?? 0), body: SAFE_METHODS.has(method) ? {} : await readBody(req),
+      path, userAgent: String(req.headers['user-agent'] ?? '') || undefined, query: url.searchParams, id: Number(route[1].exec(path)![1] ?? 0), body: SAFE_METHODS.has(method) ? {} : await readBody(req, /^\/api\/things\/items\/\d+\/documents$/.test(path) ? MAX_PAPER_BODY_BYTES : undefined),
       user: signedIn, kitchen: kitchen(db, signedIn.id, theirClock), clock: theirClock, token, ip: clientIp(req), https: isHttps(req), local: isLocal(req),
       origin: req.headers.host ? `${isHttps(req) ? 'https' : 'http'}://${String(req.headers.host).slice(0, 200)}` : undefined,
     });

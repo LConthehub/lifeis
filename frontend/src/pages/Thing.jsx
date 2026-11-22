@@ -7,6 +7,7 @@ import { shrink } from '../components/shrink';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput } from '../components/ui';
 import { ItemForm } from './Things';
 import { DueBadge } from './Upkeep';
+import Records from '../components/Records';
 
 const dayText = (day) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -131,6 +132,8 @@ export default function Thing() {
           {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
         </section>
       </div>
+
+      <Records item={item} onChanged={(saved) => (saved ? setItem(saved) : load())} />
 
       {jobs.length > 0 && (
         <section className={cardClass} aria-label="Upkeep">

@@ -22,6 +22,7 @@ import FillPlace from './pages/FillPlace';
 import Thing from './pages/Thing';
 import Activities from './pages/Activities';
 import Search from './components/Search';
+import HomeReport from './pages/HomeReport';
 import UpkeepPage, { JobPage } from './pages/Upkeep';
 import { ThingStickersPage, ThingStickerLanding } from './pages/ThingStickers';
 import AccessNote from './components/AccessNote';
@@ -142,6 +143,7 @@ function Shell({ user, onLogout }) {
           <Route path="/things/upkeep" element={<UpkeepPage />} />
           <Route path="/things/upkeep/:id" element={<JobPage />} />
           <Route path="/things/stickers" element={<ThingStickersPage />} />
+          <Route path="/things/report" element={<HomeReport />} />
           <Route path="/things/:id" element={<Thing />} />
           <Route path="/t/:code" element={<ThingStickerLanding />} />
           <Route path="/p/:code" element={<StickerLanding />} />

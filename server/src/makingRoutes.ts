@@ -2,7 +2,7 @@
  * The addresses for the things you keep (/api/things) and the projects that use them (/api/projects).
  * What they do is core/'s inventory.ts and projects.ts; this only reads what was sent and passes it on.
  */
-import { inventory, projects, upkeep, whatIsThis, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
+import { inventory, projects, upkeep, whatIsThis, MAX_DOCUMENT, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
 import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -19,12 +19,26 @@ const itemFrom = (body: Body) => ({
   // Left out: left as they are.
   ...(sent(body, 'barcode') ? { barcode: read.maybeText(body, 'barcode') } : {}),
   ...(sent(body, 'activities') ? { activities: read.texts(body, 'activities') } : {}),
+  ...(sent(body, 'records') ? { records: recordsFrom(read.record(body, 'records')) } : {}),
 });
 
-/** A photo sent as base64 text (the "data" field), as the pages send them. */
-function photoFrom(body: Body): Uint8Array {
+/** A thing's home records as sent: only the fields that were sent, so the rest are left as they are. */
+function recordsFrom(r: Body) {
+  return {
+    ...(sent(r, 'bought_on') ? { bought_on: read.maybeText(r, 'bought_on') } : {}),
+    ...(sent(r, 'bought_at') ? { bought_at: read.maybeText(r, 'bought_at') } : {}),
+    ...(sent(r, 'price_cents') ? { price_cents: read.maybeWhole(r, 'price_cents') } : {}),
+    ...(sent(r, 'value_cents') ? { value_cents: read.maybeWhole(r, 'value_cents') } : {}),
+    ...(sent(r, 'serial') ? { serial: read.maybeText(r, 'serial') } : {}),
+    ...(sent(r, 'model') ? { model: read.maybeText(r, 'model') } : {}),
+    ...(sent(r, 'warranty_until') ? { warranty_until: read.maybeText(r, 'warranty_until') } : {}),
+  };
+}
+
+/** A photo or a paper sent as base64 text (the "data" field), as the pages send them. */
+function photoFrom(body: Body, most = MAX_THING_PHOTO): Uint8Array {
   const text = read.text(body, 'data');
-  if (text.length > MAX_THING_PHOTO * 1.4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(text)) throw new Refusal(400, 'That photo is too large to keep, or was damaged on the way');
+  if (text.length > most * 1.4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(text)) throw new Refusal(400, 'That photo is too large to keep, or was damaged on the way');
   return Uint8Array.from(atob(text), (letter) => letter.charCodeAt(0));
 }
 
@@ -152,6 +166,21 @@ export function makingRoutes(db: Db): Route[] {
       status: 201,
       json: await things(c).logUse(c.id, { day: read.maybeText(c.body, 'day'), project_id: read.maybeWhole(c.body, 'project_id'), activity: read.maybeText(c.body, 'activity'), note: read.maybeText(c.body, 'note') }),
     })],
+    // Home records: a thing's papers, and the whole home inventory.
+    ['GET', at('things/report'), async (c) => ({ json: await things(c).homeReport() })],
+    ['GET', at('things/items/:id/documents'), async (c) => ({ json: await things(c).documents(c.id) })],
+    ['POST', at('things/items/:id/documents'), async (c) => ({
+      status: 201,
+      json: await things(c).addDocument(c.id, { kind: read.text(c.body, 'kind'), name: read.maybeText(c.body, 'name') ?? '', bytes: photoFrom(c.body, MAX_DOCUMENT) }),
+    })],
+    ['GET', at('things/documents/:id'), async (c) => {
+      const paper = await things(c).document(c.id);
+      if (!paper) return { status: 404, json: { detail: 'Not found' } };
+      // Shown, not run: a PDF opens in the browser's own reader, and nothing in it can act as Life Is.
+      return { body: paper.bytes, headers: { 'Content-Type': paper.type, 'Cache-Control': 'private, max-age=60', 'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "sandbox; default-src 'none'", 'Content-Disposition': `inline; filename="${paper.name.replace(/[^\w. -]/g, '_')}"` } };
+    }],
+    ['DELETE', at('things/documents/:id'), async (c) => (await things(c).removeDocument(c.id), { status: 204 })],
     ['PUT', at('things/items/:id/photo'), async (c) => ({ json: await things(c).setPhoto(c.id, photoFrom(c.body)) })],
     ['DELETE', at('things/items/:id/photo'), async (c) => ({ json: await things(c).removePhoto(c.id) })],
     ['GET', at('things/items/:id/photo'), async (c) => {

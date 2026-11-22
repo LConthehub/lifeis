@@ -36,5 +36,5 @@ body {
   body::before, body::after { display: none !important; }
   main { padding: 0 !important; max-width: none !important; }
   main > div { background: transparent !important; box-shadow: none !important; padding: 0 !important; backdrop-filter: none !important; --tw-ring-shadow: 0 0 #0000 !important; }
-  .sticker-sheet { padding: 0 !important; }
+  .sticker-sheet, .report-sheet { padding: 0 !important; }
 }
