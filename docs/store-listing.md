@@ -5,9 +5,11 @@ are written once and reviewed before anything goes live.
 
 ## Still to decide
 
-- **The name.** "Life Is" has trademark neighbours ("Life is Good", "Life Is Strange"). Decide before the
-  first upload; the store title can change later, but reviews and links follow the name.
-- **Contact email:** `hello@emailmy.space`, once that address is created in iCloud. Google shows it publicly.
+- **The name** is Life Is (decided 2026-11-22), shown in stores with what it is: "Life Is: Home Organizer".
+  It has trademark neighbours ("Life is Good", "Life Is Strange"), so a short attorney check is worth having
+  before filing a mark or selling in earnest.
+- **Website:** https://lifeis.living  **Privacy policy:** https://lifeis.living/privacy (both live).
+- **Contact email:** `hello@lifeis.living`, once that address is created in iCloud. Google shows it publicly.
 - **Publisher name.** A personal account shows the account holder's legal name.
 - **The app ID** is `space.emailmy.lifeis`. It can never change after the first upload.
 
@@ -90,7 +92,7 @@ Adults (18 and over). Not designed for children.
 - [ ] App icon, 512 x 512
 - [ ] Feature graphic, 1024 x 500
 - [ ] At least 2 phone screenshots; 4 to 8 is better (recipes, a project with its budget, spending, the "where should this phone keep it" screen)
-- [ ] A privacy policy web address (see `privacy.md`)
+- [x] A privacy policy web address: https://lifeis.living/privacy
 - [ ] A signed release build of the app
 - [ ] 12 testers opted in for 14 days, before applying for public release
 
@@ -100,5 +102,5 @@ Adults (18 and over). Not designed for children.
 - [ ] Build the purchase step and test it with Google's test accounts
 - [ ] Camera permission for the barcode scanner, checked on a device
 - [ ] Replace the placeholder icon and splash screen in the Android project
-- [ ] Create `hello@emailmy.space` in iCloud and send it a test message
+- [ ] Create `hello@lifeis.living` in iCloud (custom email domain for lifeis.living) and send it a test message
 - [ ] Fill in the publisher name in the privacy policy

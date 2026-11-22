@@ -11,7 +11,7 @@ import type { PushSender } from '../../core/src/index.ts';
 
 type Keys = { publicKey: string; privateKey: string };
 
-export function browserPush(keyDir: string, contact = 'mailto:hello@emailmy.space'): { publicKey: string; send: PushSender } {
+export function browserPush(keyDir: string, contact = 'mailto:hello@lifeis.living'): { publicKey: string; send: PushSender } {
   const file = path.join(keyDir, 'push-keys.json');
   let keys: Keys;
   if (existsSync(file)) keys = JSON.parse(readFileSync(file, 'utf8')) as Keys;

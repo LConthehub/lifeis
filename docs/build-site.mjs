@@ -81,5 +81,5 @@ writeFileSync(path.join(out, 'index.html'), page('Life Is', `<h1>Life Is</h1>
 <p>It keeps everything on your own device, or on a computer you run yourself. No account, no advertising, no tracking. One payment, no subscription.</p>
 <p>The app is on its way to the app stores.</p>
 <p><a href="privacy.html">Privacy policy</a></p>
-<footer>Questions: <a href="mailto:hello@emailmy.space">hello@emailmy.space</a></footer>`));
+<footer>Questions: <a href="mailto:hello@lifeis.living">hello@lifeis.living</a></footer>`));
 console.log('The website is in docs/site');
