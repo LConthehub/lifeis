@@ -5,6 +5,7 @@ import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessa
 import { LifeAreasPicker } from '../components/LifeAreas';
 import { chooseAgain, inApp, linkedServer, onDevice, serverOrigin } from '../where';
 import { AssistantService } from '../components/Assistant';
+import { RemindersSettings } from '../components/Reminders';
 
 const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 120: '2 hours', 480: '8 hours', 0: 'Stay signed in' };
 
@@ -19,6 +20,12 @@ const GROUPS = [
     id: 'home', label: 'Your home', icon: '🏠',
     sections: [
       { id: 'life', title: 'What Life Is looks after', words: 'sections areas sewing garden cookware clothing money spending show hide', render: ({ onLifeChanged }) => <Titled title="What Life Is looks after" hint="Decides which sections show. Nothing is removed by unticking."><LifeAreasPicker onSaved={onLifeChanged} /></Titled> },
+    ],
+  },
+  {
+    id: 'reminders', label: 'Reminders', icon: '🔔',
+    sections: [
+      { id: 'reminders', title: 'Reminders that reach you', words: 'notify notification notifications push ntfy email digest morning alert remind phone browser', render: () => <Titled title="Reminders that reach you"><RemindersSettings /></Titled> },
     ],
   },
   {

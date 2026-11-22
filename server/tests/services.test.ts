@@ -144,6 +144,30 @@ it('a yearly date is saved and shown through the calendar addresses', async () =
   expect((await admin.post('/api/calendar/events', { title: 'x', day: '2046-03-07', yearly: 'yes' })).status).toBe(422);
 });
 
+it('reminders are off until turned on, say what each way sends, and can be tried', async () => {
+  const admin = await start(true);
+  const off = (await admin.get('/api/reminders')).json;
+  expect([off.settings.email, off.settings.ntfy, off.settings.push, off.can, off.push_key]).toEqual([false, null, false, { email: false, mail_available: true, ntfy: true, push: false }, null]);
+  expect(off.services.ntfy.sends).toMatch(/aren't locked/);
+
+  const on = (await admin.put('/api/reminders', { time: '06:30', zone: 'Europe/London', ntfy: { server: 'https://ntfy.sh', topic: '', detail: 'count' }, covers: { coupons: false } })).json;
+  expect([on.settings.time, on.settings.zone, on.settings.covers.coupons, on.settings.ntfy.detail]).toEqual(['06:30', 'Europe/London', false, 'count']);
+  expect(on.settings.origin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+  expect((await admin.put('/api/reminders', { time: 'dawn' })).status).toBe(400);
+
+  // Tried by hand: ntfy is posted to; email needs an account first; browsers need this Life Is to send them.
+  expect((await admin.post('/api/reminders/try', { channel: 'ntfy' })).json).toEqual({ sent: ['ntfy'], problems: [] });
+  expect(asked).toEqual([`https://ntfy.sh/${on.settings.ntfy.topic}`]);
+  expect((await admin.post('/api/reminders/try', { channel: 'email' })).json.problems[0]).toMatch(/Connect an email account first/);
+  await admin.post('/api/mail/accounts', { address: 'me@example.org', name: 'Me', password: 'an-app-password', imap_host: 'imap.example.org', imap_port: 993, smtp_host: 'smtp.example.org', smtp_port: 465 });
+  expect((await admin.post('/api/reminders/try', { channel: 'email' })).json).toEqual({ sent: ['email'], problems: [] });
+  expect([sent[0]!.to[0]!.address, sent[0]!.subject]).toEqual(['me@example.org', 'Life Is: Nothing needs you today']);
+  expect((await admin.post('/api/reminders/try', { channel: 'push' })).json.problems[0]).toMatch(/can't send browser notifications/);
+  expect((await admin.post('/api/reminders/try', { channel: 'pigeon' })).status).toBe(422);
+  expect((await admin.get('/api/reminders/digest')).json).toMatchObject({ lines: [], title: 'Nothing needs you today' });
+  expect((await visitor().get('/api/reminders')).status).toBe(401);
+});
+
 it('email is set up, read and answered over the web addresses, and the password never comes back', async () => {
   const admin = await start(true);
   const none = (await admin.get('/api/mail')).json;

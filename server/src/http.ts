@@ -40,6 +40,8 @@ export type Context = {
   ip: string;
   https: boolean;
   local: boolean;
+  /** Where the person reached Life Is (https://life.example), for links back to it. */
+  origin?: string;
 };
 export type Handler = (c: Context) => Promise<Reply>;
 export type Route = [method: string, path: RegExp, handler: Handler];

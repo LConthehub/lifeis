@@ -196,6 +196,20 @@ export function mail(db: Db, owner: number, clock: Clock = () => new Date(), too
       forget(id);
     },
 
+    /**
+     * A note from Life Is to the person themselves: sent from their first email account to that same address.
+     * Null when they have no account.
+     */
+    async noteToSelf(subject: string, text: string): Promise<string | null> {
+      const { postbox } = need();
+      const first = await db.get<{ id: number }>('SELECT id FROM mail_accounts WHERE owner_id = ? ORDER BY id LIMIT 1', [owner]);
+      if (!first) return null;
+      const s = await server(first.id);
+      const me = { name: s.name ?? null, address: s.address };
+      await postbox.send(s, { from: me, to: [me], cc: [], subject: subject.slice(0, 200), text, in_reply_to: null, references: [] }, null);
+      return s.address;
+    },
+
     /** Answer a message: to its sender, or to everyone it went to. The original is quoted beneath. */
     async reply(id: number, uid: number, input: { text: string; all?: boolean }): Promise<{ sent: true; to: Who[]; cc: Who[] }> {
       const { postbox } = need();

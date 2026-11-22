@@ -73,7 +73,27 @@ async function start() {
     },
   };
   root.render(<React.StrictMode><App /></React.StrictMode>);
-  if (onPhone) await followLinks();
+  if (onPhone) {
+    await followLinks();
+    await phoneReminders();
+  }
+}
+
+/** The morning reminders made on the phone: scheduled now, again whenever the app comes back, and when changed. */
+async function phoneReminders() {
+  const { scheduleReminders, followReminderTaps } = await import('./phoneReminders.js');
+  const { App: Phone } = await import('@capacitor/app');
+  const again = () => scheduleReminders().catch((problem) => console.error(problem));
+  followReminderTaps(goTo);
+  Phone.addListener('appStateChange', ({ isActive }) => { if (isActive) again(); });
+  window.addEventListener('lifeis-reminders', again);
+  await again();
+}
+
+/** Show a page of the app, as if it had been tapped to. */
+function goTo(path) {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
 /**

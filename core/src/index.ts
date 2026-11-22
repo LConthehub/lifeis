@@ -55,3 +55,5 @@ export { assistant, isLocal as isLocalAddress, ASSISTANT_SERVICE, AREAS as ASSIS
 export { actions, ACTION_LIST, type ActionInfo, type ActionResult } from './actions.ts';
 export { upkeep, dueOf, addInterval, STARTER_JOBS, EVERY_UNITS } from './upkeep.ts';
 export type { Job, JobInput, DoneInput, DoneRecord, Due, DueState, Upkeep } from './upkeep.ts';
+export { reminders, remindersDue, zoneNow, digestText, newTopic, COVERS, NTFY_SERVICE, PUSH_SERVICE, EMAIL_SERVICE } from './reminders.ts';
+export type { Reminders, ReminderSettings, ReminderTools, Digest, DigestLine, Channel, PushSender, PushSubscription } from './reminders.ts';

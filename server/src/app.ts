@@ -7,6 +7,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BlockList, isIP } from 'node:net';
+import type { PushSender } from '../../core/src/index.ts';
 import { atomic, feedFor, kitchen, Problem, type Db } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
 import type { MailTools } from './mailRoutes.ts';
@@ -39,6 +40,8 @@ export type Options = {
   calendars?: Reach;
   /** How the assistant reaches a model and locks its key. Left out: it can't be turned on. */
   assistant?: Reach;
+  /** How a browser is sent a reminder. Left out: browsers can't be sent any. */
+  push?: { publicKey: string; send: PushSender };
   /** Told about anything that went wrong inside Life Is itself (never about a person's mistake). */
   onError?: (problem: unknown) => void;
 };
@@ -198,7 +201,7 @@ export function createApp(options: Options) {
       headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="lifeis-recipes.zip"' },
     })],
 
-    ...everydayRoutes(db, { fetcher: outside, reach: options.reach, mail: options.mail, photos: options.photos, calendars: options.calendars, assistant: options.assistant }),
+    ...everydayRoutes(db, { fetcher: outside, reach: options.reach, mail: options.mail, photos: options.photos, calendars: options.calendars, assistant: options.assistant, push: options.push }),
   ];
 
   /**
@@ -236,6 +239,7 @@ export function createApp(options: Options) {
     return route[2]({
       path, userAgent: String(req.headers['user-agent'] ?? '') || undefined, query: url.searchParams, id: Number(route[1].exec(path)![1] ?? 0), body: SAFE_METHODS.has(method) ? {} : await readBody(req),
       user: signedIn, kitchen: kitchen(db, signedIn.id, theirClock), clock: theirClock, token, ip: clientIp(req), https: isHttps(req), local: isLocal(req),
+      origin: req.headers.host ? `${isHttps(req) ? 'https' : 'http'}://${String(req.headers.host).slice(0, 200)}` : undefined,
     });
   }
 

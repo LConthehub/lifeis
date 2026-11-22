@@ -5,7 +5,7 @@ const PASS = 'trial-only-password-8031';
 const browser = await chromium.launch({ ...browserChoice, headless: true });
 const bad = [];
 const say = (what, ok) => console.log((ok ? 'ok   ' : 'FAIL ') + what);
-const EXPECTED = ['life', 'calendar-link', 'other-calendars', 'assistant', 'weather', 'mail', 'lookups', 'photos', 'media', 'recipe-web', 'idle', 'password', 'people', 'sign-out', 'recipes-out'];
+const EXPECTED = ['life', 'reminders', 'calendar-link', 'other-calendars', 'assistant', 'weather', 'mail', 'lookups', 'photos', 'media', 'recipe-web', 'idle', 'password', 'people', 'sign-out', 'recipes-out'];
 
 async function signedIn(width, height) {
   const context = await browser.newContext({ viewport: { width, height } });
@@ -26,7 +26,7 @@ const wide = await signedIn(1200, 900);
 await wide.goto(base + '/settings'); await wide.waitForTimeout(1500);
 const menu = wide.getByRole('navigation', { name: 'Settings' });
 const groups = await menu.getByRole('link').allInnerTexts();
-say('a menu of groups beside the settings: ' + groups.map((g) => g.trim()).join(' | '), groups.length === 5);
+say('a menu of groups beside the settings: ' + groups.map((g) => g.trim()).join(' | '), groups.length === 6);
 say('the first group shows by itself, not the whole long page', (await wide.locator('[data-settings-group] > div[id]').count()) === 1);
 const found = [];
 for (let i = 0; i < groups.length; i += 1) {
@@ -48,7 +48,7 @@ say('an old link to a section still finds it: ' + new URL(wide.url()).pathname, 
 const phone = await signedIn(390, 844);
 await phone.goto(base + '/settings'); await phone.waitForTimeout(1500);
 const list = phone.locator('[data-settings-groups]');
-say('on a phone, a list of groups to tap into', (await list.getByRole('link').count()) === 5 && (await phone.locator('[data-settings-group] > div[id]').isVisible().catch(() => false)) === false);
+say('on a phone, a list of groups to tap into', (await list.getByRole('link').count()) === 6 && (await phone.locator('[data-settings-group] > div[id]').isVisible().catch(() => false)) === false);
 await phone.screenshot({ path: shots + '/settings-phone-list.png' });
 await list.getByRole('link', { name: /Account/ }).click(); await phone.waitForTimeout(1500);
 say('tapping one opens it, with a way back', /Password/.test(await phone.locator('main').innerText()) && await phone.getByRole('link', { name: '‹ All settings' }).isVisible());

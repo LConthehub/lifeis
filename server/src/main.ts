@@ -11,7 +11,8 @@ import { createServer } from 'node:http';
 import path from 'node:path';
 import { createApp } from './app.ts';
 import { patientFetcher, syncDue, webFetcher } from './connectionRoutes.ts';
-import { followedDue } from '../../core/src/index.ts';
+import { followedDue, remindersDue } from '../../core/src/index.ts';
+import { browserPush } from './push.ts';
 import { openDatabase } from './database.ts';
 import { realPostbox } from './postbox.ts';
 import { vault } from './vault.ts';
@@ -24,13 +25,16 @@ const idle = Number(process.env.SESSION_IDLE_MINUTES || 15);
 const database = await openDatabase(dataDir, keyDir);
 const reach = { fetcher: webFetcher, sealer: vault(keyDir, 'media_source') };
 const calendars = { fetcher: webFetcher, sealer: vault(keyDir, 'calendar_source') };
+const mail = { postbox: realPostbox, sealer: vault(keyDir, 'mail_account') };
+const push = browserPush(keyDir);
 const server = createServer(createApp({
   db: database.db,
   reach,
   photos: { fetcher: webFetcher, sealer: vault(keyDir, 'photo_library') },
   calendars,
   assistant: { fetcher: patientFetcher, sealer: vault(keyDir, 'assistant') },
-  mail: { postbox: realPostbox, sealer: vault(keyDir, 'mail_account') },
+  mail,
+  push,
   staticDir: process.env.STATIC_DIR || undefined,
   idleMinutes: Number.isInteger(idle) && idle >= 0 ? idle : 15,
 }));
@@ -52,6 +56,23 @@ const timer = setInterval(async () => {
   }
 }, 5 * 60_000);
 timer.unref();
+
+// The morning reminders: looked at every minute, each person's sent once a day at their own time.
+let reminding = false;
+const reminderTimer = setInterval(async () => {
+  if (reminding) return;
+  reminding = true;
+  try {
+    for (const r of await remindersDue(database.db, new Date(), { fetcher: webFetcher, mail, push: push.send })) {
+      if (r.problems.length) console.error(`Reminders for person ${r.user}: ${r.problems.join('; ')}`);
+    }
+  } catch (problem) {
+    console.error(problem);
+  } finally {
+    reminding = false;
+  }
+}, 60_000);
+reminderTimer.unref();
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {

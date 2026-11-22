@@ -8,6 +8,8 @@
  * What reaches outside is handed in (`fetcher`, and the tools for each service), and is left out where
  * Life Is can't or shouldn't reach out.
  */
+import { addDays, todayOf } from '../../core/src/small.ts';
+import { reminders, COVERS, EMAIL_SERVICE, NTFY_SERVICE, PUSH_SERVICE, type PushSender, type ReminderSettings } from '../../core/src/index.ts';
 import { home, life, lookups, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
 import type { AssistantTools } from '../../core/src/index.ts';
@@ -31,6 +33,8 @@ export type Outside = {
   calendars?: Reach;
   /** How the assistant reaches a model (and locks its key), or the phone's own model. Left out: it can't be turned on. */
   assistant?: AssistantTools;
+  /** How a browser is sent a reminder, and the key it checks them by. Left out: browsers can't be sent any. */
+  push?: { publicKey: string; send: PushSender };
 };
 
 function recipeFrom(body: Body) {
@@ -59,6 +63,19 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
   const outside = options.fetcher;
   const skies = (c: Context) => weather(db, c.user.id, c.clock, outside);
   const finder = (c: Context) => lookups(db, c.user.id, c.clock, outside);
+  const remind = (c: Context) => reminders(db, c.user.id, c.clock, { fetcher: outside, mail: options.mail, push: options.push?.send });
+  /** The settings, with what each way sends and whether this Life Is can use it. */
+  const reminderState = async (c: Context) => {
+    const mine = remind(c);
+    const hasMail = Boolean(await db.get('SELECT 1 AS yes FROM mail_accounts WHERE owner_id = ?', [c.user.id]));
+    return {
+      settings: await mine.settings(),
+      browsers: (await mine.browsers()).map((b) => ({ endpoint: b.endpoint, label: b.label })),
+      can: { email: Boolean(options.mail) && hasMail, mail_available: Boolean(options.mail), ntfy: Boolean(outside), push: Boolean(options.push) },
+      push_key: options.push?.publicKey ?? null,
+      services: { email: EMAIL_SERVICE, ntfy: NTFY_SERVICE, push: PUSH_SERVICE },
+    };
+  };
 
   return [
     // The front page: what today holds, gathered from every section the person uses.
@@ -89,6 +106,49 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ['GET', /^\/api\/lookups\/book$/, async (c) => ({ json: { book: await finder(c).book(c.query.get('code') ?? '') } })],
     ['GET', /^\/api\/lookups\/title$/, async (c) => ({ json: { title: await finder(c).title(c.query.get('code') ?? '') } })],
     ['DELETE', /^\/api\/weather$/, async (c) => ({ json: { ...await skies(c).turnOff(), service: WEATHER_SERVICE } })],
+
+    // Reminders that reach you: a morning digest, sent only the ways the person turns on. See core/'s reminders.ts.
+    ['GET', /^\/api\/reminders$/, async (c) => ({ json: await reminderState(c) })],
+    ['PUT', /^\/api\/reminders$/, async (c) => {
+      const b = c.body;
+      const input: Partial<ReminderSettings> = {};
+      if (Object.hasOwn(b, 'time')) input.time = read.text(b, 'time');
+      if (Object.hasOwn(b, 'zone')) input.zone = read.maybeText(b, 'zone');
+      for (const k of ['email', 'push', 'phone'] as const) if (Object.hasOwn(b, k)) input[k] = read.yesNo(b, k);
+      if (Object.hasOwn(b, 'covers')) {
+        const covers = read.record(b, 'covers');
+        input.covers = Object.fromEntries(COVERS.filter((k) => typeof covers[k] === 'boolean').map((k) => [k, covers[k] as boolean])) as ReminderSettings['covers'];
+      }
+      if (Object.hasOwn(b, 'ntfy')) {
+        const n = b.ntfy === null ? null : read.record(b, 'ntfy');
+        input.ntfy = n === null ? null : { server: read.maybeText(n, 'server') ?? '', topic: read.maybeText(n, 'topic') ?? '', detail: read.maybeText(n, 'detail') === 'full' ? 'full' : 'count' };
+      }
+      await remind(c).save(input, c.origin);
+      return { json: await reminderState(c) };
+    }],
+    ['GET', /^\/api\/reminders\/digest$/, async (c) => {
+      if (c.query.get('ahead') !== '1') return { json: await remind(c).digest() };
+      // Tomorrow's, so the phone can have it waiting for tomorrow morning.
+      const tomorrow = Object.assign(() => c.clock(), { today: () => addDays(todayOf(c.clock), 1) });
+      return { json: await reminders(db, c.user.id, tomorrow, {}).digest() };
+    }],
+    ['POST', /^\/api\/reminders\/try$/, async (c) => {
+      const channel = read.maybeText(c.body, 'channel');
+      if (channel !== null && !['email', 'ntfy', 'push'].includes(channel)) throw notUnderstood('channel');
+      const mine = remind(c);
+      const d = await mine.digest();
+      // A try always sends something, even on a quiet day, so the person sees it work.
+      return { json: await mine.send(d, (channel ?? undefined) as 'email' | 'ntfy' | 'push' | undefined) };
+    }],
+    ['POST', /^\/api\/reminders\/browsers$/, async (c) => {
+      const keys = read.record(c.body, 'keys');
+      await remind(c).addBrowser({ endpoint: read.text(c.body, 'endpoint'), p256dh: read.text(keys, 'p256dh'), auth: read.text(keys, 'auth'), label: read.maybeText(c.body, 'label') });
+      return { status: 201, json: await reminderState(c) };
+    }],
+    ['DELETE', /^\/api\/reminders\/browsers$/, async (c) => {
+      await remind(c).removeBrowser(c.query.get('endpoint') ?? '');
+      return { json: await reminderState(c) };
+    }],
 
     // What the person wants Life Is to look after: asked once, theirs to change.
     ['GET', /^\/api\/life$/, async (c) => ({ json: await life(db, c.user.id, c.clock).getProfile() })],
