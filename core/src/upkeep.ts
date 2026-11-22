@@ -43,6 +43,8 @@ export type JobInput = {
   autopay?: boolean;
   /** The pet this care is for. Left out: unchanged. */
   pet_id?: number | null;
+  /** Someone in the household without a sign-in who usually does it. Left out: unchanged. */
+  assigned_member?: number | null;
   activity?: string | null;
   /** The thing the job is for: the car, the furnace. */
   item_id?: number | null;
@@ -64,6 +66,8 @@ export type JobInput = {
 };
 export type DoneInput = {
   day?: string | null; reading?: number | null; minutes?: number | null; cost_cents?: number | null; note?: string | null;
+  /** Done by someone in the household without a sign-in, rather than by the person marking it. */
+  by_member?: number | null;
   /** Put the cost into the month's spending, in this category (or none). */
   spend?: { category_id?: number | null } | null;
 };
@@ -90,6 +94,8 @@ export type Job = {
   points: number | null;
   autopay: boolean;
   pet: { id: number; name: string } | null;
+  /** Someone without a sign-in who usually does it. */
+  member: { id: number; name: string } | null;
   activity: string | null;
   /** Whether the person asking owns it (and so can change it). */
   mine: boolean;
@@ -114,6 +120,7 @@ type JobRow = {
   every_n: number | null; every_unit: EveryUnit | null; every_reading: number | null; reading_unit: string | null;
   first_due: string | null; assigned_to: number | null; assigned_name: string | null; steps: string | null; note: string | null;
   kind: JobKind; amount_cents: number | null; points: number | null; autopay: number; pet_id: number | null; pet_name: string | null;
+  assigned_member: number | null; member_name: string | null;
 };
 
 const MAX_TOOLS = 40;
@@ -209,8 +216,9 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
   async function rows(q: Queries, where = '', args: Value[] = []): Promise<JobRow[]> {
     return q.all<JobRow>(
       `SELECT j.id, j.owner_id, o.username AS owner, j.name, j.activity, j.item_id, j.every_n, j.every_unit, j.every_reading, j.reading_unit,
-              j.first_due, j.assigned_to, a.username AS assigned_name, j.steps, j.note, j.kind, j.amount_cents, j.points, j.autopay, j.pet_id, p.name AS pet_name
+              j.first_due, j.assigned_to, a.username AS assigned_name, j.steps, j.note, j.kind, j.amount_cents, j.points, j.autopay, j.pet_id, p.name AS pet_name, j.assigned_member, hm.name AS member_name
        FROM upkeep_jobs j JOIN users o ON o.id = j.owner_id LEFT JOIN users a ON a.id = j.assigned_to LEFT JOIN pets p ON p.id = j.pet_id
+       LEFT JOIN household_members hm ON hm.id = j.assigned_member
        WHERE (j.owner_id = ? OR j.assigned_to = ?) ${where} ORDER BY j.name COLLATE NOCASE, j.id`, [viewer, viewer, ...args]);
   }
 
@@ -254,6 +262,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
     return {
       id: row.id, name: row.name, kind: row.kind, amount_cents: row.amount_cents, points: row.points, autopay: row.autopay === 1,
       pet: row.pet_id !== null ? { id: row.pet_id, name: row.pet_name ?? '' } : null,
+      member: row.assigned_member !== null ? { id: row.assigned_member, name: row.member_name ?? '' } : null,
       activity: row.activity, mine: owner === viewer, owner: row.owner,
       item: item ? { id: item.id, name: item.name, place: item.place } : null,
       every: row.every_n && row.every_unit ? { n: row.every_n, unit: row.every_unit } : null,
@@ -267,7 +276,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
 
   async function doneList(q: Queries, jobId: number): Promise<DoneRecord[]> {
     return q.all<DoneRecord>(
-      `SELECT d.id, d.day, u.username AS by, d.reading, d.minutes, d.cost_cents, d.points, d.money_entry_id, d.note
+      `SELECT d.id, d.day, COALESCE(d.done_name, u.username) AS by, d.reading, d.minutes, d.cost_cents, d.points, d.money_entry_id, d.note
        FROM upkeep_done d LEFT JOIN users u ON u.id = d.done_by WHERE d.job_id = ? ORDER BY d.day DESC, d.id DESC`, [jobId]);
   }
 
@@ -303,6 +312,10 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
     if (input.pet_id !== undefined) {
       if (input.pet_id !== null && !(await q.get('SELECT id FROM pets WHERE id = ? AND owner_id = ?', [input.pet_id, viewer]))) throw new Problem(404, "That pet isn't one of yours");
       sets.push('pet_id = ?'); args.push(input.pet_id);
+    }
+    if (input.assigned_member !== undefined) {
+      if (input.assigned_member !== null && !(await q.get('SELECT id FROM household_members WHERE id = ? AND owner_id = ?', [input.assigned_member, viewer]))) throw new Problem(404, "That person isn't in your household");
+      sets.push('assigned_member = ?'); args.push(input.assigned_member);
     }
     if (sets.length) await q.run(`UPDATE upkeep_jobs SET ${sets.join(', ')} WHERE id = ?`, [...args, jobId]);
   }
@@ -423,8 +436,14 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
         row = await seen(tx, id);
         // A bill's usual amount is what it cost, unless another is said.
         cost = input.cost_cents ?? (anchored(row.kind) ? row.amount_cents : null);
-        const made = await tx.run('INSERT INTO upkeep_done (job_id, day, done_by, reading, minutes, cost_cents, points, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [id, day, viewer, input.reading ?? null, input.minutes ?? null, cost, row.kind === 'chore' ? row.points : null, clean(input.note, 1000), now()]);
+        // Done by someone without a sign-in: one of the household of whoever the job belongs to.
+        let member: { id: number; name: string } | undefined;
+        if (input.by_member != null) {
+          member = await tx.get('SELECT id, name FROM household_members WHERE id = ? AND owner_id = ?', [input.by_member, row.owner_id]);
+          if (!member) throw new Problem(404, "That person isn't in this household");
+        }
+        const made = await tx.run('INSERT INTO upkeep_done (job_id, day, done_by, done_member, done_name, reading, minutes, cost_cents, points, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [id, day, viewer, member?.id ?? null, member?.name ?? null, input.reading ?? null, input.minutes ?? null, cost, row.kind === 'chore' ? row.points : null, clean(input.note, 1000), now()]);
         doneId = made.lastId;
         // Paid or renewed: its date moves on by one round (or, with no round, it's finished with).
         if (anchored(row.kind) && row.first_due) {
@@ -496,11 +515,11 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
      * Who has done what this week (Monday to Sunday) and last: the points of the chores each person did, among
      * the chores this person owns or was given.
      */
-    async scores(): Promise<{ week_start: string; people: { name: string; this_week: number; last_week: number; done: number }[] }> {
+    async scores(): Promise<{ week_start: string; point_cents: number | null; people: { name: string; this_week: number; last_week: number; done: number }[] }> {
       const day = today();
       const start = addDays(day, -((dayNumber(day) + 3) % 7));
       const rows = await db.all<{ name: string | null; day: string; points: number | null }>(
-        `SELECT u.username AS name, d.day, d.points FROM upkeep_done d JOIN upkeep_jobs j ON j.id = d.job_id LEFT JOIN users u ON u.id = d.done_by
+        `SELECT COALESCE(d.done_name, u.username) AS name, d.day, d.points FROM upkeep_done d JOIN upkeep_jobs j ON j.id = d.job_id LEFT JOIN users u ON u.id = d.done_by
          WHERE j.kind = 'chore' AND (j.owner_id = ? OR j.assigned_to = ?) AND d.day >= ? AND d.done_by IS NOT NULL`, [viewer, viewer, addDays(start, -7)]);
       const people = new Map<string, { name: string; this_week: number; last_week: number; done: number }>();
       for (const r of rows) {
@@ -508,7 +527,36 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
         if (r.day >= start) { one.this_week += r.points ?? 0; one.done += 1; } else one.last_week += r.points ?? 0;
         people.set(one.name, one);
       }
-      return { week_start: start, people: [...people.values()].sort((a, b) => b.this_week - a.this_week || a.name.localeCompare(b.name)) };
+      const worth = await db.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'chore_point_cents'", [viewer]);
+      return { week_start: start, point_cents: worth?.value ? Number(worth.value) : null, people: [...people.values()].sort((a, b) => b.this_week - a.this_week || a.name.localeCompare(b.name)) };
+    },
+
+    /** The people in this household who have no sign-in of their own. */
+    async members(): Promise<{ id: number; name: string }[]> {
+      return db.all<{ id: number; name: string }>('SELECT id, name FROM household_members WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id', [viewer]);
+    },
+
+    async addMember(name: string): Promise<{ id: number; name: string }[]> {
+      const said = clean(name, 60);
+      if (!said) throw new Problem(400, 'Say their name');
+      const all = await this.members();
+      if (all.some((m) => labelKey(m.name) === labelKey(said))) throw new Problem(409, `${said} is already in your household`);
+      if (all.length >= 30) throw new Problem(400, 'A household holds 30 people at most');
+      await db.run('INSERT INTO household_members (owner_id, name, created_at) VALUES (?, ?, ?)', [viewer, said, now()]);
+      return this.members();
+    },
+
+    /** Take someone out of the household. What they did stays in each chore's history, under their name. */
+    async removeMember(id: number): Promise<{ id: number; name: string }[]> {
+      await db.run('DELETE FROM household_members WHERE id = ? AND owner_id = ?', [id, viewer]);
+      return this.members();
+    },
+
+    /** What a point is worth, for pocket money: so many cents, or nothing. */
+    async setPointValue(cents: number | null): Promise<void> {
+      if (cents !== null && !(Number.isInteger(cents) && cents >= 0 && cents <= 100000)) throw new Problem(400, 'What a point is worth is an amount, 0 or more');
+      if (!cents) await db.run("DELETE FROM user_settings WHERE user_id = ? AND key = 'chore_point_cents'", [viewer]);
+      else await db.run("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'chore_point_cents', ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value", [viewer, String(cents)]);
     },
 
     /** What a thing's latest reading is, and the place it's kept, for a job's page. */

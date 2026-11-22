@@ -871,6 +871,25 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE places ADD COLUMN box_destination TEXT`,
     ],
   },
+  {
+    // People in the household who have no sign-in of their own (children, mostly): they can be given chores
+    // and collect the points for doing them.
+    number: 29,
+    name: 'people in the household without a sign-in, for chores',
+    statements: [
+      `CREATE TABLE household_members (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_household_members ON household_members(owner_id)`,
+      `ALTER TABLE upkeep_jobs ADD COLUMN assigned_member INTEGER REFERENCES household_members(id) ON DELETE SET NULL`,
+      // Their name is kept beside who they were, so a week's points still read right after someone is removed.
+      `ALTER TABLE upkeep_done ADD COLUMN done_member INTEGER REFERENCES household_members(id) ON DELETE SET NULL`,
+      `ALTER TABLE upkeep_done ADD COLUMN done_name TEXT`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

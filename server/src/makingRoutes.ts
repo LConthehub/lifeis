@@ -79,6 +79,7 @@ function jobFrom(body: Body): JobInput {
     ...(sent(body, 'points') ? { points: read.maybeWhole(body, 'points') } : {}),
     ...(sent(body, 'autopay') ? { autopay: read.yesNo(body, 'autopay') } : {}),
     ...(sent(body, 'pet_id') ? { pet_id: read.maybeWhole(body, 'pet_id') } : {}),
+    ...(sent(body, 'assigned_member') ? { assigned_member: read.maybeWhole(body, 'assigned_member') } : {}),
     ...(tools !== undefined ? { tools: tools as number[] } : {}),
     ...(supplies !== undefined ? { supplies: (supplies as Body[]).map((x) => ({ item_id: read.maybeWhole(x, 'item_id') ?? 0, quantity: read.maybeNumber(x, 'quantity'), unit: read.maybeText(x, 'unit') })) } : {}),
     ...(last ? { last_done: { day: read.text(last, 'day'), reading: read.maybeNumber(last, 'reading') } } : {}),
@@ -210,6 +211,11 @@ export function makingRoutes(db: Db): Route[] {
 
     ['GET', at('things/upkeep'), async (c) => ({ json: await jobs(c).list() })],
     ['GET', at('things/upkeep/people'), async (c) => ({ json: await jobs(c).people() })],
+    // People in the household without a sign-in, who do chores, and what a point is worth.
+    ['GET', at('things/upkeep/members'), async (c) => ({ json: await jobs(c).members() })],
+    ['POST', at('things/upkeep/members'), async (c) => ({ status: 201, json: await jobs(c).addMember(read.text(c.body, 'name')) })],
+    ['DELETE', at('things/upkeep/members/:id'), async (c) => ({ json: await jobs(c).removeMember(c.id) })],
+    ['PUT', at('things/upkeep/points'), async (c) => (await jobs(c).setPointValue(read.maybeWhole(c.body, 'cents')), { json: await jobs(c).scores() })],
     ['GET', at('things/upkeep/scores'), async (c) => ({ json: await jobs(c).scores() })],
     ['GET', at('things/upkeep/starters'), async () => ({ json: STARTER_JOBS })],
     ['POST', at('things/upkeep'), async (c) => ({ status: 201, json: await jobs(c).create(jobFrom(c.body)) })],
@@ -222,7 +228,7 @@ export function makingRoutes(db: Db): Route[] {
         status: 201,
         json: await jobs(c).done(c.id, {
           day: read.maybeText(c.body, 'day'), reading: read.maybeNumber(c.body, 'reading'), minutes: read.maybeWhole(c.body, 'minutes'),
-          cost_cents: read.maybeWhole(c.body, 'cost_cents'), note: read.maybeText(c.body, 'note'),
+          cost_cents: read.maybeWhole(c.body, 'cost_cents'), note: read.maybeText(c.body, 'note'), by_member: read.maybeWhole(c.body, 'by_member'),
           spend: spend ? { category_id: read.maybeWhole(spend, 'category_id') } : null,
         }),
       };

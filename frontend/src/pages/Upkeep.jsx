@@ -52,10 +52,12 @@ export default function UpkeepPage() {
   const [modal, setModal] = useState(null);       // { job: {} } to make one, { done: job } to mark one done
   const [kind, setKind] = useState('');           // '' for everything, or one kind
   const [scores, setScores] = useState(null);
+  const [members, setMembers] = useState([]);
   const navigate = useNavigate();
   const load = useCallback(() => {
     axios.get('/api/things/upkeep').then(({ data }) => setJobs(data)).catch(() => setJobs([]));
     axios.get('/api/things/upkeep/scores').then(({ data }) => setScores(data)).catch(() => {});
+    axios.get('/api/things/upkeep/members').then(({ data }) => setMembers(data)).catch(() => {});
   }, []);
   useEffect(() => { load(); axios.get('/api/things/upkeep/starters').then(({ data }) => setStarters(data)).catch(() => {}); }, [load]);
   if (!jobs) return null;
@@ -81,17 +83,19 @@ export default function UpkeepPage() {
       {(!kind || kind === 'bill' || kind === 'renewal') && perMonth > 0 && (
         <p className="text-sm text-gray-700 dark:text-life-100" data-monthly>Your bills and renewals come to about <span className="font-semibold">{money(Math.round(perMonth))}</span> a month.</p>
       )}
-      {(!kind || kind === 'chore') && scores?.people.length > 0 && (
+      {scores && (kind === 'chore' || (!kind && scores.people.length > 0)) && (
         <section className={cardClass} aria-label="Chores this week">
           <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Chores this week</h2>
+          {scores.people.length === 0 && <p className="text-sm text-gray-500 dark:text-life-300">Nobody has done one yet this week.</p>}
           <ul className="space-y-1">
             {scores.people.map((p, i) => (
               <li key={p.name} className="flex items-baseline gap-2 text-sm">
-                <span className="flex-1 text-gray-800 dark:text-life-50">{i === 0 && p.this_week > 0 ? '🏆 ' : ''}{p.name} <span className="text-xs text-gray-500 dark:text-life-300">{p.done} done{p.last_week ? ` · ${p.last_week} points last week` : ''}</span></span>
-                <span className="font-semibold text-life-700 dark:text-life-100">{p.this_week} point{p.this_week === 1 ? '' : 's'}</span>
+                <span className="flex-1 text-gray-800 dark:text-life-50">{i === 0 && p.this_week > (scores.people[1]?.this_week ?? 0) ? '🏆 ' : ''}{p.name} <span className="text-xs text-gray-500 dark:text-life-300">{p.done} done{p.last_week ? ` · ${p.last_week} points last week` : ''}</span></span>
+                <span className="font-semibold text-life-700 dark:text-life-100">{p.this_week} point{p.this_week === 1 ? '' : 's'}{scores.point_cents ? <span className="font-normal text-gray-600 dark:text-life-200"> · {money(p.this_week * scores.point_cents)}</span> : null}</span>
               </li>
             ))}
           </ul>
+          {kind === 'chore' && <Family members={members} setMembers={setMembers} pointCents={scores.point_cents} onPoints={setScores} />}
         </section>
       )}
       {jobs.length === 0 && (
@@ -112,7 +116,7 @@ export default function UpkeepPage() {
                   <Link to={`/things/upkeep/${j.id}`} className="min-w-0 flex-1">
                     <span className="block text-sm text-gray-800 hover:underline dark:text-life-50"><span aria-hidden="true">{j.kind !== 'job' ? `${KINDS[j.kind][1]} ` : ''}</span>{j.name}</span>
                     <span className="block text-xs text-gray-500 dark:text-life-300">
-                      {[j.amount_cents != null && money(j.amount_cents), j.autopay && 'pays itself', j.points != null && `${j.points} point${j.points === 1 ? '' : 's'}`, j.item?.name, j.activity, j.assigned_to && `${j.assigned_to.name} does it`, !j.mine && `${j.owner}'s`].filter(Boolean).join(' · ') || scheduleText(j)}
+                      {[j.amount_cents != null && money(j.amount_cents), j.autopay && 'pays itself', j.points != null && `${j.points} point${j.points === 1 ? '' : 's'}`, j.item?.name, j.activity, (j.member ?? j.assigned_to) && `${(j.member ?? j.assigned_to).name} does it`, !j.mine && `${j.owner}'s`].filter(Boolean).join(' · ') || scheduleText(j)}
                     </span>
                   </Link>
                   <DueBadge job={j} />
@@ -261,13 +265,14 @@ function JobForm({ job, onDone }) {
   const making = !job.id;
   const [things, setThings] = useState([]);
   const [people, setPeople] = useState([]);
+  const [members, setMembers] = useState([]);
   const [form, setForm] = useState({
     kind: job.kind || 'job', amount: job.amount_cents != null ? (job.amount_cents / 100).toFixed(2) : '', points: job.points ?? '', autopay: Boolean(job.autopay),
     first_due: job.first_due || '',
     name: job.name || '', activity: job.activity || '', item_id: job.item?.id ?? '',
     every_n: job.every?.n ?? '', every_unit: job.every?.unit ?? 'month', by_time: job.id ? Boolean(job.every) : true,
     every_reading: job.every_reading ?? '', reading_unit: job.reading_unit || '', by_reading: Boolean(job.every_reading),
-    assigned_to: job.assigned_to?.id ?? '', steps: job.steps || '', note: job.note || '',
+    assigned_to: job.member ? `m:${job.member.id}` : (job.assigned_to?.id ?? ''), steps: job.steps || '', note: job.note || '',
     tools: (job.tools || []).map((t) => t.id), supplies: (job.supplies || []).map((s) => ({ item_id: s.item_id, quantity: s.quantity ?? '', unit: s.unit || '' })),
     last_day: '', last_reading: '',
   });
@@ -275,6 +280,7 @@ function JobForm({ job, onDone }) {
   useEffect(() => {
     axios.get('/api/things/items').then(({ data }) => setThings(data)).catch(() => {});
     axios.get('/api/things/upkeep/people').then(({ data }) => setPeople(data)).catch(() => {});
+    axios.get('/api/things/upkeep/members').then(({ data }) => setMembers(data)).catch(() => {});
   }, []);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const named = (id) => things.find((t) => t.id === Number(id));
@@ -289,7 +295,8 @@ function JobForm({ job, onDone }) {
       name: form.name, activity: form.activity || null, item_id: form.item_id === '' ? null : Number(form.item_id),
       every_n: form.by_time && form.every_n !== '' ? Number(form.every_n) : null, every_unit: form.by_time && form.every_n !== '' ? form.every_unit : null,
       every_reading: form.by_reading && form.every_reading !== '' ? Number(form.every_reading) : null, reading_unit: form.by_reading ? form.reading_unit || null : null,
-      assigned_to: form.assigned_to === '' ? null : Number(form.assigned_to), steps: form.steps || null, note: form.note || null,
+      assigned_to: form.assigned_to === '' || String(form.assigned_to).startsWith('m:') ? null : Number(form.assigned_to),
+      assigned_member: String(form.assigned_to).startsWith('m:') ? Number(String(form.assigned_to).slice(2)) : null, steps: form.steps || null, note: form.note || null,
       tools: form.tools, supplies: form.supplies.map((s) => ({ item_id: s.item_id, quantity: s.quantity === '' ? null : Number(s.quantity), unit: s.unit || null })),
       ...(making && !dated && form.last_day ? { last_done: { day: form.last_day, reading: form.last_reading === '' ? null : Number(form.last_reading) } } : {}),
     };
@@ -319,6 +326,7 @@ function JobForm({ job, onDone }) {
           <select value={form.assigned_to} onChange={set('assigned_to')} className={inputClass}>
             <option value="">Anyone</option>
             {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {members.map((p) => <option key={`m${p.id}`} value={`m:${p.id}`}>{p.name}</option>)}
           </select>
         </Field>
       </div>
@@ -403,9 +411,14 @@ function DoneForm({ job, onDone }) {
   const dated = job.kind === 'bill' || job.kind === 'renewal';
   const [form, setForm] = useState({ day: toDateInput(new Date()), reading: '', minutes: '', cost: dated && job.amount_cents != null ? (job.amount_cents / 100).toFixed(2) : '', spend: dated, category_id: '', note: '' });
   const [categories, setCategories] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [who, setWho] = useState(job.member ? String(job.member.id) : '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { axios.get('/api/money').then(({ data }) => setCategories(data.categories || [])).catch(() => {}); }, []);
+  useEffect(() => {
+    axios.get('/api/money').then(({ data }) => setCategories(data.categories || [])).catch(() => {});
+    if (job.kind === 'chore' && job.mine) axios.get('/api/things/upkeep/members').then(({ data }) => setMembers(data)).catch(() => {});
+  }, [job.kind, job.mine]);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const submit = async (e) => {
     e.preventDefault();
@@ -414,13 +427,21 @@ function DoneForm({ job, onDone }) {
     try {
       onDone((await axios.post(`/api/things/upkeep/${job.id}/done`, {
         day: form.day, reading: form.reading === '' ? null : Number(form.reading), minutes: form.minutes === '' ? null : Number(form.minutes),
-        cost_cents: cents, note: form.note || null, spend: form.spend && cents ? { category_id: form.category_id === '' ? null : Number(form.category_id) } : null,
+        cost_cents: cents, note: form.note || null, by_member: who === '' ? null : Number(who), spend: form.spend && cents ? { category_id: form.category_id === '' ? null : Number(form.category_id) } : null,
       })).data);
     } catch (err) { setError(errorMessage(err, "Couldn't keep that")); setBusy(false); }
   };
   const gather = [...job.tools.map((t) => `${t.name}${t.place ? ` (${t.place})` : ''}`), ...job.supplies.map((s) => `${s.amount} ${s.name}`)];
   return (
     <form onSubmit={submit} className="space-y-3">
+      {members.length > 0 && (
+        <Field label="Who did it">
+          <select value={who} onChange={(e) => setWho(e.target.value)} className={inputClass}>
+            <option value="">Me</option>
+            {members.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </Field>
+      )}
       {gather.length > 0 && <p className="text-xs text-gray-600 dark:text-life-200">Each tool notes it was used for this; supplies come out of what you have. {gather.join(' · ')}</p>}
       <div className="grid grid-cols-2 gap-3">
         <Field label="When"><input type="date" required value={form.day} onChange={set('day')} className={inputClass} /></Field>
@@ -467,5 +488,52 @@ function ReadingForm({ job, onDone }) {
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
       <div className="flex justify-end"><button type="submit" className={buttonClass}>Keep it</button></div>
     </form>
+  );
+}
+
+/** Who does chores without a sign-in of their own (children, mostly), and what a point is worth. */
+function Family({ members, setMembers, pointCents, onPoints }) {
+  const [name, setName] = useState('');
+  const [worth, setWorth] = useState(pointCents ? (pointCents / 100).toFixed(2) : '');
+  const [error, setError] = useState('');
+  const add = async (e) => {
+    e.preventDefault();
+    setError('');
+    try { setMembers((await axios.post('/api/things/upkeep/members', { name })).data); setName(''); } catch (err) { setError(errorMessage(err, "Couldn't add them")); }
+  };
+  const remove = async (m) => {
+    if (!window.confirm(`Take ${m.name} out of the household? What they did stays in each chore's history.`)) return;
+    setMembers((await axios.delete(`/api/things/upkeep/members/${m.id}`)).data);
+  };
+  const saveWorth = async () => {
+    const cents = worth.trim() === '' ? null : Math.round(Number(worth.replace(/[^0-9.]/g, '')) * 100);
+    if (cents !== null && Number.isNaN(cents)) { setError('What a point is worth is a number, like 0.50'); return; }
+    setError('');
+    try { onPoints((await axios.put('/api/things/upkeep/points', { cents })).data); } catch (err) { setError(errorMessage(err, "Couldn't save that")); }
+  };
+  return (
+    <div className="mt-3 space-y-2 border-t border-life-50 pt-3 dark:border-life-700" data-family>
+      <h3 className="text-xs font-medium text-gray-600 dark:text-life-200">Who does chores, without a sign-in of their own</h3>
+      {members.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5" aria-label="In the household">
+          {members.map((m) => (
+            <li key={m.id} className="inline-flex items-center gap-1 rounded-full bg-life-50 px-2.5 py-0.5 text-sm text-life-700 dark:bg-life-700 dark:text-life-100">
+              {m.name}<button type="button" onClick={() => remove(m)} aria-label={`Take ${m.name} out`} className="text-gray-400 hover:text-red-600">✕</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form onSubmit={add} className="flex gap-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} aria-label="Their name" placeholder="A child's name" className={`${inputClass} !w-44`} />
+        <button type="submit" disabled={!name.trim()} className={quietButtonClass}>Add</button>
+      </form>
+      <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-life-100">
+        <label className="flex items-center gap-2">A point is worth
+          <input inputMode="decimal" value={worth} onChange={(e) => setWorth(e.target.value)} onBlur={saveWorth} aria-label="What a point is worth" placeholder="0.00" className={`${inputClass} !w-24`} />
+        </label>
+        <span className="text-xs text-gray-500 dark:text-life-300">Left empty: points only.</span>
+      </div>
+      {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+    </div>
   );
 }

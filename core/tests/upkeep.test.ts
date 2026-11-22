@@ -165,9 +165,41 @@ it('chores give their points to whoever does them, counted by the week', async (
   await theirs.done(bins.id, {});
   await theirs.done(dishes.id, {});
   await jobs.done(dishes.id, {});
-  expect(await jobs.scores()).toEqual({ week_start: '2046-03-05', people: [
+  expect(await jobs.scores()).toEqual({ week_start: '2046-03-05', point_cents: null, people: [
     { name: 'partner', this_week: 3, last_week: 1, done: 2 },
     { name: 'owner', this_week: 1, last_week: 0, done: 1 },
   ] });
   expect((await theirs.scores()).people.map((p) => p.name)).toEqual(['partner', 'owner']); // the one given the chores sees the same board
+});
+
+it('someone without a sign-in can be given chores and collect the points, and a point can be worth money', async () => {
+  let family = await jobs.addMember(' Leo ');
+  family = await jobs.addMember('Mia');
+  expect(family.map((m) => m.name)).toEqual(['Leo', 'Mia']);
+  await expect(jobs.addMember('leo')).rejects.toEqual(problem(409));
+  await expect(jobs.addMember(' ')).rejects.toEqual(problem(400));
+  const leo = family[0]!.id;
+
+  const room = await jobs.create({ name: 'Tidy your room', kind: 'chore', points: 2, every_n: 1, every_unit: 'week', assigned_member: leo });
+  expect(room.member).toEqual({ id: leo, name: 'Leo' });
+  const dishes = await jobs.create({ name: 'Do the dishes', kind: 'chore', points: 1, every_n: 1, every_unit: 'day' });
+  expect((await jobs.done(room.id, { by_member: leo })).done[0]!.by).toBe('Leo');
+  await jobs.done(dishes.id, { by_member: family[1]!.id });
+  await jobs.done(dishes.id, {});
+  await jobs.setPointValue(50);
+  expect(await jobs.scores()).toEqual({ week_start: '2046-03-05', point_cents: 50, people: [
+    { name: 'Leo', this_week: 2, last_week: 0, done: 1 }, { name: 'Mia', this_week: 1, last_week: 0, done: 1 }, { name: 'owner', this_week: 1, last_week: 0, done: 1 },
+  ] });
+
+  // Someone else's household is not this one's; and removing a person keeps what they did.
+  const other = upkeep(db, await person('other'), clock);
+  expect(await other.members()).toEqual([]);
+  await expect(other.create({ name: 'x', kind: 'chore', assigned_member: leo })).rejects.toEqual(problem(404));
+  await expect(jobs.done(room.id, { by_member: 9999 })).rejects.toEqual(problem(404));
+  expect((await jobs.removeMember(leo)).map((m) => m.name)).toEqual(['Mia']);
+  expect((await jobs.get(room.id)).member).toBeNull();
+  expect((await jobs.get(room.id)).done[0]!.by).toBe('Leo');
+  expect((await jobs.scores()).people[0]).toMatchObject({ name: 'Leo', this_week: 2 });
+  await jobs.setPointValue(null);
+  expect((await jobs.scores()).point_cents).toBeNull();
 });
