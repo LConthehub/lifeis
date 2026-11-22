@@ -48,4 +48,5 @@ export { recipeFromPage, recipeFromWeb, RECIPE_WEB_SERVICE } from './recipeWeb.t
 export { makeBackup, restoreBackup, PASSPHRASE_MIN } from './backup.ts';
 export { accessNow, decide, isPaidPath, ENDED_MESSAGE, PAID_PARTS, PRICE, TRIAL_DAYS, type Access, type Held } from './access.ts';
 export { money } from './money.ts';
-export { assistant, isLocal as isLocalAddress, ASSISTANT_SERVICE, AREAS as ASSISTANT_AREAS } from './assistant.ts';
+export { assistant, isLocal as isLocalAddress, ASSISTANT_SERVICE, AREAS as ASSISTANT_AREAS, type AssistantTools, type PhoneModel } from './assistant.ts';
+export { actions, ACTION_LIST, type ActionInfo, type ActionResult } from './actions.ts';

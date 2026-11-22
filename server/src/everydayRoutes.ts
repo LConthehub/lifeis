@@ -10,12 +10,14 @@
  */
 import { home, life, lookups, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
+import type { AssistantTools } from '../../core/src/index.ts';
 import { enjoyingRoutes } from './enjoyingRoutes.ts';
 import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
 import { mailRoutes, type MailTools } from './mailRoutes.ts';
 import { makingRoutes } from './makingRoutes.ts';
 import { moneyRoutes } from './moneyRoutes.ts';
 import { assistantRoutes } from './assistantRoutes.ts';
+import { actionRoutes } from './actionRoutes.ts';
 import { planRoutes } from './planRoutes.ts';
 import { shoppingRoutes } from './shoppingRoutes.ts';
 
@@ -27,8 +29,8 @@ export type Outside = {
   mail?: MailTools;
   photos?: Reach;
   calendars?: Reach;
-  /** How the assistant reaches a model, and locks the model's key. Left out: it can't be turned on. */
-  assistant?: Reach;
+  /** How the assistant reaches a model (and locks its key), or the phone's own model. Left out: it can't be turned on. */
+  assistant?: AssistantTools;
 };
 
 function recipeFrom(body: Body) {
@@ -162,6 +164,7 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ...makingRoutes(db),
     ...moneyRoutes(db),
     ...assistantRoutes(db, options.assistant),
+    ...actionRoutes(db),
     ...(options.reach ? connectionRoutes(db, options.reach) : []),
     ...enjoyingRoutes(db, options.calendars),
     ...mailRoutes(db, options.mail),

@@ -11,10 +11,12 @@
  * None of this applies to a Life Is someone hosts themselves, or to the app when it is connected to one.
  * Nothing here talks to a shop: whether it has been unlocked, and when the trial began, are handed in.
  */
+import { ACTION_LIST } from './actions.ts';
+
 export const TRIAL_DAYS = 14;
 export const PRICE = '$14.99';
 /** The first part of an address (/api/<this>/…) for each part the unlock covers. */
-export const PAID_PARTS = ['things', 'projects', 'plans', 'calendar', 'media', 'mail', 'money'] as const;
+export const PAID_PARTS = ['things', 'projects', 'plans', 'calendar', 'media', 'mail', 'money', 'assistant'] as const;
 
 export type Held = { trial_started: string | null; unlocked: boolean };
 export type Access = {
@@ -41,6 +43,9 @@ export function accessNow(held: Held, now: Date): Access {
 /** Whether an address belongs to a part the unlock covers. */
 export function isPaidPath(path: string): boolean {
   const part = /^\/api\/([a-z-]+)/.exec(path)?.[1];
+  // A short request from Siri, Google or a link belongs to the part of Life Is it touches.
+  const action = /^\/api\/actions\/([a-z-]+)/.exec(path)?.[1];
+  if (action) return ACTION_LIST.find((a) => a.id === action)?.part !== 'kitchen';
   return (PAID_PARTS as readonly string[]).includes(part ?? '');
 }
 

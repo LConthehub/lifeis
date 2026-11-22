@@ -22,7 +22,11 @@ async function onThisPhone() {
   const { db, saved } = onPhone ? await (await import('./nativeDatabase.js')).openNativeDatabase() : await (await import('./database.js')).openDeviceDatabase();
   await migrate(db);
   const { deviceAnswers } = await import('./answer.js');
-  const outside = onPhone ? { fetcher: (await import('./outside.js')).phoneFetcher } : {};
+  const fetcher = onPhone ? (await import('./outside.js')).phoneFetcher : undefined;
+  // The phone's own built-in AI, where it has one. In a browser, where the app is only tried out, a test can
+  // hand in a stand-in as window.lifeisTryPhoneModel.
+  const phone = onPhone ? (await import('./phoneModel.js')).phoneModel() : window.lifeisTryPhoneModel ?? null;
+  const outside = { ...(fetcher ? { fetcher } : {}), ...(fetcher || phone ? { assistant: { ...(fetcher ? { fetcher } : {}), ...(phone ? { phone } : {}) } } : {}) };
   // When the free trial began is kept in the phone's keystore, not the database, so bringing a backup back
   // neither restarts it nor ends it. Whether it is unlocked will come from the app store, once it is in one.
   const held = {
@@ -69,6 +73,26 @@ async function start() {
     },
   };
   root.render(<React.StrictMode><App /></React.StrictMode>);
+  if (onPhone) await followLinks();
+}
+
+/**
+ * A link that opens the app (space.emailmy.lifeis://do/add-to-groceries?item=eggs, from a shortcut on the icon,
+ * Siri or Google) goes to that page in the app, as if it had been tapped there.
+ */
+async function followLinks() {
+  const { App: Phone } = await import('@capacitor/app');
+  const go = (address) => {
+    let url;
+    try { url = new URL(address); } catch { return; }
+    const path = `/${url.host}${url.pathname}`.replace(/\/+$/, '');
+    if (!/^\/do\/[a-z-]{1,40}$/.test(path)) return;
+    window.history.pushState({}, '', path + url.search);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+  const first = await Phone.getLaunchUrl().catch(() => null);
+  if (first?.url) go(first.url);
+  Phone.addListener('appUrlOpen', ({ url }) => go(url));
 }
 
 start().catch((problem) => {

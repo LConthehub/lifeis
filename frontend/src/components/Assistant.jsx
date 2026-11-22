@@ -15,15 +15,18 @@ export function AssistantService() {
   const [a, setA] = useState(null);
   const [form, setForm] = useState(null);
   const [models, setModels] = useState(null);
+  const [phoneState, setPhoneState] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   useEffect(() => { axios.get('/api/assistant').then(({ data }) => setA(data)).catch(() => {}); }, []);
   if (!a) return null;
-  const start = () => { setForm({ enabled: true, url: a.url, model: a.model, cloud_ok: a.cloud_ok, key: '', areas: a.areas }); setMessage(''); setModels(null); };
+  const start = () => { setForm({ enabled: true, source: a.source, url: a.url, model: a.model, cloud_ok: a.cloud_ok, key: '', areas: a.areas }); setMessage(''); setModels(null); };
   const set = (name) => (e) => setForm({ ...form, [name]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const tick = (area) => setForm({ ...form, areas: form.areas.includes(area) ? form.areas.filter((x) => x !== area) : [...form.areas, area] });
+  const onPhone = form?.source === 'phone';
+  const checkPhone = async () => { setMessage(''); try { setPhoneState((await axios.post('/api/assistant/phone')).data); } catch (err) { setMessage(errorMessage(err, "Couldn't check")); } };
   let local = true;
-  if (form) { try { const host = new URL(form.url).hostname; local = /^(localhost|host\.docker\.internal|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)|\.(local|lan|home\.arpa|ts\.net|internal)$/.test(host); } catch { /* not yet an address */ } }
+  if (form && !onPhone) { try { const host = new URL(form.url).hostname; local = /^(localhost|host\.docker\.internal|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)|\.(local|lan|home\.arpa|ts\.net|internal)$/.test(host); } catch { /* not yet an address */ } }
   const save = async (e) => {
     e.preventDefault();
     setBusy(true); setMessage('');
@@ -43,19 +46,41 @@ export function AssistantService() {
     <div className="py-3" data-assistant-settings>
       <div className="flex items-baseline gap-2">
         <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">💬 An AI assistant</h3>
-        <span className={`rounded px-1.5 text-[11px] ${a.enabled ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{a.enabled ? (a.local ? 'On, at home' : 'On, cloud') : 'Off'}</span>
+        <span className={`rounded px-1.5 text-[11px] ${a.enabled ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{a.enabled ? (a.source === 'phone' ? 'On, this device' : a.local ? 'On, at home' : 'On, cloud') : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
-        Ask questions about your household in your own words. It uses a model you run yourself, such as Ollama or LM Studio. <span className="font-medium">What it does:</span> {a.service.sends}
+        Ask questions about your household in your own words. {a.phone ? `It can use this device's own ${a.phone.name}, or a model you run yourself.` : 'It uses a model you run yourself, such as Ollama or LM Studio.'} <span className="font-medium">What it does:</span> {a.service.sends}
       </p>
       {!a.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : !form ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-800 dark:text-life-50">
-          {a.enabled && <span className="mr-auto break-all">Using <span className="font-medium">{a.model || 'the default model'}</span> at {a.url}</span>}
+          {a.enabled && (a.source === 'phone'
+            ? <span className="mr-auto">Using this device's own <span className="font-medium">{a.phone?.name}</span>. Nothing leaves the device.</span>
+            : <span className="mr-auto break-all">Using <span className="font-medium">{a.model || 'the default model'}</span> at {a.url}</span>)}
           <button type="button" onClick={start} className={quietButtonClass}>{a.enabled ? 'Change' : 'Set it up'}</button>
           {a.enabled && <button type="button" onClick={off} className={quietButtonClass}>Turn off</button>}
         </div>
       ) : (
         <form onSubmit={save} className="mt-2 space-y-3 rounded-lg bg-life-50/60 p-3 dark:bg-life-800">
+          {a.phone && (
+            <fieldset className="space-y-1">
+              <legend className="text-sm font-medium text-gray-700 dark:text-life-100">Where answers come from</legend>
+              <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-life-50">
+                <input type="radio" name="source" checked={onPhone} onChange={() => setForm({ ...form, source: 'phone' })} className="mt-1" />
+                <span>This device's own {a.phone.name} <span className="text-xs text-gray-500 dark:text-life-300">— built in, and nothing leaves the device. It is small, so it is given less to look at and keeps its answers simple.</span></span>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-life-50">
+                <input type="radio" name="source" checked={!onPhone} onChange={() => setForm({ ...form, source: 'address' })} className="mt-1" />
+                <span>A model at an address <span className="text-xs text-gray-500 dark:text-life-300">— one you run yourself at home, or a cloud AI with the warning below.</span></span>
+              </label>
+            </fieldset>
+          )}
+          {onPhone && (
+            <div className="space-y-1 text-sm">
+              <button type="button" onClick={checkPhone} className="text-life-600 hover:underline dark:text-life-200">Check {a.phone.name} is ready</button>
+              {phoneState && <p className={phoneState.ready ? 'text-life-700 dark:text-life-200' : 'text-honey-700'} data-phone-state>{phoneState.ready ? `${phoneState.name} is ready.` : phoneState.why}</p>}
+            </div>
+          )}
+          {!onPhone && <>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="The model's address *"><input required value={form.url} onChange={set('url')} className={inputClass} /></Field>
             <Field label="Model">
@@ -67,6 +92,7 @@ export function AssistantService() {
           <p className="text-xs text-gray-500 dark:text-life-300">Ollama: http://host.docker.internal:11434/v1. LM Studio: http://host.docker.internal:1234/v1. If Life Is isn't in Docker, use localhost instead of host.docker.internal.</p>
           <button type="button" onClick={look} className="text-sm text-life-600 hover:underline dark:text-life-200">Check it answers, and list its models</button>
           {models && models.length === 0 && <p className="text-sm text-gray-600 dark:text-life-100">It answered, but listed no models.</p>}
+          </>}
 
           <fieldset>
             <legend className="text-sm font-medium text-gray-700 dark:text-life-100">What it may look at</legend>
@@ -79,7 +105,7 @@ export function AssistantService() {
             ))}
           </fieldset>
 
-          <details open={!local || form.cloud_ok} className="rounded-lg border border-honey-200 bg-honey-50 p-3 dark:border-honey-700 dark:bg-transparent">
+          {!onPhone && <details open={!local || form.cloud_ok} className="rounded-lg border border-honey-200 bg-honey-50 p-3 dark:border-honey-700 dark:bg-transparent">
             <summary className="cursor-pointer text-sm font-medium text-honey-700">A cloud AI instead (off unless you allow it)</summary>
             <p className="mt-2 text-sm text-honey-700">
               A cloud AI (ChatGPT, Claude, Gemini and others) runs on someone else's computers. Whatever you tick above, and your question, would leave this computer and be handled under that company's terms,
@@ -90,7 +116,7 @@ export function AssistantService() {
               <span>Yes, I understand that what I ask about leaves this computer when I use a cloud AI.</span>
             </label>
             <div className="mt-2"><Field label={a.key_saved ? 'Its key (one is saved; leave blank to keep it)' : 'Its key, if it needs one'}><input type="password" autoComplete="off" value={form.key} onChange={set('key')} className={inputClass} /></Field></div>
-          </details>
+          </details>}
           {!local && !form.cloud_ok && <p className="text-sm text-red-600">That address isn't on this computer or your own network. Allow a cloud AI above, or use a model at home.</p>}
 
           {message && <p className="text-sm text-red-600" role="alert">{message}</p>}
@@ -125,7 +151,7 @@ export function AskCard() {
         <input value={question} onChange={(e) => setQuestion(e.target.value)} aria-label="Ask about your household" placeholder="Ask about your household…" className={`${inputClass} flex-1`} />
         <button type="submit" disabled={busy || !question.trim()} className={buttonClass}>{busy ? 'Thinking…' : 'Ask'}</button>
       </form>
-      <p className="mt-1 text-xs text-gray-500 dark:text-life-300">{a.local ? 'Answered by your own model; nothing leaves home.' : `Answered by a cloud AI at ${new URL(a.url).hostname}: what it looks at leaves this computer.`}</p>
+      <p className="mt-1 text-xs text-gray-500 dark:text-life-300">{a.source === 'phone' ? `Answered by this device's own ${a.phone?.name}; nothing leaves the device.` : a.local ? 'Answered by your own model; nothing leaves home.' : `Answered by a cloud AI at ${new URL(a.url).hostname}: what it looks at leaves this computer.`}</p>
       {error && <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>}
       {answer && (
         <div className="mt-3 space-y-2">

@@ -1,10 +1,13 @@
 /**
  * An optional assistant: questions about your own household, answered by an AI model you choose.
  *
- * It works the way Sworkr's does. It talks to a model you run yourself (Ollama, LM Studio, llama.cpp's server:
- * all speak the same OpenAI-style language). Addresses on this computer or your own network are allowed as
- * they are. Anything else (a cloud AI) needs an explicit "yes, my information leaves this computer" tick, and
- * that is off by default.
+ * Answers come from one of two places, chosen by the person:
+ *   - the phone's own built-in AI (Apple Intelligence on an iPhone or iPad, Gemini Nano on Android), in the app.
+ *     The model is part of the phone, so nothing leaves the device. It is small, so it is given less.
+ *   - a model at an address, the way Sworkr's assistant works: one you run yourself (Ollama, LM Studio,
+ *     llama.cpp's server: all speak the same OpenAI-style language). Addresses on this computer or your own
+ *     network are allowed as they are. Anything else (a cloud AI) needs an explicit "yes, my information leaves
+ *     this computer" tick, and that is off by default.
  *
  * What the model is given is chosen by you, part by part (the kitchen, your things, projects, spending, the
  * calendar), and you can see exactly what was sent with every answer. Never: mail, passwords, notes on the
@@ -32,6 +35,20 @@ export const AREAS = ['kitchen', 'things', 'projects', 'spending', 'calendar'] a
 export type Area = (typeof AREAS)[number];
 /** Small models take in only so much. Past this, the longest lists are shortened, and the model is told. */
 export const FACTS_LIMIT = 24_000;
+/** A phone's built-in model takes in far less (Apple's on-device model reads about 4,000 tokens in all). */
+export const PHONE_FACTS_LIMIT = 6_000;
+
+/**
+ * The phone's own built-in model, handed in by the app. Never present on a server or in a browser.
+ * `check` says whether it can answer now; `answer` gives its reply to one prompt.
+ */
+export type PhoneModel = {
+  name: string;
+  check(): Promise<{ ready: boolean; why?: string }>;
+  answer(system: string, prompt: string): Promise<string>;
+};
+export type AssistantTools = { fetcher?: Fetcher; sealer?: Sealer; phone?: PhoneModel };
+export type Source = 'address' | 'phone';
 
 const SETTING = 'assistant';
 const SYSTEM = 'You help someone with their own household. Answer ONLY from the JSON facts you are given about their home: ' +
@@ -42,18 +59,22 @@ const SYSTEM = 'You help someone with their own household. Answer ONLY from the 
 export type AssistantStatus = {
   available: boolean;
   enabled: boolean;
+  /** Where answers come from: the phone's built-in AI, or a model at an address. */
+  source: Source;
+  /** The phone's built-in AI, when this is the app on a phone that may have one. */
+  phone: { name: string } | null;
   url: string;
   model: string;
   /** Whether a cloud AI (an address that isn't this computer or your own network) has been allowed. */
   cloud_ok: boolean;
   key_saved: boolean;
-  /** Whether the address is on this computer or your own network. */
+  /** Whether nothing leaves home: the phone's own model, or an address on this computer or your own network. */
   local: boolean;
   areas: Area[];
   service: typeof ASSISTANT_SERVICE;
 };
-export type AssistantInput = { enabled?: boolean; url?: string | null; model?: string | null; cloud_ok?: boolean; key?: string | null; clear_key?: boolean; areas?: string[] };
-type Kept = { enabled: boolean; url: string; model: string; cloud_ok: boolean; key: string | null; areas: Area[] };
+export type AssistantInput = { source?: string; enabled?: boolean; url?: string | null; model?: string | null; cloud_ok?: boolean; key?: string | null; clear_key?: boolean; areas?: string[] };
+type Kept = { source: Source; enabled: boolean; url: string; model: string; cloud_ok: boolean; key: string | null; areas: Area[] };
 
 /** This computer, your own network, or your Tailscale network. */
 export function isLocal(address: string): boolean {
@@ -71,12 +92,14 @@ export function isLocal(address: string): boolean {
 /** Thinking some models write out before their answer (<think>…</think>) is left out of what is shown. */
 const answerOnly = (text: string) => text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 
-export function assistant(db: Db, owner: number, clock: Clock = () => new Date(), tools?: { fetcher: Fetcher; sealer: Sealer }) {
+export function assistant(db: Db, owner: number, clock: Clock = () => new Date(), tools?: AssistantTools) {
   async function kept(): Promise<Kept> {
     const row = await db.get<{ value: string | null }>('SELECT value FROM user_settings WHERE user_id = ? AND key = ?', [owner, SETTING]);
     let saved: Partial<Kept> = {};
     try { saved = row?.value ? JSON.parse(row.value) as Partial<Kept> : {}; } catch { /* start again */ }
     return {
+      // The phone's model only where there is one: a backup brought to a server falls back to an address.
+      source: saved.source === 'phone' && tools?.phone ? 'phone' : 'address',
       enabled: saved.enabled === true, url: typeof saved.url === 'string' ? saved.url : DEFAULT_URL, model: typeof saved.model === 'string' ? saved.model : '',
       cloud_ok: saved.cloud_ok === true, key: typeof saved.key === 'string' ? saved.key : null,
       areas: Array.isArray(saved.areas) ? saved.areas.filter((a): a is Area => (AREAS as readonly string[]).includes(a)) : ['kitchen'],
@@ -85,18 +108,23 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
   const keep = (k: Kept) => db.run(
     'INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value', [owner, SETTING, JSON.stringify(k)]);
   const shown = (k: Kept): AssistantStatus => ({
-    available: Boolean(tools), enabled: k.enabled, url: k.url, model: k.model, cloud_ok: k.cloud_ok, key_saved: k.key !== null, local: isLocal(k.url), areas: k.areas, service: ASSISTANT_SERVICE,
+    available: Boolean(tools?.fetcher || tools?.phone), enabled: k.enabled, source: k.source, phone: tools?.phone ? { name: tools.phone.name } : null,
+    url: k.url, model: k.model, cloud_ok: k.cloud_ok, key_saved: k.key !== null, local: k.source === 'phone' || isLocal(k.url), areas: k.areas, service: ASSISTANT_SERVICE,
   });
   const need = () => {
-    if (!tools) throw new Problem(400, "This copy of Life Is isn't set up to reach outside services");
-    return tools;
+    if (!tools?.fetcher) throw new Problem(400, "This copy of Life Is isn't set up to reach outside services");
+    return tools.fetcher;
+  };
+  const sealer = () => {
+    if (!tools?.sealer) throw new Problem(400, "A key can't be kept safely here yet. Use a model that needs no key, such as one on your own network.");
+    return tools.sealer;
   };
   async function call(k: Kept, path: string, send?: string) {
-    const key = k.key ? need().sealer.unseal(k.key) : null;
+    const key = k.key ? sealer().unseal(k.key) : null;
     const headers: Record<string, string> = { Accept: 'application/json', ...(send ? { 'Content-Type': 'application/json' } : {}), ...(key ? { Authorization: `Bearer ${key}` } : {}) };
     let answer;
     try {
-      answer = await need().fetcher(k.url + path, headers, send ? { method: 'POST', body: send } : undefined);
+      answer = await need()(k.url + path, headers, send ? { method: 'POST', body: send } : undefined);
     } catch {
       throw new Problem(400, `Couldn't reach ${k.url}. Is the model running? If it's on the computer that runs Life Is in Docker, use host.docker.internal instead of localhost.`);
     }
@@ -106,7 +134,7 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
   }
 
   /** What the model is given: the ticked parts of Life Is, as plain facts. */
-  async function facts(areas: Area[]): Promise<Record<string, unknown>> {
+  async function facts(areas: Area[], limit = FACTS_LIMIT): Promise<Record<string, unknown>> {
     const today = todayOf(clock);
     const out: Record<string, unknown> = { today };
     if (areas.includes('kitchen')) {
@@ -162,7 +190,7 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
     }
     // Small models take in only so much: the longest lists are shortened until it fits, and the model is told.
     const lists = ['recipes', 'things', 'spent_on', 'calendar_next_30_days', 'pantry'];
-    for (let size = JSON.stringify(out).length, rounds = 0; size > FACTS_LIMIT && rounds < 40; size = JSON.stringify(out).length, rounds += 1) {
+    for (let size = JSON.stringify(out).length, rounds = 0; size > limit && rounds < 60; size = JSON.stringify(out).length, rounds += 1) {
       const holders = lists.map((name) => [name, name === 'spent_on' ? (out.spending_this_month as { spent_on?: unknown[] } | undefined)?.spent_on : out[name]] as const)
         .filter((h): h is readonly [string, unknown[]] => Array.isArray(h[1]) && h[1].length > 1)
         .sort((a, b) => JSON.stringify(b[1]).length - JSON.stringify(a[1]).length);
@@ -179,17 +207,19 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
 
     async save(input: AssistantInput): Promise<AssistantStatus> {
       const before = await kept();
+      const source: Source = input.source === undefined ? before.source : input.source === 'phone' ? 'phone' : 'address';
+      if (source === 'phone' && !tools?.phone) throw new Problem(400, "This device has no built-in AI that Life Is can use");
       const url = input.url === undefined || input.url === null ? before.url : input.url.trim().replace(/\/+$/, '');
       if (!/^https?:\/\/[^\s]+$/.test(url)) throw new Problem(400, 'The address starts with http:// or https://');
       const cloudOk = input.cloud_ok ?? before.cloud_ok;
-      if (!isLocal(url) && !cloudOk) {
+      // The address only matters when answers come from it; choosing the phone's own model never needs the tick.
+      if (source === 'address' && !isLocal(url) && !cloudOk) {
         throw new Problem(400, "That address isn't on this computer or your own network. Tick the box to allow a cloud AI, knowing what you ask about leaves this computer.");
       }
       const typedKey = clean(input.key, 500);
-      if (typedKey) need();
       const next: Kept = {
-        enabled: input.enabled ?? before.enabled, url, model: input.model === undefined || input.model === null ? before.model : input.model.trim().slice(0, 120), cloud_ok: cloudOk,
-        key: input.clear_key ? null : typedKey ? need().sealer.seal(typedKey) : before.key,
+        source, enabled: input.enabled ?? before.enabled, url, model: input.model === undefined || input.model === null ? before.model : input.model.trim().slice(0, 120), cloud_ok: cloudOk,
+        key: input.clear_key ? null : typedKey ? sealer().seal(typedKey) : before.key,
         areas: input.areas === undefined ? before.areas : [...new Set(input.areas)].filter((a): a is Area => (AREAS as readonly string[]).includes(a)),
       };
       await keep(next);
@@ -202,7 +232,17 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
       return (Array.isArray(got.data) ? got.data : []).map((m) => (m && typeof m === 'object' ? (m as { id?: unknown }).id : null)).filter((id): id is string => typeof id === 'string');
     },
 
-    facts: async (): Promise<Record<string, unknown>> => facts((await kept()).areas),
+    facts: async (): Promise<Record<string, unknown>> => { const k = await kept(); return facts(k.areas, k.source === 'phone' ? PHONE_FACTS_LIMIT : FACTS_LIMIT); },
+
+    /** Whether the phone's built-in AI can answer right now, and if not, why not, in words. */
+    async phoneCheck(): Promise<{ ready: boolean; why?: string; name: string }> {
+      if (!tools?.phone) throw new Problem(400, 'This device has no built-in AI that Life Is can use');
+      try {
+        return { name: tools.phone.name, ...(await tools.phone.check()) };
+      } catch {
+        return { name: tools.phone.name, ready: false, why: `${tools.phone.name} isn't available on this device.` };
+      }
+    },
 
     /** An answer to a question about the household, and exactly what the model was given to answer it. */
     async ask(given: string | null | undefined): Promise<{ answer: string; given: Record<string, unknown> }> {
@@ -210,12 +250,22 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
       if (!question) throw new Problem(400, 'Ask a question');
       const k = await kept();
       if (!k.enabled) throw new Problem(409, 'Turn the assistant on in Settings, under "Outside services"');
-      if (!isLocal(k.url) && !k.cloud_ok) throw new Problem(409, "The assistant's address isn't on this computer or your network, and a cloud AI hasn't been allowed");
+      if (k.source === 'address' && !isLocal(k.url) && !k.cloud_ok) throw new Problem(409, "The assistant's address isn't on this computer or your network, and a cloud AI hasn't been allowed");
       if (k.areas.length === 0) throw new Problem(409, 'The assistant has been given nothing to look at. Tick what it may see in Settings.');
+      const prompt = (data: Record<string, unknown>) => `Facts:\n${JSON.stringify(data)}\n\nQuestion: ${question}`;
+      if (k.source === 'phone') {
+        const phone = tools!.phone!;
+        const state = await phone.check().catch(() => ({ ready: false, why: undefined }));
+        if (!state.ready) throw new Problem(409, state.why ?? `${phone.name} isn't ready on this device.`);
+        const data = await facts(k.areas, PHONE_FACTS_LIMIT);
+        let text: string;
+        try { text = await phone.answer(SYSTEM, prompt(data)); } catch { throw new Problem(400, `${phone.name} couldn't answer that. Try a shorter question, or tick fewer things for it to look at.`); }
+        return { answer: answerOnly(text) || '(The model gave no answer.)', given: data };
+      }
       const data = await facts(k.areas);
       const got = await call(k, '/chat/completions', JSON.stringify({
         ...(k.model ? { model: k.model } : {}), temperature: 0.2,
-        messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: `Facts:\n${JSON.stringify(data)}\n\nQuestion: ${question}` }],
+        messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: prompt(data) }],
       }));
       const text = (got.choices as { message?: { content?: unknown } }[] | undefined)?.[0]?.message?.content;
       if (typeof text !== 'string') throw new Problem(400, "The model's server sent something that isn't an answer");

@@ -4,4 +4,10 @@
     <string name="title_activity_main">Life Is</string>
     <string name="package_name">space.emailmy.lifeis</string>
     <string name="custom_url_scheme">space.emailmy.lifeis</string>
+    <string name="shortcut_groceries_short">Add to groceries</string>
+    <string name="shortcut_groceries_long">Add to the grocery list</string>
+    <string name="shortcut_spent_short">Something spent</string>
+    <string name="shortcut_spent_long">Write down something spent</string>
+    <string name="shortcut_dinner_short">What's for dinner</string>
+    <string name="shortcut_dinner_long">What's for dinner tonight</string>
 </resources>

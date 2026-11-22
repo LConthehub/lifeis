@@ -19,7 +19,7 @@ it('counts fourteen days from when the trial began, and not before it begins', (
 
 it('keeps the kitchen and backups free, whatever the trial says', () => {
   for (const free of ['/api/kitchen/recipes', '/api/shopping/prices', '/api/device/backup', '/api/device/restore', '/api/home', '/api/life', '/api/health']) expect(isPaidPath(free)).toBe(false);
-  for (const paid of ['/api/things/items', '/api/projects/3/costs', '/api/plans', '/api/calendar/events', '/api/media', '/api/mail/accounts', '/api/money/entries']) expect(isPaidPath(paid)).toBe(true);
+  for (const paid of ['/api/things/items', '/api/projects/3/costs', '/api/plans', '/api/calendar/events', '/api/media', '/api/mail/accounts', '/api/money/entries', '/api/assistant/ask']) expect(isPaidPath(paid)).toBe(true);
   const ended = accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-06-01T00:00:00Z'));
   expect(decide(ended, 'POST', '/api/kitchen/recipes')).toBe('go');
   expect(decide(ended, 'POST', '/api/device/backup')).toBe('go');

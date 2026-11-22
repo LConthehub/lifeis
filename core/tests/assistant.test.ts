@@ -117,3 +117,36 @@ it('shortens the longest lists to fit a small model, and says it did', async () 
   expect((given.recipes as unknown[]).length).toBeGreaterThan(10);
   expect(given.note).toMatch(/shortened/);
 });
+
+it("uses the phone's own model when chosen: no address, no tick, nothing fetched, and less to read", async () => {
+  let ready = true;
+  const prompts: string[] = [];
+  const phone = {
+    name: 'Apple Intelligence',
+    check: async () => (ready ? { ready: true } : { ready: false, why: 'Apple Intelligence is still downloading.' }),
+    answer: async (system: string, prompt: string) => { prompts.push(system + prompt); return 'You have eggs.'; },
+  };
+  const cook = kitchen(db, ana, clock);
+  for (let n = 0; n < 120; n += 1) await cook.createRecipe({ title: `Recipe ${n} with a long name`, ingredients_text: '2 cups flour\n3 eggs\n1 cup milk', steps_text: 'Mix.', tags: [] });
+  // On a server there is no phone model to choose.
+  await expect(helper(ana).save({ source: 'phone' })).rejects.toMatchObject({ status: 400 });
+  const me = assistant(db, ana, clock, { phone });
+  expect(await me.status()).toMatchObject({ available: true, source: 'address', phone: { name: 'Apple Intelligence' } });
+  // A cloud address saved earlier doesn't matter once the phone's own model is chosen.
+  const chosen = await me.save({ source: 'phone', enabled: true, url: 'https://far-away.example/v1' });
+  expect(chosen).toMatchObject({ source: 'phone', local: true, cloud_ok: false });
+  expect(await me.phoneCheck()).toEqual({ name: 'Apple Intelligence', ready: true });
+  const got = await me.ask('What can I make?');
+  expect(got.answer).toBe('You have eggs.');
+  expect(asked).toHaveLength(0); // nothing went to any address
+  expect(JSON.stringify(got.given).length).toBeLessThanOrEqual(6000);
+  expect(prompts[0]).toContain('What can I make?');
+  // Not ready yet: said in words, and nothing is asked of it.
+  ready = false;
+  await expect(me.ask('Again?')).rejects.toThrow(/still downloading/);
+  expect(prompts).toHaveLength(1);
+  // A key can't be kept where there's no way to lock it.
+  await expect(me.save({ source: 'address', url: 'http://localhost:11434/v1', key: 'sk-1' })).rejects.toThrow(/can't be kept safely/);
+  // The same records on a server, where there's no phone: it falls back to an address.
+  expect((await helper(ana).status()).source).toBe('address');
+});
