@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import Scanner from '../components/Scanner';
+import PlacePicker from '../components/PlacePicker';
 import { stickerCode } from './Places';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
@@ -13,10 +14,13 @@ const DID = { film: 'Watched', show: 'Watched', music: 'Listened', book: 'Read',
 const localCover = (cover) => typeof cover === 'string' && cover.startsWith('/api/');
 const commaList = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
 
-/** Everything you own to watch, hear, read or play, by title, with the formats you have it on. */
-export default function MediaPage() {
+/**
+ * Everything you own to watch, hear, read or play, by title, with the formats you have it on. Given `only`
+ * (as the Books tab is), the same collection shows one type alone.
+ */
+export default function MediaPage({ only = '' }) {
   const [titles, setTitles] = useState(null);
-  const [type, setType] = useState('');
+  const [type, setType] = useState(only);
   const [show, setShow] = useState('');     // '', 'wanted' or 'lent'
   const [q, setQ] = useState('');
   const [adding, setAdding] = useState(null);       // null, or what the new title starts with
@@ -25,19 +29,25 @@ export default function MediaPage() {
   const load = useCallback(() => { axios.get('/api/media').then(({ data }) => setTitles(data)).catch(() => setTitles([])); }, []);
   useEffect(() => { load(); }, [load]);
   if (!titles) return null;
+  const mine = only ? titles.filter((m) => m.type === only) : titles;
   const word = q.trim().toLowerCase();
-  const shown = titles.filter((m) => (!type || m.type === type) && (show !== 'wanted' || m.wanted) && (show !== 'lent' || m.lent_to.length > 0)
+  const shown = mine.filter((m) => (!type || m.type === type) && (show !== 'wanted' || m.wanted) && (show !== 'lent' || m.lent_to.length > 0)
     && (!word || [m.title, m.creator, ...m.genres, ...m.formats].some((v) => String(v ?? '').toLowerCase().includes(word))));
   const count = (id) => titles.filter((m) => m.type === id).length;
   const chip = (active) => `rounded-full px-3 py-1 text-sm ${active ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Collection</h1>
+        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">{only ? typeOf(only)[1] : 'Collection'}</h1>
         <button type="button" onClick={() => setScanning(true)} className={quietButtonClass}>📷 Scan a barcode</button>
         <button type="button" onClick={() => setAdding({ type: type || 'film' })} className={buttonClass}>+ Add</button>
       </div>
-      {titles.length === 0 ? (
+      {mine.length === 0 && only === 'book' ? (
+        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
+          No books yet. Scan the barcode on the back (its ISBN) and Life Is looks up the title and author, then asks
+          where it's kept: a room, and a shelf in it.
+        </div>
+      ) : mine.length === 0 ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
           Nothing here yet. Add a film, an album or a book, and say what you have it on: VHS, Blu-ray, vinyl, paperback, anything.
           The same title on two formats is one title with two copies.
@@ -45,14 +55,14 @@ export default function MediaPage() {
       ) : (
         <>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="What to show">
-            <button type="button" onClick={() => setType('')} aria-pressed={!type} className={chip(!type)}>Everything <span className="opacity-70">{titles.length}</span></button>
-            {TYPES.filter(([id]) => count(id) > 0).map(([id, label, icon]) => (
+            {!only && <button type="button" onClick={() => setType('')} aria-pressed={!type} className={chip(!type)}>Everything <span className="opacity-70">{titles.length}</span></button>}
+            {TYPES.filter(([id]) => !only && count(id) > 0).map(([id, label, icon]) => (
               <button key={id} type="button" onClick={() => setType(id)} aria-pressed={type === id} className={chip(type === id)}>{icon} {label} <span className="opacity-70">{count(id)}</span></button>
             ))}
-            {titles.some((m) => m.wanted) && <button type="button" onClick={() => setShow(show === 'wanted' ? '' : 'wanted')} aria-pressed={show === 'wanted'} className={chip(show === 'wanted')}>Wanted</button>}
-            {titles.some((m) => m.lent_to.length) && <button type="button" onClick={() => setShow(show === 'lent' ? '' : 'lent')} aria-pressed={show === 'lent'} className={chip(show === 'lent')}>Lent out</button>}
+            {mine.some((m) => m.wanted) && <button type="button" onClick={() => setShow(show === 'wanted' ? '' : 'wanted')} aria-pressed={show === 'wanted'} className={chip(show === 'wanted')}>Wanted</button>}
+            {mine.some((m) => m.lent_to.length) && <button type="button" onClick={() => setShow(show === 'lent' ? '' : 'lent')} aria-pressed={show === 'lent'} className={chip(show === 'lent')}>Lent out</button>}
           </div>
-          {titles.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a title, a person, a genre or a format" aria-label="Find in the collection" className={`${inputClass} max-w-sm`} />}
+          {mine.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a title, a person, a genre or a format" aria-label="Find in the collection" className={`${inputClass} max-w-sm`} />}
           {shown.length === 0 ? <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing matches.</div> : (
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {shown.map((m) => (
@@ -189,10 +199,7 @@ function TitleForm({ title, withCopy = false, onDone }) {
             <div className="grid grid-cols-2 gap-3">
               <Field label={form.barcode ? "What it's on *" : "What it's on"}><input list="media-formats" required={Boolean(form.barcode)} value={form.format} onChange={set('format')} placeholder={formats.slice(0, 3).join(', ') || 'Any word you like'} className={inputClass} /></Field>
               <Field label="Where it is">
-                <select value={form.place_id} onChange={set('place_id')} className={inputClass}>
-                  <option value="">No place</option>
-                  {places.map((p) => <option key={p.id} value={p.id}>{p.path}</option>)}
-                </select>
+                <PlacePicker value={form.place_id} places={places} onPlaces={setPlaces} onChange={(id) => setForm((f) => ({ ...f, place_id: id }))} />
               </Field>
               {form.barcode && <p className="col-span-2 text-xs text-gray-600 dark:text-life-200">Barcode <span className="font-mono">{form.barcode}</span> will be kept with this copy, so scanning it finds it next time.</p>}
             </div>
@@ -334,10 +341,7 @@ function CopyForm({ title, copy, onDone }) {
       <div className="grid grid-cols-2 gap-3">
         <Field label="What it's on *"><input required autoFocus={!copy.id} list="copy-formats" value={form.format} onChange={set('format')} placeholder={formats.slice(0, 3).join(', ') || 'Any word you like'} className={inputClass} /></Field>
         <Field label="Where it is">
-          <select value={form.place_id} onChange={set('place_id')} className={inputClass}>
-            <option value="">No place</option>
-            {places.map((p) => <option key={p.id} value={p.id}>{p.path}</option>)}
-          </select>
+          <PlacePicker value={form.place_id} places={places} onPlaces={setPlaces} onChange={(id) => setForm((f) => ({ ...f, place_id: id }))} />
         </Field>
       </div>
       <datalist id="copy-formats">{formats.map((f) => <option key={f} value={f} />)}</datalist>

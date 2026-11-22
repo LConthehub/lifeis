@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export const inputClass = 'w-full rounded-lg border border-life-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-life-500 focus:outline-none focus:ring-2 focus:ring-life-200 dark:border-life-700 dark:bg-life-800 dark:text-life-50';
 export const buttonClass = 'rounded-full bg-gradient-to-br from-life-500 to-life-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-life-600 hover:to-life-800 disabled:opacity-50';
@@ -27,7 +28,9 @@ export default function Modal({ title, onClose, children, wide = false }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
-  return (
+  // Drawn on the page itself, not where it is used: the frosted panel pages sit in (backdrop-blur) would
+  // otherwise hold it inside the panel, under the header, instead of over the whole screen.
+  return createPortal(
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-modal="true" aria-label={title}
         className={`max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl dark:bg-life-800 sm:rounded-2xl sm:p-6 ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'}`}>
@@ -37,7 +40,8 @@ export default function Modal({ title, onClose, children, wide = false }) {
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

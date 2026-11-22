@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { ScanSticker } from './Places';
+import PlacePicker from '../components/PlacePicker';
 
 const TYPES = [['text', 'Text'], ['number', 'A number'], ['choice', 'A choice from a list'], ['yesno', 'Yes or no'], ['date', 'A date'], ['link', 'A link']];
 const typeName = (type) => (TYPES.find(([id]) => id === type) || ['', type])[1];
@@ -129,7 +130,7 @@ export default function Things() {
       )}
       {editing && (
         <Modal title={editing.id ? editing.name : 'Add a thing'} onClose={() => setEditing(null)}>
-          <ItemForm item={editing} kinds={kinds} places={places} onDone={() => { setEditing(null); load(); }} />
+          <ItemForm item={editing} kinds={kinds} places={places} onPlaces={setPlaces} onDone={() => { setEditing(null); load(); }} />
         </Modal>
       )}
     </div>
@@ -159,7 +160,7 @@ function ValueInput({ field, value, onChange }) {
   return <input type={field.type === 'link' ? 'url' : 'text'} value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder={field.type === 'link' ? 'https://' : ''} className={inputClass} />;
 }
 
-function ItemForm({ item, kinds, places, onDone }) {
+function ItemForm({ item, kinds, places, onPlaces, onDone }) {
   const [form, setForm] = useState({
     kind_id: item.kind_id, name: item.name || '', quantity: item.quantity ?? '', unit: item.unit || '', place_id: item.place_id ?? '',
     low_at: item.low_at ?? '', note: item.note || '', values: { ...(item.values || {}) },
@@ -206,10 +207,7 @@ function ItemForm({ item, kinds, places, onDone }) {
       <datalist id="thing-units">{['yd', 'm', 'cm', 'in', 'ft', 'g', 'kg', 'oz', 'lb', 'ml', 'l', 'skein', 'spool', 'packet', 'box', 'piece'].map((u) => <option key={u} value={u} />)}</datalist>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Where it is">
-          <select value={form.place_id} onChange={set('place_id')} className={inputClass}>
-            <option value="">No place</option>
-            {places.map((p) => <option key={p.id} value={p.id}>{p.path}</option>)}
-          </select>
+          <PlacePicker value={form.place_id} places={places} onPlaces={onPlaces} onChange={(id) => setForm((f) => ({ ...f, place_id: id }))} />
         </Field>
         <Field label="Running low at"><input type="number" min="0" step="any" value={form.low_at} onChange={set('low_at')} className={inputClass} /></Field>
       </div>
