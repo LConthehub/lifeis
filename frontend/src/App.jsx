@@ -113,7 +113,7 @@ function Shell({ user, demo = false, onLogout }) {
           {/* Six words don't fit across a phone. There, Settings stays up beside the name and the words take
               the row below, on one line that scrolls sideways with no visible scrollbar; the current word is
               scrolled into view. From the sm breakpoint up it sits in the row with the name, as before. */}
-          <nav ref={navRef} className="order-3 flex w-full min-w-0 flex-nowrap gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:order-2 sm:w-auto sm:flex-wrap sm:overflow-visible" aria-label="Sections">
+          <nav ref={navRef} className="order-3 flex w-full min-w-0 flex-nowrap gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pr-8 [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] sm:order-2 sm:w-auto sm:flex-wrap sm:overflow-visible sm:pr-0 sm:[mask-image:none]" aria-label="Sections">
             {showing.map((s) => (
               <Link key={s.word} to={s.home} aria-current={s === section ? 'page' : undefined}
                 className={`shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-sm font-semibold sm:px-2.5 ${s === section ? 'bg-white text-life-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.shown ?? s.word}</Link>
