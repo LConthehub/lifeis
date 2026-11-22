@@ -33,6 +33,7 @@ const SUITE = [
   { specs: ['fill-a-place', 'gear-and-copy-history'], online: true },
   { specs: ['upkeep'] },
   { specs: ['household'] },
+  { specs: ['pets'] },
   { specs: ['search'] },
   { specs: ['records'] },
   { specs: ['reminders'], fixtures: [['ntfy', 8098]] },

@@ -90,7 +90,7 @@ export default function Records({ item, onChanged }) {
           </ul>
         )}
         <div className="flex flex-wrap items-center gap-2">
-          <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="What kind of paper" className={`${inputClass} w-auto`}>
+          <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="What kind of paper" className={`${inputClass} !w-auto`}>
             {KINDS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
           <input ref={picker} type="file" accept="application/pdf,image/*" className="hidden" aria-label="The paper's file" onChange={(e) => add(e.target.files?.[0])} />

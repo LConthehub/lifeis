@@ -327,15 +327,15 @@ function JobForm({ job, onDone }) {
         <legend className="sr-only">How often</legend>
         <label className="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-life-100">
           <input type="checkbox" checked={form.by_time} onChange={(e) => setForm({ ...form, by_time: e.target.checked })} className="accent-life-600" /> Every
-          <input type="number" min="1" step="1" value={form.every_n} onChange={set('every_n')} disabled={!form.by_time} aria-label="How many" className={`${inputClass} w-20`} />
-          <select value={form.every_unit} onChange={set('every_unit')} disabled={!form.by_time} aria-label="Days, weeks, months or years" className={`${inputClass} w-28`}>
+          <input type="number" min="1" step="1" value={form.every_n} onChange={set('every_n')} disabled={!form.by_time} aria-label="How many" className={`${inputClass} !w-20`} />
+          <select value={form.every_unit} onChange={set('every_unit')} disabled={!form.by_time} aria-label="Days, weeks, months or years" className={`${inputClass} !w-28`}>
             {UNITS.map(([u, many]) => <option key={u} value={u}>{many}</option>)}
           </select>
         </label>
         <label className="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-life-100">
           <input type="checkbox" checked={form.by_reading} onChange={(e) => setForm({ ...form, by_reading: e.target.checked })} className="accent-life-600" /> {form.by_time ? 'or every' : 'Every'}
-          <input type="number" min="0" step="any" value={form.every_reading} onChange={set('every_reading')} disabled={!form.by_reading} aria-label="How far between" className={`${inputClass} w-28`} />
-          <input value={form.reading_unit} onChange={set('reading_unit')} disabled={!form.by_reading} list="reading-units" aria-label="Measured in" placeholder="miles" className={`${inputClass} w-28`} />
+          <input type="number" min="0" step="any" value={form.every_reading} onChange={set('every_reading')} disabled={!form.by_reading} aria-label="How far between" className={`${inputClass} !w-28`} />
+          <input value={form.reading_unit} onChange={set('reading_unit')} disabled={!form.by_reading} list="reading-units" aria-label="Measured in" placeholder="miles" className={`${inputClass} !w-28`} />
           <datalist id="reading-units">{['miles', 'km', 'hours', 'cycles'].map((u) => <option key={u} value={u} />)}</datalist>
         </label>
         {form.by_time && form.by_reading && <p className="text-xs text-gray-500 dark:text-life-300">Whichever comes first.</p>}
@@ -347,8 +347,8 @@ function JobForm({ job, onDone }) {
         {making && !dated && (
           <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-life-100">
             Last done
-            <input type="date" value={form.last_day} onChange={set('last_day')} aria-label="Last done" className={`${inputClass} w-40`} />
-            {form.by_reading && <input type="number" min="0" step="any" value={form.last_reading} onChange={set('last_reading')} aria-label="The reading then" placeholder={`at (${form.reading_unit || 'reading'})`} className={`${inputClass} w-32`} />}
+            <input type="date" value={form.last_day} onChange={set('last_day')} aria-label="Last done" className={`${inputClass} !w-40`} />
+            {form.by_reading && <input type="number" min="0" step="any" value={form.last_reading} onChange={set('last_reading')} aria-label="The reading then" placeholder={`at (${form.reading_unit || 'reading'})`} className={`${inputClass} !w-32`} />}
             <span className="text-xs text-gray-500 dark:text-life-300">Left empty: it's due now.</span>
           </div>
         )}
@@ -377,9 +377,9 @@ function JobForm({ job, onDone }) {
             <div key={`${s.item_id}-${i}`} className="flex items-center gap-1.5 text-sm">
               <span className="min-w-0 flex-1 truncate text-gray-800 dark:text-life-50">{named(s.item_id)?.name ?? '…'}</span>
               <input type="number" min="0" step="any" value={s.quantity} aria-label="How much" placeholder="how much"
-                onChange={(e) => setForm({ ...form, supplies: form.supplies.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)) })} className={`${inputClass} w-20`} />
+                onChange={(e) => setForm({ ...form, supplies: form.supplies.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)) })} className={`${inputClass} !w-20`} />
               <input value={s.unit} aria-label="Unit" placeholder={named(s.item_id)?.unit || 'unit'}
-                onChange={(e) => setForm({ ...form, supplies: form.supplies.map((x, j) => (j === i ? { ...x, unit: e.target.value } : x)) })} className={`${inputClass} w-16`} />
+                onChange={(e) => setForm({ ...form, supplies: form.supplies.map((x, j) => (j === i ? { ...x, unit: e.target.value } : x)) })} className={`${inputClass} !w-16`} />
               <button type="button" onClick={() => setForm({ ...form, supplies: form.supplies.filter((_, j) => j !== i) })} aria-label="Take it off" className="text-gray-400 hover:text-red-600">✕</button>
             </div>
           ))}
@@ -436,7 +436,7 @@ function DoneForm({ job, onDone }) {
         <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-life-100">
           <label className="flex items-center gap-2"><input type="checkbox" checked={form.spend} onChange={(e) => setForm({ ...form, spend: e.target.checked })} className="accent-life-600" /> Put it in this month's spending</label>
           {form.spend && (
-            <select value={form.category_id} onChange={set('category_id')} aria-label="Spending category" className={`${inputClass} w-auto`}>
+            <select value={form.category_id} onChange={set('category_id')} aria-label="Spending category" className={`${inputClass} !w-auto`}>
               <option value="">No category</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>

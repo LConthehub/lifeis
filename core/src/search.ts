@@ -10,7 +10,7 @@ import type { Db, Value } from './db.ts';
 import { placePaths } from './inventory.ts';
 import { Problem } from './problem.ts';
 
-export const SEARCH_KINDS = ['recipe', 'pantry', 'thing', 'place', 'title', 'project', 'job', 'plan', 'event'] as const;
+export const SEARCH_KINDS = ['recipe', 'pantry', 'thing', 'place', 'title', 'project', 'job', 'pet', 'plan', 'event'] as const;
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 export type SearchResult = { kind: SearchKind; id: number; icon: string; title: string; detail: string | null; link: string };
 
@@ -92,6 +92,13 @@ export async function search(db: Db, owner: number, query: string, only?: Search
     for (const j of await db.all<{ id: number; name: string; activity: string | null }>(
       `SELECT id, name, activity FROM upkeep_jobs WHERE (owner_id = ? OR assigned_to = ?) AND ${w.sql} ORDER BY name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, owner, ...w.args])) {
       out.push({ kind: 'job', id: j.id, icon: '🔧', title: j.name, detail: join('Upkeep', j.activity), link: `/things/upkeep/${j.id}` });
+    }
+  }
+  if (wants('pet')) {
+    const w = every(['name', 'species', 'breed', 'microchip', 'vet_name', 'note']);
+    for (const p of await db.all<{ id: number; name: string; species: string | null; breed: string | null }>(
+      `SELECT id, name, species, breed FROM pets WHERE owner_id = ? AND ${w.sql} ORDER BY name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
+      out.push({ kind: 'pet', id: p.id, icon: '🐾', title: p.name, detail: join('Pet', p.breed ?? p.species), link: `/things/pets/${p.id}` });
     }
   }
   if (wants('plan')) {

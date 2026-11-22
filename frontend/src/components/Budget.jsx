@@ -44,7 +44,7 @@ export default function Budget({ project, onChange }) {
             </span>
             {paying?.id === c.id ? (
               <form onSubmit={pay} className="flex items-center gap-1.5">
-                <input autoFocus inputMode="decimal" aria-label={`What ${c.label} came to`} value={paying.amount} onChange={(e) => setPaying({ id: c.id, amount: e.target.value })} className={`${inputClass} w-24`} />
+                <input autoFocus inputMode="decimal" aria-label={`What ${c.label} came to`} value={paying.amount} onChange={(e) => setPaying({ id: c.id, amount: e.target.value })} className={`${inputClass} !w-24`} />
                 <button type="submit" className="text-life-600 hover:underline dark:text-life-200">Paid</button>
                 <button type="button" onClick={() => setPaying(null)} className="text-gray-500 hover:underline">Cancel</button>
               </form>
@@ -72,7 +72,7 @@ export default function Budget({ project, onChange }) {
       )}
       <form onSubmit={add} className="mt-3 flex flex-wrap items-end gap-2">
         <input required aria-label="What the money is for" placeholder="What for" value={label} onChange={(e) => setLabel(e.target.value)} className={`${inputClass} min-w-0 flex-1`} />
-        <input inputMode="decimal" aria-label="Planned cost" placeholder="Planned" value={planned} onChange={(e) => setPlanned(e.target.value)} className={`${inputClass} w-28`} />
+        <input inputMode="decimal" aria-label="Planned cost" placeholder="Planned" value={planned} onChange={(e) => setPlanned(e.target.value)} className={`${inputClass} !w-28`} />
         <button type="submit" className={buttonClass}>Add</button>
       </form>
       {error && <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>}

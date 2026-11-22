@@ -41,6 +41,8 @@ export type JobInput = {
   points?: number | null;
   /** A bill that pays itself: it's a reminder that money is about to leave, not something to do. */
   autopay?: boolean;
+  /** The pet this care is for. Left out: unchanged. */
+  pet_id?: number | null;
   activity?: string | null;
   /** The thing the job is for: the car, the furnace. */
   item_id?: number | null;
@@ -87,6 +89,7 @@ export type Job = {
   amount_cents: number | null;
   points: number | null;
   autopay: boolean;
+  pet: { id: number; name: string } | null;
   activity: string | null;
   /** Whether the person asking owns it (and so can change it). */
   mine: boolean;
@@ -110,7 +113,7 @@ type JobRow = {
   id: number; owner_id: number; owner: string; name: string; activity: string | null; item_id: number | null;
   every_n: number | null; every_unit: EveryUnit | null; every_reading: number | null; reading_unit: string | null;
   first_due: string | null; assigned_to: number | null; assigned_name: string | null; steps: string | null; note: string | null;
-  kind: JobKind; amount_cents: number | null; points: number | null; autopay: number;
+  kind: JobKind; amount_cents: number | null; points: number | null; autopay: number; pet_id: number | null; pet_name: string | null;
 };
 
 const MAX_TOOLS = 40;
@@ -206,8 +209,8 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
   async function rows(q: Queries, where = '', args: Value[] = []): Promise<JobRow[]> {
     return q.all<JobRow>(
       `SELECT j.id, j.owner_id, o.username AS owner, j.name, j.activity, j.item_id, j.every_n, j.every_unit, j.every_reading, j.reading_unit,
-              j.first_due, j.assigned_to, a.username AS assigned_name, j.steps, j.note, j.kind, j.amount_cents, j.points, j.autopay
-       FROM upkeep_jobs j JOIN users o ON o.id = j.owner_id LEFT JOIN users a ON a.id = j.assigned_to
+              j.first_due, j.assigned_to, a.username AS assigned_name, j.steps, j.note, j.kind, j.amount_cents, j.points, j.autopay, j.pet_id, p.name AS pet_name
+       FROM upkeep_jobs j JOIN users o ON o.id = j.owner_id LEFT JOIN users a ON a.id = j.assigned_to LEFT JOIN pets p ON p.id = j.pet_id
        WHERE (j.owner_id = ? OR j.assigned_to = ?) ${where} ORDER BY j.name COLLATE NOCASE, j.id`, [viewer, viewer, ...args]);
   }
 
@@ -250,6 +253,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
       : (last?.reading ?? null);
     return {
       id: row.id, name: row.name, kind: row.kind, amount_cents: row.amount_cents, points: row.points, autopay: row.autopay === 1,
+      pet: row.pet_id !== null ? { id: row.pet_id, name: row.pet_name ?? '' } : null,
       activity: row.activity, mine: owner === viewer, owner: row.owner,
       item: item ? { id: item.id, name: item.name, place: item.place } : null,
       every: row.every_n && row.every_unit ? { n: row.every_n, unit: row.every_unit } : null,
@@ -296,6 +300,10 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
     if (input.amount_cents !== undefined || making) { sets.push('amount_cents = ?'); args.push(input.amount_cents ?? null); }
     if (input.points !== undefined || making) { sets.push('points = ?'); args.push(input.points ?? null); }
     if (input.autopay !== undefined) { sets.push('autopay = ?'); args.push(input.autopay ? 1 : 0); }
+    if (input.pet_id !== undefined) {
+      if (input.pet_id !== null && !(await q.get('SELECT id FROM pets WHERE id = ? AND owner_id = ?', [input.pet_id, viewer]))) throw new Problem(404, "That pet isn't one of yours");
+      sets.push('pet_id = ?'); args.push(input.pet_id);
+    }
     if (sets.length) await q.run(`UPDATE upkeep_jobs SET ${sets.join(', ')} WHERE id = ?`, [...args, jobId]);
   }
 

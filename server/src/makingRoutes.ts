@@ -2,7 +2,7 @@
  * The addresses for the things you keep (/api/things) and the projects that use them (/api/projects).
  * What they do is core/'s inventory.ts and projects.ts; this only reads what was sent and passes it on.
  */
-import { inventory, projects, upkeep, whatIsThis, MAX_DOCUMENT, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
+import { inventory, pets, projects, upkeep, whatIsThis, MAX_PET_PHOTO, MAX_DOCUMENT, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
 import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -78,6 +78,7 @@ function jobFrom(body: Body): JobInput {
     ...(sent(body, 'amount_cents') ? { amount_cents: read.maybeWhole(body, 'amount_cents') } : {}),
     ...(sent(body, 'points') ? { points: read.maybeWhole(body, 'points') } : {}),
     ...(sent(body, 'autopay') ? { autopay: read.yesNo(body, 'autopay') } : {}),
+    ...(sent(body, 'pet_id') ? { pet_id: read.maybeWhole(body, 'pet_id') } : {}),
     ...(tools !== undefined ? { tools: tools as number[] } : {}),
     ...(supplies !== undefined ? { supplies: (supplies as Body[]).map((x) => ({ item_id: read.maybeWhole(x, 'item_id') ?? 0, quantity: read.maybeNumber(x, 'quantity'), unit: read.maybeText(x, 'unit') })) } : {}),
     ...(last ? { last_done: { day: read.text(last, 'day'), reading: read.maybeNumber(last, 'reading') } } : {}),
@@ -91,6 +92,12 @@ export function makingRoutes(db: Db): Route[] {
   const things = (c: Context) => inventory(db, c.user.id, c.clock);
   const making = (c: Context) => projects(db, c.user.id, c.clock);
   const jobs = (c: Context) => upkeep(db, c.user.id, c.clock);
+  const animals = (c: Context) => pets(db, c.user.id, c.clock);
+  const petFrom = (body: Body) => ({
+    name: read.text(body, 'name'), species: read.maybeText(body, 'species'), breed: read.maybeText(body, 'breed'), born_on: read.maybeText(body, 'born_on'),
+    microchip: read.maybeText(body, 'microchip'), vet_name: read.maybeText(body, 'vet_name'), vet_phone: read.maybeText(body, 'vet_phone'),
+    food: read.maybeText(body, 'food'), note: read.maybeText(body, 'note'),
+  });
 
   return [
     // ==================== THE THINGS YOU KEEP ====================
@@ -225,6 +232,36 @@ export function makingRoutes(db: Db): Route[] {
       return { json: await jobs(c).reading(c.id, value, read.maybeText(c.body, 'day')) };
     }],
     ['DELETE', at('things/upkeep/done/:id'), async (c) => ({ json: await jobs(c).undo(c.id) })],
+
+    // ==================== PETS ====================
+    // Who they are, how their weight goes, and their care (upkeep that is theirs). See core/'s pets.ts.
+
+    ['GET', at('things/pets'), async (c) => ({ json: await animals(c).list() })],
+    ['POST', at('things/pets'), async (c) => ({ status: 201, json: await animals(c).create(petFrom(c.body)) })],
+    ['GET', at('things/pets/:id'), async (c) => ({ json: await animals(c).get(c.id) })],
+    ['PUT', at('things/pets/:id'), async (c) => ({ json: await animals(c).update(c.id, petFrom(c.body)) })],
+    ['DELETE', at('things/pets/:id'), async (c) => (await animals(c).remove(c.id), { status: 204 })],
+    ['GET', at('things/pets/:id/care'), async (c) => ({ json: await animals(c).careOffered(c.id) })],
+    ['POST', at('things/pets/:id/care'), async (c) => ({
+      status: 201,
+      json: await animals(c).addCare(c.id, {
+        name: read.text(c.body, 'name'), every_n: read.maybeWhole(c.body, 'every_n'), every_unit: read.maybeText(c.body, 'every_unit'),
+        kind: read.maybeText(c.body, 'kind'), last_done: read.maybeText(c.body, 'last_done'), first_due: read.maybeText(c.body, 'first_due'),
+      }),
+    })],
+    ['POST', at('things/pets/:id/weights'), async (c) => {
+      const value = read.maybeNumber(c.body, 'value');
+      if (value === null) throw notUnderstood('value');
+      return { status: 201, json: await animals(c).addWeight(c.id, { value, unit: read.text(c.body, 'unit'), day: read.maybeText(c.body, 'day') }) };
+    }],
+    ['DELETE', at('things/pets/weights/:id'), async (c) => (await animals(c).removeWeight(c.id), { status: 204 })],
+    ['PUT', at('things/pets/:id/photo'), async (c) => ({ json: await animals(c).setPhoto(c.id, photoFrom(c.body, MAX_PET_PHOTO)) })],
+    ['DELETE', at('things/pets/:id/photo'), async (c) => ({ json: await animals(c).removePhoto(c.id) })],
+    ['GET', at('things/pets/:id/photo'), async (c) => {
+      const photo = await animals(c).photo(c.id);
+      if (!photo) return { status: 404, json: { detail: 'Not found' } };
+      return { body: photo.bytes, headers: { 'Content-Type': photo.type, 'Cache-Control': 'private, max-age=60', 'X-Content-Type-Options': 'nosniff' } };
+    }],
 
     // ==================== PROJECTS ====================
 

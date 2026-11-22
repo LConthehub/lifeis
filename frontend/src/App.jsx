@@ -23,6 +23,7 @@ import Thing from './pages/Thing';
 import Activities from './pages/Activities';
 import Search from './components/Search';
 import HomeReport from './pages/HomeReport';
+import PetsPage, { PetPage } from './pages/Pets';
 import UpkeepPage, { JobPage } from './pages/Upkeep';
 import { ThingStickersPage, ThingStickerLanding } from './pages/ThingStickers';
 import AccessNote from './components/AccessNote';
@@ -45,7 +46,7 @@ const SECTIONS = [
     tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫'], ['/prices', 'Prices', '💲']] },
   { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar') || path.startsWith('/plans') || path.startsWith('/mail'), tabs: [['/calendar', 'Calendar', '📅'], ['/plans', 'Plans', '✨'], ['/mail', 'Mail', '✉️']] },
   { word: 'keeping', home: '/things', owns: (path) => path.startsWith('/things'),
-    tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/upkeep', 'Upkeep', '🔧'], ['/things/activities', 'Activities', '🛠'], ['/things/kinds', 'Kinds', '🏷']] },
+    tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/upkeep', 'Upkeep', '🔧'], ['/things/pets', 'Pets', '🐾'], ['/things/activities', 'Activities', '🛠'], ['/things/kinds', 'Kinds', '🏷']] },
   { word: 'making', home: '/projects', owns: (path) => path.startsWith('/projects'),
     tabs: [['/projects', 'Projects', '🧵']] },
   { word: 'spending', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month', '💵']] },
@@ -144,6 +145,8 @@ function Shell({ user, onLogout }) {
           <Route path="/things/upkeep/:id" element={<JobPage />} />
           <Route path="/things/stickers" element={<ThingStickersPage />} />
           <Route path="/things/report" element={<HomeReport />} />
+          <Route path="/things/pets" element={<PetsPage />} />
+          <Route path="/things/pets/:id" element={<PetPage />} />
           <Route path="/things/:id" element={<Thing />} />
           <Route path="/t/:code" element={<ThingStickerLanding />} />
           <Route path="/p/:code" element={<StickerLanding />} />

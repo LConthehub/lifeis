@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const KINDS = [['', 'Everything'], ['recipe', 'Recipes'], ['thing', 'Things'], ['place', 'Places'], ['title', 'Collection'], ['project', 'Projects'], ['job', 'Upkeep'], ['plan', 'Plans'], ['event', 'Calendar']];
+const KINDS = [['', 'Everything'], ['recipe', 'Recipes'], ['thing', 'Things'], ['place', 'Places'], ['title', 'Collection'], ['project', 'Projects'], ['job', 'Upkeep'], ['pet', 'Pets'], ['plan', 'Plans'], ['event', 'Calendar']];
 
 /**
  * One search across everything in Life Is, the way Sworkr's is: a box in the header, or "/" from anywhere

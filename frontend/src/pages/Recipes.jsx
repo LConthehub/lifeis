@@ -245,15 +245,15 @@ export function RecipeForm({ recipe, draft, onSaved }) {
         <span className="block text-xs font-medium text-gray-600 dark:text-life-200">What it's cooked in: pans, dishes and tools, from your things or just by name</span>
         {equipment.map((row, i) => (
           <div key={i} className="flex flex-wrap items-center gap-2">
-            <input type="number" min="1" step="1" value={row.quantity} onChange={(e) => setRow(i, { quantity: e.target.value })} aria-label="How many" className={`${inputClass} w-16`} />
-            <select value={row.item_id} onChange={(e) => setRow(i, { item_id: e.target.value })} aria-label="Which of your things" className={`${inputClass} w-auto flex-1`}>
+            <input type="number" min="1" step="1" value={row.quantity} onChange={(e) => setRow(i, { quantity: e.target.value })} aria-label="How many" className={`${inputClass} !w-16`} />
+            <select value={row.item_id} onChange={(e) => setRow(i, { item_id: e.target.value })} aria-label="Which of your things" className={`${inputClass} !w-auto flex-1`}>
               <option value="">Something not in my things…</option>
               {[...new Set(things.map((t) => t.kind))].map((kind) => (
                 <optgroup key={kind} label={kind}>{things.filter((t) => t.kind === kind).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</optgroup>
               ))}
             </select>
-            {row.item_id === '' && <input value={row.label} onChange={(e) => setRow(i, { label: e.target.value })} placeholder="e.g. 8x8 baking dish" aria-label="What it is" className={`${inputClass} w-auto flex-1`} />}
-            <input value={row.note} onChange={(e) => setRow(i, { note: e.target.value })} placeholder="note" aria-label="A note" className={`${inputClass} w-28`} />
+            {row.item_id === '' && <input value={row.label} onChange={(e) => setRow(i, { label: e.target.value })} placeholder="e.g. 8x8 baking dish" aria-label="What it is" className={`${inputClass} !w-auto flex-1`} />}
+            <input value={row.note} onChange={(e) => setRow(i, { note: e.target.value })} placeholder="note" aria-label="A note" className={`${inputClass} !w-28`} />
             <button type="button" onClick={() => setEquipment(equipment.filter((_, n) => n !== i))} className="text-xs text-gray-400 hover:text-red-600" aria-label="Take this off">✕</button>
           </div>
         ))}

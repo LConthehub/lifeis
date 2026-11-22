@@ -798,6 +798,41 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE upkeep_done ADD COLUMN points INTEGER`,
     ],
   },
+  {
+    // Pets: who they are and who looks after them (the vet, the microchip), a photo, how their weight goes,
+    // and their care, which is upkeep that belongs to a pet.
+    number: 26,
+    name: 'pets, and the care that belongs to each',
+    statements: [
+      `CREATE TABLE pets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        species TEXT,
+        breed TEXT,
+        born_on TEXT,
+        microchip TEXT,
+        vet_name TEXT,
+        vet_phone TEXT,
+        food TEXT,
+        note TEXT,
+        photo_type TEXT,
+        photo BLOB,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_pets_owner ON pets(owner_id)`,
+      `CREATE TABLE pet_weights (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pet_id INTEGER NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        value REAL NOT NULL CHECK(value > 0),
+        unit TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_pet_weights ON pet_weights(pet_id, day)`,
+      `ALTER TABLE upkeep_jobs ADD COLUMN pet_id INTEGER REFERENCES pets(id) ON DELETE CASCADE`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

@@ -74,7 +74,7 @@ export function RemindersSettings() {
       </p>
       <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-life-100">
         <label className="flex items-center gap-2">Each morning at
-          <input type="time" value={s.time} onChange={(e) => e.target.value && save({ time: e.target.value })} aria-label="When" className={`${inputClass} w-32`} />
+          <input type="time" value={s.time} onChange={(e) => e.target.value && save({ time: e.target.value })} aria-label="When" className={`${inputClass} !w-32`} />
         </label>
         <span className="text-xs text-gray-500 dark:text-life-300">{s.zone ?? zone() ?? ''}</span>
       </div>
@@ -172,7 +172,7 @@ function NtfyWay({ s, services, busy, said, save, tryIt }) {
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-life-100">
-          <label className="flex items-center gap-2">Server <input value={server} onChange={(e) => setServer(e.target.value)} aria-label="ntfy server" className={`${inputClass} w-56`} /></label>
+          <label className="flex items-center gap-2">Server <input value={server} onChange={(e) => setServer(e.target.value)} aria-label="ntfy server" className={`${inputClass} !w-56`} /></label>
           <label className="flex items-center gap-2"><input type="checkbox" checked={full} onChange={(e) => setFull(e.target.checked)} className="accent-life-600" /> Say what each thing is</label>
         </div>
       )}

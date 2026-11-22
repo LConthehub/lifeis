@@ -426,6 +426,30 @@ it('home records over the web: what a thing cost, its papers, and the home inven
   expect((await admin.delete(`/api/things/documents/${kept.json[0].id}`)).status).toBe(204);
 });
 
+it('pets over the web: a profile, care that becomes upkeep, weights and a photo', async () => {
+  const admin = await owner();
+  const made = await admin.post('/api/things/pets', { name: 'Rex', species: 'Dog', vet_name: 'Oak Lane Vets', vet_phone: '555 0100' });
+  expect([made.status, made.json.species, made.json.care]).toEqual([201, 'dog', []]);
+  const id = made.json.id;
+  expect((await admin.post('/api/things/pets', { species: 'cat' })).status).toBe(422);
+  expect((await admin.get(`/api/things/pets/${id}/care`)).json.map((c: { name: string }) => c.name)).toContain('Heartworm prevention');
+  const cared = await admin.post(`/api/things/pets/${id}/care`, { name: 'Vaccinations', every_n: 1, every_unit: 'year', last_done: '2020-01-01' });
+  expect([cared.status, cared.json.care.map((j: { name: string }) => j.name), cared.json.next.state, cared.json.care_due]).toEqual([201, ['Rex: Vaccinations'], 'overdue', 1]);
+  // It's upkeep too, and says whose it is.
+  expect((await admin.get('/api/things/upkeep')).json.map((j: { name: string; pet: { name: string } }) => [j.name, j.pet.name])).toEqual([['Rex: Vaccinations', 'Rex']]);
+  expect((await admin.post(`/api/things/pets/${id}/weights`, { value: 43, unit: 'lb' })).json.weights[0]).toMatchObject({ value: 43, unit: 'lb' });
+  expect((await admin.post(`/api/things/pets/${id}/weights`, { unit: 'lb' })).status).toBe(422);
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 9]);
+  expect((await admin.put(`/api/things/pets/${id}/photo`, { data: jpeg.toString('base64') })).json.photo).toBe(true);
+  expect((await admin.get(`/api/things/pets/${id}/photo`)).bytes.equals(jpeg)).toBe(true);
+  expect((await admin.get('/api/search?q=rex&kind=pet')).json.map((r: { title: string }) => r.title)).toEqual(['Rex']);
+
+  const other = await member(admin, 'partner');
+  expect([(await other.get('/api/things/pets')).json, (await other.get(`/api/things/pets/${id}`)).status, (await other.get(`/api/things/pets/${id}/photo`)).status]).toEqual([[], 404, 404]);
+  expect((await admin.delete(`/api/things/pets/${id}`)).status).toBe(204);
+  expect((await admin.get('/api/things/upkeep')).json).toEqual([]);
+});
+
 it('upkeep over the web: a job with its tools, done, on the calendar, and given to someone else', async () => {
   const admin = await owner();
   const kind = (await admin.post('/api/things/kinds', { name: 'Tools' })).json[0];
@@ -592,7 +616,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.

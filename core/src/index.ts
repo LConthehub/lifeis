@@ -63,3 +63,5 @@ export { DOCUMENT_KINDS, MAX_DOCUMENT } from './inventory.ts';
 export type { Records, RecordsInput, ItemDocument, DocumentKind, HomeReport, ReportLine } from './inventory.ts';
 export { JOB_KINDS } from './upkeep.ts';
 export type { JobKind } from './upkeep.ts';
+export { pets, careName, PET_CARE, WEIGHT_UNITS, MAX_PET_PHOTO } from './pets.ts';
+export type { Pet, PetInput, PetSummary, PetWeight, Pets } from './pets.ts';
