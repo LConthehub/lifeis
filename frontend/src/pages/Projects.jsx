@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import { hintsFor, kindChoices } from '../projectKinds';
 import Budget from '../components/Budget';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
@@ -74,16 +75,16 @@ function ProjectForm({ project, activities, onDone }) {
   };
   return (
     <form onSubmit={submit} className="space-y-3">
-      <Field label="What it is *"><input required autoFocus={!project.id} value={form.name} onChange={set('name')} placeholder="e.g. Linen shirt dress" className={inputClass} /></Field>
+      <Field label="What it is *"><input required autoFocus={!project.id} value={form.name} onChange={set('name')} placeholder={`e.g. ${hintsFor(form.activity).project}`} className={inputClass} /></Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="What kind of doing"><input list="project-activities" value={form.activity} onChange={set('activity')} placeholder="Sewing, Garden, House…" className={inputClass} /></Field>
+        <Field label="What kind of project"><input list="project-activities" value={form.activity} onChange={set('activity')} placeholder="Sewing, Woodworking, Home repair…" className={inputClass} /></Field>
         <Field label="Where it's at">
           <select value={form.status} onChange={set('status')} className={inputClass}>{STATUSES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
         </Field>
       </div>
-      <datalist id="project-activities">{activities.map((a) => <option key={a} value={a} />)}</datalist>
+      <datalist id="project-activities">{kindChoices(activities).map((a) => <option key={a} value={a} />)}</datalist>
       <Field label="Wanted by"><input type="date" value={form.due_on} onChange={set('due_on')} className={inputClass} /></Field>
-      <Field label="Notes"><textarea rows={4} value={form.notes} onChange={set('notes')} placeholder="Measurements, changes to the pattern, what you'd do differently" className={inputClass} /></Field>
+      <Field label="Notes"><textarea rows={4} value={form.notes} onChange={set('notes')} placeholder={hintsFor(form.activity).notes} className={inputClass} /></Field>
       {form.status === 'done' && project.status !== 'done' && <p className="text-xs text-gray-500 dark:text-life-300">Finishing takes what it hadn't used yet out of your things.</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="text-right"><button type="submit" className={buttonClass}>Save</button></div>
@@ -238,13 +239,14 @@ export function ProjectPage() {
       <p className="text-right"><button type="button" onClick={remove} className="text-xs text-red-600 hover:underline">Remove this project</button></p>
 
       {modal === 'edit' && <Modal title={project.name} onClose={() => setModal(null)}><ProjectForm project={project} activities={activities} onDone={saved} /></Modal>}
-      {modal === 'line' && <Modal title="What it uses" onClose={() => setModal(null)}><LineForm projectId={project.id} items={items} onDone={saved} /></Modal>}
-      {modal === 'session' && <Modal title="Time on it" onClose={() => setModal(null)}><SessionForm projectId={project.id} onDone={saved} /></Modal>}
+      {modal === 'line' && <Modal title="What it uses" onClose={() => setModal(null)}><LineForm projectId={project.id} kind={project.activity} items={items} onDone={saved} /></Modal>}
+      {modal === 'session' && <Modal title="Time on it" onClose={() => setModal(null)}><SessionForm projectId={project.id} kind={project.activity} onDone={saved} /></Modal>}
     </div>
   );
 }
 
-function LineForm({ projectId, items, onDone }) {
+function LineForm({ projectId, kind, items, onDone }) {
+  const hints = hintsFor(kind);
   const [form, setForm] = useState({ item_id: items[0] ? String(items[0].id) : '', label: '', quantity: '', unit: '', note: '' });
   const [error, setError] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -267,20 +269,20 @@ function LineForm({ projectId, items, onDone }) {
           <option value="">Something I don't have yet</option>
         </select>
       </Field>
-      {!item && <Field label="What it is *"><input required value={form.label} onChange={set('label')} placeholder="e.g. 9 inch zipper" className={inputClass} /></Field>}
+      {!item && <Field label="What it is *"><input required value={form.label} onChange={set('label')} placeholder={`e.g. ${hints.uses}`} className={inputClass} /></Field>}
       <div className="grid grid-cols-2 gap-3">
         <Field label="How much it needs"><input type="number" min="0" step="any" value={form.quantity} onChange={set('quantity')} className={inputClass} /></Field>
         <Field label="Unit"><input value={form.unit} onChange={set('unit')} placeholder={item?.unit || ''} className={inputClass} /></Field>
       </div>
       <p className="text-xs text-gray-500 dark:text-life-300">With an amount, that much is set aside for this project once it's planned. Leave it empty for something only used, not used up: a pattern, a tool.</p>
-      <Field label="A note"><input value={form.note} onChange={set('note')} placeholder="for the lining, view B…" className={inputClass} /></Field>
+      <Field label="A note"><input value={form.note} onChange={set('note')} placeholder={hints.usesNote} className={inputClass} /></Field>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="text-right"><button type="submit" className={buttonClass}>Add</button></div>
     </form>
   );
 }
 
-function SessionForm({ projectId, onDone }) {
+function SessionForm({ projectId, kind, onDone }) {
   const [form, setForm] = useState({ day: toDateInput(new Date()), hours: '', minutes: '', note: '' });
   const [error, setError] = useState('');
   // What kept the session company, from the collection: found by typing, checked to add.
@@ -303,7 +305,7 @@ function SessionForm({ projectId, onDone }) {
         <Field label="Hours"><input type="number" min="0" step="any" value={form.hours} onChange={set('hours')} className={inputClass} /></Field>
         <Field label="Minutes"><input type="number" min="0" step="1" value={form.minutes} onChange={set('minutes')} className={inputClass} /></Field>
       </div>
-      <Field label="What you did"><input value={form.note} onChange={set('note')} placeholder="Cut out the bodice." className={inputClass} /></Field>
+      <Field label="What you did"><input value={form.note} onChange={set('note')} placeholder={hintsFor(kind).did} className={inputClass} /></Field>
       {titles.length > 0 && (
         <div className="space-y-1">
           <Field label="Watched or listened to meanwhile, from your collection"><input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Type a title" className={inputClass} /></Field>

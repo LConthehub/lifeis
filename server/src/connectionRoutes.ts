@@ -37,6 +37,7 @@ export const webFetcher: Fetcher = async (url, headers, send) => {
   };
   return {
     status: response.status,
+    header: (name: string) => response.headers.get(name),
     type: response.headers.get('content-type'),
     json: async () => JSON.parse(new TextDecoder().decode(await body())) as unknown,
     bytes: body,
@@ -51,7 +52,7 @@ export const patientFetcher: Fetcher = async (url, headers, send) => {
     if (bytes.length > 5_000_000) throw new Error('That answer is too large');
     return bytes;
   };
-  return { status: response.status, type: response.headers.get('content-type'), json: async () => JSON.parse(new TextDecoder().decode(await body())) as unknown, bytes: body };
+  return { status: response.status, header: (name: string) => response.headers.get(name), type: response.headers.get('content-type'), json: async () => JSON.parse(new TextDecoder().decode(await body())) as unknown, bytes: body };
 };
 
 const connectionFrom = (body: Body) => ({

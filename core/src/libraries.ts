@@ -18,6 +18,7 @@
  */
 import { applyImport, serverUrl, type Answer, type Fetcher, type Imported, type Sealer, type SyncResult } from './connections.ts';
 import { atomic, type Db, type Queries } from './db.ts';
+import { signedFetcher } from './digest.ts';
 import { Problem } from './problem.ts';
 import { clean, stamp, type Clock } from './small.ts';
 
@@ -162,7 +163,7 @@ const calibreWebNumber = (entry: OpdsEntry): string | null =>
   [...entry.files, entry.coverUrl ?? ''].map((a) => /\/opds\/(?:cover|download)\/(\d+)/.exec(a)?.[1]).find(Boolean) ?? null;
 
 /** Everything a book server has, as the collection needs it. `limit` reads only that many, to try a sign-in. */
-export async function readLibrary(fetcher: Fetcher, kind: LibraryKind, url: string, secret: Secret, limit = 0): Promise<{ items: Imported[]; coverHeaders: Record<string, string> }> {
+export async function readLibrary(fetcher: Fetcher, kind: LibraryKind, url: string, secret: Secret, limit = 0): Promise<{ items: Imported[]; coverHeaders: Record<string, string>; /** The way to ask for covers, when it isn't simply the fetcher with those headers. */ ask?: Fetcher }> {
   const who = LIBRARY_NAMES[kind];
   if (kind === 'audiobookshelf') {
     const headers = { Accept: 'application/json', Authorization: `Bearer ${secret.key ?? ''}` };
@@ -231,12 +232,15 @@ export async function readLibrary(fetcher: Fetcher, kind: LibraryKind, url: stri
   if (kind === 'calibre') {
     // Calibre's own Content server. Its catalogue starts with a menu; "By Title" is every book, a page at a time.
     // Each book's files are at /get/<format>/<number>/<library>, which gives the page that opens it in Calibre's reader.
-    const items = (await readOpds(fetcher, who, `${url}/opds/navcatalog/4f7469746c65`, headers, false, limit)).map((e) => {
+    // Over plain http it asks for a "Digest" sign-in, where each request is signed afresh; over https, for a plain one.
+    // Either way it is answered as asked, and with no username nothing is sent at all.
+    const ask = secret.username ? signedFetcher(fetcher, secret.username, secret.password ?? '') : fetcher;
+    const items = (await readOpds(ask, who, `${url}/opds/navcatalog/4f7469746c65`, {}, false, limit)).map((e) => {
       const at = /\/get\/[^/]+\/(\d+)\/([^/?#]+)/.exec(e.files[0] ?? e.coverUrl ?? '');
       // Calibre joins several authors with an ampersand.
       return { ...e, creator: e.creator?.replaceAll(' & ', ', ') ?? null, link: at ? `${url}/#book_id=${at[1]}&library_id=${at[2]}&panel=book_details` : e.link };
     });
-    return { items, coverHeaders: headers };
+    return { items, coverHeaders: {}, ask };
   }
   if (kind === 'calibre-web') {
     // Its own ids can't be trusted (books added without Calibre all share "urn:uuid:None"), so the book's number is the id.
@@ -294,7 +298,7 @@ export function libraries(db: Db, owner: number, clock: Clock, tools: { fetcher:
     try { return JSON.parse(plainText) as Secret; } catch { throw new Problem(400, 'Give the sign-in again: the saved one can no longer be read'); }
   };
 
-  async function keepCovers(wanted: { mediaId: number; url: string }[], headers: Record<string, string>): Promise<number> {
+  async function keepCovers(wanted: { mediaId: number; url: string }[], headers: Record<string, string>, ask: Fetcher = tools.fetcher): Promise<number> {
     const missing = new Set((await db.all<{ id: number }>('SELECT id FROM media WHERE owner_id = ? AND id NOT IN (SELECT media_id FROM media_covers)', [owner])).map((r) => r.id));
     let kept = 0;
     for (const { mediaId, url } of wanted) {
@@ -302,7 +306,7 @@ export function libraries(db: Db, owner: number, clock: Clock, tools: { fetcher:
       if (!missing.has(mediaId)) continue;
       missing.delete(mediaId);
       try {
-        const answer = await tools.fetcher(url, headers);
+        const answer = await ask(url, headers);
         if (answer.status !== 200 || !answer.type?.startsWith('image/')) continue;
         const bytes = await answer.bytes();
         if (bytes.length === 0 || bytes.length > 2_000_000) continue;
@@ -361,9 +365,9 @@ export function libraries(db: Db, owner: number, clock: Clock, tools: { fetcher:
     async sync(id: number): Promise<SyncResult> {
       const source = await row(db, id);
       try {
-        const { items, coverHeaders } = await readLibrary(tools.fetcher, source.kind, source.url, opened(source));
+        const { items, coverHeaders, ask } = await readLibrary(tools.fetcher, source.kind, source.url, opened(source));
         const { result, wantsCover } = await atomic(db, (tx) => applyImport(tx, owner, source, items, now(), as(source.kind)));
-        const covers = await keepCovers(wantsCover, coverHeaders);
+        const covers = await keepCovers(wantsCover, coverHeaders, ask);
         const said = `${result.total} on the server` + (result.added ? `, ${result.added} added` : '') + (result.removed ? `, ${result.removed} gone` : '');
         await db.run('UPDATE library_sources SET last_sync_at = ?, last_ok = 1, last_message = ? WHERE id = ?', [now(), said, id]);
         return { ...result, covers };

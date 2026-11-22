@@ -31,7 +31,8 @@ export function opensIn(link, source) {
 const SOURCES = { jellyfin: 'Jellyfin', emby: 'Emby', list: 'a list' };
 const sourceName = (source) => SOURCES[source] ?? bookServerName(source);
 const commaList = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
-const isAudio = (format) => /audio/i.test(format);
+// A book you listen to: an audiobook by name, or a book on CD, tape, cassette, MP3 or a record.
+const isAudio = (format) => /audio|audible|\b(cd|cds|mp3|tape|tapes|cassette|cassettes|vinyl|record|records|lp|playaway)\b/i.test(format);
 const isEbook = (format) => /e-?book|kindle|kobo|epub|nook/i.test(format);
 
 /**
@@ -49,7 +50,7 @@ export const LIBRARIES = {
   },
   audiobooks: {
     type: 'book', title: 'Audiobooks', format: 'Audiobook', fits: (m) => m.formats.some(isAudio),
-    empty: 'No audiobooks yet. Add one and say what it\'s on (Audiobook, Audible, CD, or anything with "audio" in it), bring in a list, or connect Audiobookshelf under Servers.',
+    empty: 'No audiobooks yet. Add one and say what it\'s on (Audiobook, Audible, CD, or anything with "audio" in it), bring in a list, or connect Audiobookshelf under Servers. Books on CD or tape belong here too: say "Book on CD" or "Book on tape" and where they are kept.',
   },
 };
 

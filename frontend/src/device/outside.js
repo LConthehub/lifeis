@@ -13,5 +13,6 @@ export const phoneFetcher = async (url, headers, send) => {
   const bytes = typeof got.data === 'string' ? unpacked(got.data) : new Uint8Array();
   let type = null;
   for (const name of Object.keys(got.headers ?? {})) if (name.toLowerCase() === 'content-type') type = got.headers[name];
-  return { status: got.status, type, bytes: async () => bytes, json: async () => JSON.parse(new TextDecoder().decode(bytes)) };
+  const header = (wanted) => { for (const name of Object.keys(got.headers ?? {})) if (name.toLowerCase() === wanted.toLowerCase()) return got.headers[name]; return null; };
+  return { status: got.status, type, header, bytes: async () => bytes, json: async () => JSON.parse(new TextDecoder().decode(bytes)) };
 };

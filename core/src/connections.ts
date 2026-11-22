@@ -23,7 +23,11 @@ const NAMES: Record<ServerKind, string> = { jellyfin: 'Jellyfin', emby: 'Emby' }
 /** How often a connection may sync by itself, in hours. 0: only when asked. */
 export const EVERY_CHOICES = [0, 1, 6, 24, 168];
 
-export type Answer = { status: number; json(): Promise<unknown>; bytes(): Promise<Uint8Array>; type: string | null };
+export type Answer = {
+  status: number; json(): Promise<unknown>; bytes(): Promise<Uint8Array>; type: string | null;
+  /** One of the answer's headers by name, where the fetcher can give them. Needed only to sign in the way a server asks (digest.ts). */
+  header?(name: string): string | null;
+};
 /** Asks a web address for its answer. Almost always a plain question; `send` is for the few that must be posted. */
 export type Fetcher = (url: string, headers: Record<string, string>, send?: { method: 'POST'; body: string }) => Promise<Answer>;
 export type Sealer = { seal(plain: string): string; unseal(sealed: string): string | null };

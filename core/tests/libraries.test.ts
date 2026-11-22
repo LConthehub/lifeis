@@ -316,3 +316,42 @@ it('Calibre: "By Title" is read page by page, tags become genres, and each book 
   expect(reasons).toMatchObject({ creator: 'Chris Ferrie, Wade Fairclough', year: 2024, genres: ['Humor', 'Physics'], summary: 'About Reasons.' });
   expect(reasons.copies[0]).toMatchObject({ format: 'eBook', source: 'calibre', link: 'http://calibre.test/#book_id=44&library_id=calibre&panel=book_details' });
 });
+
+// ---------- signing in the way Calibre asks ----------
+
+it('the fingerprint Digest sign-in is built on matches the published examples', async () => {
+  const { md5, digestAnswer, digestChallenge } = await import('../src/digest.ts');
+  expect([md5(''), md5('abc'), md5('The quick brown fox jumps over the lazy dog')]).toEqual([
+    'd41d8cd98f00b204e9800998ecf8427e', '900150983cd24fb0d6963f7d28e17f72', '9e107d9d372bb6826bd81d3542a419d6']);
+  expect(md5('a'.repeat(200))).toHaveLength(32);
+  // The worked example in the standard (RFC 2617, section 3.5).
+  const challenge = digestChallenge('Digest realm="testrealm@host.com", qop="auth,auth-int", nonce="dcd98b7102dd2f0e8b11d0f600bfb0c093", opaque="5ccc069c403ebaf9f0171e9517f40e41"')!;
+  expect(challenge).toMatchObject({ realm: 'testrealm@host.com', qop: true });
+  expect(digestAnswer(challenge, 'Mufasa', 'Circle Of Life', 'GET', '/dir/index.html', 1, '0a4f113b')).toContain('response="6629fae49393a05397450978507c4ef1"');
+  expect(digestChallenge('Basic realm="x"')).toBeNull();
+});
+
+it('Calibre with a password: the reader signs in with Digest when asked, and never sends the password itself', async () => {
+  const { md5 } = await import('../src/digest.ts');
+  const entry = `<entry><title>Emma</title><author><name>Jane Austen</name></author><id>urn:uuid:e1</id>
+    <link type="application/epub+zip" href="/get/epub/7/calibre" rel="http://opds-spec.org/acquisition"/><link type="image/jpeg" href="/get/cover/7/calibre" rel="http://opds-spec.org/image"/></entry>`;
+  const sent: (string | undefined)[] = [];
+  const guarded: Fetcher = async (url, headers) => {
+    sent.push(headers.Authorization);
+    const given = headers.Authorization ?? '';
+    const at = new URL(url);
+    const part = (name: string) => new RegExp(`${name}="?([^",]+)"?`).exec(given)?.[1] ?? '';
+    const right = md5(`${md5('reader:calibre:s3cret')}:n0nce:${part('nc')}:${part('cnonce')}:auth:${md5(`GET:${at.pathname}${at.search}`)}`);
+    const ok = given.startsWith('Digest ') && part('response') === right && part('uri') === at.pathname + at.search;
+    const body = new TextEncoder().encode(ok ? (at.pathname.startsWith('/get/cover') ? 'jpeg' : feed(entry)) : '');
+    return { status: ok ? 200 : 401, type: ok ? (at.pathname.startsWith('/get/cover') ? 'image/jpeg' : 'application/atom+xml') : null,
+      header: (name) => (!ok && name.toLowerCase() === 'www-authenticate' ? 'Digest realm="calibre", nonce="n0nce", algorithm="MD5", qop="auth"' : null),
+      json: async () => ({}), bytes: async () => body };
+  };
+  const mine = libraries(db, owner, clock, { fetcher: guarded, sealer });
+  await expect(mine.create({ kind: 'calibre', url: 'http://calibre.test', username: 'reader', password: 'wrong' })).rejects.toThrow("Calibre didn't accept that sign-in");
+  const [server] = await mine.create({ kind: 'calibre', url: 'http://calibre.test', username: 'reader', password: 's3cret' });
+  expect(await mine.sync(server!.id)).toMatchObject({ total: 1, added: 1, covers: 1 });
+  expect(sent.join(' ')).not.toContain('s3cret');
+  expect(sent.some((line) => line?.startsWith('Basic '))).toBe(false);
+});

@@ -25,7 +25,7 @@ export const FORMATS: Record<MediaType, string[]> = {
   film: ['VHS', 'DVD', 'Blu-ray', '4K UHD', 'LaserDisc', 'Betamax', 'Digital'],
   show: ['VHS', 'DVD', 'Blu-ray', '4K UHD', 'Digital'],
   music: ['Vinyl', 'CD', 'Cassette', '8-track', 'MiniDisc', 'Digital'],
-  book: ['Hardcover', 'Paperback', 'eBook', 'Audiobook'],
+  book: ['Hardcover', 'Paperback', 'eBook', 'Audiobook', 'Book on CD', 'Book on tape'],
   game: ['Cartridge', 'Disc', 'Digital', 'Board game'],
   other: [],
 };
