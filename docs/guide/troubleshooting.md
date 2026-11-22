@@ -16,7 +16,7 @@ The first account can only be made on the computer Life Is runs on, at `http://l
 
 ## I forgot my password
 
-Nobody can reset it for you, and that is deliberate too: there is no back door, for you or for anyone else. Keep your password somewhere safe, such as a password manager. If someone else in your Life Is forgets theirs, the admin can add them again as a new person.
+Nobody can reset it for you. That is deliberate: there is no back door, for you or for anyone else. Keep your password somewhere safe, such as a password manager. If someone else in your Life Is forgets theirs, the admin can add them again as a new person.
 
 ## The camera will not scan
 
@@ -26,13 +26,15 @@ Nobody can reset it for you, and that is deliberate too: there is no back door, 
 
 ## A barcode was not found
 
-Look-ups are off until you turn them on. When one is on and still finds nothing, the catalog does not know that barcode: type the name, and Life Is keeps the barcode for next time. Numbers that stores print themselves, on things they weigh or label, mean nothing anywhere else and are not looked up.
+Look-ups are off until you turn them on. When they are on and still find nothing, the catalog does not know that barcode: type the name, and Life Is keeps the barcode for next time. Numbers that stores print themselves, on things they weigh or label, mean nothing anywhere else and are not looked up.
 
 ## A reminder did not arrive
 
 - Reminders go only on days there is something to say.
 - Use **Send one now** under Settings › Reminders to test each way.
 - Browser reminders need Life Is opened over https, and the browser allowed to show notifications.
+
+See [Reminders](reminders.html).
 
 ## It was signed out
 

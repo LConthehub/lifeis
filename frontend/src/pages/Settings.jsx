@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import CopyButton from '../components/Copy';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
@@ -407,7 +408,7 @@ function CalendarLink() {
   const [link, setLink] = useState(null);
   const [kinds, setKinds] = useState([]);
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
+  const addressField = useRef(null);
   const took = (data) => { setLink(data); setKinds(data.kinds); setError(''); };
   useEffect(() => { axios.get('/api/calendar/link').then(({ data }) => took(data)).catch(() => {}); }, []);
   if (!link) return null;
@@ -419,9 +420,6 @@ function CalendarLink() {
     if (link.on && next.length > 0) ask(() => axios.put('/api/calendar/link', { kinds: next }));
   };
   const address = link.token ? `${serverOrigin()}/cal/${link.token}.ics` : '';
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(address); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch { setError('Copying was refused: press and hold the link to copy it instead'); }
-  };
   const onThisComputerOnly = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(serverOrigin()).hostname);
   return (
     <section className={cardClass}>
@@ -447,11 +445,11 @@ function CalendarLink() {
       ) : (
         <div className="space-y-3">
           <Field label="Your link">
-            <input readOnly value={address} onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs`} />
+            <input ref={addressField} readOnly value={address} onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs`} />
           </Field>
           <div className="flex flex-wrap gap-2">
             <a href={address.replace(/^https?:/, 'webcal:')} className={buttonClass}>Add to this device's calendar</a>
-            <button type="button" onClick={copy} className={quietButtonClass}>{copied ? 'Copied' : 'Copy the link'}</button>
+            <CopyButton text={address} what="the calendar link" label="Copy the link" selectRef={addressField} />
           </div>
           {onThisComputerOnly && (
             <p className="text-sm text-amber-700 dark:text-amber-300">

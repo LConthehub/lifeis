@@ -8,7 +8,7 @@ The **entertaining** section is what you own and what you have watched, read or 
 
 ## Adding
 
-- **Scan the barcode.** A book's ISBN fills in its title and author, when looking books up is turned on. This reaches outside, so it is off until you turn it on.
+- **Scan the barcode.** A book's ISBN fills in its title and author. This looks it up outside, so it is off until you turn it on.
 - **Type it.** A title is enough. What it is on can be any word: VHS, Vinyl, Kindle.
 - **Say where it is kept.** A room, and a shelf in it. You can add a place while you add the book.
 
@@ -33,7 +33,7 @@ If the server is on the same computer as Life Is, and Life Is runs in Docker, us
 
 ## Kindle, Apple Books and Google Play Books
 
-These offer no way for another program to read your library, so Life Is cannot link to them the way it links to a server. There are two honest ways round it:
+These offer no way for another program to read your library, so Life Is cannot link to them as it does to a server. Two ways round it:
 
 - **Bring in a list.** On Books, eBooks or Audiobooks, choose **Bring in a list**. It takes the file Goodreads gives you (My Books, then Import and export), one from StoryGraph, any spreadsheet saved as CSV with a Title column, or plain lines such as `Dune by Frank Herbert`. You see what was found before anything is added. Books on a to-read shelf can become books you want. A book you already have is not added twice, so you can bring the same list in again later.
 - **Keep a link on a copy.** Open the book in Kindle, Apple Books or Google Play Books, copy its address or use Share, and paste it into the copy. Life Is shows an **Open in Kindle** button. The link is only followed when you press it.

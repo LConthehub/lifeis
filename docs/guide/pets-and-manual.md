@@ -12,7 +12,7 @@ Each pet has a profile: what they are, their breed and birthday, their vet with 
 
 A pet's care is upkeep that belongs to them. Pick from what suits their kind (heartworm prevention for a dog, the litter box for a cat) or add anything else. Say when it was last done and Life Is knows when it is next due.
 
-Because care is upkeep, it is in your morning reminder and on the calendar, and each time it was done is kept. See [Upkeep](upkeep.html).
+Care works like any other job in [Upkeep](upkeep.html): it shows in your morning reminder and on the calendar, and each time it was done is kept.
 
 ## The house manual
 
@@ -25,7 +25,7 @@ It has four parts, each with ideas to start from:
 - **How the house works:** the Wi-Fi, the thermostat, the alarm
 - **Day to day:** trash days, plants, bedtimes
 
-An entry can say where a thing is, using the places you already keep, and carry a phone number to tap. Your pets appear by themselves, with their food and vet.
+An entry can say where a thing is, using the places you already keep, and carry a phone number to tap. On a phone, under **Who to call**, you can tap **Choose from your contacts** to fill in a name and number. Only the one contact you tap is read, and Life Is asks for no access to your address book. Your pets appear by themselves, with their food and vet.
 
 ### Printing and sharing
 

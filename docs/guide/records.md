@@ -4,7 +4,7 @@ blurb: Receipts, manuals, serial numbers, warranties, and a home inventory for y
 ---
 # Home records
 
-After a fire, a flood or a theft, an insurer asks three things: what did you have, what was it worth, and can you show it? Home records answer all three, and they build up as a side effect of using Life Is.
+After a fire, a flood or a theft, an insurer asks what you had, what it was worth, and whether you can show it. Home records answer all three, and build up as you use Life Is.
 
 ## On each thing
 
@@ -27,7 +27,7 @@ On the Things page, **Home inventory** lists everything room by room, with what 
 
 ## Warranties
 
-A warranty about to end appears in your morning reminder a month ahead, a week ahead, the day before and on the day, so there is time to claim on anything that is wrong.
+A warranty about to end appears in your [morning reminder](reminders.html) a month ahead, a week ahead, the day before and on the day, so there is time to claim on anything that is wrong.
 
 ## Finding by number
 

@@ -21,6 +21,7 @@
     "@capacitor/filesystem": "^8.1.5",
     "@capacitor/local-notifications": "^8.3.0",
     "@capacitor/share": "^8.0.3",
+    "@capgo/capacitor-contacts": "^8.1.12",
     "@capgo/capacitor-llm": "^8.2.4",
     "@tesseract.js-data/eng": "^1.0.0",
     "@zxing/browser": "^0.2.1",

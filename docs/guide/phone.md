@@ -29,12 +29,12 @@ The 7 days start when you first add something outside the kitchen.
 
 ## Reaching a Life Is at home
 
-A Life Is on your home computer answers only that computer unless you say otherwise. Two good ways to reach it from your phone:
+A Life Is on your home computer answers only that computer unless you say otherwise ([Install](install.html) shows how). Two good ways to reach it from your phone:
 
-- **On your home network.** Let it answer other devices on your network (see [Install](install.html)), and open it at your computer's address while you are at home.
+- **On your home network.** Let it answer other devices on your network, and open it at your computer's address while you are at home.
 - **From anywhere, privately.** A private network such as Tailscale joins your phone and your computer so the phone can reach it wherever you are, without opening it to the internet.
 
-Giving it a web address of its own is possible too, and [Install](install.html) can set that up. Then it is on the public internet, behind your password.
+A web address of its own works too, but then Life Is is on the public internet, behind your password.
 
 ## The camera
 
@@ -42,4 +42,4 @@ Scanning barcodes and stickers uses the camera. The picture is read on the devic
 
 ## Short requests
 
-The app answers short requests from a shortcut on its icon, from Siri or from Google: add to the grocery list, note some spending, ask what is for dinner. Anything that adds waits for a tap, so a link alone can never change anything.
+A shortcut on the app's icon, Siri or Google can add to the grocery list, note some spending, or tell you what is for dinner. Anything that adds waits for a tap, so a link alone can never change anything.

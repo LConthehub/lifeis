@@ -8,7 +8,7 @@ The **delicious** section is recipes, the week, the grocery list and the pantry.
 
 ## Recipes
 
-Bring a recipe in three ways:
+Bring a recipe in four ways:
 
 - **Paste or type it.** Ingredients one to a line, steps one to a line.
 - **From a website.** Give the address and Life Is reads the recipe off the page. This reaches outside, so it is off until you turn it on.

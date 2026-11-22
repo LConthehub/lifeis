@@ -4,6 +4,9 @@ import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { ScanSticker } from './Places';
 import PlacePicker from '../components/PlacePicker';
+import { KIND_GROUPS, groupOfKind } from '../../../core/src/starters.ts';
+
+const OTHER = 'Other';
 
 const TYPES = [['text', 'Text'], ['number', 'A number'], ['choice', 'A choice from a list'], ['yesno', 'Yes or no'], ['date', 'A date'], ['link', 'A link']];
 const typeName = (type) => (TYPES.find(([id]) => id === type) || ['', type])[1];
@@ -49,6 +52,7 @@ export default function Things() {
   const [kinds, setKinds] = useState(null);
   const [places, setPlaces] = useState([]);
   const [items, setItems] = useState([]);
+  const [group, setGroup] = useState(null);
   const [kind, setKind] = useState(null);
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState(null);
@@ -73,62 +77,105 @@ export default function Things() {
     );
   }
 
+  // Kinds are filed under a few plain headings, worked out here from their names (the database doesn't keep which set a kind came from).
+  const groupOf = (k) => groupOfKind(k.name) ?? OTHER;
+  const groupNames = [...KIND_GROUPS, OTHER].filter((g) => kinds.some((k) => groupOf(k) === g));
+  const grouped = groupNames.length > 1;
+  const chosenGroup = grouped && groupNames.includes(group) ? group : null;
+  const inGroup = kinds.filter((k) => chosenGroup === null || groupOf(k) === chosenGroup);
+  const chosenKind = kind !== null && inGroup.some((k) => k.id === kind) ? kind : null;
+  const pickGroup = (g) => { setGroup(g); setKind(null); };
+
   const word = q.trim().toLowerCase();
   const matches = (item) => !word || [item.name, item.note, item.place, ...Object.values(item.values)].some((v) => String(v ?? '').toLowerCase().includes(word));
-  const shownItems = items.filter((i) => (kind === null || i.kind_id === kind) && matches(i));
+  const shownItems = items.filter((i) => (chosenKind === null || i.kind_id === chosenKind) && inGroup.some((k) => k.id === i.kind_id) && matches(i));
   const low = items.filter((i) => i.low).map((i) => i.name);
+  const chip = (on) => `min-h-[44px] rounded-full px-4 py-2 text-sm ${on ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
+  const kindChips = (list, label, all) => (
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>
+      {[{ id: null, name: all, items: list.reduce((n, k) => n + k.items, 0) }, ...list].map((k) => (
+        <button key={k.id ?? 'all'} type="button" onClick={() => setKind(k.id)} aria-pressed={chosenKind === k.id} className={chip(chosenKind === k.id)}>
+          {k.icon ? `${k.icon} ` : ''}{k.name} <span className="opacity-70">{k.items}</span>
+        </button>
+      ))}
+    </div>
+  );
+  // The cards for the kinds in one list, each under its own heading (one level below the group's, when there is one).
+  const cards = (list, Heading) => (
+    <div className="grid gap-3 md:grid-cols-2">
+      {list.map((k) => {
+        const here = shownItems.filter((i) => i.kind_id === k.id);
+        if (here.length === 0) return null;
+        return (
+          <section key={k.id} className={cardClass}>
+            <Heading className="mb-1 font-semibold text-life-800 dark:text-life-50">{k.icon ? `${k.icon} ` : ''}{k.name}</Heading>
+            <ul className="divide-y divide-life-50 dark:divide-life-700">
+              {here.map((item) => {
+                const details = k.fields.map((f) => shown(f, item.values[f.id])).filter(Boolean).slice(0, 4);
+                return (
+                  <li key={item.id}>
+                    <Link to={`/things/${item.id}`} className="flex w-full items-start gap-2 py-2 text-left">
+                      <span className="flex-1">
+                        <span className="block text-sm text-gray-800 dark:text-life-50">{item.name}</span>
+                        {(details.length > 0 || item.place) && (
+                          <span className="block text-xs text-gray-500 dark:text-life-300">{[...details, item.place && `📍 ${item.place}`].filter(Boolean).join(' · ')}</span>
+                        )}
+                        {item.set_aside > 0 && <span className="block text-xs text-life-600 dark:text-life-200">{item.set_aside} {item.unit || ''} set aside for projects</span>}
+                      </span>
+                      {item.low && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">low</span>}
+                      <span className="text-sm text-gray-500 dark:text-life-300">{item.amount}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
+    </div>
+  );
+  const groupsShown = groupNames.filter((g) => chosenGroup === null || g === chosenGroup)
+    .map((g) => ({ name: g, kinds: kinds.filter((k) => groupOf(k) === g && (chosenKind === null || k.id === chosenKind)) }))
+    .map((g) => ({ ...g, count: shownItems.filter((i) => g.kinds.some((k) => k.id === i.kind_id)).length }))
+    .filter((g) => g.count > 0);
+  const groupItems = (g) => items.filter((i) => kinds.some((k) => k.id === i.kind_id && groupOf(k) === g)).length;
+  const kindsOfChosen = chosenGroup ? kinds.filter((k) => groupOf(k) === chosenGroup) : [];
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Things</h1>
         {items.length > 0 && <Link to="/things/report" className={quietButtonClass}>🏠 Home inventory</Link>}
-        <button type="button" onClick={() => setEditing({ kind_id: kind ?? kinds[0].id })} className={buttonClass}>+ Add</button>
+        <Link to="/things/kinds" className="px-1 py-2 text-sm text-life-600 underline dark:text-life-200">Manage kinds</Link>
+        <button type="button" onClick={() => setEditing({ kind_id: chosenKind ?? inGroup[0].id })} className={buttonClass}>+ Add</button>
       </div>
       {low.length > 0 && <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">Running low: {low.join(', ')}.</p>}
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Kind of thing">
-        {[{ id: null, name: 'Everything', items: items.length }, ...kinds].map((k) => (
-          <button key={k.id ?? 'all'} type="button" onClick={() => setKind(k.id)} aria-pressed={kind === k.id}
-            className={`rounded-full px-3 py-1 text-sm ${kind === k.id ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`}>
-            {k.icon ? `${k.icon} ` : ''}{k.name} <span className="opacity-70">{k.items}</span>
-          </button>
-        ))}
-      </div>
+      {grouped ? (
+        <>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Part of the house or hobby">
+            {[{ name: 'Everything', id: null, count: items.length }, ...groupNames.map((g) => ({ name: g, id: g, count: groupItems(g) }))].map((g) => (
+              <button key={g.name} type="button" onClick={() => pickGroup(g.id)} aria-pressed={chosenGroup === g.id} className={chip(chosenGroup === g.id)}>
+                {g.name} <span className="opacity-70">{g.count}</span>
+              </button>
+            ))}
+          </div>
+          {kindsOfChosen.length > 1 && kindChips(kindsOfChosen, `Kind of thing in ${chosenGroup}`, `All ${chosenGroup}`)}
+        </>
+      ) : kindChips(kinds, 'Kind of thing', 'Everything')}
       {items.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find something" aria-label="Find a thing" className={`${inputClass} max-w-sm`} />}
       {shownItems.length === 0 ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>{items.length === 0 ? 'Nothing here yet. Add the first thing you keep.' : 'Nothing matches.'}</div>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {kinds.filter((k) => kind === null || k.id === kind).map((k) => {
-            const here = shownItems.filter((i) => i.kind_id === k.id);
-            if (here.length === 0) return null;
-            return (
-              <section key={k.id} className={cardClass}>
-                <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">{k.icon ? `${k.icon} ` : ''}{k.name}</h2>
-                <ul className="divide-y divide-life-50 dark:divide-life-700">
-                  {here.map((item) => {
-                    const details = k.fields.map((f) => shown(f, item.values[f.id])).filter(Boolean).slice(0, 4);
-                    return (
-                      <li key={item.id}>
-                        <Link to={`/things/${item.id}`} className="flex w-full items-start gap-2 py-2 text-left">
-                          <span className="flex-1">
-                            <span className="block text-sm text-gray-800 dark:text-life-50">{item.name}</span>
-                            {(details.length > 0 || item.place) && (
-                              <span className="block text-xs text-gray-500 dark:text-life-300">{[...details, item.place && `📍 ${item.place}`].filter(Boolean).join(' · ')}</span>
-                            )}
-                            {item.set_aside > 0 && <span className="block text-xs text-life-600 dark:text-life-200">{item.set_aside} {item.unit || ''} set aside for projects</span>}
-                          </span>
-                          {item.low && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">low</span>}
-                          <span className="text-sm text-gray-500 dark:text-life-300">{item.amount}</span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            );
-          })}
+      ) : grouped ? (
+        <div className="space-y-6">
+          {groupsShown.map((g) => (
+            <section key={g.name} aria-labelledby={`group-${g.name.replace(/\W+/g, '-')}`} className="space-y-2">
+              <h2 id={`group-${g.name.replace(/\W+/g, '-')}`} className="text-lg font-semibold text-life-800 dark:text-life-50">
+                {g.name} <span className="text-sm font-normal text-gray-500 dark:text-life-300">{g.count} {g.count === 1 ? 'thing' : 'things'}</span>
+              </h2>
+              {cards(g.kinds, 'h3')}
+            </section>
+          ))}
         </div>
-      )}
+      ) : cards(inGroup, 'h2')}
       {editing && (
         <Modal title={editing.id ? editing.name : 'Add a thing'} onClose={() => setEditing(null)}>
           <ItemForm item={editing} kinds={kinds} places={places} onPlaces={setPlaces} onDone={() => { setEditing(null); load(); }} />
@@ -260,6 +307,7 @@ export function KindsPage() {
   };
   return (
     <div className="space-y-4">
+      <Link to="/things" className="inline-block py-2 text-sm text-life-600 underline dark:text-life-200">← Things</Link>
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Kinds of things</h1>
         <button type="button" onClick={() => setModal({ kind: {} })} className={buttonClass}>+ New kind</button>

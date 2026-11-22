@@ -4,7 +4,7 @@ blurb: Jobs, bills, renewals and chores: everything that comes round again.
 ---
 # Upkeep
 
-**Upkeep** holds everything in a household that comes round again. There are four kinds, and one list.
+**Upkeep** (in **organized**) is one list of everything that comes round again, in four kinds.
 
 | Kind | For | When you have done it |
 |---|---|---|

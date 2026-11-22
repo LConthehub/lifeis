@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { inputClass, quietButtonClass, errorMessage } from './ui';
 import { inApp, onDevice } from '../where';
+import { CopyLine } from './Copy';
 
 const COVERS = [['upkeep', '🔧 Upkeep due'], ['low', '📦 Running low, or food to use soon'], ['dates', '🎂 Birthdays, plans and today’s events'], ['coupons', '🏷 Coupons running out, things lent a long time']];
 const zone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
@@ -164,7 +165,8 @@ function NtfyWay({ s, services, busy, said, save, tryIt }) {
       ) : <button type="button" disabled={busy === 'ntfy'} onClick={() => save({ ntfy: { server, topic: '', detail: full ? 'full' : 'count' } }, 'ntfy')} className={quietButtonClass}>Turn on</button>}>
       {s.ntfy ? (
         <div className="space-y-1 text-sm text-gray-700 dark:text-life-100">
-          <p>In the ntfy app, subscribe to <span className="select-all font-mono text-xs">{s.ntfy.topic}</span>{s.ntfy.server !== 'https://ntfy.sh' && <> on <span className="font-mono text-xs">{s.ntfy.server}</span></>}.</p>
+          <p>In the ntfy app, subscribe to this topic{s.ntfy.server !== 'https://ntfy.sh' && <> on <span className="font-mono text-xs">{s.ntfy.server}</span></>}:</p>
+          <CopyLine text={s.ntfy.topic} what="the topic" />
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={s.ntfy.detail === 'full'} onChange={(e) => save({ ntfy: { ...s.ntfy, detail: e.target.checked ? 'full' : 'count' } }, 'ntfy')} className="accent-life-600" />
             Say what each thing is, not only how many {s.ntfy.server === 'https://ntfy.sh' && <span className="text-xs text-gray-500 dark:text-life-300">(ntfy.sh would be able to read it)</span>}

@@ -4,17 +4,17 @@ blurb: Places, things, filling a shelf by scanning, stickers, and where everythi
 ---
 # Your home
 
-The **organized** section is the whole-house inventory: what you own, where it is, what it is for, and where it has been.
+The **organized** section holds what you own, where it is, what it is for, and where it has been. For receipts, serial numbers and the insurance inventory, see [Home records](records.html).
 
 ## Places
 
 A place is a room, a shelf in it, a bin on the shelf. Write a whole path at once, with `›` or `>` between the levels: `Garage › Tool shelf › Red bin`. Levels that already exist are reused.
 
-Wherever Life Is asks "Where it is", the list ends with **A new place…**, so you never have to stop what you are doing to make one.
+Wherever Life Is asks "Where it is", the list ends with **A new place…**, so you never have to stop to make one.
 
 ## Things, and kinds of things
 
-Life Is does not decide what you keep. You make your own **kinds** (Fabric, Tools, Board games) and give each the fields you care about: a fabric's width, a game's number of players. Ready-made sets get you started, and every part of them can be changed.
+You make your own **kinds** (Fabric, Tools, Board games) and give each the fields you care about: a fabric's width, a game's number of players. Ready-made sets get you started, and every part of them can be changed.
 
 Each thing has a page of its own with a photo, where it is, what it is for, its records, and its history.
 
@@ -32,7 +32,7 @@ Open a place and choose **Fill this place**. Then keep scanning:
 
 No barcode? Type the name and press Enter.
 
-Looking a barcode up asks an outside catalog, so it is off until you turn it on, and the page says exactly what is sent: the number under the barcode, and nothing else.
+Looking a barcode up asks an outside catalog, so it is off until you turn it on. It sends the number under the barcode, and nothing else.
 
 ## Stickers
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
+import { CopyLine } from './Copy';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from './ui';
 
 // What each book server asks for. The same words are in core/'s libraries.ts.
@@ -118,6 +119,7 @@ function BookServerForm({ server, onDone }) {
       <p className="text-xs text-gray-500 dark:text-life-300">
         If it is on the same computer as Life Is, and Life Is runs in Docker, use <code>http://host.docker.internal</code> and its port: inside Docker, "localhost" means Life Is itself.
       </p>
+      <CopyLine text="http://host.docker.internal" what="the Docker address" />
       {needs.key ? (
         <Field label={server.id ? `A new ${needs.key} (empty: keep the saved one)` : `Its ${needs.key} *`}>
           <input required={must} type="password" autoComplete="off" value={form.key} onChange={set('key')} className={inputClass} />

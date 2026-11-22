@@ -82,11 +82,12 @@
     var list = [];
     list.push('Save the file above as <code>docker-compose.yml</code> in your Life Is folder.');
     if (store === 'folders' && !folders) list.push('<strong>Fill in both folders above</strong>, or choose "Kept by Docker". Until then the file keeps your records with Docker.');
-    list.push('Open a terminal in that folder and run <code>docker compose up -d</code>. The first start downloads Life Is, which takes a few minutes.');
+    list.push('Open a terminal in that folder and run <code class="cmd" data-what="command">docker compose up -d</code>. The first start downloads Life Is, which takes a few minutes.');
     list.push('On this computer, open <a href="http://localhost:' + port + '">http://localhost:' + port + '</a> and make your account. The first account is the admin.');
     if (reach === 'network') list.push('From a phone or tablet at home, open <code>http://</code> this computer\'s address <code>:' + port + '</code>. The camera will not scan there: browsers only allow it over https.');
     if (web) list.push('Then open <a href="https://' + web + '">https://' + web + '</a> from anywhere. The first visit can take a minute while the certificate is fetched.');
     steps.innerHTML = list.map(function (s) { return '<li>' + s + '</li>'; }).join('');
+    if (window.lifeisCopy) window.lifeisCopy.enhance(steps);
 
     form.querySelectorAll('[data-when]').forEach(function (el) {
       var parts = el.getAttribute('data-when').split('=');
@@ -96,11 +97,11 @@
 
   form.addEventListener('input', build);
   form.addEventListener('change', build);
-  document.getElementById('copy-compose').addEventListener('click', function (e) {
-    var button = e.target;
-    function said() { button.textContent = 'Copied'; setTimeout(function () { button.textContent = 'Copy'; }, 1500); }
-    if (navigator.clipboard) navigator.clipboard.writeText(out.value).then(said, function () { out.select(); });
-    else { out.select(); document.execCommand('copy'); said(); }
+  var copyButton = document.getElementById('copy-compose');
+  copyButton.hidden = false;
+  copyButton.addEventListener('click', function (e) {
+    if (window.lifeisCopy) window.lifeisCopy.copy(e.currentTarget, out.value, out);
+    else out.select();
   });
   document.getElementById('download-compose').addEventListener('click', function () {
     var link = document.createElement('a');

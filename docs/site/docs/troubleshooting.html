@@ -33,21 +33,23 @@
 <main>
 <h1>Troubleshooting</h1>
 <h2>Life Is does not open</h2>
-<ul><li><strong>On a computer you run:</strong> is Docker running? Open a terminal in the folder with your <code>docker-compose.yml</code> and run <code>docker compose ps</code>. Start it with <code>docker compose up -d</code>.</li><li><strong>After a restart of the computer:</strong> Docker Desktop may need opening before Life Is comes back.</li><li><strong>From another device:</strong> a Life Is set to answer "this computer only" will not answer your phone. See <a href="install.html">Install</a>.</li></ul>
+<ul><li><strong>On a computer you run:</strong> is Docker running? Open a terminal in the folder with your <code>docker-compose.yml</code> and run <code class="cmd" data-what="command">docker compose ps</code>. Start it with <code class="cmd" data-what="command">docker compose up -d</code>.</li><li><strong>After a restart of the computer:</strong> Docker Desktop may need opening before Life Is comes back.</li><li><strong>From another device:</strong> a Life Is set to answer "this computer only" will not answer your phone. See <a href="install.html">Install</a>.</li></ul>
 <h2>I cannot make the first account</h2>
-<p>The first account can only be made on the computer Life Is runs on, at <code>http://localhost:8020</code> (or the port you chose). That is deliberate: otherwise whoever found the address first could make themselves the admin.</p>
+<p>The first account can only be made on the computer Life Is runs on, at <code class="cmd" data-what="address">http://localhost:8020</code> (or the port you chose). That is deliberate: otherwise whoever found the address first could make themselves the admin.</p>
 <h2>I forgot my password</h2>
-<p>Nobody can reset it for you, and that is deliberate too: there is no back door, for you or for anyone else. Keep your password somewhere safe, such as a password manager. If someone else in your Life Is forgets theirs, the admin can add them again as a new person.</p>
+<p>Nobody can reset it for you. That is deliberate: there is no back door, for you or for anyone else. Keep your password somewhere safe, such as a password manager. If someone else in your Life Is forgets theirs, the admin can add them again as a new person.</p>
 <h2>The camera will not scan</h2>
 <ul><li>In a browser the camera works only over <strong>https</strong>, or on the computer itself.</li><li>Allow the camera for the site in your browser's settings.</li><li>Typing the number under the barcode always works.</li></ul>
 <h2>A barcode was not found</h2>
-<p>Look-ups are off until you turn them on. When one is on and still finds nothing, the catalog does not know that barcode: type the name, and Life Is keeps the barcode for next time. Numbers that stores print themselves, on things they weigh or label, mean nothing anywhere else and are not looked up.</p>
+<p>Look-ups are off until you turn them on. When they are on and still find nothing, the catalog does not know that barcode: type the name, and Life Is keeps the barcode for next time. Numbers that stores print themselves, on things they weigh or label, mean nothing anywhere else and are not looked up.</p>
 <h2>A reminder did not arrive</h2>
 <ul><li>Reminders go only on days there is something to say.</li><li>Use <strong>Send one now</strong> under Settings › Reminders to test each way.</li><li>Browser reminders need Life Is opened over https, and the browser allowed to show notifications.</li></ul>
+<p>See <a href="reminders.html">Reminders</a>.</p>
 <h2>It was signed out</h2>
 <p>Life Is signs out after a while unused. Change how long under <strong>Settings › Account</strong>.</p>
 <h2>Something else</h2>
 <p>Write to <a href="mailto:hello@lifeis.living">hello@lifeis.living</a>.</p>
+<script src="copy.js"></script>
 
 <p class="next"></p>
 </main>

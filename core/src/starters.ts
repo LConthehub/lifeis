@@ -3,9 +3,11 @@
  * rename them, add fields, take fields away. They only save typing.
  */
 import type { FieldInput } from './inventory.ts';
+import { labelKey } from './small.ts';
 
 export type StarterKind = { name: string; icon: string; unit?: string; fields: FieldInput[] };
-export type Starter = { slug: string; name: string; about: string; kinds: StarterKind[] };
+/** `group` is the plain heading the Things page files this set's kinds under. */
+export type Starter = { slug: string; name: string; about: string; group: string; kinds: StarterKind[] };
 
 const text = (name: string): FieldInput => ({ name, type: 'text' });
 const number = (name: string, unit?: string): FieldInput => ({ name, type: 'number', unit });
@@ -19,6 +21,7 @@ export const STARTERS: Starter[] = [
     slug: 'sewing',
     name: 'Sewing',
     about: 'Fabric by the yard or meter, notions, and patterns.',
+    group: 'Crafts',
     kinds: [
       { name: 'Fabric', icon: '🧵', unit: 'yd', fields: [
         choice('Type', 'Woven', 'Knit', 'Other'), text('Fiber'), number('Width', 'in'), text('Color'), text('Print'),
@@ -34,6 +37,7 @@ export const STARTERS: Starter[] = [
     slug: 'cookware',
     name: 'Cookware and kitchen gear',
     about: 'Cast iron, pots and pans, baking dishes and tools: what you cook in, so recipes can say which.',
+    group: 'Cooking',
     kinds: [
       { name: 'Cast iron', icon: '🍳', fields: [
         text('Maker'), text('Made'), text('Size'), text('Pattern or model number'),
@@ -48,6 +52,7 @@ export const STARTERS: Starter[] = [
     slug: 'knitting',
     name: 'Knitting & crochet',
     about: 'Yarn, needles and hooks, and patterns.',
+    group: 'Crafts',
     kinds: [
       { name: 'Yarn', icon: '🧶', unit: 'skein', fields: [
         text('Brand'), text('Colorway'), text('Fiber'),
@@ -62,6 +67,7 @@ export const STARTERS: Starter[] = [
     slug: 'woodworking',
     name: 'Woodworking',
     about: 'Boards and sheet goods, hardware, finishes, and plans.',
+    group: 'Workshop',
     kinds: [
       { name: 'Wood', icon: '🪵', unit: 'ft', fields: [text('Species'), number('Thickness', 'in'), number('Width', 'in'), choice('Form', 'Board', 'Sheet', 'Dowel', 'Offcut')] },
       { name: 'Hardware', icon: '🔩', fields: [choice('Type', 'Screws', 'Nails', 'Bolts', 'Hinges', 'Brackets', 'Other'), text('Size'), text('Finish')] },
@@ -73,6 +79,7 @@ export const STARTERS: Starter[] = [
     slug: 'gardening',
     name: 'Gardening',
     about: 'Seeds, plants, and what goes on the soil.',
+    group: 'Garden',
     kinds: [
       { name: 'Seeds', icon: '🌱', unit: 'packet', fields: [text('Variety'), text('From'), date('Packed for'), text('Sow'), number('Days to harvest')] },
       { name: 'Plants', icon: '🪴', fields: [text('Variety'), choice('Lives', 'Indoors', 'Outdoors', 'Greenhouse'), date('Planted on'), text('Light'), text('Watering')] },
@@ -83,6 +90,7 @@ export const STARTERS: Starter[] = [
     slug: 'clothing',
     name: 'Clothes, shoes and linens',
     about: 'What everyone wears and in what size, and the sheets that fit each bed.',
+    group: 'Clothes and linens',
     kinds: [
       { name: 'Clothes', icon: '👕', fields: [
         text('Size'), text('Whose'), choice('Type', 'Top', 'Bottom', 'Dress', 'Outerwear', 'Underwear', 'Sleepwear', 'Sportswear', 'Other'),
@@ -97,6 +105,7 @@ export const STARTERS: Starter[] = [
     slug: 'home',
     name: 'Around the house',
     about: 'Tools, paint for each room, filters and bulbs, and what is in storage.',
+    group: 'Around the house',
     kinds: [
       { name: 'Tools', icon: '🧰', fields: [text('Brand'), text('Model'), date('Bought on'), text('Lent to')] },
       { name: 'Paint', icon: '🎨', fields: [text('Brand'), text('Color name'), text('Color code'), choice('Finish', 'Matt', 'Eggshell', 'Satin', 'Gloss'), text('Used in'), date('Opened on')] },
@@ -104,3 +113,12 @@ export const STARTERS: Starter[] = [
     ],
   },
 ];
+
+/** The headings the Things page uses, in the order it shows them. Kinds that fit no set go under "Other", last. */
+export const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garden', 'Around the house', 'Clothes and linens'] as const;
+
+/** Which heading a kind belongs under, by its name (capitals and spacing don't matter), or null if no ready-made set has it. */
+export function groupOfKind(name: string): string | null {
+  const key = labelKey(name);
+  return STARTERS.find((starter) => starter.kinds.some((kind) => labelKey(kind.name) === key))?.group ?? null;
+}

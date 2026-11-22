@@ -28,6 +28,15 @@ th, td { text-align: left; vertical-align: top; padding: .5rem .6rem; border-bot
 .builder input:not([type=radio]):not([type=checkbox]) { display: block; width: 100%; max-width: 30rem; margin-top: .2rem; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: .5rem; font: inherit; background: var(--paper); color: var(--ink); }
 .builder input[type=number] { max-width: 9rem; } .builder [data-when] { margin: .3rem 0 .3rem 1.6rem; }
 .file textarea { width: 100%; font: 13.5px/1.5 ui-monospace, Consolas, monospace; padding: .8rem; border: 1px solid var(--line); border-radius: .7rem; background: #14201f; color: #e9efee; white-space: pre; overflow-x: auto; resize: vertical; }
-button { font: inherit; font-weight: 600; background: var(--teal); color: #fff; border: 0; border-radius: 999px; padding: .5rem 1.1rem; cursor: pointer; margin-right: .4rem; }
+button { font: inherit; font-weight: 600; background: var(--teal); color: #fff; border: 0; border-radius: 999px; padding: .5rem 1.1rem; min-height: 44px; cursor: pointer; margin-right: .4rem; }
+.copy { background: var(--card); color: var(--ink); border: 1px solid var(--soft); }
+.copy:hover { border-color: var(--teal); } .copy:focus-visible, .code pre:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+.copy.inline { margin: .1rem 0 .1rem .4rem; padding: .3rem .9rem; }
+.code { margin: .9rem 0; border: 1px solid var(--line); border-radius: .7rem; background: var(--card); overflow: hidden; }
+.code .copy { display: block; margin: .4rem .5rem .1rem auto; }
+.code pre { margin: 0; padding: .6rem .9rem .9rem; overflow-x: auto; font: 13.5px/1.5 ui-monospace, Consolas, monospace; }
+.code code { background: none; padding: 0; font: inherit; }
+code.cmd { overflow-wrap: anywhere; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .next { margin-top: 2.5rem; font-weight: 600; }
 footer { border-top: 1px solid var(--line); padding: 1.3rem 1.1rem 2.5rem; font-size: .9rem; color: var(--soft); text-align: center; }

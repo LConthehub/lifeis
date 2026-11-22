@@ -17,7 +17,7 @@ Life Is on your own computer is free, with every part included. It runs in Docke
 
 ## Make your setup file
 
-Life Is's whole setup is one file, `docker-compose.yml`: where your records live, and who can open it. Fill in what you want; the file below changes as you type. Nothing you type here is sent anywhere.
+The whole setup is one file, `docker-compose.yml`: where your records live, and who can open it. Fill in what you want; the file below changes as you type. Nothing you type here is sent anywhere.
 
 {{builder}}
 

@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import PlacePicker from '../components/PlacePicker';
+import CopyButton from '../components/Copy';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { onDevice, serverOrigin } from '../where';
+import { contactPicker } from '../device/phoneContacts';
 
 const ICONS = { emergency: '🚨', contacts: '📞', house: '🏠', routines: '🗓' };
 const telHref = (phone) => `tel:${phone.replace(/[^0-9+]/g, '')}`;
@@ -98,17 +100,15 @@ export default function ManualPage() {
 function Sharing({ manual, onChanged }) {
   const [days, setDays] = useState('7');
   const [pets, setPets] = useState(true);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const share = manual.share;
   const address = share.on ? `${serverOrigin()}/m/${share.token}` : '';
   const hidden = manual.sections.reduce((n, s) => n + s.entries.filter((e) => e.private).length, 0);
   const turnOn = async () => {
     setError('');
-    try { onChanged((await axios.put('/api/manual/share', { days: days === '' ? null : Number(days), pets })).data); setCopied(false); } catch (err) { setError(errorMessage(err, "Couldn't make the link")); }
+    try { onChanged((await axios.put('/api/manual/share', { days: days === '' ? null : Number(days), pets })).data); } catch (err) { setError(errorMessage(err, "Couldn't make the link")); }
   };
   const turnOff = async () => { onChanged((await axios.delete('/api/manual/share')).data); };
-  const copy = async () => { try { await navigator.clipboard.writeText(address); setCopied(true); } catch { setCopied(false); } };
   return (
     <section className={`${cardClass} space-y-2 print:hidden`} aria-label="Sharing">
       <div className="flex items-baseline gap-2">
@@ -123,7 +123,7 @@ function Sharing({ manual, onChanged }) {
           </p>
           <input readOnly value={address} aria-label="The link" onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs`} />
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={copy} className={quietButtonClass}>{copied ? 'Copied' : 'Copy the link'}</button>
+            <CopyButton text={address} what="the address of your house manual" label="Copy the link" />
             <a href={address} target="_blank" rel="noreferrer" className={quietButtonClass}>See what they'll see</a>
             <button type="button" onClick={turnOff} className={quietButtonClass}>Turn it off</button>
           </div>
@@ -158,8 +158,38 @@ function EntryForm({ entry, sections, places, onPlaces, onDone }) {
   };
   const remove = async () => { if (window.confirm(`Remove "${entry.title}"?`)) onDone((await axios.delete(`/api/manual/entries/${entry.id}`)).data); };
   const person = form.section === 'contacts';
+  const picker = useMemo(() => contactPicker(), []);
+  const [chosen, setChosen] = useState(null); // a contact with several numbers, waiting for one to be picked
+  const [contactNote, setContactNote] = useState('');
+  const [choosing, setChoosing] = useState(false);
+  const choose = async () => {
+    setContactNote(''); setChosen(null); setChoosing(true);
+    try {
+      const one = await picker.pick();
+      if (!one) return;
+      if (one.phones.length > 1) { setChosen(one); return; }
+      setForm((f) => ({ ...f, title: one.name || f.title, phone: one.phones[0] || f.phone }));
+      if (!one.phones.length) setContactNote(`${one.name || 'That contact'} has no phone number saved. You can type one.`);
+    } catch (problem) {
+      setContactNote(problem.message || "Couldn't open your contacts. You can type the name and number instead.");
+    } finally { setChoosing(false); }
+  };
+  const useNumber = (phone) => { setForm((f) => ({ ...f, title: chosen.name || f.title, phone })); setChosen(null); };
   return (
     <form onSubmit={submit} className="space-y-3">
+      {person && picker && (
+        <div className="space-y-2">
+          <button type="button" onClick={choose} disabled={choosing} className={`${quietButtonClass} min-h-[44px] w-full`}>Choose from your contacts</button>
+          <p className="text-xs text-gray-600 dark:text-life-100">Only the one contact you choose is read, on this device. It is not sent anywhere unless your house manual is one you share.</p>
+          {chosen && (
+            <div role="group" aria-label={`Numbers for ${chosen.name}`} className="space-y-2">
+              <p className="text-sm">{chosen.name} has more than one number. Which one?</p>
+              {chosen.phones.map((p) => <button key={p} type="button" onClick={() => useNumber(p)} className={`${quietButtonClass} min-h-[44px] w-full`}>{p}</button>)}
+            </div>
+          )}
+          {contactNote && <p className="text-sm text-gray-700 dark:text-life-100" role="status">{contactNote}</p>}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Field label={person ? 'Who *' : 'What *'}><input required autoFocus={!form.title} value={form.title} onChange={set('title')} className={inputClass} /></Field>
         <Field label="Part of the manual">

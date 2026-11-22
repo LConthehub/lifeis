@@ -10,7 +10,14 @@ const out = path.join(here, 'site');
 mkdirSync(out, { recursive: true });
 
 const safe = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const inline = (text) => safe(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>')
+// A bit of code in a sentence gets a Copy button only when it is a whole command or address to type or paste on its own.
+const SHELL = /^(docker|sudo|cd|curl|npm|git|ssh|brew|winget|apt|apt-get|systemctl|bash|sh|wsl|powershell|python|pip)\s+\S/;
+const ADDRESS = /^https?:\/\/[^\s/]+\S*$/;
+const codeSpan = (code) => (SHELL.test(code) ? `<code class="cmd" data-what="command">${code}</code>`
+  : ADDRESS.test(code) ? `<code class="cmd" data-what="address">${code}</code>` : `<code>${code}</code>`);
+// What a fenced block holds, so its button can say what it copies: "Copy this command", "Copy this file", "Copy this code".
+const whatIs = (lang) => (/^(bash|sh|shell|console|cmd|powershell|ps1|zsh|terminal)?$/i.test(lang) ? 'command' : /^(ya?ml|env|ini|toml|json|conf)$/i.test(lang) ? 'file' : 'code');
+const inline = (text) => safe(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, (m, code) => codeSpan(code))
   .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>')
   .replace(/([A-Za-z0-9._-]+@[A-Za-z0-9.-]+\.[a-z]{2,})/g, '<a href="mailto:$1">$1</a>');
 
@@ -23,6 +30,18 @@ function html(markdown) {
     if (!line.trim()) continue;
     const heading = /^(#{1,3}) (.+)$/.exec(line);
     if (heading) { parts.push(`<h${heading[1].length}>${inline(heading[2])}</h${heading[1].length}>`); continue; }
+    // A fenced block of code: shown as written, and given a Copy button by copy.js. A leading "$ " prompt is not part of the command.
+    const fence = /^(\s*)```\s*([\w-]*)\s*$/.exec(line);
+    if (fence) {
+      const block = [];
+      i += 1;
+      while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) { block.push(lines[i].startsWith(fence[1]) ? lines[i].slice(fence[1].length) : lines[i]); i += 1; }
+      while (block.length && !block[block.length - 1].trim()) block.pop();
+      const lone = block.filter((l) => l.trim());
+      const shown = lone.length && lone.every((l) => /^\$ /.test(l)) ? block.map((l) => l.replace(/^\$ /, '')) : block;
+      parts.push(`<div class="code" data-what="${whatIs(fence[2])}"><pre tabindex="0"><code>${safe(shown.join('\n'))}</code></pre></div>`);
+      continue;
+    }
     // A line that is only {{name}} is a place for something made elsewhere (the setup builder).
     if (/^\{\{\w+\}\}$/.test(line.trim())) { parts.push(line.trim()); continue; }
     if (/^\d+\. /.test(line)) {
@@ -48,7 +67,7 @@ function html(markdown) {
       continue;
     }
     const words = [line];
-    while (i + 1 < lines.length && lines[i + 1].trim() && !/^(#|- |\||\d+\. |\{\{)/.test(lines[i + 1])) { i += 1; words.push(lines[i]); }
+    while (i + 1 < lines.length && lines[i + 1].trim() && !/^(#|- |\||\d+\. |\{\{|\s*```)/.test(lines[i + 1])) { i += 1; words.push(lines[i]); }
     parts.push(`<p>${inline(words.join(' '))}</p>`);
   }
   return parts.join('\n');
@@ -272,9 +291,9 @@ volumes:
   lifeis_data:
   lifeis_keys:
 </textarea>
-  <p><button type="button" id="copy-compose">Copy</button> <button type="button" id="download-compose">Download docker-compose.yml</button></p>
+  <p><button type="button" class="copy" id="copy-compose" aria-label="Copy the setup file" hidden>Copy</button> <button type="button" id="download-compose">Download docker-compose.yml</button></p>
 </div>`;
-const STEPS = `<ol id="steps"><li>Save the file above as <code>docker-compose.yml</code> in your Life Is folder.</li><li>Open a terminal in that folder and run <code>docker compose up -d</code>.</li><li>On this computer, open <a href="http://localhost:8020">http://localhost:8020</a> and make your account.</li></ol>`;
+const STEPS = `<ol id="steps"><li>Save the file above as <code>docker-compose.yml</code> in your Life Is folder.</li><li>Open a terminal in that folder and run <code class="cmd" data-what="command">docker compose up -d</code>.</li><li>On this computer, open <a href="http://localhost:8020">http://localhost:8020</a> and make your account.</li></ol>`;
 const NOT_YET = RELEASED ? '' : `<p class="note"><strong>Not released yet.</strong> Life Is for your own computer comes out with the app. This page already makes the file you will use, so you can see what is involved; it will not start until then. Meanwhile, <a href="https://demo.lifeis.living">try the demo</a>.</p>`;
 
 const docPage = (guide) => `<!doctype html>
@@ -300,6 +319,7 @@ ${guides.map((g) => `  <a href="${g.slug}.html"${g.slug === guide.slug ? ' aria-
 </nav>
 <main>
 ${guide.body.replace('{{builder}}', BUILDER).replace('{{steps}}', STEPS).replace('{{released}}', NOT_YET)}
+<script src="copy.js"></script>
 ${guide.slug === 'install' ? '<script src="setup.js"></script>' : ''}
 <p class="next">${(() => { const next = guides[guides.indexOf(guide) + 1]; return next && guide.slug !== 'index' ? `Next: <a href="${next.slug}.html">${safe(next.title)}</a>` : ''; })()}</p>
 </main>
@@ -316,6 +336,7 @@ writeFileSync(path.join(docsOut, 'index.html'), docPage({ slug: 'index', title: 
   body: `<h1>Guides</h1>\n<p>How Life Is works, part by part. New here? Start with the first one, or <a href="https://demo.lifeis.living">try the demo</a> and come back when you have a question.</p>\n<div class="cards">\n${
     guides.map((g) => `  <a href="${g.slug}.html"><b>${safe(g.title)}</b><span>${safe(g.blurb)}</span></a>`).join('\n')}\n</div>` }));
 copyFileSync(path.join(here, 'site-src', 'setup.js'), path.join(docsOut, 'setup.js'));
+copyFileSync(path.join(here, 'site-src', 'copy.js'), path.join(docsOut, 'copy.js'));
 writeFileSync(path.join(docsOut, 'docs.css'), `:root { --ink: #1f2d33; --soft: #5b6b72; --paper: #fbfaf7; --card: #ffffff; --line: #dfe5e3; --deep: #264653; --teal: #2a9d8f; }
 @media (prefers-color-scheme: dark) { :root { --ink: #e9efee; --soft: #a3b3b5; --paper: #14201f; --card: #1b2b2b; --line: #2b3b3c; --teal: #6cc5b8; } }
 * { box-sizing: border-box; }
@@ -346,7 +367,16 @@ th, td { text-align: left; vertical-align: top; padding: .5rem .6rem; border-bot
 .builder input:not([type=radio]):not([type=checkbox]) { display: block; width: 100%; max-width: 30rem; margin-top: .2rem; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: .5rem; font: inherit; background: var(--paper); color: var(--ink); }
 .builder input[type=number] { max-width: 9rem; } .builder [data-when] { margin: .3rem 0 .3rem 1.6rem; }
 .file textarea { width: 100%; font: 13.5px/1.5 ui-monospace, Consolas, monospace; padding: .8rem; border: 1px solid var(--line); border-radius: .7rem; background: #14201f; color: #e9efee; white-space: pre; overflow-x: auto; resize: vertical; }
-button { font: inherit; font-weight: 600; background: var(--teal); color: #fff; border: 0; border-radius: 999px; padding: .5rem 1.1rem; cursor: pointer; margin-right: .4rem; }
+button { font: inherit; font-weight: 600; background: var(--teal); color: #fff; border: 0; border-radius: 999px; padding: .5rem 1.1rem; min-height: 44px; cursor: pointer; margin-right: .4rem; }
+.copy { background: var(--card); color: var(--ink); border: 1px solid var(--soft); }
+.copy:hover { border-color: var(--teal); } .copy:focus-visible, .code pre:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+.copy.inline { margin: .1rem 0 .1rem .4rem; padding: .3rem .9rem; }
+.code { margin: .9rem 0; border: 1px solid var(--line); border-radius: .7rem; background: var(--card); overflow: hidden; }
+.code .copy { display: block; margin: .4rem .5rem .1rem auto; }
+.code pre { margin: 0; padding: .6rem .9rem .9rem; overflow-x: auto; font: 13.5px/1.5 ui-monospace, Consolas, monospace; }
+.code code { background: none; padding: 0; font: inherit; }
+code.cmd { overflow-wrap: anywhere; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .next { margin-top: 2.5rem; font-weight: 600; }
 footer { border-top: 1px solid var(--line); padding: 1.3rem 1.1rem 2.5rem; font-size: .9rem; color: var(--soft); text-align: center; }
 `);

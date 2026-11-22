@@ -55,5 +55,45 @@ await thing.getByRole('button', { name: 'Add', exact: true }).click(); await pag
 const placesAfter = await page.evaluate(() => fetch('/api/things/places').then((r) => r.json()));
 check('a thing can make a place too', placesAfter.some((p) => p.path === 'Bedroom › Under the bed') && placesAfter.length === 3, placesAfter.map((p) => p.path).join(', '));
 
+// Things are filed under a few plain headings: two ready-made sets and a kind of the person's own.
+await page.evaluate(async () => {
+  const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
+  await post('/api/things/starters', { slug: 'cookware' });
+  await post('/api/things/starters', { slug: 'sewing' });
+  const kinds = await fetch('/api/things/kinds').then((r) => r.json());
+  const id = (name) => kinds.find((k) => k.name === name).id;
+  await post('/api/things/items', { kind_id: id('Cast iron'), name: 'Lodge skillet' });
+  await post('/api/things/items', { kind_id: id('Cast iron'), name: 'Dutch oven' });
+  await post('/api/things/items', { kind_id: id('Fabric'), name: 'Blue linen' });
+  await post('/api/things/items', { kind_id: id('Toys'), name: 'Wooden train' });
+});
+await page.goto(base + '/things'); await page.waitForTimeout(1000);
+const groupRow = page.getByRole('group', { name: 'Part of the house or hobby' });
+const chips = (await groupRow.getByRole('button').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
+check('the chips are the headings, in order, with counts', JSON.stringify(chips) === JSON.stringify(['Everything 4', 'Cooking 2', 'Crafts 1', 'Other 1']), chips.join(' | '));
+const headings = await page.getByRole('heading', { level: 2 }).allInnerTexts();
+check('each heading sits over its own things', headings.length === 3 && /^Cooking/.test(headings[0]) && /^Crafts/.test(headings[1]) && /^Other/.test(headings[2]), headings.join(' | '));
+await page.screenshot({ path: `${shots}/things-grouped.png`, fullPage: true });
+await page.setViewportSize({ width: 375, height: 812 });
+await page.waitForTimeout(300);
+const tall = await groupRow.getByRole('button').evaluateAll((els) => Math.min(...els.map((e) => e.getBoundingClientRect().height)));
+const wide = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+check('on a phone the chips are easy to tap and the page does not slide sideways', tall >= 44 && wide, `${tall}px, fits: ${wide}`);
+await page.screenshot({ path: `${shots}/things-grouped-phone.png`, fullPage: true });
+await groupRow.getByRole('button', { name: /^Cooking/ }).click(); await page.waitForTimeout(300);
+const cooking = await page.locator('main').innerText();
+check('choosing Cooking shows only its things', /Lodge skillet/.test(cooking) && /Dutch oven/.test(cooking) && !/Blue linen/.test(cooking) && !/Wooden train/.test(cooking));
+check('Cooking can be narrowed to one of its kinds', await page.getByRole('group', { name: 'Kind of thing in Cooking' }).getByRole('button', { name: /Cast iron/ }).isVisible());
+await page.getByRole('group', { name: 'Kind of thing in Cooking' }).getByRole('button', { name: /Pots and pans/ }).click(); await page.waitForTimeout(300);
+check('narrowing to a kind with nothing in it shows nothing matches', /Nothing matches/.test(await page.locator('main').innerText()));
+await groupRow.getByRole('button', { name: /^Other/ }).click(); await page.waitForTimeout(300);
+const other = await page.locator('main').innerText();
+check('Other holds the kind the person made', /Wooden train/.test(other) && !/Lodge skillet/.test(other));
+check('a group with one kind has no second row of chips', (await page.getByRole('group', { name: /Kind of thing in/ }).count()) === 0);
+await page.getByRole('link', { name: 'Manage kinds' }).click(); await page.waitForTimeout(800);
+check('Manage kinds opens the kinds page, still in the organized section', /\/things\/kinds$/.test(page.url()) && await page.getByRole('heading', { name: 'Kinds of things' }).isVisible() && await page.getByRole('link', { name: /Things/ }).first().isVisible());
+await page.getByRole('link', { name: '← Things' }).click(); await page.waitForTimeout(800);
+check('and there is a way back to Things', /\/things$/.test(page.url()));
+
 console.log(results.join('\n'));
 await browser.close();

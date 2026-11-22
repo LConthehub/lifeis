@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import BookServers from '../components/BookServers';
+import { CopyLine } from '../components/Copy';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 
 const KINDS = [['jellyfin', 'Jellyfin'], ['emby', 'Emby']];
@@ -110,8 +111,9 @@ function ServerForm({ server, onDone }) {
       )}
       <Field label="Its address *"><input required autoFocus={!server.id} type="url" value={form.url} onChange={set('url')} placeholder="http://192.168.1.20:8096" className={inputClass} /></Field>
       <p className="text-xs text-gray-500 dark:text-life-300">
-        If {product} is on the same computer as Life Is, and Life Is runs in Docker, use <code>http://host.docker.internal:8096</code>: inside Docker, "localhost" means Life Is itself.
+        If {product} is on the same computer as Life Is, and Life Is runs in Docker, use the address below: inside Docker, "localhost" means Life Is itself.
       </p>
+      <CopyLine text="http://host.docker.internal:8096" what="the Docker address" />
       <Field label={server.id ? 'A new key (empty: keep the saved one)' : 'A key *'}>
         <input required={!server.id} type="password" autoComplete="off" value={form.secret} onChange={set('secret')} className={inputClass} />
       </Field>
