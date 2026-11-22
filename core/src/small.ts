@@ -50,3 +50,12 @@ export const inOrder = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
  * ingredient's key, this keeps every alphabet as it is.
  */
 export const labelKey = (name: string) => name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** What kind of picture these bytes are, going by how they begin; null when they aren't one Life Is keeps. */
+export function pictureType(bytes: Uint8Array): string | null {
+  const starts = (...head: number[]) => head.every((b, i) => bytes[i] === b);
+  if (starts(0xff, 0xd8, 0xff)) return 'image/jpeg';
+  if (starts(0x89, 0x50, 0x4e, 0x47)) return 'image/png';
+  if (starts(0x52, 0x49, 0x46, 0x46) && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'image/webp';
+  return null;
+}

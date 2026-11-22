@@ -366,6 +366,43 @@ it('things and projects answer over the web', async () => {
   expect((await admin.delete(`/api/things/items/${linen.json.id}`)).status).toBe(204);
 });
 
+it('a home inventoried over the web: scanning, moving, uses, activities, stickers and photos', async () => {
+  const admin = await owner();
+  const kind = (await admin.post('/api/things/kinds', { name: 'Household' })).json[0];
+  const places = (await admin.post('/api/things/places', { name: 'Garage' })).json;
+  const garage = places[0].id;
+  const drill = (await admin.post('/api/things/items', { kind_id: kind.id, name: 'Drill', barcode: '5012345678900', activities: ['DIY'] })).json;
+  expect([drill.barcode, drill.activities, drill.photo]).toEqual(['5012345678900', ['DIY'], false]);
+
+  // Its box's barcode finds it; moving it is kept in its history.
+  expect((await admin.get('/api/things/scan?code=5012345678900')).json).toMatchObject({ kind: 'thing', item: { id: drill.id } });
+  expect((await admin.get('/api/things/scan?code=9780140449136')).json).toEqual({ kind: 'unknown', barcode: '9780140449136', isbn: true });
+  expect((await admin.post(`/api/things/items/${drill.id}/move`, { place_id: garage })).json.place).toBe('Garage');
+  expect((await admin.post(`/api/things/items/${drill.id}/uses`, { activity: 'Repairs', note: 'gate hinge' })).status).toBe(201);
+  expect((await admin.get(`/api/things/items/${drill.id}/history`)).json.map((h: { what: string }) => h.what)).toEqual(['used', 'moved', 'added']);
+  expect((await admin.get('/api/things/activities')).json).toEqual([{ name: 'DIY', things: 1, projects: 0 }]);
+  expect((await admin.get('/api/things/activity?name=diy')).json.things.map((t: { name: string }) => t.name)).toEqual(['Drill']);
+
+  // A sheet of blank stickers; one scanned is new, until it's put on something.
+  const blanks = (await admin.get('/api/things/stickers/blank?count=4')).json;
+  expect(blanks).toHaveLength(4);
+  expect((await admin.get(`/api/things/scan?code=${encodeURIComponent(`https://x/t/${blanks[0]}`)}`)).json).toEqual({ kind: 'new-sticker', code: blanks[0] });
+  const kite = (await admin.post('/api/things/items', { kind_id: kind.id, name: 'Kite', code: blanks[0], place_id: garage })).json;
+  expect((await admin.get(`/api/things/scan?code=${encodeURIComponent(`https://x/t/${blanks[0]}`)}`)).json).toMatchObject({ kind: 'thing', item: { id: kite.id } });
+  expect((await admin.post('/api/things/stickers', { ids: [drill.id] })).json[0]).toMatchObject({ id: drill.id, name: 'Drill', place: 'Garage' });
+  expect((await admin.post('/api/things/stickers', { ids: 'all' })).status).toBe(422);
+
+  // A photo of it, shown back as it was sent.
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 7, 7, 7]);
+  expect((await admin.put(`/api/things/items/${drill.id}/photo`, { data: jpeg.toString('base64') })).json.photo).toBe(true);
+  const shown = await admin.get(`/api/things/items/${drill.id}/photo`);
+  expect([shown.status, shown.headers.get('content-type'), shown.bytes.equals(jpeg)]).toEqual([200, 'image/jpeg', true]);
+
+  const other = await member(admin, 'partner');
+  expect((await other.get(`/api/things/items/${drill.id}/photo`)).status).toBe(404);
+  expect((await other.get('/api/things/scan?code=5012345678900')).json.kind).toBe('unknown');
+});
+
 it('what Life Is looks after is asked once, and sets up what fits', async () => {
   const admin = await owner();
   expect((await admin.get('/api/life')).json).toMatchObject({ areas: null, sections: ['eating', 'planning', 'keeping', 'making', 'enjoying', 'spending'] });
@@ -505,7 +542,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.

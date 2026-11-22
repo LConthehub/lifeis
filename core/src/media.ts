@@ -12,6 +12,7 @@
  * `media(db, owner)` is one person's collection: everything it reads and writes is theirs.
  */
 import { atomic, type Db, type Queries, type Value } from './db.ts';
+import { historyOf, noteHistory, noteMove, placePath, type HistoryEntry } from './history.ts';
 import { placePaths } from './inventory.ts';
 import { Problem } from './problem.ts';
 import { clean, dayNumber, dayOrNull, inOrder, labelKey, stamp, todayOf, type Clock } from './small.ts';
@@ -209,8 +210,9 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
   }
 
   async function addCopyIn(q: Queries, mediaId: number, input: CopyInput): Promise<void> {
-    await q.run('INSERT INTO media_copies (media_id, format, place_id, barcode, lent_to, lent_on, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    const made = await q.run('INSERT INTO media_copies (media_id, format, place_id, barcode, lent_to, lent_on, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [mediaId, ...(await copyValues(q, input)), now()]);
+    await noteHistory(q, owner, { copy_id: made.lastId }, { what: 'added', to_place: await placePath(q, owner, input.place_id), day: todayOf(clock), at: now() });
     // Having a copy answers the wanting.
     await q.run('UPDATE media SET wanted = 0, updated_at = ? WHERE id = ?', [now(), mediaId]);
   }
@@ -318,9 +320,32 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
     async updateCopy(id: number, input: CopyInput): Promise<Media> {
       return atomic(db, async (tx) => {
         const copy = await ownedCopy(tx, id);
+        const was = (await tx.get<{ place_id: number | null }>('SELECT place_id FROM media_copies WHERE id = ?', [id]))!.place_id;
         await tx.run('UPDATE media_copies SET format = ?, place_id = ?, barcode = ?, lent_to = ?, lent_on = ?, note = ? WHERE id = ?', [...(await copyValues(tx, input)), id]);
+        await noteMove(tx, owner, { copy_id: id }, was, input.place_id ?? null, { day: todayOf(clock), at: now() });
         return one(tx, copy.media_id);
       });
+    },
+
+    /** Put a copy somewhere else, keeping where it was in its history. */
+    async moveCopy(id: number, placeId: number | null): Promise<Media> {
+      return atomic(db, async (tx) => {
+        const copy = await ownedCopy(tx, id);
+        if (placeId !== null && !(await tx.get('SELECT id FROM places WHERE id = ? AND owner_id = ?', [placeId, owner]))) {
+          throw new Problem(404, "That place isn't there to put it in");
+        }
+        const was = (await tx.get<{ place_id: number | null }>('SELECT place_id FROM media_copies WHERE id = ?', [id]))!.place_id;
+        if (await noteMove(tx, owner, { copy_id: id }, was, placeId, { day: todayOf(clock), at: now() })) {
+          await tx.run('UPDATE media_copies SET place_id = ? WHERE id = ?', [placeId, id]);
+        }
+        return one(tx, copy.media_id);
+      });
+    },
+
+    /** Everything that happened to one copy, newest first. */
+    async copyHistory(id: number): Promise<HistoryEntry[]> {
+      await ownedCopy(db, id);
+      return historyOf(db, owner, { copy_id: id });
     },
 
     async removeCopy(id: number): Promise<Media> {

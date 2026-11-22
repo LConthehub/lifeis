@@ -626,6 +626,50 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_money_entries_owner ON money_entries(owner_id, day)`,
     ],
   },
+  {
+    // A whole home inventoried: each thing can carry a Life Is sticker, the barcode printed on its box, and a
+    // photo; it can belong to activities (Sewing, Camping); and it keeps a history of where it has been and
+    // what it was used for. A book or film's copy keeps the same history.
+    number: 21,
+    name: 'stickers, barcodes, photos, activities and a history for each thing',
+    statements: [
+      `ALTER TABLE items ADD COLUMN code TEXT`,
+      `CREATE UNIQUE INDEX idx_items_code ON items(code) WHERE code IS NOT NULL`,
+      `ALTER TABLE items ADD COLUMN barcode TEXT`,
+      `CREATE INDEX idx_items_barcode ON items(owner_id, barcode)`,
+      `CREATE TABLE item_photos (
+        item_id INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        bytes BLOB NOT NULL
+      )`,
+      `CREATE TABLE item_activities (
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        activity TEXT NOT NULL,
+        key TEXT NOT NULL,
+        PRIMARY KEY (item_id, key)
+      )`,
+      // Where a place is written as it was then ("Leo's room › Shelf"), so the history still reads right after a
+      // place is renamed or removed. The same for a project's name.
+      `CREATE TABLE item_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        item_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
+        copy_id INTEGER REFERENCES media_copies(id) ON DELETE CASCADE,
+        what TEXT NOT NULL CHECK(what IN ('added', 'moved', 'used')),
+        from_place TEXT,
+        to_place TEXT,
+        project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+        project TEXT,
+        activity TEXT,
+        day TEXT NOT NULL,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        CHECK ((item_id IS NULL) != (copy_id IS NULL))
+      )`,
+      `CREATE INDEX idx_item_history_item ON item_history(item_id, id)`,
+      `CREATE INDEX idx_item_history_copy ON item_history(copy_id, id)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

@@ -23,6 +23,8 @@ import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { inventory } from './inventory.ts';
 import { Problem } from './problem.ts';
 import { addDays, clean, dayNumber, dayOrNull, stamp, todayOf, type Clock } from './small.ts';
+import { pictureType } from './small.ts';
+export { pictureType };
 
 export const PLAN_ITEM_KINDS = ['task', 'recipe', 'thing', 'media', 'project'] as const;
 export type PlanItemKind = (typeof PLAN_ITEM_KINDS)[number];
@@ -87,14 +89,6 @@ type PlanRow = { id: number; name: string; start_day: string; end_day: string; n
 type ItemRow = { id: number; plan_id: number; kind: PlanItemKind; ref_id: number | null; label: string; quantity: number | null; note: string | null; done: number; meal_plan_id: number | null };
 const ITEM_COLUMNS = 'id, plan_id, kind, ref_id, label, quantity, note, done, meal_plan_id';
 
-/** What kind of picture these bytes are, going by how they begin; null when they aren't one Life Is keeps. */
-export function pictureType(bytes: Uint8Array): string | null {
-  const starts = (...head: number[]) => head.every((b, i) => bytes[i] === b);
-  if (starts(0xff, 0xd8, 0xff)) return 'image/jpeg';
-  if (starts(0x89, 0x50, 0x4e, 0x47)) return 'image/png';
-  if (starts(0x52, 0x49, 0x46, 0x46) && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'image/webp';
-  return null;
-}
 
 export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
   const now = () => stamp(clock());

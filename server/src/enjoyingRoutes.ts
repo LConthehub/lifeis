@@ -92,6 +92,8 @@ export function enjoyingRoutes(db: Db, follow?: FollowTools): Route[] {
 
     ['POST', at('media/:id/copies'), async (c) => ({ status: 201, json: await shelf(c).addCopy(c.id, copyFrom(c.body)) })],
     ['PUT', at('media/copies/:id'), async (c) => ({ json: await shelf(c).updateCopy(c.id, copyFrom(c.body)) })],
+    ['POST', at('media/copies/:id/move'), async (c) => ({ json: await shelf(c).moveCopy(c.id, read.maybeWhole(c.body, 'place_id')) })],
+    ['GET', at('media/copies/:id/history'), async (c) => ({ json: await shelf(c).copyHistory(c.id) })],
     ['DELETE', at('media/copies/:id'), async (c) => ({ json: await shelf(c).removeCopy(c.id) })],
 
     ['POST', at('media/:id/log'), async (c) => ({

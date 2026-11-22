@@ -2,8 +2,8 @@
  * The addresses for the things you keep (/api/things) and the projects that use them (/api/projects).
  * What they do is core/'s inventory.ts and projects.ts; this only reads what was sent and passes it on.
  */
-import { inventory, projects, type Db, type FieldInput, type FieldType } from '../../core/src/index.ts';
-import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
+import { inventory, projects, whatIsThis, MAX_THING_PHOTO, type Db, type FieldInput, type FieldType } from '../../core/src/index.ts';
+import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
 const at = (path: string) => new RegExp(`^/api/${path.replaceAll(':id', ID)}$`);
@@ -16,7 +16,17 @@ const itemFrom = (body: Body) => ({
   name: read.text(body, 'name'), quantity: read.maybeNumber(body, 'quantity'), unit: read.maybeText(body, 'unit'),
   place_id: read.maybeWhole(body, 'place_id'), low_at: read.maybeNumber(body, 'low_at'), note: read.maybeText(body, 'note'),
   values: read.record(body, 'values'),
+  // Left out: left as they are.
+  ...(sent(body, 'barcode') ? { barcode: read.maybeText(body, 'barcode') } : {}),
+  ...(sent(body, 'activities') ? { activities: read.texts(body, 'activities') } : {}),
 });
+
+/** A photo sent as base64 text (the "data" field), as the pages send them. */
+function photoFrom(body: Body): Uint8Array {
+  const text = read.text(body, 'data');
+  if (text.length > MAX_THING_PHOTO * 1.4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(text)) throw new Refusal(400, 'That photo is too large to keep, or was damaged on the way');
+  return Uint8Array.from(atob(text), (letter) => letter.charCodeAt(0));
+}
 
 const placeFrom = (body: Body) => ({ name: read.text(body, 'name'), parent_id: read.maybeWhole(body, 'parent_id'), note: read.maybeText(body, 'note') });
 
@@ -96,7 +106,39 @@ export function makingRoutes(db: Db): Route[] {
     ['POST', at('things/items'), async (c) => {
       const kind = read.maybeWhole(c.body, 'kind_id');
       if (kind === null) throw notUnderstood('kind_id');
-      return { status: 201, json: await things(c).createItem({ kind_id: kind, ...itemFrom(c.body) }) };
+      return { status: 201, json: await things(c).createItem({ kind_id: kind, ...itemFrom(c.body), code: read.maybeText(c.body, 'code') }) };
+    }],
+    // What a scan is: a place, a thing, copies in the collection, a blank sticker, or unknown. See core/'s whereabouts.ts.
+    ['GET', at('things/scan'), async (c) => {
+      const code = c.query.get('code') ?? '';
+      if (code.length > 300) throw notUnderstood('code');
+      return { json: await whatIsThis(db, c.user.id, code, c.clock) };
+    }],
+    ['GET', at('things/activities'), async (c) => ({ json: await things(c).listActivities() })],
+    ['GET', at('things/activity'), async (c) => {
+      const name = c.query.get('name') ?? '';
+      if (!name.trim() || name.length > 60) throw notUnderstood('name');
+      return { json: await things(c).activity(name) };
+    }],
+    ['POST', at('things/stickers'), async (c) => {
+      const ids = Array.isArray(c.body.ids) ? c.body.ids : null;
+      if (!ids || !ids.every((id) => Number.isInteger(id) && (id as number) > 0)) throw notUnderstood('ids');
+      return { json: await things(c).thingStickers(ids as number[]) };
+    }],
+    ['GET', at('things/stickers/blank'), async (c) => ({ json: await things(c).blankCodes(queryNumber(c.query, 'count') ?? 30) })],
+    ['POST', at('things/items/:id/move'), async (c) => ({ json: await things(c).moveItem(c.id, read.maybeWhole(c.body, 'place_id'), read.maybeText(c.body, 'note')) })],
+    ['GET', at('things/items/:id/history'), async (c) => ({ json: await things(c).itemHistory(c.id) })],
+    ['POST', at('things/items/:id/uses'), async (c) => ({
+      status: 201,
+      json: await things(c).logUse(c.id, { day: read.maybeText(c.body, 'day'), project_id: read.maybeWhole(c.body, 'project_id'), activity: read.maybeText(c.body, 'activity'), note: read.maybeText(c.body, 'note') }),
+    })],
+    ['PUT', at('things/items/:id/photo'), async (c) => ({ json: await things(c).setPhoto(c.id, photoFrom(c.body)) })],
+    ['DELETE', at('things/items/:id/photo'), async (c) => ({ json: await things(c).removePhoto(c.id) })],
+    ['GET', at('things/items/:id/photo'), async (c) => {
+      const photo = await things(c).photo(c.id);
+      if (!photo) return { status: 404, json: { detail: 'Not found' } };
+      // The person's own picture: their browser may keep it for a while, nothing in between may.
+      return { body: photo.bytes, headers: { 'Content-Type': photo.type, 'Cache-Control': 'private, max-age=60', 'X-Content-Type-Options': 'nosniff' } };
     }],
     ['GET', at('things/items/:id'), async (c) => ({ json: await things(c).getItem(c.id) })],
     ['PUT', at('things/items/:id'), async (c) => ({ json: await things(c).updateItem(c.id, itemFrom(c.body)) })],

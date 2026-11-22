@@ -12,8 +12,9 @@
  * `inventory(db, owner)` is one person's things: everything it reads and writes is theirs.
  */
 import { atomic, type Db, type Queries, type Value } from './db.ts';
+import { historyOf, noteHistory, noteMove, placePath, type HistoryEntry } from './history.ts';
 import { Problem } from './problem.ts';
-import { clean, dayNumber, inOrder, labelKey, rounded, stamp, type Clock } from './small.ts';
+import { clean, dayNumber, dayOrNull, inOrder, labelKey, pictureType, rounded, stamp, todayOf, type Clock } from './small.ts';
 import { STARTERS, type Starter } from './starters.ts';
 import * as units from './units.ts';
 
@@ -46,6 +47,12 @@ export type ItemInput = {
   note?: string | null;
   /** A value for each field, by the field's id. Left out or empty: no value. */
   values?: Record<string, unknown>;
+  /** The barcode printed on it or its box. Left out: unchanged. */
+  barcode?: string | null;
+  /** A Life Is sticker's code, from a blank sticker scanned for a new thing. Only when making one. */
+  code?: string | null;
+  /** What it's for: Sewing, Camping. Left out: unchanged. */
+  activities?: string[];
 };
 export type Item = {
   id: number;
@@ -68,6 +75,12 @@ export type Item = {
   set_aside: number;
   /** What's left for something new: what you have, less what's set aside. Null when no amount is known. */
   free: number | null;
+  /** Its Life Is sticker's code, once it has one. */
+  code: string | null;
+  barcode: string | null;
+  /** Whether a photo of it is kept: /api/things/items/:id/photo. */
+  photo: boolean;
+  activities: string[];
   created_at: string;
   updated_at: string;
 };
@@ -100,7 +113,41 @@ export function stickerCode(read: string): string | null {
   const m = /(?:^|\/p\/)([2-9A-HJ-NP-Za-hj-np-z]{10})\/?$/.exec(read.trim());
   return m ? m[1]!.toUpperCase() : null;
 }
-type ItemRow = Omit<Item, 'amount' | 'place' | 'low' | 'values' | 'set_aside' | 'free'>;
+type ItemRow = Omit<Item, 'amount' | 'place' | 'low' | 'values' | 'set_aside' | 'free' | 'photo' | 'activities'> & { photo: number };
+
+/** The code out of a scanned thing's sticker: a web address ending in /t/ and the code. Null when it isn't one. */
+export function thingStickerCode(read: string): string | null {
+  const m = /\/t\/([2-9A-HJ-NP-Za-hj-np-z]{10})\/?$/.exec(read.trim());
+  return m ? m[1]!.toUpperCase() : null;
+}
+
+/** A barcode as it's kept: the digits and letters only, so "0 12345-67890 5" and "012345678905" are one. */
+export const plainBarcode = (read: string | null | undefined): string | null => clean(read?.replace(/[^0-9A-Za-z]/g, '').toUpperCase(), 40);
+
+/** Activity names as given, each once, without empty ones. */
+function activityList(names: string[] | undefined): { name: string; key: string }[] {
+  const out: { name: string; key: string }[] = [];
+  for (const raw of names ?? []) {
+    const name = clean(String(raw), 60);
+    if (name && !out.some((a) => a.key === labelKey(name))) out.push({ name, key: labelKey(name) });
+  }
+  return out.slice(0, 20);
+}
+
+/**
+ * The one way to write an activity typed several ways ("Sewing", "sewing", "SEWING"): the most used, and among
+ * those, one written like a name (a capital, then small letters).
+ */
+function bestSpelling(names: string[]): string {
+  const counts = new Map<string, number>();
+  for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1);
+  const named = (n: string) => (/^\p{Lu}[^\p{Lu}]*$/u.test(n) ? 1 : 0);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || named(b[0]) - named(a[0]))[0]![0];
+}
+
+export type ThingSticker = { id: number; name: string; place: string | null; code: string };
+export type ActivitySummary = { name: string; things: number; projects: number };
+export const MAX_THING_PHOTO = 8_000_000;
 
 const asField = (row: FieldRow): Field => ({ ...row, choices: row.choices ? (JSON.parse(row.choices) as string[]) : [] });
 
@@ -291,8 +338,14 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
 
   async function items(q: Queries, where = '', args: Value[] = []): Promise<Item[]> {
     const rows = await q.all<ItemRow>(
-      `SELECT i.id, i.kind_id, k.name AS kind, k.icon, i.name, i.quantity, i.unit, i.place_id, i.low_at, i.note, i.created_at, i.updated_at
+      `SELECT i.id, i.kind_id, k.name AS kind, k.icon, i.name, i.quantity, i.unit, i.place_id, i.low_at, i.note, i.code, i.barcode,
+              EXISTS (SELECT 1 FROM item_photos ph WHERE ph.item_id = i.id) AS photo, i.created_at, i.updated_at
        FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.owner_id = ? ${where} ORDER BY i.name COLLATE NOCASE, i.id`, [owner, ...args]);
+    const doing = new Map<number, string[]>();
+    for (const row of await q.all<{ item_id: number; activity: string }>(
+      'SELECT a.item_id, a.activity FROM item_activities a JOIN items i ON i.id = a.item_id WHERE i.owner_id = ? ORDER BY a.activity COLLATE NOCASE', [owner])) {
+      doing.set(row.item_id, [...(doing.get(row.item_id) ?? []), row.activity]);
+    }
     const paths = placePaths(await placeRows(q));
     const aside = await setAsideByItem(q, owner);
     const values = new Map<number, Record<string, FieldValue>>();
@@ -312,6 +365,8 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
         values: values.get(row.id) ?? {},
         set_aside: setAside,
         free: row.quantity !== null ? rounded(Math.max(0, row.quantity - setAside), 4) : null,
+        photo: Boolean(row.photo),
+        activities: doing.get(row.id) ?? [],
       };
     });
   }
@@ -320,6 +375,20 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     const found = (await items(q, 'AND i.id = ?', [id]))[0];
     if (!found) throw new Problem(404, 'Not found');
     return found;
+  }
+
+  const when = () => ({ day: todayOf(clock), at: now() });
+
+  async function saveActivities(q: Queries, itemId: number, names: string[] | undefined) {
+    if (names === undefined) return;
+    await q.run('DELETE FROM item_activities WHERE item_id = ?', [itemId]);
+    for (const a of activityList(names)) await q.run('INSERT INTO item_activities (item_id, activity, key) VALUES (?, ?, ?)', [itemId, a.name, a.key]);
+  }
+
+  async function ownedItem(q: Queries, id: number): Promise<{ id: number; place_id: number | null; code: string | null }> {
+    const row = await q.get<{ id: number; place_id: number | null; code: string | null }>('SELECT id, place_id, code FROM items WHERE id = ? AND owner_id = ?', [id, owner]);
+    if (!row) throw new Problem(404, 'Not found');
+    return row;
   }
 
   /** A thing's own columns, checked, in the order the SQL below names them (after the kind). */
@@ -527,10 +596,19 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     createItem(input: ItemInput): Promise<Item> {
       return atomic(db, async (tx) => {
         const kind = await kindRow(tx, input.kind_id);
+        // A blank sticker scanned for something new: its code becomes this thing's, if nothing has it yet.
+        let code: string | null = null;
+        if (input.code != null) {
+          code = thingStickerCode(`/t/${String(input.code).trim()}`);
+          if (!code) throw new Problem(400, "That isn't a Life Is sticker's code");
+          if (await tx.get('SELECT id FROM items WHERE code = ?', [code])) throw new Problem(409, 'That sticker is already on something');
+        }
         const made = await tx.run(
-          'INSERT INTO items (owner_id, kind_id, name, quantity, unit, place_id, low_at, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [owner, kind.id, ...(await itemValues(tx, input, kind)), now(), now()]);
+          'INSERT INTO items (owner_id, kind_id, name, quantity, unit, place_id, low_at, note, code, barcode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [owner, kind.id, ...(await itemValues(tx, input, kind)), code, plainBarcode(input.barcode), now(), now()]);
         await saveValues(tx, made.lastId, kind.id, input.values);
+        await saveActivities(tx, made.lastId, input.activities);
+        await noteHistory(tx, owner, { item_id: made.lastId }, { what: 'added', to_place: await placePath(tx, owner, input.place_id), ...when() });
         return item(tx, made.lastId);
       });
     },
@@ -542,9 +620,128 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
         const kind = await kindRow(tx, before.kind_id);
         await tx.run('UPDATE items SET name = ?, quantity = ?, unit = ?, place_id = ?, low_at = ?, note = ?, updated_at = ? WHERE id = ?',
           [...(await itemValues(tx, { ...input, kind_id: kind.id }, kind)), now(), id]);
+        if (input.barcode !== undefined) await tx.run('UPDATE items SET barcode = ? WHERE id = ?', [plainBarcode(input.barcode), id]);
         await saveValues(tx, id, kind.id, input.values);
+        await saveActivities(tx, id, input.activities);
+        await noteMove(tx, owner, { item_id: id }, before.place_id, input.place_id ?? null, when());
         return item(tx, id);
       });
+    },
+
+    /** Put a thing somewhere else (or nowhere), keeping where it was in its history. */
+    moveItem(id: number, placeId: number | null, note?: string | null): Promise<Item> {
+      return atomic(db, async (tx) => {
+        const before = await ownedItem(tx, id);
+        if (placeId !== null && !(await tx.get('SELECT id FROM places WHERE id = ? AND owner_id = ?', [placeId, owner]))) {
+          throw new Problem(404, "That place isn't there to put it in");
+        }
+        if (await noteMove(tx, owner, { item_id: id }, before.place_id, placeId, when(), note)) {
+          await tx.run('UPDATE items SET place_id = ?, updated_at = ? WHERE id = ?', [placeId, now(), id]);
+        }
+        return item(tx, id);
+      });
+    },
+
+    /** Everything that happened to a thing, newest first. */
+    async itemHistory(id: number): Promise<HistoryEntry[]> {
+      await ownedItem(db, id);
+      return historyOf(db, owner, { item_id: id });
+    },
+
+    /** A time it was used: on a day, for a project or an activity, with a note. */
+    logUse(id: number, input: { day?: string | null; project_id?: number | null; activity?: string | null; note?: string | null }): Promise<HistoryEntry[]> {
+      return atomic(db, async (tx) => {
+        await ownedItem(tx, id);
+        let project: { id: number; name: string; activity: string | null } | undefined;
+        if (input.project_id != null) {
+          project = await tx.get('SELECT id, name, activity FROM projects WHERE id = ? AND owner_id = ?', [input.project_id, owner]);
+          if (!project) throw new Problem(404, "That project isn't there");
+        }
+        if (input.day != null && !dayOrNull(input.day)) throw new Problem(400, 'Pick a day');
+        await noteHistory(tx, owner, { item_id: id }, {
+          what: 'used', day: dayOrNull(input.day) ?? todayOf(clock), at: now(), project_id: project?.id ?? null, project: project?.name ?? null,
+          activity: clean(input.activity, 60) ?? project?.activity ?? null, note: input.note,
+        });
+        return historyOf(tx, owner, { item_id: id });
+      });
+    },
+
+    /** Keep a photo of it (JPEG, PNG or WebP), in place of any before. */
+    async setPhoto(id: number, bytes: Uint8Array): Promise<Item> {
+      const type = pictureType(bytes);
+      if (!type) throw new Problem(400, "That isn't a photo Life Is can keep (JPEG, PNG or WebP)");
+      if (bytes.length > MAX_THING_PHOTO) throw new Problem(400, 'That photo is too large to keep');
+      return atomic(db, async (tx) => {
+        await ownedItem(tx, id);
+        await tx.run('INSERT INTO item_photos (item_id, type, bytes) VALUES (?, ?, ?) ON CONFLICT(item_id) DO UPDATE SET type = excluded.type, bytes = excluded.bytes', [id, type, bytes]);
+        return item(tx, id);
+      });
+    },
+
+    async photo(id: number): Promise<{ type: string; bytes: Uint8Array } | null> {
+      await ownedItem(db, id);
+      return (await db.get<{ type: string; bytes: Uint8Array }>('SELECT type, bytes FROM item_photos WHERE item_id = ?', [id])) ?? null;
+    },
+
+    async removePhoto(id: number): Promise<Item> {
+      await ownedItem(db, id);
+      await db.run('DELETE FROM item_photos WHERE item_id = ?', [id]);
+      return item(db, id);
+    },
+
+    /** Stickers for these things: each given a code the first time, and keeping it. */
+    thingStickers(ids: number[]): Promise<ThingSticker[]> {
+      return atomic(db, async (tx) => {
+        const out: ThingSticker[] = [];
+        for (const id of ids.slice(0, 500)) {
+          const row = await ownedItem(tx, id);
+          let code = row.code;
+          while (!code) {
+            const fresh = newCode();
+            if (!(await tx.get('SELECT id FROM items WHERE code = ?', [fresh]))) { code = fresh; await tx.run('UPDATE items SET code = ? WHERE id = ?', [code, id]); }
+          }
+          const thing = await item(tx, id);
+          out.push({ id, name: thing.name, place: thing.place, code });
+        }
+        return out;
+      });
+    },
+
+    /** Codes for a sheet of blank stickers, to stick on first and say what each is on when it's scanned. */
+    async blankCodes(count: number): Promise<string[]> {
+      const out: string[] = [];
+      while (out.length < Math.max(1, Math.min(count, 200))) {
+        const code = newCode();
+        if (!out.includes(code) && !(await db.get('SELECT id FROM items WHERE code = ?', [code]))) out.push(code);
+      }
+      return out;
+    },
+
+    /** The activities in use: those things are for, and those projects are, with how many of each. */
+    async listActivities(): Promise<ActivitySummary[]> {
+      const found = new Map<string, ActivitySummary & { spellings: string[] }>();
+      const add = (name: string, which: 'things' | 'projects') => {
+        const key = labelKey(name);
+        const one = found.get(key) ?? { name, things: 0, projects: 0, spellings: [] };
+        one[which] += 1;
+        one.spellings.push(name);
+        found.set(key, one);
+      };
+      for (const row of await db.all<{ activity: string }>('SELECT a.activity FROM item_activities a JOIN items i ON i.id = a.item_id WHERE i.owner_id = ?', [owner])) add(row.activity, 'things');
+      for (const row of await db.all<{ activity: string }>("SELECT activity FROM projects WHERE owner_id = ? AND activity IS NOT NULL AND activity != ''", [owner])) add(row.activity, 'projects');
+      return [...found.values()].map(({ spellings, ...one }) => ({ ...one, name: bestSpelling(spellings) }))
+        .sort((a, b) => inOrder(a.name.toLowerCase(), b.name.toLowerCase()));
+    },
+
+    /** One activity: the things for it, and its projects. */
+    async activity(name: string): Promise<{ name: string; things: Item[]; projects: { id: number; name: string; status: string }[] }> {
+      const key = labelKey(name);
+      const things = await items(db, 'AND i.id IN (SELECT item_id FROM item_activities WHERE key = ?)', [key]);
+      const projects = (await db.all<{ id: number; name: string; status: string; activity: string }>(
+        "SELECT id, name, status, activity FROM projects WHERE owner_id = ? AND activity IS NOT NULL ORDER BY updated_at DESC", [owner])).filter((p) => labelKey(p.activity) === key);
+      const spellings = [...things.flatMap((t) => t.activities.filter((a) => labelKey(a) === key)), ...projects.map((p) => p.activity)];
+      const shown = spellings.length ? bestSpelling(spellings) : (clean(name, 60) ?? name);
+      return { name: shown, things, projects: projects.map(({ id, name: n, status }) => ({ id, name: n, status })) };
     },
 
     /** Remove a thing. Projects that used it keep its name on their list. */
