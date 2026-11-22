@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="Pick your options and get a ready setup file to copy.">
+<title>Install with Docker · Life Is</title>
+<link rel="icon" href="../icon.png">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../"><img src="../icon.png" alt=""> Life Is</a>
+  <a href="./">Guides</a>
+  <a class="pill" href="https://demo.lifeis.living">Try the demo</a>
+</header>
+<div class="layout">
+<nav class="menu" aria-label="Guides">
+  <a href="getting-started.html">Get started</a>
+  <a href="install.html" aria-current="page">Install with Docker</a>
+  <a href="home.html">Your home</a>
+  <a href="records.html">Home records</a>
+  <a href="upkeep.html">Upkeep</a>
+  <a href="kitchen.html">The kitchen</a>
+  <a href="pets-and-manual.html">Pets and the house manual</a>
+  <a href="reminders.html">Reminders</a>
+  <a href="phone.html">On your phone</a>
+  <a href="your-data.html">Your data</a>
+  <a href="troubleshooting.html">Troubleshooting</a>
+</nav>
+<main>
+<h1>Install on your own computer</h1>
+<p>Pick your options, copy one file, start it. This page writes the setup file for you.</p>
+<p>Life Is on your own computer is free, with every part included. It runs in Docker, a free program that keeps Life Is and everything it needs in one tidy box.</p>
+<p class="note"><strong>Not released yet.</strong> Life Is for your own computer comes out with the app. This page already makes the file you will use, so you can see what is involved; it will not start until then. Meanwhile, <a href="https://demo.lifeis.living">try the demo</a>.</p>
+<h2>Before you start</h2>
+<ol><li>Install <strong>Docker Desktop</strong> (Windows, Mac) or <strong>Docker Engine</strong> (Linux) from docker.com, and open it once.</li><li>Make a folder for Life Is, such as <code>Documents/lifeis</code>.</li></ol>
+<h2>Make your setup file</h2>
+<p>Life Is's whole setup is one file, <code>docker-compose.yml</code>: where your records live, and who can open it. Fill in what you want; the file below changes as you type. Nothing you type here is sent anywhere.</p>
+<p id="no-script" class="note">This builder needs JavaScript. Without it, copy the file below as it is: it works without any changes.</p>
+<form id="setup" class="builder" data-image="ghcr.io/lconthehub/lifeis:latest" onsubmit="return false">
+  <fieldset><legend>Where your records are kept</legend>
+    <label><input type="radio" name="store" value="docker" checked> Kept by Docker (simplest)</label>
+    <label><input type="radio" name="store" value="folders"> In folders I choose</label>
+    <div data-when="store=folders" hidden>
+      <label class="field">Folder for your records <input name="data_folder" placeholder="D:/lifeis/data or /home/me/lifeis/data" autocomplete="off"></label>
+      <label class="field">Folder for the keys <input name="keys_folder" placeholder="D:/lifeis/keys or /home/me/lifeis/keys" autocomplete="off"></label>
+    </div>
+  </fieldset>
+  <fieldset><legend>Who can open it</legend>
+    <label><input type="radio" name="reach" value="computer" checked> This computer only</label>
+    <label><input type="radio" name="reach" value="network"> Other devices on my home network</label>
+    <label><input type="radio" name="reach" value="web"> A web address of its own (https)</label>
+    <div data-when="reach=web" hidden>
+      <label class="field">The address, already pointing at this computer <input name="web_address" placeholder="home.example.com" autocomplete="off" inputmode="url"></label>
+    </div>
+  </fieldset>
+  <fieldset><legend>The rest</legend>
+    <label class="field">Port on this computer <input name="port" type="number" min="1" max="65535" value="8020"></label>
+    <label class="field">Sign out after this many minutes unused (0: never) <input name="idle" type="number" min="0" max="1440" value="15"></label>
+    <label><input type="checkbox" name="media"> I run Jellyfin, Emby or Immich on this same computer</label>
+  </fieldset>
+</form>
+<h2>Your setup file</h2>
+<div class="file">
+  <textarea id="compose" readonly rows="22" spellcheck="false" aria-label="docker-compose.yml"># Made with the setup builder at lifeis.living/docs/install
+name: lifeis
+
+services:
+  lifeis:
+    image: ghcr.io/lconthehub/lifeis:latest
+    ports:
+      - "127.0.0.1:8020:8008"     # this computer only
+    volumes:
+      - lifeis_data:/data        # your records, encrypted
+      - lifeis_keys:/keys        # the key that opens them, kept apart
+    environment:
+      - SESSION_IDLE_MINUTES=15
+    restart: unless-stopped
+
+volumes:
+  lifeis_data:
+  lifeis_keys:
+</textarea>
+  <p><button type="button" id="copy-compose">Copy</button> <button type="button" id="download-compose">Download docker-compose.yml</button></p>
+</div>
+<h2>Start it</h2>
+<ol id="steps"><li>Save the file above as <code>docker-compose.yml</code> in your Life Is folder.</li><li>Open a terminal in that folder and run <code>docker compose up -d</code>.</li><li>On this computer, open <a href="http://localhost:8020">http://localhost:8020</a> and make your account.</li></ol>
+<h2>What the choices mean</h2>
+<h3>Where your records are kept</h3>
+<p><strong>Kept by Docker</strong> is the simplest: Docker looks after two named stores. Never run <code>docker compose down -v</code>: the <code>-v</code> deletes them.</p>
+<p><strong>In folders you choose</strong> puts your records where you can see them and copy them. Pick one folder for the records and another for the keys. Keep both: one is no use without the other.</p>
+<h3>Who can open it</h3>
+<p><strong>This computer only</strong> is the safest, and the default.</p>
+<p><strong>Other devices on my home network</strong> lets a phone or tablet at home open it, at this computer's address.</p>
+<p><strong>A web address of its own</strong> adds a small web server (Caddy) that gets a certificate by itself, so Life Is opens at <code>https://</code> your address from anywhere. The address must already point at this computer, and ports 80 and 443 must reach it. Life Is is then on the public internet, behind your password. The first account is still made on this computer itself.</p>
+<h2>Updating</h2>
+<p>Run these two in the folder with your setup file. Your records stay.</p>
+<p><code>docker compose pull</code></p>
+<p><code>docker compose up -d</code></p>
+<p>Life Is saves a copy of its database by itself before each upgrade.</p>
+<h2>What's next</h2>
+<p><a href="getting-started.html">Get started</a>: make your account and do the three things worth doing on day one.</p>
+<script src="setup.js"></script>
+<p class="next">Next: <a href="home.html">Your home</a></p>
+</main>
+</div>
+<footer><a href="../">Life Is</a> · <a href="../privacy">Privacy policy</a> · <a href="mailto:hello@lifeis.living">hello@lifeis.living</a></footer>
+</body>
+</html>

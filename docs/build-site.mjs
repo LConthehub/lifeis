@@ -1,7 +1,7 @@
-// Makes the small public website (docs/site) from the words in this folder: a front page and the privacy
-// policy. Plain pages with nothing loaded from anywhere else, so they can be put on any web host as they are.
+// Makes the public website (docs/site) from the words in this folder: a front page, the privacy policy, and
+// the guides in docs/guide (one text file each), with a setup builder on the install page. Plain pages with nothing loaded from anywhere else, so they can be put on any web host as they are.
 //   node docs/build-site.mjs
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,6 +11,7 @@ mkdirSync(out, { recursive: true });
 
 const safe = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const inline = (text) => safe(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>')
+  .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>')
   .replace(/([A-Za-z0-9._-]+@[A-Za-z0-9.-]+\.[a-z]{2,})/g, '<a href="mailto:$1">$1</a>');
 
 /** The little of Markdown these pages use: headings, paragraphs, bullets and tables. */
@@ -22,6 +23,15 @@ function html(markdown) {
     if (!line.trim()) continue;
     const heading = /^(#{1,3}) (.+)$/.exec(line);
     if (heading) { parts.push(`<h${heading[1].length}>${inline(heading[2])}</h${heading[1].length}>`); continue; }
+    // A line that is only {{name}} is a place for something made elsewhere (the setup builder).
+    if (/^\{\{\w+\}\}$/.test(line.trim())) { parts.push(line.trim()); continue; }
+    if (/^\d+\. /.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\d+\. /.test(lines[i])) { items.push(`<li>${inline(lines[i].replace(/^\d+\. /, ''))}</li>`); i += 1; }
+      i -= 1;
+      parts.push(`<ol>${items.join('')}</ol>`);
+      continue;
+    }
     if (line.startsWith('- ')) {
       const items = [];
       while (i < lines.length && lines[i].startsWith('- ')) { items.push(`<li>${inline(lines[i].slice(2))}</li>`); i += 1; }
@@ -38,7 +48,7 @@ function html(markdown) {
       continue;
     }
     const words = [line];
-    while (i + 1 < lines.length && lines[i + 1].trim() && !/^(#|- |\|)/.test(lines[i + 1])) { i += 1; words.push(lines[i]); }
+    while (i + 1 < lines.length && lines[i + 1].trim() && !/^(#|- |\||\d+\. |\{\{)/.test(lines[i + 1])) { i += 1; words.push(lines[i]); }
     parts.push(`<p>${inline(words.join(' '))}</p>`);
   }
   return parts.join('\n');
@@ -150,6 +160,7 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
     <a href="#what">What it does</a>
     <a href="#yours">Your data</a>
     <a href="#price">Price</a>
+    <a href="docs/">Guides</a>
     <a class="pill" href="${DEMO}">Try the demo</a>
   </div>
   <div class="wrap" style="padding:0">
@@ -189,12 +200,155 @@ ${shots.length > 1 ? `<div class="shots">\n${shots.slice(1).map(([file, caption]
     <ul class="plain"><li>Run Life Is at home and open it from any browser</li><li>Every part included</li><li>Share it with the people you live with, each with their own sign-in</li></ul></div>
 </div>
 <p class="center"><a class="button" href="${DEMO}">Try the demo</a><br><span style="color:var(--soft);font-size:.95rem">A made-up household, reset every night. No sign-up.</span></p>
-<p class="lede" style="text-align:center;margin:0 auto">The app is on its way to the app stores.</p>
+<p class="lede" style="text-align:center;margin:0 auto">The app is on its way to the app stores. <a href="docs/">Read the guides</a> to see how it all works.</p>
 </div>
 <footer>
-  <a href="privacy">Privacy policy</a> · Questions: <a href="mailto:hello@lifeis.living">hello@lifeis.living</a>
+  <a href="docs/">Guides</a> · <a href="privacy">Privacy policy</a> · Questions: <a href="mailto:hello@lifeis.living">hello@lifeis.living</a>
 </footer>
 </body>
 </html>
 `);
-console.log('The website is in docs/site');
+
+// ---------- the guides ----------
+
+/** Whether Life Is for your own computer can be downloaded yet. Until it can, the install page says so. */
+const RELEASED = false;
+const IMAGE = 'ghcr.io/lconthehub/lifeis:latest';
+// The order the guides are listed in.
+const GUIDES = ['getting-started', 'install', 'home', 'records', 'upkeep', 'kitchen', 'pets-and-manual', 'reminders', 'phone', 'your-data', 'troubleshooting'];
+
+const guideDir = path.join(here, 'guide');
+const guides = GUIDES.filter((slug) => existsSync(path.join(guideDir, `${slug}.md`))).map((slug) => {
+  const text = readFileSync(path.join(guideDir, `${slug}.md`), 'utf8').replace(/\r\n/g, '\n');
+  const front = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? '';
+  const meta = Object.fromEntries(front.split('\n').map((l) => /^(\w+):\s*(.+)$/.exec(l)).filter(Boolean).map((m) => [m[1], m[2]]));
+  return { slug, title: meta.title ?? slug, blurb: meta.blurb ?? '', body: html(text) };
+});
+for (const file of readdirSync(guideDir)) {
+  if (file.endsWith('.md') && !GUIDES.includes(file.slice(0, -3))) console.warn(`docs/guide/${file} is not listed in GUIDES, so it has no page`);
+}
+
+const BUILDER = `<p id="no-script" class="note">This builder needs JavaScript. Without it, copy the file below as it is: it works without any changes.</p>
+<form id="setup" class="builder" data-image="${IMAGE}" onsubmit="return false">
+  <fieldset><legend>Where your records are kept</legend>
+    <label><input type="radio" name="store" value="docker" checked> Kept by Docker (simplest)</label>
+    <label><input type="radio" name="store" value="folders"> In folders I choose</label>
+    <div data-when="store=folders" hidden>
+      <label class="field">Folder for your records <input name="data_folder" placeholder="D:/lifeis/data or /home/me/lifeis/data" autocomplete="off"></label>
+      <label class="field">Folder for the keys <input name="keys_folder" placeholder="D:/lifeis/keys or /home/me/lifeis/keys" autocomplete="off"></label>
+    </div>
+  </fieldset>
+  <fieldset><legend>Who can open it</legend>
+    <label><input type="radio" name="reach" value="computer" checked> This computer only</label>
+    <label><input type="radio" name="reach" value="network"> Other devices on my home network</label>
+    <label><input type="radio" name="reach" value="web"> A web address of its own (https)</label>
+    <div data-when="reach=web" hidden>
+      <label class="field">The address, already pointing at this computer <input name="web_address" placeholder="home.example.com" autocomplete="off" inputmode="url"></label>
+    </div>
+  </fieldset>
+  <fieldset><legend>The rest</legend>
+    <label class="field">Port on this computer <input name="port" type="number" min="1" max="65535" value="8020"></label>
+    <label class="field">Sign out after this many minutes unused (0: never) <input name="idle" type="number" min="0" max="1440" value="15"></label>
+    <label><input type="checkbox" name="media"> I run Jellyfin, Emby or Immich on this same computer</label>
+  </fieldset>
+</form>
+<h2>Your setup file</h2>
+<div class="file">
+  <textarea id="compose" readonly rows="22" spellcheck="false" aria-label="docker-compose.yml"># Made with the setup builder at lifeis.living/docs/install
+name: lifeis
+
+services:
+  lifeis:
+    image: ${IMAGE}
+    ports:
+      - "127.0.0.1:8020:8008"     # this computer only
+    volumes:
+      - lifeis_data:/data        # your records, encrypted
+      - lifeis_keys:/keys        # the key that opens them, kept apart
+    environment:
+      - SESSION_IDLE_MINUTES=15
+    restart: unless-stopped
+
+volumes:
+  lifeis_data:
+  lifeis_keys:
+</textarea>
+  <p><button type="button" id="copy-compose">Copy</button> <button type="button" id="download-compose">Download docker-compose.yml</button></p>
+</div>`;
+const STEPS = `<ol id="steps"><li>Save the file above as <code>docker-compose.yml</code> in your Life Is folder.</li><li>Open a terminal in that folder and run <code>docker compose up -d</code>.</li><li>On this computer, open <a href="http://localhost:8020">http://localhost:8020</a> and make your account.</li></ol>`;
+const NOT_YET = RELEASED ? '' : `<p class="note"><strong>Not released yet.</strong> Life Is for your own computer comes out with the app. This page already makes the file you will use, so you can see what is involved; it will not start until then. Meanwhile, <a href="https://demo.lifeis.living">try the demo</a>.</p>`;
+
+const docPage = (guide) => `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="${safe(guide.blurb)}">
+<title>${safe(guide.title)} · Life Is</title>
+<link rel="icon" href="../icon.png">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../"><img src="../icon.png" alt=""> Life Is</a>
+  <a href="./">Guides</a>
+  <a class="pill" href="https://demo.lifeis.living">Try the demo</a>
+</header>
+<div class="layout">
+<nav class="menu" aria-label="Guides">
+${guides.map((g) => `  <a href="${g.slug}.html"${g.slug === guide.slug ? ' aria-current="page"' : ''}>${safe(g.title)}</a>`).join('\n')}
+</nav>
+<main>
+${guide.body.replace('{{builder}}', BUILDER).replace('{{steps}}', STEPS).replace('{{released}}', NOT_YET)}
+${guide.slug === 'install' ? '<script src="setup.js"></script>' : ''}
+<p class="next">${(() => { const next = guides[guides.indexOf(guide) + 1]; return next && guide.slug !== 'index' ? `Next: <a href="${next.slug}.html">${safe(next.title)}</a>` : ''; })()}</p>
+</main>
+</div>
+<footer><a href="../">Life Is</a> · <a href="../privacy">Privacy policy</a> · <a href="mailto:hello@lifeis.living">hello@lifeis.living</a></footer>
+</body>
+</html>
+`;
+
+const docsOut = path.join(out, 'docs');
+mkdirSync(docsOut, { recursive: true });
+for (const guide of guides) writeFileSync(path.join(docsOut, `${guide.slug}.html`), docPage(guide));
+writeFileSync(path.join(docsOut, 'index.html'), docPage({ slug: 'index', title: 'Guides', blurb: 'How Life Is works, part by part.',
+  body: `<h1>Guides</h1>\n<p>How Life Is works, part by part. New here? Start with the first one, or <a href="https://demo.lifeis.living">try the demo</a> and come back when you have a question.</p>\n<div class="cards">\n${
+    guides.map((g) => `  <a href="${g.slug}.html"><b>${safe(g.title)}</b><span>${safe(g.blurb)}</span></a>`).join('\n')}\n</div>` }));
+copyFileSync(path.join(here, 'site-src', 'setup.js'), path.join(docsOut, 'setup.js'));
+writeFileSync(path.join(docsOut, 'docs.css'), `:root { --ink: #1f2d33; --soft: #5b6b72; --paper: #fbfaf7; --card: #ffffff; --line: #dfe5e3; --deep: #264653; --teal: #2a9d8f; }
+@media (prefers-color-scheme: dark) { :root { --ink: #e9efee; --soft: #a3b3b5; --paper: #14201f; --card: #1b2b2b; --line: #2b3b3c; --teal: #6cc5b8; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--teal); }
+.top { background: linear-gradient(120deg, var(--deep), #2a9d8f); color: #fff; padding: .7rem 1.1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.top a { color: #fff; text-decoration: none; opacity: .92; } .top .brand { font-weight: 700; font-size: 1.1rem; margin-right: auto; display: flex; align-items: center; gap: .5rem; opacity: 1; }
+.top img { width: 1.8rem; height: 1.8rem; border-radius: .45rem; } .pill { background: rgba(255,255,255,.2); border-radius: 999px; padding: .25rem .9rem; font-weight: 600; }
+.layout { max-width: 64rem; margin: 0 auto; padding: 1.5rem 1.1rem 3rem; display: grid; gap: 2rem; grid-template-columns: 14rem minmax(0, 1fr); }
+.menu { display: flex; flex-direction: column; gap: .15rem; align-self: start; position: sticky; top: 1rem; font-size: .95rem; }
+.menu a { padding: .3rem .7rem; border-radius: .5rem; text-decoration: none; color: var(--ink); }
+.menu a[aria-current] { background: var(--teal); color: #fff; font-weight: 600; } .menu a:hover { background: var(--line); } .menu a[aria-current]:hover { background: var(--teal); }
+@media (max-width: 46rem) { .layout { grid-template-columns: 1fr; gap: 1rem; } .menu { position: static; flex-direction: row; flex-wrap: wrap; } .menu a { background: var(--card); border: 1px solid var(--line); } }
+main { min-width: 0; }
+h1 { font-size: 1.8rem; line-height: 1.2; margin: 0 0 .8rem; } h2 { font-size: 1.25rem; margin: 2.2rem 0 .4rem; color: var(--deep); } h3 { font-size: 1.05rem; margin: 1.5rem 0 .3rem; }
+@media (prefers-color-scheme: dark) { h2 { color: var(--teal); } }
+p, ul, ol { margin: .6rem 0; } ul, ol { padding-left: 1.3rem; } li { margin: .25rem 0; }
+code { background: var(--line); border-radius: .3rem; padding: .05rem .35rem; font-size: .92em; }
+.wide { overflow-x: auto; } table { border-collapse: collapse; width: 100%; font-size: .94rem; }
+th, td { text-align: left; vertical-align: top; padding: .5rem .6rem; border-bottom: 1px solid var(--line); }
+.cards { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); margin-top: 1.2rem; }
+.cards a { background: var(--card); border: 1px solid var(--line); border-radius: .9rem; padding: .9rem 1rem; text-decoration: none; color: var(--ink); display: block; }
+.cards a:hover { border-color: var(--teal); } .cards b { display: block; color: var(--teal); } .cards span { font-size: .92rem; color: var(--soft); }
+.note { background: #fbf0d3; color: #5b3a12; border-radius: .7rem; padding: .7rem .9rem; }
+.builder { background: var(--card); border: 1px solid var(--line); border-radius: .9rem; padding: .4rem 1rem 1rem; }
+.builder fieldset { border: 0; padding: 0; margin: 1rem 0 0; } .builder legend { font-weight: 700; padding: 0; }
+.builder label { display: block; margin: .35rem 0; } .builder .field { font-size: .92rem; color: var(--soft); }
+.builder input:not([type=radio]):not([type=checkbox]) { display: block; width: 100%; max-width: 30rem; margin-top: .2rem; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: .5rem; font: inherit; background: var(--paper); color: var(--ink); }
+.builder input[type=number] { max-width: 9rem; } .builder [data-when] { margin: .3rem 0 .3rem 1.6rem; }
+.file textarea { width: 100%; font: 13.5px/1.5 ui-monospace, Consolas, monospace; padding: .8rem; border: 1px solid var(--line); border-radius: .7rem; background: #14201f; color: #e9efee; white-space: pre; overflow-x: auto; resize: vertical; }
+button { font: inherit; font-weight: 600; background: var(--teal); color: #fff; border: 0; border-radius: 999px; padding: .5rem 1.1rem; cursor: pointer; margin-right: .4rem; }
+.next { margin-top: 2.5rem; font-weight: 600; }
+footer { border-top: 1px solid var(--line); padding: 1.3rem 1.1rem 2.5rem; font-size: .9rem; color: var(--soft); text-align: center; }
+`);
+console.log(`The website is in docs/site: a front page, the privacy policy and ${guides.length} guides`);

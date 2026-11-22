@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="When something does not open, scan or arrive.">
+<title>Troubleshooting · Life Is</title>
+<link rel="icon" href="../icon.png">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../"><img src="../icon.png" alt=""> Life Is</a>
+  <a href="./">Guides</a>
+  <a class="pill" href="https://demo.lifeis.living">Try the demo</a>
+</header>
+<div class="layout">
+<nav class="menu" aria-label="Guides">
+  <a href="getting-started.html">Get started</a>
+  <a href="install.html">Install with Docker</a>
+  <a href="home.html">Your home</a>
+  <a href="records.html">Home records</a>
+  <a href="upkeep.html">Upkeep</a>
+  <a href="kitchen.html">The kitchen</a>
+  <a href="pets-and-manual.html">Pets and the house manual</a>
+  <a href="reminders.html">Reminders</a>
+  <a href="phone.html">On your phone</a>
+  <a href="your-data.html">Your data</a>
+  <a href="troubleshooting.html" aria-current="page">Troubleshooting</a>
+</nav>
+<main>
+<h1>Troubleshooting</h1>
+<h2>Life Is does not open</h2>
+<ul><li><strong>On a computer you run:</strong> is Docker running? Open a terminal in the folder with your <code>docker-compose.yml</code> and run <code>docker compose ps</code>. Start it with <code>docker compose up -d</code>.</li><li><strong>After a restart of the computer:</strong> Docker Desktop may need opening before Life Is comes back.</li><li><strong>From another device:</strong> a Life Is set to answer "this computer only" will not answer your phone. See <a href="install.html">Install</a>.</li></ul>
+<h2>I cannot make the first account</h2>
+<p>The first account can only be made on the computer Life Is runs on, at <code>http://localhost:8020</code> (or the port you chose). That is deliberate: otherwise whoever found the address first could make themselves the admin.</p>
+<h2>I forgot my password</h2>
+<p>Nobody can reset it for you, and that is deliberate too: there is no back door, for you or for anyone else. Keep your password somewhere safe, such as a password manager. If someone else in your Life Is forgets theirs, the admin can add them again as a new person.</p>
+<h2>The camera will not scan</h2>
+<ul><li>In a browser the camera works only over <strong>https</strong>, or on the computer itself.</li><li>Allow the camera for the site in your browser's settings.</li><li>Typing the number under the barcode always works.</li></ul>
+<h2>A barcode was not found</h2>
+<p>Look-ups are off until you turn them on. When one is on and still finds nothing, the catalogue does not know that barcode: type the name, and Life Is keeps the barcode for next time. Numbers that shops print themselves, on things they weigh or label, mean nothing anywhere else and are not looked up.</p>
+<h2>A reminder did not arrive</h2>
+<ul><li>Reminders go only on days there is something to say.</li><li>Use <strong>Send one now</strong> under Settings › Reminders to test each way.</li><li>Browser reminders need Life Is opened over https, and the browser allowed to show notifications.</li></ul>
+<h2>It was signed out</h2>
+<p>Life Is signs out after a while unused. Change how long under <strong>Settings › Account</strong>.</p>
+<h2>Something else</h2>
+<p>Write to <a href="mailto:hello@lifeis.living">hello@lifeis.living</a>.</p>
+
+<p class="next"></p>
+</main>
+</div>
+<footer><a href="../">Life Is</a> · <a href="../privacy">Privacy policy</a> · <a href="mailto:hello@lifeis.living">hello@lifeis.living</a></footer>
+</body>
+</html>
