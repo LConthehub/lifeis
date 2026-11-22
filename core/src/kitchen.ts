@@ -24,6 +24,7 @@ import type {
 import { Problem } from './problem.ts';
 import { addDays, clean, dayNumber, inOrder, labelKey, rounded, stamp, todayOf, type Clock } from './small.ts';
 import { cut, folderName, linesAsText, readImport, splitLines, TEXT_LIMIT, toSchemaOrg, type TextLine } from './recipeText.ts';
+import { MAX_PASTED_GROCERIES, readGroceryList, readRecipeFile, recipeKey, type RecipeFile, type Unread } from './recipeFiles.ts';
 import * as units from './units.ts';
 
 export const MEALS: readonly string[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -296,6 +297,55 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
     return rows.map((row) => ({ ...row, done: Boolean(row.done), from_plan: Boolean(row.from_plan), amount: units.amount(row.quantity, row.unit) }));
   }
 
+  /** One typed grocery line, read: "2 lb chicken thighs" is an amount, a unit and a name, as in a recipe. */
+  function groceryLine(body: { label: string; quantity?: number | null; unit?: string | null }) {
+    const text = clean(body.label, 200);
+    if (!text) throw new Problem(400, 'Say what to buy');
+    const parsed = units.parseLine(text);
+    return {
+      parsed, name: parsed.name || text,
+      quantity: body.quantity ?? parsed.quantity,
+      unit: body.unit ? units.canonical(body.unit) : parsed.unit,
+    };
+  }
+
+  /** Put one read line on the list: the one place a grocery line is made. */
+  async function putOnList(q: Queries, line: ReturnType<typeof groceryLine>, ingredient: number | null) {
+    await q.run('INSERT INTO grocery (owner_id, ingredient_id, label, quantity, unit, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [owner, ingredient, cut(line.name, 200), line.quantity, line.unit, line.parsed.note, now()]);
+  }
+
+  /** The things on the list not yet bought, by the ingredient's name, as the list tells "already there". */
+  async function openOnList(q: Queries): Promise<Set<string>> {
+    const rows = await q.all<{ key: string }>(
+      'SELECT i.key FROM grocery g JOIN ingredients i ON i.id = g.ingredient_id WHERE g.owner_id = ? AND g.done = 0', [owner]);
+    return new Set(rows.map((row) => row.key));
+  }
+
+  /** Recipes already kept, by name and first ingredient (recipeFiles.ts says why those two). */
+  async function keptRecipeKeys(q: Queries): Promise<Set<string>> {
+    const rows = await q.all<{ title: string; first: string | null }>(
+      `SELECT r.title, (SELECT l.text FROM recipe_lines l WHERE l.recipe_id = r.id AND l.part = 'ingredients' AND l.is_heading = 0
+        ORDER BY l.sort_order LIMIT 1) AS first FROM recipes r WHERE r.owner_id = ?`, [owner]);
+    return new Set(rows.map((row) => recipeKey(row.title, row.first)));
+  }
+
+  /** Each recipe read from a file that Life Is can keep, and each that it can't, with why. */
+  function recipesFromFile(file: RecipeFile) {
+    const read = readRecipeFile(file);
+    const failed: Unread[] = [...read.failed];
+    const recipes: { name: string; input: RecipeInput; key: string }[] = [];
+    for (const one of read.recipes) {
+      try {
+        recipeValues(one.input); // the checks saving makes, so a recipe that would be refused is named now
+        recipes.push({ ...one, key: recipeKey(one.input.title, one.input.ingredients_text) });
+      } catch (problem) {
+        failed.push({ name: one.name, why: problem instanceof Problem ? problem.message : "It couldn't be read" });
+      }
+    }
+    return { recipes, failed };
+  }
+
   function planWindow(start: string, days: number): [string, string] {
     if (!(Number.isInteger(days) && days >= 1 && days <= 62)) throw new Problem(400, '1 to 62 days');
     return [start, addDays(start, days - 1)];
@@ -376,6 +426,38 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
         const recipes: Recipe[] = [];
         for (const recipe of found) recipes.push(await readRecipe(tx, await createIn(tx, recipe)));
         return { imported: recipes.length, recipes };
+      });
+    },
+
+    /**
+     * What a file from another app holds, and nothing kept: how many recipes, the first few by name, how many
+     * are in Life Is already (the same name and first ingredient), and any that couldn't be read.
+     */
+    async lookOverRecipeFile(file: RecipeFile): Promise<{ found: number; first: string[]; already: number; fresh: number; failed: Unread[] }> {
+      const { recipes, failed } = recipesFromFile(file);
+      const kept = await keptRecipeKeys(db);
+      let already = 0;
+      for (const one of recipes) {
+        if (kept.has(one.key)) already += 1;
+        else kept.add(one.key); // the same recipe twice in one file is one new recipe
+      }
+      return { found: recipes.length + failed.length, first: recipes.slice(0, 8).map((one) => one.name), already, fresh: recipes.length - already, failed };
+    },
+
+    /** Keep the new recipes of a file from another app, all in one change. Bringing the same file in again adds nothing. */
+    async bringInRecipeFile(file: RecipeFile): Promise<{ found: number; added: number; already: number; failed: Unread[] }> {
+      const { recipes, failed } = recipesFromFile(file);
+      return atomic(db, async (tx) => {
+        const kept = await keptRecipeKeys(tx);
+        let added = 0;
+        let already = 0;
+        for (const one of recipes) {
+          if (kept.has(one.key)) { already += 1; continue; }
+          await createIn(tx, one.input);
+          kept.add(one.key);
+          added += 1;
+        }
+        return { found: recipes.length + failed.length, added, already, failed };
       });
     },
 
@@ -519,17 +601,46 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
 
     /** Something to buy, typed in. "2 lb chicken thighs" is read like a recipe line. */
     async addGrocery(body: { label: string; quantity?: number | null; unit?: string | null }): Promise<GroceryItem[]> {
-      const text = clean(body.label, 200);
-      if (!text) throw new Problem(400, 'Say what to buy');
-      const parsed = units.parseLine(text);
-      const quantity = body.quantity ?? parsed.quantity;
-      const unit = body.unit ? units.canonical(body.unit) : parsed.unit;
-      const name = parsed.name || text;
+      const line = groceryLine(body);
       return atomic(db, async (tx) => {
-        const ingredient = await ingredientId(tx, name);
-        await tx.run('INSERT INTO grocery (owner_id, ingredient_id, label, quantity, unit, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [owner, ingredient, cut(name, 200), quantity, unit, parsed.note, now()]);
+        await putOnList(tx, line, await ingredientId(tx, line.name));
         return groceryRows(tx);
+      });
+    },
+
+    /**
+     * A list pasted in (from Notes, a message, an email), read and checked against the list, and nothing
+     * added. Each line says what it would become and whether it's already on the list (or earlier in the paste).
+     */
+    async lookOverGroceries(pasted: string): Promise<{ lines: { text: string; label: string; amount: string | null; note: string | null; already: boolean }[] }> {
+      const seen = await openOnList(db);
+      const lines = readGroceryList(pasted).map((text) => {
+        const line = groceryLine({ label: text });
+        const key = units.nameKey(line.name);
+        const already = key !== '' && seen.has(key);
+        if (key) seen.add(key);
+        return { text, label: cut(line.name, 200), amount: line.quantity !== null ? units.amount(line.quantity, line.unit) : null, note: line.parsed.note, already };
+      });
+      return { lines };
+    },
+
+    /** Put each line on the list as if typed, skipping what's on it already. All of them, or none. */
+    async addGroceries(texts: string[]): Promise<{ items: GroceryItem[]; added: number; already: number }> {
+      if (texts.length > MAX_PASTED_GROCERIES) throw new Problem(400, `That's more than ${MAX_PASTED_GROCERIES} things. Add it in two parts.`);
+      const lines = texts.filter((text) => text.trim()).map((text) => groceryLine({ label: text }));
+      return atomic(db, async (tx) => {
+        const onList = await openOnList(tx);
+        let added = 0;
+        let already = 0;
+        for (const line of lines) {
+          const ingredient = await ingredientId(tx, line.name);
+          const key = units.nameKey(line.name);
+          if (key && onList.has(key)) { already += 1; continue; }
+          await putOnList(tx, line, ingredient);
+          if (key) onList.add(key);
+          added += 1;
+        }
+        return { items: await groceryRows(tx), added, already };
       });
     },
 

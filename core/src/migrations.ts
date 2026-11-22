@@ -936,6 +936,42 @@ export const MIGRATIONS: Migration[] = [
       ),
     ],
   },
+  {
+    // Recall alerts for cars: the recalls NHTSA lists for a car's make, model and year, each kept once per car
+    // (so one the person has dismissed stays dismissed), and what the last check of each car found.
+    number: 32,
+    name: 'Recall alerts for cars',
+    statements: [
+      `CREATE TABLE vehicle_recalls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        campaign TEXT NOT NULL,
+        component TEXT,
+        summary TEXT,
+        consequence TEXT,
+        remedy TEXT,
+        park_it INTEGER NOT NULL DEFAULT 0,
+        park_outside INTEGER NOT NULL DEFAULT 0,
+        over_the_air INTEGER NOT NULL DEFAULT 0,
+        reported_on TEXT,
+        looked_up TEXT NOT NULL,
+        first_seen_at TEXT NOT NULL,
+        dismissed_at TEXT,
+        UNIQUE (owner_id, item_id, campaign)
+      )`,
+      `CREATE INDEX idx_vehicle_recalls_item ON vehicle_recalls(item_id)`,
+      `CREATE TABLE recall_checks (
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        looked_up TEXT NOT NULL,
+        checked_at TEXT NOT NULL,
+        result TEXT NOT NULL CHECK(result IN ('ok', 'not_listed', 'failed')),
+        message TEXT,
+        PRIMARY KEY (owner_id, item_id)
+      )`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

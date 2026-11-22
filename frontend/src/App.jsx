@@ -23,10 +23,12 @@ import Thing from './pages/Thing';
 import Activities from './pages/Activities';
 import Search from './components/Search';
 import HomeReport from './pages/HomeReport';
+import WalkThrough from './pages/WalkThrough';
 import PetsPage, { PetPage } from './pages/Pets';
 import ManualPage from './pages/Manual';
 import PackingPage from './pages/Packing';
 import UpkeepPage, { JobPage } from './pages/Upkeep';
+import ChoreChart from './pages/ChoreChart';
 import { ThingStickersPage, ThingStickerLanding } from './pages/ThingStickers';
 import AccessNote from './components/AccessNote';
 import Money from './pages/Money';
@@ -156,8 +158,10 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/things/places/stickers" element={<StickersPage />} />
           <Route path="/things/places/:id" element={<PlacePage />} />
           <Route path="/things/places/:id/fill" element={<FillPlace />} />
+          <Route path="/things/places/:id/walk" element={<WalkThrough />} />
           <Route path="/things/activities" element={<Activities />} />
           <Route path="/things/upkeep" element={<UpkeepPage />} />
+          <Route path="/things/upkeep/chart" element={<ChoreChart />} />
           <Route path="/things/upkeep/:id" element={<JobPage />} />
           <Route path="/things/stickers" element={<ThingStickersPage />} />
           <Route path="/things/report" element={<HomeReport />} />

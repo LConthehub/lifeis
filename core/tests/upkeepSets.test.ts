@@ -42,7 +42,9 @@ describe('the ready-made sets', () => {
         const made = await jobs.create(j);
         expect(made.name).toBe(j.name);
         expect(made.kind).toBe(j.kind);
-        expect(made.due.state).not.toBe('unscheduled');
+        // A renewal whose date is the person's to set asks for it; every other job has a day to be due on.
+        if (j.first === 'yours') expect(made.due).toMatchObject({ state: 'unscheduled', needs_date: true });
+        else expect(made.due.state).not.toBe('unscheduled');
         count++;
       }
     }
@@ -79,6 +81,60 @@ describe('the ready-made sets', () => {
   it('count from today: the day itself is today, the day after is next year', () => {
     const taxes = (today: string) => readySets(today).find((s) => s.slug === 'papers')!.jobs[0]!.first_due;
     expect([taxes('2046-04-15'), taxes('2046-04-16'), taxes('2046-12-31')]).toEqual(['2046-04-15', '2047-04-15', '2047-04-15']);
+  });
+});
+
+describe('when a set job is first due', () => {
+  const find = (today: string, set: string, name: string) => readySets(today).find((s) => s.slug === set)!.jobs.find((j) => j.name === name)!;
+
+  it('with no fixed day, one round from the day it is added, and it says how it was found', () => {
+    expect(find('2046-03-05', 'house', 'Flush the water heater')).toMatchObject({ first_due: '2047-03-05', first: 'interval' });
+    expect(find('2046-03-05', 'house', 'Change the furnace filter')).toMatchObject({ first_due: '2046-06-05', first: 'interval' });
+    expect(find('2046-03-05', 'house', 'Test the smoke and CO alarms')).toMatchObject({ first_due: '2046-04-05', first: 'interval' });
+    expect(find('2046-08-31', 'health', 'Dentist checkup')).toMatchObject({ first_due: '2047-02-28', first: 'interval' });
+    expect(find('2046-03-05', 'health', 'Annual physical')).toMatchObject({ first_due: '2047-03-05', first: 'interval' });
+  });
+
+  it('a fixed day keeps its day, even when the job also has an interval', () => {
+    expect(find('2046-03-05', 'house', 'Service the furnace')).toMatchObject({ first_due: '2046-10-01', first: 'day' });
+    expect(find('2046-03-05', 'papers', 'File federal and state taxes')).toMatchObject({ first_due: '2046-04-15', first: 'day' });
+    expect(find('2046-03-05', 'house', 'Clean the gutters')).toMatchObject({ first_due: '2046-04-15', first: 'day' });
+  });
+
+  it('a job that goes by a reading alone is left as it was, and one that has both still goes by time too', () => {
+    expect(find('2046-03-05', 'car', 'Rotate the tires')).toMatchObject({ first_due: null, first: 'reading', every_n: null });
+    expect(find('2046-03-05', 'car', 'Change the oil')).toMatchObject({ first_due: '2046-09-05', first: 'interval', every_reading: 5000 });
+  });
+
+  it('a renewal with no date is left for the person to set', () => {
+    for (const name of ['Car registration', 'State inspection', 'Car insurance', 'Emissions test']) {
+      expect(find('2046-03-05', 'car', name), name).toMatchObject({ first_due: null, first: 'yours' });
+    }
+    expect(find('2046-03-05', 'papers', 'Passport')).toMatchObject({ first_due: null, first: 'yours' });
+  });
+
+  it('adding every set puts nothing late and nothing due today, and the undated renewals ask for a date', async () => {
+    for (const s of readySets('2046-03-05')) await jobs.addSet(s.slug);
+    const all = await jobs.list();
+    const pressing = all.filter((j) => j.due.state === 'overdue' || j.due.state === 'due');
+    expect(pressing.map((j) => j.name)).toEqual([]);
+    expect(all.find((j) => j.name === 'Flush the water heater')!.due).toMatchObject({ state: 'later', next_day: '2047-03-05', days_left: 365 });
+    const asking = all.filter((j) => j.due.needs_date).map((j) => j.name).sort();
+    expect(asking).toContain('Passport');
+    expect(asking).toContain('Car registration');
+    for (const j of all.filter((x) => x.due.needs_date)) expect(j.due).toMatchObject({ state: 'unscheduled', next_day: null, days_left: null });
+    // Once the person gives it a date, it is an ordinary renewal.
+    const passport = all.find((j) => j.name === 'Passport')!;
+    const dated = await jobs.update(passport.id, { name: 'Passport', kind: 'renewal', every_n: 10, every_unit: 'year', first_due: '2046-03-15' });
+    expect(dated.due).toMatchObject({ state: 'soon', days_left: 10 });
+    expect(dated.due.needs_date).toBeUndefined();
+  });
+
+  it('doing a job sooner counts from the day it was done', async () => {
+    await jobs.addSet('house');
+    const heater = (await jobs.list()).find((j) => j.name === 'Flush the water heater')!;
+    const done = await jobs.done(heater.id, { day: '2045-04-01' });
+    expect(done.job.due).toMatchObject({ next_day: '2046-04-01', state: 'later', days_left: 27 });
   });
 });
 

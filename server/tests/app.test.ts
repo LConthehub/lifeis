@@ -286,6 +286,35 @@ it('recipes download as a zip of Nextcloud Cookbook folders', async () => {
 
 // ---------- the pages ----------
 
+it('recipes from another app are looked over, brought in once, and a pasted grocery list is added as typed', async () => {
+  const admin = await owner();
+  const soup = { name: 'Tomato Soup', ingredients: '1 can tomatoes\n1 cup stock', directions: 'Simmer.', prep_time: '10 min', categories: ['Soup'], photo_data: 'AAAA' };
+  const file = { sources: [{ name: 'Tomato Soup', data: soup }, { name: 'Pancakes', data: { name: 'Pancakes', ingredients: '1 cup flour', directions: 'Fry.' } }, { name: 'Odd', data: 'x' }], unreadable: [{ name: 'Broken', why: 'It was damaged' }] };
+  const look = await admin.post('/api/kitchen/recipes/file/read', file);
+  expect([look.status, look.json]).toEqual([200, { found: 4, first: ['Tomato Soup', 'Pancakes'], already: 0, fresh: 2,
+    failed: [{ name: 'Broken', why: 'It was damaged' }, { name: 'Odd', why: "That isn't a recipe" }] }]);
+  expect((await admin.get('/api/kitchen/recipes')).json).toEqual([]);
+  const brought = await admin.post('/api/kitchen/recipes/file', file);
+  expect([brought.status, brought.json.added, brought.json.already]).toEqual([201, 2, 0]);
+  const listed = (await admin.get('/api/kitchen/recipes')).json;
+  expect(listed.map((r: { title: string }) => r.title)).toEqual(['Pancakes', 'Tomato Soup']);
+  expect((await admin.get(`/api/kitchen/recipes/${listed[1].id}`)).json).toMatchObject({ prep_minutes: 10, tags: ['soup'], ingredients_text: '1 can tomatoes\n1 cup stock', steps_text: 'Simmer.' });
+  expect((await admin.post('/api/kitchen/recipes/file', file)).json).toMatchObject({ added: 0, already: 2 });
+  expect((await admin.post('/api/kitchen/recipes/file', { sources: 'x' })).status).toBe(422);
+  expect((await admin.post('/api/kitchen/recipes/file', {})).status).toBe(400);
+
+  await admin.post('/api/kitchen/grocery', { label: 'Eggs' });
+  const pasted = 'Produce:\n- apples\n[ ] 2 lb chicken thighs\nmilk, eggs, bread\ntomatoes, diced';
+  const peek = (await admin.post('/api/kitchen/grocery/paste/read', { text: pasted })).json.lines;
+  expect(peek.map((l: { text: string; already: boolean }) => [l.text, l.already])).toEqual([['apples', false], ['2 lb chicken thighs', false], ['milk', false], ['eggs', true], ['bread', false], ['tomatoes, diced', false]]);
+  expect((await admin.get('/api/kitchen/grocery')).json).toHaveLength(1);
+  const added = await admin.post('/api/kitchen/grocery/paste', { lines: peek.map((l: { text: string }) => l.text) });
+  expect([added.status, added.json.added, added.json.already]).toEqual([201, 5, 1]);
+  expect(added.json.items.find((g: { label: string }) => g.label === 'chicken thighs')).toMatchObject({ quantity: 2, unit: 'lb' });
+  expect((await admin.post('/api/kitchen/grocery/paste/read', { text: 'Produce:' })).status).toBe(400);
+  expect((await admin.post('/api/kitchen/grocery/paste', { lines: 'milk' })).status).toBe(422);
+});
+
 it('the pages are served, and nothing outside their folder is', async () => {
   await stop();
   const built = path.join(folder, 'pages');
@@ -423,6 +452,16 @@ it('home records over the web: what a thing cost, its papers, and the home inven
   const other = await member(admin, 'partner');
   expect((await other.get(`/api/things/documents/${kept.json[0].id}`)).status).toBe(404);
   expect((await other.get('/api/things/report')).json.things).toBe(0);
+  // The inventory by room, and the same as a spreadsheet: a byte-order mark, a download name with the day, a known row.
+  expect((await admin.get('/api/things/report?rooms=0&min_cents=60000')).json.rooms).toEqual([]);
+  expect((await admin.get('/api/things/report?rooms=x')).status).toBe(422);
+  const sheet = await admin.get('/api/things/report.csv');
+  expect([sheet.status, sheet.headers.get('content-type'), sheet.headers.get('content-disposition')])
+    .toEqual([200, 'text/csv; charset=utf-8', expect.stringMatching(/^attachment; filename="home-inventory-\d{4}-\d{2}-\d{2}\.csv"$/)]);
+  expect([...sheet.bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+  expect(sheet.bytes.toString('utf8')).toContain('No place yet,,Television,Appliances,some,,SN-123,,,799.00,500.00,2099-01-01,no,yes\r\n');
+  expect((await admin.get('/api/things/report.csv?min_cents=lots')).status).toBe(422);
+  expect((await other.get('/api/things/report.csv')).bytes.toString('utf8')).not.toContain('Television');
   expect((await admin.delete(`/api/things/documents/${kept.json[0].id}`)).status).toBe(204);
 });
 
@@ -534,6 +573,55 @@ it('upkeep ready-made sets are listed, added with the jobs the person kept, and 
   expect((await admin.get('/api/things/upkeep')).json).toHaveLength(3);
   expect((await admin.post('/api/things/upkeep/sets', { slug: 'boat' })).status).toBe(404);
   expect((await admin.post('/api/things/upkeep/sets', { slug: 'yard', only: 'all' })).status).toBe(422);
+  // A job with no day of its own is first due a round from today, not today; one with a day keeps it.
+  const mower = (await admin.get('/api/things/upkeep')).json.find((j: { name: string }) => j.name === 'Clean the grill');
+  expect([mower.due.state, mower.first_due]).toEqual(['later', mower.due.next_day]);
+  const house = (await admin.post('/api/things/upkeep/sets', { slug: 'house', only: ['Flush the water heater'] })).json;
+  expect(house.added).toBe(1);
+  const heater = (await admin.get('/api/things/upkeep')).json.find((j: { name: string }) => j.name === 'Flush the water heater');
+  expect([heater.due.state, heater.due.days_left >= 364]).toEqual(['later', true]);
+  expect((await admin.get('/api/things/upkeep/sets')).json.find((s: { slug: string }) => s.slug === 'house').jobs.find((j: { name: string }) => j.name === 'Flush the water heater').first).toBe('interval');
+});
+
+it('upkeep: a chore chart for a week, and an allowance that can be marked paid', async () => {
+  const admin = await owner();
+  const leo = (await admin.post('/api/things/upkeep/members', { name: 'Leo' })).json[0];
+  await admin.put('/api/things/upkeep/points', { cents: 25 });
+  const day = new Date();
+  const today = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+  const dishes = (await admin.post('/api/things/upkeep', { name: 'Dishes', kind: 'chore', points: 3, assigned_member: leo.id, every_n: 1, every_unit: 'day' })).json;
+  await admin.post('/api/things/upkeep', { name: 'Vacuum', kind: 'chore', points: 5, every_n: 1, every_unit: 'week' });
+  await admin.post('/api/things/upkeep', { name: 'Change the filter', every_n: 1, every_unit: 'month' });
+
+  const chart = await admin.get('/api/things/upkeep/chart');
+  expect([chart.status, chart.json.days.length, chart.json.point_cents, chart.json.days.includes(chart.json.today)]).toEqual([200, 7, 25, true]);
+  expect(new Date(`${chart.json.week_start}T12:00:00`).getDay()).toBe(0); // Sunday
+  expect(chart.json.groups.map((g: { who: string | null }) => g.who)).toEqual(['Leo', null]);
+  expect(chart.json.groups[0].chores[0]).toMatchObject({ name: 'Dishes', points: 3, anytime: false });
+  expect(chart.json.groups[0].chores[0].days).toEqual(chart.json.days);
+  expect(chart.json.groups[1].chores.map((c: { name: string }) => c.name)).toEqual(['Vacuum']);
+  expect((await admin.get('/api/things/upkeep/chart?week=next&start_on=monday')).json.days[0] > chart.json.today).toBe(true);
+  expect((await admin.get('/api/things/upkeep/chart?week=soon')).status).toBe(400);
+
+  await admin.post(`/api/things/upkeep/${dishes.id}/done`, { day: today, by_member: leo.id });
+  const owed = (await admin.get('/api/things/upkeep/allowance?period=this_week')).json;
+  expect(owed.people).toHaveLength(1);
+  expect(owed.people[0]).toMatchObject({ name: 'Leo', points: 3, cents: 75, owing_points: 3, owing_cents: 75, paid_through: null });
+  expect((await admin.get('/api/things/upkeep/allowance?period=custom&from=2020-01-01&to=2020-01-31')).json.people[0]).toMatchObject({ points: 0, cents: 0 });
+  expect((await admin.get('/api/things/upkeep/allowance?period=custom&from=2020-02-01&to=2020-01-31')).status).toBe(400);
+  expect((await admin.get('/api/things/upkeep/allowance?period=never')).status).toBe(400);
+
+  const paid = await admin.post('/api/things/upkeep/allowance/paid', { member_id: leo.id });
+  expect([paid.status, paid.json[0]]).toEqual([201, expect.objectContaining({ name: 'Leo', points: 3, cents: 75 })]);
+  expect((await admin.get('/api/things/upkeep/allowance?period=this_week')).json.people[0]).toMatchObject({ paid_through: today, owing_points: 0, owing_cents: 0 });
+  expect((await admin.post('/api/things/upkeep/allowance/paid', { member_id: leo.id })).status).toBe(409);
+  expect((await admin.post('/api/things/upkeep/allowance/paid', {})).status).toBe(422);
+  expect((await admin.delete(`/api/things/upkeep/allowance/paid/${leo.id}`)).json).toEqual([]);
+  expect((await admin.get('/api/things/upkeep/allowance?period=this_week')).json.people[0]).toMatchObject({ paid_through: null, owing_points: 3 });
+  // Another person's household is theirs alone.
+  const partner = await member(admin, 'partner');
+  expect((await partner.get('/api/things/upkeep/allowance')).json.people).toEqual([]);
+  expect((await partner.post('/api/things/upkeep/allowance/paid', { member_id: leo.id })).status).toBe(404);
 });
 
 it('what Life Is looks after is asked once, and sets up what fits', async () => {
@@ -675,7 +763,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['manual_shares', 'manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.

@@ -38,6 +38,7 @@ export function PlacePage() {
           {place.note && <p className="text-sm text-gray-600 dark:text-life-100">{place.note}</p>}
         </div>
         <Link to={`/things/places/${id}/fill`} className={buttonClass}>📷 Fill this place</Link>
+        <Link to={`/things/places/${id}/walk`} className={quietButtonClass}>Walk through this room</Link>
         <Link to={`/things/places/stickers?only=${id}`} className={quietButtonClass}>Print its sticker</Link>
         {things.length > 0 && <Link to={`/things/stickers?place=${id}`} className={quietButtonClass}>Stickers for what's here</Link>}
       </div>

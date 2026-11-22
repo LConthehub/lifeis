@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { inApp } from '../where';
+import RecipeFile from '../components/RecipeFile';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, minutesText, toDateInput } from '../components/ui';
 
 /** The recipe box: search, tags, add, paste in, export. */
@@ -77,7 +78,7 @@ export default function Recipes() {
   );
 }
 
-const WAYS = [['web', 'From a website'], ['photo', 'From a photo or a book'], ['text', 'Paste the text']];
+const WAYS = [['web', 'From a website'], ['photo', 'From a photo or a book'], ['text', 'Paste the text'], ['file', 'Many, from another app']];
 
 /** A recipe from somewhere else: a web page, a photo of a page or a card, or text pasted in. */
 function BringIn({ onDraft, onDone }) {
@@ -93,6 +94,7 @@ function BringIn({ onDraft, onDone }) {
       {way === 'web' && <FromWeb onDraft={onDraft} />}
       {way === 'photo' && <FromPhoto onDraft={onDraft} />}
       {way === 'text' && <ImportForm onDone={onDone} />}
+      {way === 'file' && <RecipeFile onDone={() => onDone([])} />}
     </div>
   );
 }

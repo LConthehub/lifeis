@@ -42,6 +42,16 @@ function photoFrom(body: Body, most = MAX_THING_PHOTO): Uint8Array {
   return Uint8Array.from(atob(text), (letter) => letter.charCodeAt(0));
 }
 
+/** What to leave out of the home inventory, from the address: rooms=3,7 (0 is "no place yet"), min_cents=50000, unvalued=0. */
+function reportChoices(query: URLSearchParams) {
+  const rooms = query.get('rooms');
+  const ids = rooms === null || rooms === '' ? null : rooms.split(',').map(Number);
+  if (ids && (ids.length > 200 || !ids.every((id) => Number.isInteger(id) && id >= 0))) throw notUnderstood('rooms');
+  const least = queryNumber(query, 'min_cents');
+  if (least !== null && !(Number.isInteger(least) && least >= 0)) throw notUnderstood('min_cents');
+  return { rooms: ids, min_cents: least, unvalued: query.get('unvalued') !== '0' };
+}
+
 const placeFrom = (body: Body) => ({ name: read.text(body, 'name'), parent_id: read.maybeWhole(body, 'parent_id'), note: read.maybeText(body, 'note') });
 
 const projectFrom = (body: Body) => ({
@@ -180,7 +190,13 @@ export function makingRoutes(db: Db): Route[] {
       json: await things(c).logUse(c.id, { day: read.maybeText(c.body, 'day'), project_id: read.maybeWhole(c.body, 'project_id'), activity: read.maybeText(c.body, 'activity'), note: read.maybeText(c.body, 'note') }),
     })],
     // Home records: a thing's papers, and the whole home inventory.
-    ['GET', at('things/report'), async (c) => ({ json: await things(c).homeReport() })],
+    ['GET', at('things/report'), async (c) => ({ json: await things(c).homeReport(reportChoices(c.query)) })],
+    // The same as a spreadsheet to keep off-site; made here, from this person's things only.
+    ['GET', at('things/report\\.csv'), async (c) => {
+      const file = await things(c).homeReportCsv(reportChoices(c.query));
+      return { body: new TextEncoder().encode(file.text), headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff', 'Content-Disposition': `attachment; filename="${file.filename}"` } };
+    }],
     ['GET', at('things/items/:id/documents'), async (c) => ({ json: await things(c).documents(c.id) })],
     ['POST', at('things/items/:id/documents'), async (c) => ({
       status: 201,
@@ -217,6 +233,15 @@ export function makingRoutes(db: Db): Route[] {
     ['DELETE', at('things/upkeep/members/:id'), async (c) => ({ json: await jobs(c).removeMember(c.id) })],
     ['PUT', at('things/upkeep/points'), async (c) => (await jobs(c).setPointValue(read.maybeWhole(c.body, 'cents')), { json: await jobs(c).scores() })],
     ['GET', at('things/upkeep/scores'), async (c) => ({ json: await jobs(c).scores() })],
+    // A week of chores for the fridge, and what each child has earned (and been paid) in a period.
+    ['GET', at('things/upkeep/chart'), async (c) => ({ json: await jobs(c).chart(c.query.get('week'), c.query.get('start_on')) })],
+    ['GET', at('things/upkeep/allowance'), async (c) => ({ json: await jobs(c).allowance({ period: c.query.get('period'), from: c.query.get('from'), to: c.query.get('to'), start_on: c.query.get('start_on') }) })],
+    ['POST', at('things/upkeep/allowance/paid'), async (c) => {
+      const member = read.maybeWhole(c.body, 'member_id');
+      if (member === null) throw notUnderstood('member_id');
+      return { status: 201, json: await jobs(c).markPaid(member, read.maybeText(c.body, 'through')) };
+    }],
+    ['DELETE', at('things/upkeep/allowance/paid/:id'), async (c) => ({ json: await jobs(c).undoPaid(c.id) })],
     ['GET', at('things/upkeep/starters'), async () => ({ json: STARTER_JOBS })],
     // Ready-made sets of jobs, with their dates counted from today; adding one skips the jobs already there.
     ['GET', at('things/upkeep/sets'), async (c) => ({ json: jobs(c).sets() })],

@@ -82,6 +82,8 @@ export type Due = {
   next_reading: number | null;
   latest_reading: number | null;
   reading_left: number | null;
+  /** A bill or renewal that has no date yet and was never paid: the person is to set the date. Not late. */
+  needs_date?: true;
 };
 export type JobTool = { id: number; name: string; icon: string | null; place: string | null };
 export type JobSupply = { id: number; item_id: number; name: string; quantity: number | null; unit: string | null; amount: string; have: string; low: boolean; place: string | null };
@@ -153,6 +155,9 @@ function soonWindow(n: number, unit: EveryUnit): number {
 export function dueOf(job: Pick<JobRow, 'every_n' | 'every_unit' | 'every_reading' | 'first_due'> & { kind?: JobKind }, last: { day: string; reading: number | null } | null, latest: number | null, today: string): Due {
   const out: Due = { state: 'unscheduled', next_day: null, days_left: null, next_reading: null, latest_reading: latest, reading_left: null };
   const states: DueState[] = [];
+  // A bill or renewal with no date and never paid: its date is the person's to set. It is not late, and it is
+  // not quietly due a year off either; it says so, until they give it a date.
+  if (anchored(job.kind ?? 'job') && !job.first_due && !last) { out.needs_date = true; return out; }
   if (job.every_n && job.every_unit) {
     // A bill or renewal is due on its own date; anything else, so long after it was last done.
     out.next_day = anchored(job.kind ?? 'job') && job.first_due ? job.first_due : last ? addInterval(last.day, job.every_n, job.every_unit) : (job.first_due ?? today);
@@ -271,22 +276,108 @@ function nextOn(today: string, [month, day]: [number, number]): string {
   return this_year >= today ? this_year : `${year + 1}-${pad(month)}-${pad(day)}`;
 }
 
-export type ReadyJob = { name: string; activity: string; kind: JobKind; every_n: number | null; every_unit: EveryUnit | null; every_reading: number | null; reading_unit: string | null; steps: string | null; note: string | null; first_due: string | null };
+/**
+ * How a ready-made job's first due day was found: `day`, a day of the year it falls on; `interval`, one round
+ * from the day it is added (it has no day of its own, and would otherwise be late the moment it was added);
+ * `yours`, a renewal whose date only the person knows; `reading`, a job that goes by a reading alone.
+ */
+export type FirstDue = 'day' | 'interval' | 'yours' | 'reading';
+export type ReadyJob = { name: string; activity: string; kind: JobKind; every_n: number | null; every_unit: EveryUnit | null; every_reading: number | null; reading_unit: string | null; steps: string | null; note: string | null; first_due: string | null; first: FirstDue };
 export type ReadySet = { slug: string; name: string; about: string; jobs: ReadyJob[] };
 
 /** The ready-made sets, each job as the input to `create`, with a day it falls on as its first due date counted from `today`. */
 export function readySets(today: string): ReadySet[] {
   return SET_DEFS.map((s) => ({
     slug: s.slug, name: s.name, about: s.about,
-    jobs: s.jobs.map((j) => ({
-      name: j.name, activity: j.activity, kind: j.kind ?? 'job', every_n: j.every_n ?? null, every_unit: j.every_unit ?? null,
-      every_reading: j.every_reading ?? null, reading_unit: j.reading_unit ?? null, steps: j.steps ?? null, note: j.note ?? null,
-      first_due: j.on?.length ? j.on.map((d) => nextOn(today, d)).sort()[0]! : null,
-    })),
+    jobs: s.jobs.map((j): ReadyJob => {
+      const kind = j.kind ?? 'job';
+      const timed = j.every_n !== undefined && j.every_unit !== undefined;
+      // A fixed day keeps it. Without one, a job that goes by time is first due one round from today; a renewal
+      // is left for the person to date (it is then flagged "set the date", not counted late); a reading-only job has no day.
+      const first: FirstDue = j.on?.length ? 'day' : anchored(kind) ? 'yours' : timed ? 'interval' : 'reading';
+      return {
+        name: j.name, activity: j.activity, kind, every_n: j.every_n ?? null, every_unit: j.every_unit ?? null,
+        every_reading: j.every_reading ?? null, reading_unit: j.reading_unit ?? null, steps: j.steps ?? null, note: j.note ?? null,
+        first_due: first === 'day' ? j.on!.map((d) => nextOn(today, d)).sort()[0]! : first === 'interval' ? addInterval(today, j.every_n!, j.every_unit!) : null,
+        first,
+      };
+    }),
   }));
 }
 
 export type SetAdded = { set: string; added: number; already: number; added_names: string[]; already_names: string[] };
+
+export type StartOn = 'sunday' | 'monday';
+/** The first day of the week a day is in: Sunday, as American calendars have it, or Monday. */
+export const weekStartOf = (day: string, startOn: StartOn = 'sunday') => addDays(day, -((dayNumber(day) + (startOn === 'monday' ? 3 : 4)) % 7));
+
+export const PERIODS = ['this_week', 'last_week', 'this_month', 'last_month', 'custom'] as const;
+export type Period = (typeof PERIODS)[number];
+const MAX_RANGE_DAYS = 800;
+
+/** The first and last day of a period, counted from today. */
+export function periodRange(period: Period, today: string, startOn: StartOn = 'sunday', from?: string | null, to?: string | null): { from: string; to: string } {
+  if (period === 'this_week' || period === 'last_week') {
+    const start = addDays(weekStartOf(today, startOn), period === 'last_week' ? -7 : 0);
+    return { from: start, to: addDays(start, 6) };
+  }
+  if (period === 'this_month' || period === 'last_month') {
+    const first = addInterval(`${today.slice(0, 7)}-01`, period === 'last_month' ? -1 : 0, 'month');
+    return { from: first, to: addDays(addInterval(first, 1, 'month'), -1) };
+  }
+  const a = dayOrNull(from);
+  const b = dayOrNull(to);
+  if (!a || !b) throw new Problem(400, 'Pick the first and last day');
+  if (a > b) throw new Problem(400, 'The last day comes after the first');
+  if (dayNumber(b) - dayNumber(a) > MAX_RANGE_DAYS) throw new Problem(400, 'Pick a range of two years or less');
+  return { from: a, to: b };
+}
+
+/**
+ * The days within [start, end] a job falls due, if it keeps the rhythm of its next due day: a daily one on
+ * every day, one every other day on every other, a weekly one on its weekday, a monthly one on its date.
+ */
+export function daysDueIn(next: string, n: number, unit: EveryUnit, start: string, end: string): string[] {
+  const out: string[] = [];
+  if (unit === 'day' || unit === 'week') {
+    const step = unit === 'day' ? n : n * 7;
+    const a = dayNumber(next);
+    const s = dayNumber(start);
+    const e = dayNumber(end);
+    for (let d = a + Math.ceil((s - a) / step) * step; d <= e; d += step) out.push(addDays(start, d - s));
+    return out;
+  }
+  const round = (unit === 'month' ? 30.4375 : 365.25) * n;
+  const near = Math.round(((dayNumber(start) + dayNumber(end)) / 2 - dayNumber(next)) / round);
+  for (let k = near - 2; k <= near + 2; k++) {
+    const day = addInterval(next, k * n, unit);
+    if (day >= start && day <= end) out.push(day);
+  }
+  return out;
+}
+
+export type ChartChore = { id: number; name: string; points: number | null; every: { n: number; unit: EveryUnit } | null; days: string[]; anytime: boolean };
+export type ChartGroup = { who: string | null; member_id: number | null; chores: ChartChore[] };
+export type Chart = { week_start: string; days: string[]; today: string; point_cents: number | null; groups: ChartGroup[] };
+
+export type PaidPayment = { on: string; through: string; points: number; cents: number | null };
+type PaidRecord = { through: string; payments: PaidPayment[] };
+export type AllowancePerson = {
+  id: number; name: string; done: number;
+  /** Earned in the period, and what that is in cents (null while points have no value). */
+  points: number; cents: number | null;
+  /** The day they were last paid up to, if ever. */
+  paid_through: string | null;
+  /** What of the period is already paid, and what is still to pay. */
+  paid_points: number; paid_cents: number | null; owing_points: number; owing_cents: number | null;
+  /** The day to mark paid up to: the end of the period, or today if it is not over. */
+  pay_through: string;
+};
+export type Allowance = {
+  period: Period; from: string; to: string; today: string; point_cents: number | null; people: AllowancePerson[];
+  history: { id: number; name: string; on: string; through: string; points: number; cents: number | null }[];
+};
+const KEPT_PAYMENTS = 20;
 
 export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) {
   const now = () => stamp(clock());
@@ -440,6 +531,40 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
   async function getJob(id: number): Promise<Job & { done: DoneRecord[] }> {
     const row = await seen(db, id);
     return { ...(await whole(db, row)), done: await doneList(db, id) };
+  }
+
+  /** What a point is worth in cents, or null while points have no value. */
+  async function pointCents(): Promise<number | null> {
+    const worth = await db.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'chore_point_cents'", [viewer]);
+    return worth?.value ? Number(worth.value) : null;
+  }
+
+  /**
+   * Who was paid up to which day, kept as a little JSON in the person's settings (no table of its own):
+   * { "<household member id>": { through: day, payments: [{ on, through, points, cents }] } }.
+   */
+  async function paidRecords(): Promise<Record<string, PaidRecord>> {
+    const row = await db.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'allowance_paid'", [viewer]);
+    const out: Record<string, PaidRecord> = {};
+    try {
+      const parsed = JSON.parse(row?.value ?? '{}') as Record<string, PaidRecord>;
+      for (const [id, r] of Object.entries(parsed)) {
+        if (r && typeof r.through === 'string' && Array.isArray(r.payments)) out[id] = { through: r.through, payments: r.payments };
+      }
+    } catch { /* a value that is not JSON is as if nobody was paid */ }
+    return out;
+  }
+  async function savePaid(paid: Record<string, PaidRecord>): Promise<void> {
+    if (Object.keys(paid).length === 0) await db.run("DELETE FROM user_settings WHERE user_id = ? AND key = 'allowance_paid'", [viewer]);
+    else await db.run("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'allowance_paid', ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value", [viewer, JSON.stringify(paid)]);
+  }
+
+  /** The chores the household's children did from one day to another, with their points. */
+  async function memberPoints(from: string, to: string): Promise<{ member_id: number; day: string; points: number }[]> {
+    return db.all<{ member_id: number; day: string; points: number }>(
+      `SELECT d.done_member AS member_id, d.day, COALESCE(d.points, 0) AS points
+       FROM upkeep_done d JOIN upkeep_jobs j ON j.id = d.job_id JOIN household_members hm ON hm.id = d.done_member AND hm.owner_id = ?
+       WHERE j.kind = 'chore' AND (j.owner_id = ? OR j.assigned_to = ?) AND d.day >= ? AND d.day <= ?`, [viewer, viewer, viewer, from, to]);
   }
 
   return {
@@ -635,6 +760,120 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
       return { week_start: start, point_cents: worth?.value ? Number(worth.value) : null, people: [...people.values()].sort((a, b) => b.this_week - a.this_week || a.name.localeCompare(b.name)) };
     },
 
+    /**
+     * A week of chores for the fridge: for each person in the household, each chore given to them, and the days
+     * of the week it falls due, found the way the list finds them (from when it was last done, or its first due
+     * day). A chore never done, with no day of its own, that comes round every week or more has no particular
+     * day: it gets one box for the week (`anytime`). One that goes by no time at all is a box for the week too.
+     * `week` is this week, next week or last, from today.
+     */
+    async chart(week: string | null | undefined, startOn: string | null | undefined): Promise<Chart> {
+      if (week != null && !['last', 'this', 'next'].includes(week)) throw new Problem(400, 'Pick last week, this week or next');
+      if (startOn != null && startOn !== 'sunday' && startOn !== 'monday') throw new Problem(400, 'A week starts on Sunday or Monday');
+      const day = today();
+      const first = addDays(weekStartOf(day, (startOn as StartOn | null) ?? 'sunday'), week === 'next' ? 7 : week === 'last' ? -7 : 0);
+      const days = Array.from({ length: 7 }, (_, i) => addDays(first, i));
+      const last = days[6]!;
+      const groups = new Map<string, ChartGroup>();
+      for (const m of (await db.all<{ id: number; name: string }>('SELECT id, name FROM household_members WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id', [viewer]))) {
+        groups.set(`m${m.id}`, { who: m.name, member_id: m.id, chores: [] });
+      }
+      for (const job of (await listJobs()).filter((j) => j.kind === 'chore')) {
+        const key = job.member ? `m${job.member.id}` : job.assigned_to ? `u${job.assigned_to.id}` : 'anyone';
+        const group = groups.get(key) ?? { who: job.member?.name ?? job.assigned_to?.name ?? null, member_id: job.member?.id ?? null, chores: [] };
+        groups.set(key, group);
+        const next = job.due.next_day;
+        let due: string[] = [];
+        let anytime = false;
+        if (!job.every || next === null) anytime = true;
+        else {
+          // Late is due now; and a chore with no day of its own keeps the rhythm from today.
+          const from = next < day ? day : next;
+          due = daysDueIn(from, job.every.n, job.every.unit, first, last);
+          const floating = !job.last_done && !job.first_due && job.every.n * { day: 1, week: 7, month: 30, year: 365 }[job.every.unit] >= 7;
+          if (floating) { anytime = due.length > 0; due = []; }
+        }
+        if (!anytime && due.length === 0) continue;
+        group.chores.push({ id: job.id, name: job.name, points: job.points, every: job.every, days: due, anytime });
+      }
+      const order = (g: ChartGroup) => (g.member_id !== null ? 0 : g.who !== null ? 1 : 2);
+      const out = [...groups.values()].filter((g) => g.member_id !== null || g.chores.length > 0)
+        .sort((a, b) => order(a) - order(b) || (a.who ?? '').localeCompare(b.who ?? ''));
+      for (const g of out) g.chores.sort((a, b) => a.name.localeCompare(b.name));
+      const worth = await db.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'chore_point_cents'", [viewer]);
+      return { week_start: first, days, today: day, point_cents: worth?.value ? Number(worth.value) : null, groups: out };
+    },
+
+    /**
+     * What each child has earned in a period, in points and in cents, and what of it is still to pay: the days
+     * up to the one they were last marked paid through are already paid. Cents are whole numbers throughout.
+     */
+    async allowance(opts: { period?: string | null; from?: string | null; to?: string | null; start_on?: string | null } = {}): Promise<Allowance> {
+      const period = (opts.period ?? 'this_week') as Period;
+      if (!PERIODS.includes(period)) throw new Problem(400, 'Pick this week, last week, this month, last month or a range');
+      if (opts.start_on != null && opts.start_on !== 'sunday' && opts.start_on !== 'monday') throw new Problem(400, 'A week starts on Sunday or Monday');
+      const day = today();
+      const range = periodRange(period, day, (opts.start_on as StartOn | null) ?? 'sunday', opts.from, opts.to);
+      const members = await db.all<{ id: number; name: string }>('SELECT id, name FROM household_members WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id', [viewer]);
+      const worth = await pointCents();
+      const paid = await paidRecords();
+      const earned = await memberPoints(range.from, range.to);
+      const cents = (points: number) => (worth ? points * worth : null);
+      const people = members.map((m): AllowancePerson => {
+        const through = paid[String(m.id)]?.through ?? null;
+        const mine = earned.filter((r) => r.member_id === m.id);
+        const sum = (rs: typeof mine) => rs.reduce((n, r) => n + r.points, 0);
+        const owing = sum(mine.filter((r) => through === null || r.day > through));
+        const points = sum(mine);
+        return {
+          id: m.id, name: m.name, done: mine.length, points, cents: cents(points), paid_through: through,
+          paid_points: points - owing, paid_cents: cents(points - owing), owing_points: owing, owing_cents: cents(owing),
+          pay_through: range.to < day ? range.to : day,
+        };
+      });
+      const history = members.flatMap((m) => (paid[String(m.id)]?.payments ?? []).map((p, i) => ({ id: m.id, name: m.name, ...p, i })))
+        .sort((a, b) => (a.on < b.on ? 1 : a.on > b.on ? -1 : b.i - a.i)).slice(0, 10).map(({ i: _i, ...p }) => p);
+      return { period, ...range, today: day, point_cents: worth, people, history };
+    },
+
+    /**
+     * Mark a child as paid, up to a day (today if none): what they earned on the days after the last payment, up
+     * to that day. The value of a point then is kept with the payment, so changing it later does not change it.
+     */
+    async markPaid(memberId: number, through?: string | null): Promise<Allowance['history']> {
+      const member = await db.get<{ id: number; name: string }>('SELECT id, name FROM household_members WHERE id = ? AND owner_id = ?', [memberId, viewer]);
+      if (!member) throw new Problem(404, "That person isn't in your household");
+      const day = today();
+      const upTo = dayOrNull(through) ?? day;
+      if (upTo > day) throw new Problem(400, 'Someone can only be paid up to today');
+      const paid = await paidRecords();
+      const before = paid[String(member.id)];
+      if (before && upTo <= before.through) throw new Problem(409, `${member.name} is already paid through ${before.through}`);
+      const rows = (await memberPoints(before ? addDays(before.through, 1) : '0001-01-01', upTo)).filter((r) => r.member_id === member.id);
+      const points = rows.reduce((n, r) => n + r.points, 0);
+      if (points === 0) throw new Problem(400, `${member.name} has nothing to be paid for through that day`);
+      const worth = await pointCents();
+      const record = before ?? { through: upTo, payments: [] };
+      record.through = upTo;
+      record.payments.push({ on: day, through: upTo, points, cents: worth ? points * worth : null });
+      record.payments = record.payments.slice(-KEPT_PAYMENTS);
+      paid[String(member.id)] = record;
+      await savePaid(paid);
+      return (await this.allowance({ period: 'this_week' })).history;
+    },
+
+    /** Take back the last payment marked for a child: they are paid through the one before it again. */
+    async undoPaid(memberId: number): Promise<Allowance['history']> {
+      const paid = await paidRecords();
+      const record = paid[String(memberId)];
+      if (!record || record.payments.length === 0) throw new Problem(404, 'No payment to take back');
+      record.payments.pop();
+      const previous = record.payments[record.payments.length - 1];
+      if (previous) record.through = previous.through; else delete paid[String(memberId)];
+      await savePaid(paid);
+      return (await this.allowance({ period: 'this_week' })).history;
+    },
+
     /** The people in this household who have no sign-in of their own. */
     async members(): Promise<{ id: number; name: string }[]> {
       return db.all<{ id: number; name: string }>('SELECT id, name FROM household_members WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id', [viewer]);
@@ -653,6 +892,8 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
     /** Take someone out of the household. What they did stays in each chore's history, under their name. */
     async removeMember(id: number): Promise<{ id: number; name: string }[]> {
       await db.run('DELETE FROM household_members WHERE id = ? AND owner_id = ?', [id, viewer]);
+      const paid = await paidRecords();
+      if (paid[String(id)]) { delete paid[String(id)]; await savePaid(paid); }
       return this.members();
     },
 

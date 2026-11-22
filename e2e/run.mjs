@@ -25,7 +25,7 @@ const root = path.resolve(here, '..');
 // One entry per Life Is: the walk-throughs that run against it, in turn (a later one may use what an earlier
 // one made). `account` is made, and set up for every part of Life Is, before they start, for walk-throughs
 // that sign in rather than make the first account. `phone` serves the phone app's own pages, where Life Is
-// runs inside the app. `fixtures` are stand-ins started first (e2e/fixtures), such as a pretend Jellyfin.
+// runs inside the app. `env` adds environment variables to the Life Is started. `fixtures` are stand-ins started first (e2e/fixtures), such as a pretend Jellyfin.
 // `docker` needs stand-ins only the Docker test setup has.
 const TRIAL = ['trial', 'trial-only-password-8021'];
 const SUITE = [
@@ -48,8 +48,10 @@ const SUITE = [
   { specs: ['home'], account: TRIAL, online: true },
   { specs: ['calendar-link'], account: TRIAL },
   { specs: ['collection'], account: TRIAL },
+  { specs: ['bring-in'], account: TRIAL },
   { specs: ['mail'], account: TRIAL, docker: true },
   { specs: ['media-servers'], account: TRIAL, fixtures: [['jellyfin', 8097]] },
+  { specs: ['recalls'], account: TRIAL, fixtures: [['nhtsa', 8100]], env: { NHTSA_API: 'http://127.0.0.1:8100' } },
   { specs: ['book-servers'], account: TRIAL, fixtures: [['books', 8099]] },
   { specs: ['photo-library'], account: TRIAL, docker: true },
   { specs: ['touch-targets'], account: TRIAL },
@@ -106,7 +108,7 @@ async function startLifeIs(group) {
   const server = spawn(process.execPath, ['server/src/main.ts'], {
     cwd: root, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, DATA_DIR: data, PORT: String(port), HOST: '127.0.0.1', STATIC_DIR: group.phone ? 'frontend/dist-device' : 'frontend/dist',
-      ...(group.demo ? { DEMO_MODE: '1', DEMO_PASSWORD: 'a-demo-password-for-walk-throughs' } : {}) },
+      ...(group.demo ? { DEMO_MODE: '1', DEMO_PASSWORD: 'a-demo-password-for-walk-throughs' } : {}), ...(group.env ?? {}) },
   });
   let said = '';
   server.stdout.on('data', (d) => { said += d; });

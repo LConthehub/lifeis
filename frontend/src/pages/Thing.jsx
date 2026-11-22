@@ -8,6 +8,7 @@ import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, err
 import { ItemForm } from './Things';
 import { DueBadge } from './Upkeep';
 import Records from '../components/Records';
+import { ThingRecalls } from '../components/Recalls';
 
 const dayText = (day) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -132,6 +133,8 @@ export default function Thing() {
           {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
         </section>
       </div>
+
+      <ThingRecalls itemId={id} key={`${id}-${item.updated_at}`} />
 
       <Records item={item} onChanged={(saved) => (saved ? setItem(saved) : load())} />
 

@@ -7,6 +7,7 @@ import { LifeAreasPicker } from '../components/LifeAreas';
 import { chooseAgain, inApp, linkedServer, onDevice, serverOrigin } from '../where';
 import { AssistantService } from '../components/Assistant';
 import { RemindersSettings } from '../components/Reminders';
+import { RecallAlertsService } from '../components/Recalls';
 
 const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 120: '2 hours', 480: '8 hours', 0: 'Stay signed in' };
 
@@ -46,6 +47,7 @@ const GROUPS = [
       { id: 'lookups', title: 'Barcode lookups', words: 'isbn book grocery film music game album dvd blu-ray vinyl scan open library food facts musicbrainz upcitemdb', render: () => <Plain><BookLookupService /></Plain> },
       { id: 'photos', title: 'Photos from Immich', words: 'immich pictures plans memories', render: () => <Plain><PhotoLibraryService /></Plain> },
       { id: 'media', title: 'Jellyfin or Emby', words: 'media server films shows music jellyfin emby', render: () => <MediaServers /> },
+      { id: 'recalls', title: 'Recall alerts', words: 'car vehicle recall nhtsa safety make model year vin', render: () => <Plain><RecallAlertsService /></Plain> },
       { id: 'recipe-web', title: 'Recipes from a website', words: 'import url link page photo ocr', render: () => <RecipesFromWeb /> },
     ],
   },

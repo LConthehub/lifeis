@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
+import PasteList from '../components/PasteList';
 import Scanner from '../components/Scanner';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, fromDateInput } from '../components/ui';
 
@@ -115,6 +116,7 @@ export default function Groceries() {
           <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Add something: 2 lb chicken thighs" aria-label="Add to the list" className={inputClass} />
           <button type="submit" disabled={!text.trim()} className={buttonClass}>Add</button>
         </form>
+        <button type="button" onClick={() => setModal({ paste: true })} className="min-h-[44px] px-1 text-sm text-life-600 underline dark:text-life-200">Paste a list</button>
         <label className="w-full text-xs text-gray-600 dark:text-life-200 sm:w-40">Shopping at
           <input key={shop.store || ''} list="my-shops" defaultValue={shop.store || ''} onBlur={saveStore} placeholder="which store" aria-label="Shopping at" className={`${inputClass} mt-0.5`} />
         </label>
@@ -247,6 +249,14 @@ export default function Groceries() {
       {modal?.scan && (
         <Modal title="Scan a grocery" onClose={() => { setModal(null); load(); }}>
           <ScanGrocery open={open} sign={sign} putAway={putAway} onChanged={load} />
+        </Modal>
+      )}
+      {modal?.paste && (
+        <Modal title="Paste a list" onClose={() => setModal(null)}>
+          <PasteList onDone={(data) => {
+            setItems(data.items); setModal(null); loadShop();
+            setMessage(`Added ${data.added} thing${data.added === 1 ? '' : 's'}${data.already ? `, and ${data.already} ${data.already === 1 ? 'was' : 'were'} already on the list` : ''}.`);
+          }} />
         </Modal>
       )}
       {modal?.usual && (

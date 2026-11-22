@@ -1,5 +1,7 @@
 export * as units from './units.ts';
 export * as recipeText from './recipeText.ts';
+export { readRecipeFile, readGroceryList, recipeKey, minutesFrom, MAX_FILE_BYTES, MAX_FILE_RECIPES, MAX_PASTED_GROCERIES } from './recipeFiles.ts';
+export type { FileSource, FileRecipe, RecipeFile, Unread } from './recipeFiles.ts';
 export { atomic } from './db.ts';
 export type { Db, Queries, Row, Tx, Value, Written } from './db.ts';
 export { LATEST, currentVersion, migrate } from './migrations.ts';
@@ -76,3 +78,5 @@ export { readBookList, importBookList, csvRows, formatOf } from './bookList.ts';
 export type { ListedBook, ListChoices, ListResult } from './bookList.ts';
 export { readStatement, lookOverStatement, importStatement } from './bankStatement.ts';
 export type { Statement, StatementRow, StatementChoices, StatementResult, LookedOver } from './bankStatement.ts';
+export { recalls, recallsDue, vehiclesOf, recallAddress, reportedDay, RECALL_SERVICE, NHTSA_API, NOT_LISTED } from './recalls.ts';
+export type { Recall, Recalls, RecallStatus, Vehicle, NeedsDetails, CheckedVehicle, VehicleRecalls, CheckReport } from './recalls.ts';

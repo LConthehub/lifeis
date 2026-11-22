@@ -167,17 +167,61 @@ function bestSpelling(names: string[]): string {
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || named(b[0]) - named(a[0]))[0]![0];
 }
 
+/** The "room" of things with no place: not a real place, so it has no id of a place's. */
+export const NO_ROOM = 0;
 export type ReportLine = {
-  id: number; name: string; kind: string; place: string | null; amount: string; photo: boolean; receipt: boolean;
+  id: number; name: string; kind: string; place: string | null; amount: string; quantity: number | null; photo: boolean; receipt: boolean;
+  /** The room it sits under (its place's top-level place, however deep), or 0 for no place. */
+  room_id: number;
+  /** Where in the room: "Shelf 2 › Bin A"; null when it is in the room itself or has no place. */
+  where: string | null;
   serial: string | null; model: string | null; bought_on: string | null; bought_at: string | null;
   price_cents: number | null; value_cents: number | null; /** What it's worth now if said, else what it cost. */ worth_cents: number; warranty_until: string | null;
 };
+export type ReportRoom = {
+  id: number; name: string; things: number;
+  /** What the things shown cost, in cents (those with no price count nothing). */ price_cents: number;
+  /** What they are worth now, in cents: the value given, else what it cost. */ worth_cents: number;
+  /** How many were counted at what they cost because no worth-now value was given. */ at_cost: number;
+  with_photo: number; with_serial: number; with_receipt: number;
+  /** How many have neither a price nor a value. */ unvalued: number;
+  lines: ReportLine[];
+};
+/** What to leave out of the report. Left out: nothing is. */
+export type ReportOptions = {
+  /** Only these rooms (their place ids; 0 is "No place yet"). Null or left out: all. */
+  rooms?: number[] | null;
+  /** Only things worth at least this many cents. */
+  min_cents?: number | null;
+  /** Whether to keep things with no price or value. Default yes. */
+  unvalued?: boolean;
+};
 export type HomeReport = {
-  day: string; things: number; worth_cents: number; /** How many have a price or a value. */ valued: number; with_photo: number; with_receipt: number;
-  rooms: { name: string; worth_cents: number; lines: ReportLine[] }[];
+  day: string;
+  /** All of the household's things and what they are worth, whatever was chosen to leave out. */
+  things: number; worth_cents: number; price_cents: number; /** How many have a price or a value. */ valued: number; unvalued: number;
+  with_photo: number; with_receipt: number; with_serial: number; at_cost: number;
+  /** What is in the report as chosen. */
+  shown: { things: number; worth_cents: number; price_cents: number };
+  /** Every room, chosen or not, for choosing among: with how many things lack a photo or a value. */
+  choices: { id: number; name: string; things: number; incomplete: number; gaps: number }[];
+  /** The room with the most still missing (a photo, a value or a serial number), if any real room has something missing. */
+  neediest: { id: number; name: string; gaps: number } | null;
+  rooms: ReportRoom[];
   /** Warranties ending in the next ninety days, soonest first. */
   warranties: { id: number; name: string; until: string; days_left: number }[];
 };
+
+/** Cents as plain dollars for a spreadsheet: 79900 is 799.00. Whole-number arithmetic, so nothing drifts. */
+const plainDollars = (cents: number | null): string => (cents === null ? '' : `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`);
+
+/** One spreadsheet field: quoted when it holds a comma, a quote or a line break; a leading = + @ (or - before a letter) is defused so Excel doesn't run it. */
+function csvField(text: string): string {
+  const safe = /^[=+@\t\r]|^-[^0-9.]/.test(text) ? `'${text}` : text;
+  return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
+}
+export const CSV_COLUMNS = ['Room', 'Where exactly', 'What it is', 'Kind', 'Quantity', 'Make/model', 'Serial number', 'Bought on', 'Bought at',
+  'Cost', 'Worth now', 'Warranty until', 'Has photo', 'Has receipt'] as const;
 
 export type ThingSticker = { id: number; name: string; place: string | null; code: string };
 export type ActivitySummary = { name: string; things: number; projects: number; jobs: number };
@@ -464,6 +508,82 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     }
     const unit = units.canonical(clean(input.unit, 20)) ?? kind.unit;
     return [name, input.quantity ?? null, unit, input.place_id ?? null, input.low_at ?? null, clean(input.note, 5000)];
+  }
+
+  /**
+   * The home report. A thing's room is the top-level place above the place it sits in, however deep: a bin on a
+   * shelf in the sewing room is in the sewing room. All money is whole cents added as whole numbers.
+   */
+  async function homeReportIn(options: ReportOptions): Promise<HomeReport> {
+    const all = await items(db);
+    const rows = await placeRows(db);
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const roomOfPlace = (placeId: number | null): PlaceRow | null => {
+      let at = placeId === null ? undefined : byId.get(placeId);
+      for (let steps = 0; at && at.parent_id !== null && byId.has(at.parent_id) && steps <= MAX_DEPTH; steps += 1) at = byId.get(at.parent_id);
+      return at ?? null;
+    };
+    const receipts = new Set((await db.all<{ item_id: number }>(
+      "SELECT DISTINCT d.item_id FROM item_documents d JOIN items i ON i.id = d.item_id WHERE i.owner_id = ? AND d.kind = 'receipt'", [owner])).map((r) => r.item_id));
+    const worth = (t: Item) => t.records.value_cents ?? t.records.price_cents ?? 0;
+    const recorded = (t: Item) => t.records.value_cents !== null || t.records.price_cents !== null;
+    const roomNames = new Map<number, string>([[NO_ROOM, 'No place yet']]);
+    const lineOf = (t: Item): ReportLine => {
+      const room = roomOfPlace(t.place_id);
+      if (room) roomNames.set(room.id, room.name);
+      const roomName = room?.name ?? '';
+      return {
+        id: t.id, name: t.name, kind: t.kind, place: t.place, amount: t.amount, quantity: t.quantity, photo: t.photo, receipt: receipts.has(t.id),
+        room_id: room?.id ?? NO_ROOM,
+        where: room && t.place && t.place !== roomName ? t.place.slice(roomName.length + 3) : null,
+        serial: t.records.serial, model: t.records.model, bought_on: t.records.bought_on, bought_at: t.records.bought_at,
+        price_cents: t.records.price_cents, value_cents: t.records.value_cents, worth_cents: worth(t), warranty_until: t.records.warranty_until,
+      };
+    };
+    const lines = all.map((t) => ({ t, line: lineOf(t) }));
+    const sum = (list: Item[], pick: (t: Item) => number) => list.reduce((n, t) => n + pick(t), 0);
+    const missing = (t: Item) => Number(!t.photo) + Number(!recorded(t)) + Number(!t.records.serial);
+
+    const grouped = new Map<number, typeof lines>();
+    for (const one of lines) grouped.set(one.line.room_id, [...(grouped.get(one.line.room_id) ?? []), one]);
+    const inOrderOfName = (a: { id: number; name: string }, b: { id: number; name: string }) =>
+      Number(a.id === NO_ROOM) - Number(b.id === NO_ROOM) || a.name.localeCompare(b.name) || a.id - b.id;
+    const choices = [...grouped.entries()].map(([id, list]) => ({
+      id, name: roomNames.get(id)!, things: list.length,
+      incomplete: list.filter(({ t }) => !t.photo || !recorded(t)).length, gaps: sum(list.map(({ t }) => t), missing),
+    })).sort(inOrderOfName);
+    const needy = choices.filter((c) => c.id !== NO_ROOM && c.gaps > 0).sort((a, b) => b.gaps - a.gaps || inOrderOfName(a, b))[0];
+
+    const chosen = options.rooms ? new Set(options.rooms) : null;
+    const least = options.min_cents && options.min_cents > 0 ? options.min_cents : 0;
+    const keep = ({ t, line }: (typeof lines)[number]) =>
+      (!chosen || chosen.has(line.room_id)) && (options.unvalued !== false || recorded(t)) && worth(t) >= least;
+    const rooms: ReportRoom[] = choices.map((c) => {
+      const list = grouped.get(c.id)!.filter(keep);
+      const things = list.map(({ t }) => t);
+      return {
+        id: c.id, name: c.name, things: list.length,
+        price_cents: sum(things, (t) => t.records.price_cents ?? 0), worth_cents: sum(things, worth),
+        at_cost: things.filter((t) => t.records.value_cents === null && t.records.price_cents !== null).length,
+        with_photo: things.filter((t) => t.photo).length, with_serial: things.filter((t) => t.records.serial).length,
+        with_receipt: things.filter((t) => receipts.has(t.id)).length, unvalued: things.filter((t) => !recorded(t)).length,
+        lines: list.map(({ line }) => line).sort((a, b) => b.worth_cents - a.worth_cents || a.name.localeCompare(b.name) || a.id - b.id),
+      };
+    }).filter((room) => room.things > 0);
+
+    return {
+      day: todayOf(clock),
+      things: all.length, worth_cents: sum(all, worth), price_cents: sum(all, (t) => t.records.price_cents ?? 0),
+      valued: all.filter(recorded).length, unvalued: all.filter((t) => !recorded(t)).length,
+      with_photo: all.filter((t) => t.photo).length, with_receipt: all.filter((t) => receipts.has(t.id)).length,
+      with_serial: all.filter((t) => t.records.serial).length,
+      at_cost: all.filter((t) => t.records.value_cents === null && t.records.price_cents !== null).length,
+      shown: { things: rooms.reduce((n, r) => n + r.things, 0), worth_cents: rooms.reduce((n, r) => n + r.worth_cents, 0), price_cents: rooms.reduce((n, r) => n + r.price_cents, 0) },
+      choices, neediest: needy ? { id: needy.id, name: needy.name, gaps: needy.gaps } : null,
+      rooms,
+      warranties: all.filter((t) => t.warranty_days !== null && t.warranty_days >= 0 && t.warranty_days <= 90)
+        .sort((a, b) => a.warranty_days! - b.warranty_days!).map((t) => ({ id: t.id, name: t.name, until: t.records.warranty_until!, days_left: t.warranty_days! })),
+    };
   }
 
   return {
@@ -785,31 +905,21 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
 
     /**
      * The home inventory, for an insurer or for peace of mind: everything kept, room by room, with what each
-     * cost and is worth, its serial number, and whether there's a photo and a receipt to show for it.
+     * cost and is worth, its serial number, and whether there is a photo and a receipt to show for it.
      */
-    async homeReport(): Promise<HomeReport> {
-      const all = await items(db);
-      const roomOf = (place: string | null) => (place ? place.split(' › ')[0]! : 'No place yet');
-      const worth = (t: Item) => (t.records.value_cents ?? t.records.price_cents ?? 0);
-      const rooms = new Map<string, Item[]>();
-      for (const t of all) rooms.set(roomOf(t.place), [...(rooms.get(roomOf(t.place)) ?? []), t]);
-      const receipts = new Set((await db.all<{ item_id: number }>(
-        "SELECT DISTINCT d.item_id FROM item_documents d JOIN items i ON i.id = d.item_id WHERE i.owner_id = ? AND d.kind = 'receipt'", [owner])).map((r) => r.item_id));
-      const line = (t: Item): ReportLine => ({
-        id: t.id, name: t.name, kind: t.kind, place: t.place, amount: t.amount, photo: t.photo, receipt: receipts.has(t.id),
-        serial: t.records.serial, model: t.records.model, bought_on: t.records.bought_on, bought_at: t.records.bought_at,
-        price_cents: t.records.price_cents, value_cents: t.records.value_cents, worth_cents: worth(t), warranty_until: t.records.warranty_until,
-      });
-      const sum = (list: Item[]) => list.reduce((n, t) => n + worth(t), 0);
-      return {
-        day: todayOf(clock),
-        things: all.length, worth_cents: sum(all), valued: all.filter((t) => worth(t) > 0).length,
-        with_photo: all.filter((t) => t.photo).length, with_receipt: all.filter((t) => receipts.has(t.id)).length,
-        rooms: [...rooms.entries()].map(([name, list]) => ({ name, worth_cents: sum(list), lines: list.map(line).sort((a, b) => b.worth_cents - a.worth_cents || a.name.localeCompare(b.name)) }))
-          .sort((a, b) => Number(a.name === 'No place yet') - Number(b.name === 'No place yet') || a.name.localeCompare(b.name)),
-        warranties: all.filter((t) => t.warranty_days !== null && t.warranty_days >= 0 && t.warranty_days <= 90)
-          .sort((a, b) => a.warranty_days! - b.warranty_days!).map((t) => ({ id: t.id, name: t.name, until: t.records.warranty_until!, days_left: t.warranty_days! })),
-      };
+    homeReport: (options: ReportOptions = {}) => homeReportIn(options),
+
+    /** The same, as a spreadsheet: one row for each thing, with a byte-order mark so Excel reads it as UTF-8. */
+    async homeReportCsv(options: ReportOptions = {}): Promise<{ filename: string; text: string }> {
+      const report = await homeReportIn(options);
+      const rows: string[][] = [[...CSV_COLUMNS]];
+      for (const room of report.rooms) {
+        for (const l of room.lines) {
+          rows.push([room.name, l.where ?? "", l.name, l.kind, l.amount, l.model ?? "", l.serial ?? "", l.bought_on ?? "", l.bought_at ?? "",
+            plainDollars(l.price_cents), plainDollars(l.value_cents ?? l.price_cents), l.warranty_until ?? "", l.photo ? "yes" : "no", l.receipt ? "yes" : "no"]);
+        }
+      }
+      return { filename: `home-inventory-${report.day}.csv`, text: '\uFEFF' + rows.map((row) => row.map(csvField).join(',')).join('\r\n') + '\r\n' };
     },
 
     /** Stickers for these things: each given a code the first time, and keeping it. */

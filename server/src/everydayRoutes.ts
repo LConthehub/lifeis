@@ -24,6 +24,7 @@ import { assistantRoutes } from './assistantRoutes.ts';
 import { actionRoutes } from './actionRoutes.ts';
 import { planRoutes } from './planRoutes.ts';
 import { shoppingRoutes } from './shoppingRoutes.ts';
+import { recallRoutes } from './recallRoutes.ts';
 
 export type Outside = {
   /** How the weather and the barcode lookups are asked. Left out: they can't be turned on. */
@@ -38,6 +39,14 @@ export type Outside = {
   /** How a browser is sent a reminder, and the key it checks them by. Left out: browsers can't be sent any. */
   push?: { publicKey: string; send: PushSender };
 };
+
+/** What a page unpacked from a file of recipes: each thing found in it as JSON, and any entry that couldn't be opened. */
+function recipeFileFrom(body: Body) {
+  return {
+    sources: read.records(body, 'sources').map((one) => ({ name: read.maybeText(one, 'name') ?? 'A recipe', data: one.data, original: read.maybeText(one, 'original') })),
+    unreadable: read.records(body, 'unreadable').map((one) => ({ name: read.maybeText(one, 'name') ?? 'A recipe', why: read.maybeText(one, 'why') ?? "It couldn't be opened" })),
+  };
+}
 
 function recipeFrom(body: Body) {
   return {
@@ -194,6 +203,10 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ['POST', /^\/api\/kitchen\/recipes\/read$/, async (c) => ({ json: recipeText.readImport(read.text(c.body, 'text'))[0] })],
     ['POST', /^\/api\/kitchen\/recipes\/from-web$/, async (c) => ({ json: await recipeFromWeb(outside, read.text(c.body, 'url')) })],
     ['GET', /^\/api\/kitchen\/recipes\/from-web$/, async () => ({ json: { available: Boolean(outside), service: RECIPE_WEB_SERVICE } })],
+    // Recipes from another app's file (Paprika, schema.org JSON, a Life Is export), unpacked by the page and sent as
+    // JSON: looked over first (nothing kept), then brought in as one change. See recipeFiles.ts.
+    ['POST', /^\/api\/kitchen\/recipes\/file\/read$/, async (c) => ({ json: await c.kitchen.lookOverRecipeFile(recipeFileFrom(c.body)) })],
+    ['POST', /^\/api\/kitchen\/recipes\/file$/, async (c) => ({ status: 201, json: await c.kitchen.bringInRecipeFile(recipeFileFrom(c.body)) })],
     ['POST', /^\/api\/kitchen\/recipes\/import$/, async (c) => ({ status: 201, json: await c.kitchen.importRecipes(read.text(c.body, 'text')) })],
     ['GET', /^\/api\/kitchen\/recipes\/(\d{1,15})$/, async (c) => ({ json: await c.kitchen.getRecipe(c.id, queryNumber(c.query, 'servings')) })],
     ['PUT', /^\/api\/kitchen\/recipes\/(\d{1,15})$/, async (c) => ({ json: await c.kitchen.updateRecipe(c.id, recipeFrom(c.body)) })],
@@ -233,6 +246,9 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
       status: 201,
       json: await c.kitchen.addGrocery({ label: read.text(c.body, 'label'), quantity: read.maybeNumber(c.body, 'quantity'), unit: read.maybeText(c.body, 'unit') }),
     })],
+    // A list pasted in: looked over (nothing added), then added line by line as if typed.
+    ['POST', /^\/api\/kitchen\/grocery\/paste\/read$/, async (c) => ({ json: await c.kitchen.lookOverGroceries(read.text(c.body, 'text')) })],
+    ['POST', /^\/api\/kitchen\/grocery\/paste$/, async (c) => ({ status: 201, json: await c.kitchen.addGroceries(read.texts(c.body, 'lines')) })],
     ['POST', /^\/api\/kitchen\/grocery\/from-plan$/, async (c) =>
       ({ json: await c.kitchen.groceryFromPlan(read.text(c.body, 'start'), read.maybeWhole(c.body, 'days') ?? 7) })],
     ['POST', /^\/api\/kitchen\/grocery\/clear-done$/, async (c) => ({ json: await c.kitchen.clearDone() })],
@@ -250,5 +266,6 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ...mailRoutes(db, options.mail),
     ...planRoutes(db, options.photos),
     ...shoppingRoutes(db),
+    ...recallRoutes(db, outside),
   ];
 }

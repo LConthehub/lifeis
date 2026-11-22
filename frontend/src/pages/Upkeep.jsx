@@ -25,6 +25,7 @@ export function scheduleText(job) {
 /** When it's due, in words, and how to colour it. */
 export function dueText(job) {
   const d = job.due;
+  if (d.needs_date) return { text: 'set the date', tone: 'bg-honey-100 text-honey-700' };
   const unit = job.reading_unit ? ` ${job.reading_unit}` : '';
   const byDays = d.days_left === null ? null
     : d.days_left < 0 ? `late by ${-d.days_left} day${d.days_left === -1 ? '' : 's'}`
@@ -46,8 +47,19 @@ export function DueBadge({ job }) {
 /** The form of a name used to tell whether two are the same: case and spacing don't count. */
 const nameKey = (name) => name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
 
-/** What a job in a ready-made set says about when it is first due. */
-const firstText = (job) => (job.first_due ? `first due ${dayText(job.first_due)}` : job.kind === 'renewal' ? 'the date is yours to set' : 'due as soon as you add it');
+/** One round, in words: "a year", "3 months". */
+const roundText = (n, unit) => (n === 1 ? `a ${unit}` : `${n} ${unit}s`);
+
+/**
+ * What a job in a ready-made set says about when it is first due: on its day, one round from the day it is
+ * added (it has no day of its own), left for the person to set, or by its reading.
+ */
+const firstText = (job) => {
+  if (job.first === 'day') return `first due ${dayText(job.first_due)}`;
+  if (job.first === 'interval') return `first due in ${roundText(job.every_n, job.every_unit)}, or sooner if you say when it was last done`;
+  if (job.first === 'yours') return 'the date is yours to set';
+  return job.first_due ? `first due ${dayText(job.first_due)}` : 'goes by its reading';
+};
 
 /** The ready-made sets: pick one, see its jobs, uncheck any, add. A job already kept (by name) is not added twice. */
 function ReadySets({ sets, jobs, onAdded }) {
@@ -114,7 +126,8 @@ function ReadySets({ sets, jobs, onAdded }) {
   );
 }
 
-const GROUPS = [['Late or due', ['overdue', 'due']], ['Coming up', ['soon']], ['Later', ['later']], ['When it needs it', ['unscheduled']]];
+// A bill or renewal with no date comes first, asking for one: it is not late, and it is not forgotten.
+const GROUPS = [['Set the date', 'date'], ['Late or due', ['overdue', 'due']], ['Coming up', ['soon']], ['Later', ['later']], ['When it needs it', ['unscheduled']]];
 
 /** Every upkeep job, the most pressing first, with the common ones to start from when there are none. */
 export default function UpkeepPage() {
@@ -171,6 +184,7 @@ export default function UpkeepPage() {
           {kind === 'chore' && <Family members={members} setMembers={setMembers} pointCents={scores.point_cents} onPoints={setScores} />}
         </section>
       )}
+      {scores && kind === 'chore' && members.length > 0 && <Allowance scores={scores} members={members} />}
       {jobs.length === 0 && (
         <p className={`${cardClass} text-sm text-gray-600 dark:text-life-100`}>
           Everything that comes round again: jobs like the furnace filter and the oil, bills and renewals like the rent and the car registration, and chores.
@@ -178,11 +192,12 @@ export default function UpkeepPage() {
         </p>
       )}
       {GROUPS.map(([title, states]) => {
-        const here = shown.filter((j) => states.includes(j.due.state));
+        const here = shown.filter((j) => (states === 'date' ? j.due.needs_date : !j.due.needs_date && states.includes(j.due.state)));
         if (!here.length) return null;
         return (
           <section key={title} className={cardClass} aria-label={title}>
             <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">{title}</h2>
+            {states === 'date' && <p className="mb-1 text-xs text-gray-500 dark:text-life-300">These need a date from you: open one and choose Change. Until then they are not counted as late.</p>}
             <ul className="divide-y divide-life-50 dark:divide-life-700">
               {here.map((j) => (
                 <li key={j.id} className="flex items-center gap-2 py-2">
@@ -203,7 +218,7 @@ export default function UpkeepPage() {
       {sets.length > 0 && !kind && (
         <details className={cardClass} role="region" aria-label="Ready-made sets" open={setsOpen ?? jobs.length === 0} onToggle={(e) => setSetsOpen(e.currentTarget.open)}>
           <summary className="flex min-h-[44px] cursor-pointer items-center font-semibold text-life-800 dark:text-life-50">Add a ready-made set</summary>
-          <p className="mb-2 text-xs text-gray-500 dark:text-life-300">Each set is a group of jobs and renewals for an American household. Look inside, uncheck what you don't need, then add it. You can change or remove each one afterward. Dates that vary by state or plan are left for you to set.</p>
+          <p className="mb-2 text-xs text-gray-500 dark:text-life-300">Each set is a group of jobs and renewals for an American household. Look inside, uncheck what you don't need, then add it. You can change or remove each one afterward. A job with no fixed day is first due one round from today, so adding a set does not put a dozen jobs on your late list. Dates that vary by state or plan are left for you to set.</p>
           <ReadySets sets={sets} jobs={jobs} onAdded={load} />
         </details>
       )}
@@ -613,7 +628,106 @@ function Family({ members, setMembers, pointCents, onPoints }) {
         </label>
         <span className="text-xs text-gray-500 dark:text-life-300">Left empty: points only.</span>
       </div>
+      <Link to="/things/upkeep/chart" className={`${quietButtonClass} inline-flex min-h-[44px] items-center`}>Print a chore chart</Link>
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
     </div>
+  );
+}
+
+/** Dollars and cents from whole cents, with no arithmetic on fractions. */
+const centsText = (cents) => `$${Math.floor(cents / 100).toLocaleString()}.${String(cents % 100).padStart(2, '0')}`;
+const pointsText = (n) => `${n} point${n === 1 ? '' : 's'}`;
+const PERIODS = [['this_week', 'This week'], ['last_week', 'Last week'], ['this_month', 'This month'], ['last_month', 'Last month'], ['custom', 'A range of days']];
+/** The day the week starts on, kept on this device by the chore chart. */
+const weekStartsOn = () => { try { return localStorage.getItem('lifeis.weekStartsOn') === 'monday' ? 'monday' : 'sunday'; } catch { return 'sunday'; } };
+
+/**
+ * What each child has earned in a period, in points and dollars, and what is still to pay. "Mark as paid"
+ * records the day they were paid up to, so the next tally starts after it.
+ */
+function Allowance({ scores, members }) {
+  const [period, setPeriod] = useState('this_week');
+  const [from, setFrom] = useState(() => toDateInput(new Date(Date.now() - 6 * 86400000)));
+  const [to, setTo] = useState(() => toDateInput(new Date()));
+  const [data, setData] = useState(null);
+  const [said, setSaid] = useState('');
+  const [error, setError] = useState('');
+  const [stamp, setStamp] = useState(0);
+  useEffect(() => {
+    let live = true;
+    const params = { period, start_on: weekStartsOn(), ...(period === 'custom' ? { from, to } : {}) };
+    axios.get('/api/things/upkeep/allowance', { params }).then(({ data: d }) => { if (live) { setData(d); setError(''); } }).catch((err) => { if (live) setError(errorMessage(err, "Couldn't add that up")); });
+    return () => { live = false; };
+  }, [period, from, to, scores, members.length, stamp]);
+  const pay = async (p) => {
+    const text = `${p.name}: ${pointsText(p.owing_points)}${p.owing_cents !== null ? `, ${centsText(p.owing_cents)}` : ''}, through ${dayText(p.pay_through)}`;
+    if (!window.confirm(`Mark as paid? ${text}`)) return;
+    setSaid(''); setError('');
+    try { await axios.post('/api/things/upkeep/allowance/paid', { member_id: p.id, through: p.pay_through }); setSaid(`${p.name} is marked as paid through ${dayText(p.pay_through)}.`); setStamp((n) => n + 1); } catch (err) { setError(errorMessage(err, "Couldn't mark that")); }
+  };
+  const undo = async (h) => {
+    if (!window.confirm(`Take back the payment to ${h.name} through ${dayText(h.through)}?`)) return;
+    setSaid(''); setError('');
+    try { await axios.delete(`/api/things/upkeep/allowance/paid/${h.id}`); setSaid('That payment is taken back.'); setStamp((n) => n + 1); } catch (err) { setError(errorMessage(err, "Couldn't take that back")); }
+  };
+  const worth = data?.point_cents ?? null;
+  const lastFor = new Set();
+  return (
+    <section className={`${cardClass} space-y-3`} aria-label="Allowance" data-allowance>
+      <div className="flex flex-wrap items-end gap-2">
+        <h2 className="mr-auto font-semibold text-life-800 dark:text-life-50">Allowance</h2>
+        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-life-100">Period
+          <select value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Period" className={`${inputClass} !w-auto min-h-[44px]`}>
+            {PERIODS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+      </div>
+      {period === 'custom' && (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-life-100">
+          <label className="flex items-center gap-2">From <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} aria-label="From" className={`${inputClass} !w-40 min-h-[44px]`} /></label>
+          <label className="flex items-center gap-2">to <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} aria-label="To" className={`${inputClass} !w-40 min-h-[44px]`} /></label>
+        </div>
+      )}
+      {data && (
+        <>
+          <p className="text-xs text-gray-500 dark:text-life-300" data-range>{dayText(data.from)} to {dayText(data.to)}{worth ? ` · a point is worth ${centsText(worth)}` : ' · points have no dollar value yet: set what a point is worth above'}</p>
+          <ul className="divide-y divide-life-50 dark:divide-life-700" aria-label="What each child earned">
+            {data.people.map((p) => (
+              <li key={p.id} className="space-y-1 py-2" data-child={p.name}>
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="mr-auto font-medium text-gray-800 dark:text-life-50">{p.name}</span>
+                  <span className="text-sm font-semibold text-life-700 dark:text-life-100" data-earned>{pointsText(p.points)}{p.cents !== null ? ` = ${centsText(p.cents)}` : ''}</span>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-life-300">
+                  {p.paid_through ? `Paid through ${dayText(p.paid_through)}` : 'Not paid yet'}{p.paid_points > 0 ? ` · ${pointsText(p.paid_points)}${p.paid_cents !== null ? ` (${centsText(p.paid_cents)})` : ''} of this is paid` : ''}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="mr-auto text-sm text-gray-800 dark:text-life-50" data-owing>{p.owing_points > 0 ? <>Still to pay: <span className="font-semibold">{pointsText(p.owing_points)}{p.owing_cents !== null ? ` = ${centsText(p.owing_cents)}` : ''}</span></> : 'Nothing to pay'}</span>
+                  {p.owing_points > 0 && <button type="button" onClick={() => pay(p)} aria-label={`Mark ${p.name} as paid through ${dayText(p.pay_through)}`} className={`${buttonClass} min-h-[44px]`}>Mark as paid</button>}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {data.history.length > 0 && (
+            <div>
+              <h3 className="text-xs font-medium text-gray-600 dark:text-life-200">Paid</h3>
+              <ul className="space-y-0.5" aria-label="Payments">
+                {data.history.map((h, i) => {
+                  const newest = !lastFor.has(h.id) && lastFor.add(h.id);
+                  return (
+                    <li key={`${h.id}-${h.through}-${i}`} className="flex flex-wrap items-center gap-x-2 text-sm text-gray-700 dark:text-life-100">
+                      <span className="mr-auto min-w-0">{h.name} was paid {h.cents !== null ? `${centsText(h.cents)} for ` : ''}{pointsText(h.points)}, through {dayText(h.through)} (on {dayText(h.on)}).</span>
+                      {newest && <button type="button" onClick={() => undo(h)} aria-label={`Take back the payment to ${h.name} through ${dayText(h.through)}`} className="min-h-[44px] px-2 text-xs text-gray-500 underline hover:text-red-600">Take back</button>}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+      {said && <p className="text-sm text-life-700 dark:text-life-100" role="status">{said}</p>}
+      {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+    </section>
   );
 }

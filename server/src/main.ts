@@ -11,7 +11,8 @@ import { createServer } from 'node:http';
 import path from 'node:path';
 import { createApp } from './app.ts';
 import { patientFetcher, syncDue, webFetcher } from './connectionRoutes.ts';
-import { followedDue, remindersDue } from '../../core/src/index.ts';
+import { followedDue, recalls, recallsDue, remindersDue } from '../../core/src/index.ts';
+import { nhtsaBase } from './recallRoutes.ts';
 import { browserPush } from './push.ts';
 import { demoFromEnv, keepDemoFresh } from './demo.ts';
 import { openDatabase } from './database.ts';
@@ -79,6 +80,23 @@ const reminderTimer = setInterval(async () => {
   }
 }, 60_000);
 reminderTimer.unref();
+
+// Recall alerts: for each person who turned them on, each car is asked about once a week, a person at a time.
+let recalling = false;
+const recallTimer = setInterval(async () => {
+  if (recalling || demo) return;
+  recalling = true;
+  try {
+    for (const person of await recallsDue(database.db, () => new Date())) {
+      try { await recalls(database.db, person, () => new Date(), webFetcher, nhtsaBase()).check(); } catch (problem) { console.error(problem); }
+    }
+  } catch (problem) {
+    console.error(problem);
+  } finally {
+    recalling = false;
+  }
+}, 60 * 60_000);
+recallTimer.unref();
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {

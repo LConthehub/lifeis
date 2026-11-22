@@ -161,6 +161,7 @@ export default function FillPlace() {
         {place.path !== place.name && <p className="text-xs text-gray-500 dark:text-life-300">{place.path}</p>}
         <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
           Scan each thing here, or type its name. What you already have is moved here; what's new is added. Scan another place's sticker to move on to it.
+          {' '}<Link to={`/things/places/${placeId}/walk`} className="underline">Walk through what's here</Link> to add photos, values and serial numbers.
         </p>
       </div>
 
