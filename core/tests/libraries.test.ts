@@ -45,6 +45,29 @@ const book = (n: number, title: string, author: string, extra = '') => `<entry>
   <link rel="http://opds-spec.org/acquisition" type="application/epub+zip" href="/opds/download/${n}/epub/"/>
   <link rel="http://opds-spec.org/image" type="image/jpeg" href="/opds/cover/${n}"/>
   ${extra}</entry>`;
+// A book as Calibre-Web 0.6.27 really sends it: a shared "urn:uuid:None" id (books added without Calibre have no uuid), the date as
+// <published>, a description in xhtml led by a TAGS line and escaped twice, a cover only when there is one, and the number in both addresses.
+const calibreBook = (n: number, title: string, author: string, tags: string, cover = true) => `<entry>
+    <title>${title}</title>
+    <id>urn:uuid:None</id>
+    <updated>2026-11-22T19:15:48+00:00</updated>
+      <author>
+        <name>${author}</name>
+      </author>
+    <published>2005-07-20T00:00:00+00:00</published>
+      <dcterms:language>eng</dcterms:language>
+    <category scheme="http://www.bisg.org/standards/bisac_subject/index.html"
+              term="${tags}"
+              label="${tags}"/>
+    <content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml">
+    TAGS: ${tags}<br/>
+        <p>A tiny book about ${title.replace('&amp;', '&amp;amp;')}.</p>
+    </div></content>
+    ${cover ? `<link type="image/jpeg" href="/opds/cover/${n}" rel="http://opds-spec.org/image"/>
+    <link type="image/jpeg" href="/opds/cover/${n}" rel="http://opds-spec.org/image/thumbnail"/>` : ''}
+    <link rel="http://opds-spec.org/acquisition" href="/opds/download/${n}/epub/"
+          length="1082" title="EPUB" mtime="2026-11-22T19:15:48+00:00" type="application/epub+zip"/>
+  </entry>`;
 
 // ---------- reading a catalogue ----------
 
@@ -58,7 +81,7 @@ it('a page of a catalogue is read: titles, authors, the year, the ISBN, and word
     title: 'Pride & Prejudice', creator: 'Jane Austen', year: 1813, ids: { isbn: '9780141439518' }, genres: ['Classics'], format: 'eBook', book: true,
     coverUrl: 'http://shelf.test/opds/cover/7', sourceId: 'urn:uuid:book-7',
   });
-  expect(page.entries[0]!.summary).toBe('<p>A novel of <b>manners</b>.</p>');
+  expect(page.entries[0]!.summary).toBe('A novel of manners.');
   expect(page.entries[1]).toMatchObject({ title: 'By author', book: false, leads: 'http://shelf.test/opds/author' });
   expect(() => readOpdsPage('<html><body>Sign in</body></html>', 'http://shelf.test')).toThrow(/catalog/);
 });
@@ -66,8 +89,9 @@ it('a page of a catalogue is read: titles, authors, the year, the ISBN, and word
 // ---------- Calibre-Web ----------
 
 it('Calibre-Web: every page is read with your sign-in, and each book opens on its own page', async () => {
-  pages['http://calibre.test/opds/books/letter/00'] = { body: feed(book(1, 'Dune', 'Frank Herbert') + book(2, 'Emma', 'Jane Austen'), '/opds/books/letter/00?offset=2') };
-  pages['http://calibre.test/opds/books/letter/00?offset=2'] = { body: feed(book(3, 'Kindred', 'Octavia E. Butler')) };
+  // Emma has no cover, and every book shares the same id: the number in the download address tells them apart.
+  pages['http://calibre.test/opds/books/letter/00'] = { body: feed(calibreBook(1, 'Dune', 'Frank Herbert', 'Science Fiction') + calibreBook(2, 'Emma', 'Jane Austen', 'Classics', false), '/opds/books/letter/00?offset=2') };
+  pages['http://calibre.test/opds/books/letter/00?offset=2'] = { body: feed(calibreBook(3, 'Salt &amp; Stone', 'Octavia E. Butler', 'Fiction')) };
   pages['http://calibre.test/opds/cover/1'] = { type: 'image/jpeg', body: new Uint8Array([255, 216, 255, 1]) };
   const [server] = await servers().create({ kind: 'calibre-web', url: 'http://calibre.test/', username: 'reader', password: 'pa ss', every_hours: 6 });
   expect(server).toMatchObject({ kind: 'calibre-web', name: 'Calibre-Web', url: 'http://calibre.test', copies: 0, last_ok: null });
@@ -80,11 +104,17 @@ it('Calibre-Web: every page is read with your sign-in, and each book opens on it
   const dune = (await shelf.list({ q: 'Dune' }))[0]!;
   expect(dune).toMatchObject({ type: 'book', creator: 'Frank Herbert', formats: ['eBook'], cover: `/api/media/${dune.id}/cover` });
   expect((await shelf.get(dune.id)).copies[0]).toMatchObject({ format: 'eBook', source: 'calibre-web', link: 'http://calibre.test/book/1' });
+  // A book without a cover still opens on its page, and an ampersand in a title or its description comes out as one.
+  const emma = (await shelf.list({ q: 'Emma' }))[0]!;
+  expect((await shelf.get(emma.id)).copies[0]).toMatchObject({ link: 'http://calibre.test/book/2' });
+  const salt = await shelf.get((await shelf.list({ q: 'Salt' }))[0]!.id);
+  expect(salt).toMatchObject({ title: 'Salt & Stone', year: 2005, summary: 'A tiny book about Salt & Stone.' });
+  expect(salt.genres).toEqual(['Fiction']);
   expect((await servers().list())[0]).toMatchObject({ copies: 3, last_ok: true, last_message: '3 on the server, 3 added' });
 
   // A book gone from the server goes from the collection; one you've logged stays as a title.
   await shelf.log((await shelf.list({ q: 'Emma' }))[0]!.id, { day: '2046-03-01' });
-  pages['http://calibre.test/opds/books/letter/00'] = { body: feed(book(1, 'Dune', 'Frank Herbert')) };
+  pages['http://calibre.test/opds/books/letter/00'] = { body: feed(calibreBook(1, 'Dune', 'Frank Herbert', 'Science Fiction')) };
   expect(await servers().sync(server!.id)).toMatchObject({ total: 1, added: 0, removed: 2 });
   expect((await shelf.list()).map((m) => m.title)).toEqual(['Dune', 'Emma']);
 });
@@ -110,16 +140,33 @@ it('any OPDS list of books can be given by its address, with no sign-in', async 
 
 // ---------- Kavita ----------
 
-it('Kavita: each library is followed to its series, with the key in the address', async () => {
-  const lead = (id: string, title: string, href: string) => `<entry><title>${title}</title><id>${id}</id><link rel="subsection" type="application/atom+xml;profile=opds-catalog" href="${href}"/><link rel="http://opds-spec.org/image" type="image/jpeg" href="/api/image/series-cover?seriesId=${id}&amp;apiKey=K1"/></entry>`;
-  pages['http://kavita.test/api/opds/K1/libraries'] = { body: feed(lead('1', 'Books', '/api/opds/K1/libraries/1') + lead('2', 'Comics', '/api/opds/K1/libraries/2')) };
-  pages['http://kavita.test/api/opds/K1/libraries/1'] = { body: feed(lead('40', 'The Hobbit', '/api/opds/K1/series/40')) };
-  pages['http://kavita.test/api/opds/K1/libraries/2'] = { body: feed(lead('41', 'Bone', '/api/opds/K1/series/41')) };
+// Shaped like Kavita 0.9.1.4 answers: a library lists its series itself, 20 to a page, with a "next" link carrying pageNumber; a series has an author, a summary led by "Format: ...", and covers that hold the key in their address.
+it('Kavita: each library is followed to its series, every page of it, with the key in the address', async () => {
+  const nav = 'application/atom+xml;profile=opds-catalog;kind=navigation';
+  const library = (id: string, title: string) => `<entry><updated>2026-11-22T19:22:47</updated><id>${id}</id><title>${title}</title><link rel="subsection" type="${nav}" href="/api/opds/K1/libraries/${id}" /><link rel="http://opds-spec.org/image" type="image/jpeg" href="/api/image/library-cover?libraryId=${id}&amp;apiKey=K1" /></entry>`;
+  const series = (id: number, title: string, author: string, genre: string) => `<entry><updated>2026-11-22T19:22:51</updated><id>${id}</id><title>${title}</title>
+    <summary>Format: Epub     Summary: A tiny book about ${title}.</summary>
+    <link rel="subsection" type="${nav}" href="/api/opds/K1/series/${id}" />
+    <link rel="http://opds-spec.org/image" type="image/jpeg" href="/api/image/series-cover?seriesId=${id}&amp;apiKey=K1" />
+    <link rel="http://opds-spec.org/image/thumbnail" type="image/jpeg" href="/api/image/series-cover?seriesId=${id}&amp;apiKey=K1" />
+    <author><name>${author}</name><uri>http://opds-spec.org/author/${id}</uri></author><category term="" label="${genre}" /></entry>`;
+  pages['http://kavita.test/api/opds/K1/libraries'] = { type: 'application/xml', body: feed(library('1', 'Books') + library('2', 'Comics')) };
+  pages['http://kavita.test/api/opds/K1/libraries/1'] = { type: 'application/xml', body: feed(series(40, 'The Hobbit', 'J. R. R. Tolkien', 'fantasy') + series(42, 'Salt &amp; Stone', 'Mara Quill', 'fiction'),
+    '/api/opds/K1/libraries/1?pageNumber=2') };
+  pages['http://kavita.test/api/opds/K1/libraries/1?pageNumber=2'] = { type: 'application/xml', body: feed(series(43, 'Quiet Orchards', 'Ines Calder', 'nature')) };
+  pages['http://kavita.test/api/opds/K1/libraries/2'] = { type: 'application/xml', body: feed(series(41, 'Bone', 'Jeff Smith', 'comics')) };
+  pages['http://kavita.test/api/image/series-cover?seriesId=40&apiKey=K1'] = { type: 'image/png', body: new Uint8Array([137, 80, 78, 71]) };
   const [server] = await servers().create({ kind: 'kavita', url: 'http://kavita.test', key: 'K1' });
   await expect(servers().create({ kind: 'kavita', url: 'http://kavita.test' })).rejects.toThrow('Paste the API key from Kavita');
-  expect(await servers().sync(server!.id)).toMatchObject({ total: 2, added: 2 });
+  expect(await servers().sync(server!.id)).toMatchObject({ total: 4, added: 4, covers: 1 });
   const hobbit = await shelf.get((await shelf.list({ q: 'Hobbit' }))[0]!.id);
+  expect(hobbit).toMatchObject({ creator: 'J. R. R. Tolkien', summary: 'A tiny book about The Hobbit.' });
   expect(hobbit.copies[0]).toMatchObject({ format: 'eBook', source: 'kavita', link: 'http://kavita.test/library/1/series/40' });
+  // The second page of a library is read, and a series is linked under the library it is in.
+  const orchards = await shelf.get((await shelf.list({ q: 'Orchards' }))[0]!.id);
+  expect(orchards.copies[0]).toMatchObject({ link: 'http://kavita.test/library/1/series/43' });
+  expect((await shelf.get((await shelf.list({ q: 'Bone' }))[0]!.id)).copies[0]).toMatchObject({ link: 'http://kavita.test/library/2/series/41' });
+  expect((await shelf.get((await shelf.list({ q: 'Salt' }))[0]!.id)).title).toBe('Salt & Stone');
 });
 
 // ---------- Audiobookshelf ----------
@@ -165,7 +212,7 @@ it('a book you already have gains a copy rather than a second title', async () =
 });
 
 it('changing, syncing by itself, and removing a book server', async () => {
-  pages['http://calibre.test/opds/books/letter/00'] = { body: feed(book(1, 'Dune', 'Frank Herbert')) };
+  pages['http://calibre.test/opds/books/letter/00'] = { body: feed(calibreBook(1, 'Dune', 'Frank Herbert', 'Science Fiction')) };
   const [server] = await servers().create({ kind: 'calibre-web', url: 'http://calibre.test', username: 'reader', password: 'p', every_hours: 6 });
   expect(await librariesDue(db, clock)).toEqual([{ id: server!.id, owner_id: owner }]);
   await servers().sync(server!.id);

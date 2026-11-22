@@ -58,6 +58,12 @@ export function plain(xml: string | undefined | null): string | null {
   }).replace(/\s+/g, ' ').trim();
   return out || null;
 }
+/** A description as plain words. Servers often send it as escaped HTML (Calibre-Web does, with its &amp; escaped again), so it is read twice. */
+const words = (xml: string | undefined | null): string | null => {
+  const once = plain(xml);
+  // Taking tags out leaves a space where each was, so "<b>manners</b>." would read "manners .".
+  return once && /<\/?[a-z][^>]*>|&(?:#\d+|#x[0-9a-f]+|[a-z]+);/i.test(once) ? plain(once)?.replace(/\s+([.,;:!?])/g, '$1') ?? null : once;
+};
 const tag = (xml: string, name: string) => new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, 'i').exec(xml)?.[1];
 const attribute = (element: string, name: string) => plain(new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i').exec(element)?.slice(1).find((v) => v !== undefined));
 type Link = { rel: string; type: string; href: string };
@@ -65,7 +71,7 @@ const linksIn = (xml: string): Link[] => [...xml.matchAll(/<link\b[^>]*>/gi)].ma
   rel: attribute(element, 'rel') ?? '', type: attribute(element, 'type') ?? '', href: attribute(element, 'href') ?? '',
 })).filter((l) => l.href);
 
-export type OpdsEntry = Imported & { /** Whether it's a book to have (it can be downloaded), or only a way further into the catalogue. */ book: boolean; /** Where this entry leads, when it's a way further in. */ leads: string | null };
+export type OpdsEntry = Imported & { /** Whether it's a book to have (it can be downloaded), or only a way further into the catalogue. */ book: boolean; /** Where this entry leads, when it's a way further in. */ leads: string | null; /** Where each file of the book can be downloaded. */ files: string[] };
 export type OpdsPage = { entries: OpdsEntry[]; next: string | null };
 
 /** One page of an OPDS catalogue, read. `at` is the page's own address, which the links in it are relative to. */
@@ -92,9 +98,12 @@ export function readOpdsPage(xml: string, at: string): OpdsPage {
     }
     const types = get.map((l) => l.type.toLowerCase()).join(' ');
     const id = plain(tag(entry, 'id')) ?? title;
+    // Calibre-Web starts its description with lines of its own ("TAGS: ...", "SERIES: ..."), which aren't part of the book's.
+    const described = (tag(entry, 'summary') ?? tag(entry, 'content'))?.replace(/\b(?:RATING|TAGS|SERIES):[^<]*<br\s*\/?>/g, '');
     entries.push({
       sourceId: id.slice(0, 300), type: 'book', title, creator: authors.length ? authors.slice(0, 4).join(', ') : null,
-      year: year ? Number(year) : null, summary: plain(tag(entry, 'summary') ?? tag(entry, 'content')), genres: [...new Set(genres)].slice(0, 12), minutes: null, ids,
+      year: year ? Number(year) : null, summary: words(described), genres: [...new Set(genres)].slice(0, 12), minutes: null, ids,
+      files: get.map((l) => resolve(l.href)).filter((h): h is string => Boolean(h)),
       coverUrl: cover ? resolve(cover.href) : null,
       format: /audio|mpeg|m4b/.test(types) ? 'Audiobook' : /cbz|cbr|comic/.test(types) ? 'Comic' : 'eBook',
       link: page ? resolve(page.href) : null,
@@ -143,11 +152,9 @@ async function readOpds(fetcher: Fetcher, who: string, start: string, headers: R
   return out;
 }
 
-/** A Calibre-Web book's own page, from the number in its cover or download address. */
-const calibreWebPage = (base: string, entry: OpdsEntry): string | null => {
-  const n = /\/opds\/(?:cover|download)\/(\d+)/.exec(entry.coverUrl ?? '')?.[1];
-  return n ? `${base}/book/${n}` : null;
-};
+/** A Calibre-Web book's number, from its download or cover address (every book has a download; only some have a cover). */
+const calibreWebNumber = (entry: OpdsEntry): string | null =>
+  [...entry.files, entry.coverUrl ?? ''].map((a) => /\/opds\/(?:cover|download)\/(\d+)/.exec(a)?.[1]).find(Boolean) ?? null;
 
 /** Everything a book server has, as the collection needs it. `limit` reads only that many, to try a sign-in. */
 export async function readLibrary(fetcher: Fetcher, kind: LibraryKind, url: string, secret: Secret, limit = 0): Promise<{ items: Imported[]; coverHeaders: Record<string, string> }> {
@@ -206,7 +213,9 @@ export async function readLibrary(fetcher: Fetcher, kind: LibraryKind, url: stri
       const libraryId = /\/libraries\/(\d+)/.exec(library.leads)?.[1];
       for (const series of await readOpds(fetcher, who, library.leads, {}, true, limit)) {
         const seriesId = /\/series\/(\d+)/.exec(series.leads ?? '')?.[1] ?? (/^\d+$/.test(series.sourceId) ? series.sourceId : null);
-        items.push({ ...series, sourceId: seriesId ? `series-${seriesId}` : series.sourceId, format: 'eBook',
+        // Kavita opens each summary with what it knows of the files ("Format: Epub     Summary: ...").
+        const summary = series.summary?.replace(/^(?:Format|File Type):.*?(?:Summary:\s*|$)/i, '').trim() || null;
+        items.push({ ...series, summary, sourceId: seriesId ? `series-${seriesId}` : series.sourceId, format: 'eBook',
           link: seriesId && libraryId ? `${url}/library/${libraryId}/series/${seriesId}` : null });
       }
       if (limit && items.length >= limit) break;
@@ -215,7 +224,11 @@ export async function readLibrary(fetcher: Fetcher, kind: LibraryKind, url: stri
   }
   const headers = basic(secret);
   if (kind === 'calibre-web') {
-    const items = (await readOpds(fetcher, who, `${url}/opds/books/letter/00`, headers, false, limit)).map((e) => ({ ...e, link: calibreWebPage(url, e) ?? e.link }));
+    // Its own ids can't be trusted (books added without Calibre all share "urn:uuid:None"), so the book's number is the id.
+    const items = (await readOpds(fetcher, who, `${url}/opds/books/letter/00`, headers, false, limit)).map((e) => {
+      const n = calibreWebNumber(e);
+      return { ...e, sourceId: n ? `book-${n}` : e.sourceId, link: n ? `${url}/book/${n}` : e.link };
+    });
     return { items, coverHeaders: headers };
   }
   return { items: await readOpds(fetcher, who, url, headers, false, limit), coverHeaders: headers };
