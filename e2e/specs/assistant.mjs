@@ -13,6 +13,12 @@ const model = createServer((req, res) => {
     if (req.url === '/v1/models') { res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ data: [{ id: 'llama3.2' }, { id: 'qwen3' }] })); return; }
     if (req.url === '/v1/chat/completions') {
       received.push(JSON.parse(body));
+      // A photo to copy out: the message holds a picture, and the model answers with the words on it.
+      const first = received.at(-1).messages[0].content;
+      if (Array.isArray(first)) {
+        res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: "Nana's buttermilk biscuits\n2 cups flour\n1 stick butter\n3/4 cup buttermilk\nCut the butter into the flour.\nBake at 450°F for 12 minutes." } }] }));
+        return;
+      }
       const said = received.at(-1).messages[1].content;
       const answer = /Omelette/.test(said) ? '<think>eggs are in the pantry</think>You could make the Omelette: you have eggs and butter.' : "I don't see that in your records.";
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: answer } }] }));
@@ -27,6 +33,7 @@ const browser = await chromium.launch({ ...browserChoice, headless: true });
 const page = await (await browser.newContext({ viewport: { width: 420, height: 900 } })).newPage();
 const bad = [];
 page.on('pageerror', (e) => bad.push('page error: ' + e.message));
+page.on('console', (m) => { if (m.type() === 'error') bad.push('console: ' + m.text().slice(0, 300)); });
 const say = (what, ok) => console.log((ok ? 'ok   ' : 'FAIL ') + what);
 const wait = (ms = 800) => page.waitForTimeout(ms);
 const text = async () => (await page.locator('main').innerText()).replace(/\s+/g, ' ');
@@ -83,6 +90,25 @@ await page.screenshot({ path: shots + '/assistant-answer.png', fullPage: true })
 const sent = JSON.stringify(received.at(-1));
 say('the model got the kitchen and the question', received.at(-1).model === 'llama3.2' && /Omelette/.test(sent) && /What can I make for dinner/.test(sent));
 say('and nothing from the parts not ticked', !/Secret gift|Necklace/.test(sent));
+
+// A handwritten card: the model copies it out, and the person checks it before it becomes a recipe.
+await page.getByRole('link', { name: 'delicious' }).click(); await wait();
+await page.getByRole('button', { name: 'Bring one in' }).click();
+await page.getByRole('button', { name: 'From a photo or a book' }).click(); await wait(600);
+const importing = page.getByRole('dialog');
+say('handwriting is offered, and says where the photo goes', /It's handwritten/.test(await importing.innerText()) && /on your own computer or network, so the photo doesn't leave home/.test(await importing.innerText()));
+// A real picture, drawn in the page: a white card with a line on it.
+const PNG = Buffer.from(await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 320; c.height = 200; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, 320, 200); x.fillStyle = '#000'; x.fillRect(20, 40, 200, 4); return c.toDataURL('image/png').split(',')[1]; }), 'base64');
+await importing.getByLabel('Choose or take a photo of a handwritten recipe').setInputFiles({ name: 'card.png', mimeType: 'image/png', buffer: PNG });
+await importing.locator('textarea').waitFor({ timeout: 15000 }).catch(async () => { console.log('FAIL no copy appeared; the page says: ' + (await importing.innerText()).replace(/\s+/g, ' ').slice(-400) + ' || ' + bad.join(' ; ')); });
+const copied = await importing.locator('textarea').inputValue();
+say('the model\'s copy is shown to be checked: ' + copied.split('\n')[0], /^Nana's buttermilk biscuits\n2 cups flour/.test(copied));
+const picture = received.at(-1).messages[0].content;
+say('the model was sent the photo and the instruction to copy, and none of the records', picture[1].type === 'image_url' && /^data:image\/jpeg;base64,/.test(picture[1].image_url.url) && /Copy out exactly/.test(picture[0].text) && !/Omelette|Necklace/.test(JSON.stringify(received.at(-1))));
+await importing.getByRole('button', { name: 'Make it a recipe' }).click(); await wait(1200);
+const draft = await page.getByRole('dialog').innerHTML();
+say('it becomes a recipe to look over, in the words on the importing', /Nana&#x27;s buttermilk biscuits|Nana's buttermilk biscuits/.test(draft) && /1 stick butter/.test(draft));
+await page.screenshot({ path: shots + '/handwritten-recipe.png' });
 console.log(bad.length ? 'PROBLEMS SEEN:\n' + [...new Set(bad)].join('\n') : 'no page errors');
 await browser.close();
 model.close();

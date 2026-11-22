@@ -41,3 +41,18 @@ export async function readPhotos(files, say = () => {}) {
     await worker.terminate();
   }
 }
+
+/**
+ * A photo made ready to hand to a model you chose, for handwriting: a JPEG no larger than a model needs,
+ * as the letters and digits a request carries. Nothing is sent here; this only prepares it.
+ */
+export async function photoForModel(file, longest = 1600) {
+  const picture = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const scale = Math.min(1, longest / Math.max(picture.width, picture.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(picture.width * scale);
+  canvas.height = Math.round(picture.height * scale);
+  canvas.getContext('2d').drawImage(picture, 0, 0, canvas.width, canvas.height);
+  picture.close?.();
+  return { type: 'image/jpeg', base64: canvas.toDataURL('image/jpeg', 0.85).split(',')[1] };
+}

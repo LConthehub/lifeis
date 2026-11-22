@@ -89,6 +89,17 @@ export function isLocal(address: string): boolean {
   return host === '::1' || /^f[cd][0-9a-f]{2}:/.test(host) || /^fe[89ab][0-9a-f]:/.test(host);
 }
 
+/**
+ * What a model is told when it is handed a photo of a recipe. It copies; it doesn't cook. Life Is keeps a
+ * recipe as it was written, so the model is asked for the words on the page and nothing of its own.
+ */
+const COPY_OUT = 'You are shown a photo of a recipe, handwritten or printed. Copy out exactly what is written, in the same words, ' +
+  'the same amounts and the same order. Do not correct, reword, translate, shorten or add anything, and do not comment. ' +
+  'Put the title on the first line. Then the ingredients, one to a line. Then the steps, one to a line. ' +
+  'Where a word cannot be read, write [?] in its place. If the photo is not a recipe, or nothing can be read, answer with exactly: NOTHING';
+/** A photo no larger than this is sent as it is; the page shrinks photos well below it. */
+const MAX_PICTURE_BYTES = 4_000_000;
+
 /** Thinking some models write out before their answer (<think>…</think>) is left out of what is shown. */
 const answerOnly = (text: string) => text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 
@@ -242,6 +253,32 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
       } catch {
         return { name: tools.phone.name, ready: false, why: `${tools.phone.name} isn't available on this device.` };
       }
+    },
+
+    /**
+     * The words on a photo of a recipe, copied out by the model at the address you gave: for handwriting, which
+     * the reader built into Life Is can't make out. The photo goes to that model and nowhere else, only when
+     * asked, and none of your records go with it. The model must be one that can look at pictures.
+     */
+    async readRecipePhoto(picture: { type?: string | null; base64?: string | null }): Promise<{ text: string }> {
+      const type = picture.type ?? '';
+      const data = (picture.base64 ?? '').replace(/\s+/g, '');
+      if (!/^image\/(jpeg|png|webp)$/.test(type) || !/^[A-Za-z0-9+/]+=*$/.test(data)) throw new Problem(400, 'Choose a photo (JPEG or PNG)');
+      if (data.length * 0.75 > MAX_PICTURE_BYTES) throw new Problem(400, 'That photo is too large to send. Take it again a little further back.');
+      const k = await kept();
+      if (!k.enabled) throw new Problem(409, 'Turn the assistant on in Settings, under "Outside services"');
+      if (k.source === 'phone') throw new Problem(409, "The phone's built-in AI can't look at photos. Choose a model at an address in Settings to read handwriting.");
+      if (!isLocal(k.url) && !k.cloud_ok) throw new Problem(409, "The assistant's address isn't on this computer or your network, and a cloud AI hasn't been allowed");
+      const got = await call(k, '/chat/completions', JSON.stringify({
+        ...(k.model ? { model: k.model } : {}), temperature: 0,
+        messages: [{ role: 'user', content: [{ type: 'text', text: COPY_OUT }, { type: 'image_url', image_url: { url: `data:${type};base64,${data}` } }] }],
+      }));
+      const said = (got.choices as { message?: { content?: unknown } }[] | undefined)?.[0]?.message?.content;
+      if (typeof said !== 'string') throw new Problem(400, "The model's server sent something that isn't an answer. Is it a model that can look at pictures?");
+      // Some models wrap what they copy in a code fence; the words inside are what was asked for.
+      const text = answerOnly(said).replace(/^```[a-z]*\s*|\s*```$/g, '').trim();
+      if (!text || /^NOTHING\.?$/i.test(text)) throw new Problem(400, "The model couldn't read a recipe in that photo. A sharper photo, straight on and in good light, reads best.");
+      return { text: text.slice(0, 20_000) };
     },
 
     /** An answer to a question about the household, and exactly what the model was given to answer it. */

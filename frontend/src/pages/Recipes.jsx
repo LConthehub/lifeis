@@ -124,6 +124,30 @@ function FromPhoto({ onDraft }) {
   const [text, setText] = useState(null);
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState('');
+  // Handwriting: a model you chose in Settings can copy it out. Offered only when one is turned on at an address.
+  const [helper, setHelper] = useState(null);
+  useEffect(() => { axios.get('/api/assistant').then(({ data }) => setHelper(data)).catch(() => {}); }, []);
+  const canWrite = helper?.enabled && helper.source === 'address';
+  const handwritten = async (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    if (files.length === 0) return;
+    setError('');
+    try {
+      const { photoForModel } = await import('../components/readPhoto');
+      let page = 0;
+      for (const file of files) {
+        page += 1;
+        setProgress(`The model is reading${files.length > 1 ? ` page ${page} of ${files.length}` : ''}… this can take a minute.`);
+        const { data } = await axios.post('/api/assistant/read-recipe', await photoForModel(file));
+        setText((before) => [before, data.text].filter((part) => part && part.trim()).join('\n\n'));
+      }
+    } catch (err) {
+      // No answer from Life Is at all means the photo never left: it couldn't be opened here.
+      setError(err?.response ? errorMessage(err, "The model couldn't read that photo.") : "That file couldn't be opened as a photo. Try a JPEG or PNG.");
+    }
+    setProgress(null);
+  };
   const picked = async (e) => {
     const files = [...e.target.files];
     e.target.value = '';
@@ -148,12 +172,29 @@ function FromPhoto({ onDraft }) {
     <div className="space-y-3">
       <p className="text-sm text-gray-600 dark:text-life-100">
         Take a photo of a recipe card or a page in a book, or choose one you have. The words are read off it <span className="font-medium">here on this device</span>:
-        the photo is not sent anywhere and is not kept. Printed pages read well; handwriting mostly doesn't.
+        the photo is not sent anywhere and is not kept. Printed pages read well this way; handwriting needs the button below.
       </p>
       <label className={`${quietButtonClass} inline-block cursor-pointer`}>
         {text ? 'Add another page' : 'Choose or take a photo'}
         <input type="file" accept="image/*" multiple onChange={picked} disabled={progress !== null} className="sr-only" aria-label="Choose or take a photo of a recipe" />
       </label>
+      {canWrite ? (
+        <div className="space-y-1 rounded-lg bg-life-50 p-3 dark:bg-life-700">
+          <label className={`${quietButtonClass} inline-block cursor-pointer`}>
+            ✍️ It's handwritten
+            <input type="file" accept="image/*" multiple onChange={handwritten} disabled={progress !== null} className="sr-only" aria-label="Choose or take a photo of a handwritten recipe" />
+          </label>
+          <p className="text-xs text-gray-600 dark:text-life-200">
+            Handwriting is read by the AI model you chose in Settings{helper.model ? ` (${helper.model})` : ''}.
+            {helper.local ? ' It is on your own computer or network, so the photo doesn\'t leave home.' : ' It is a cloud AI: the photo is sent to it, and nothing else is.'}
+            {' '}It copies out what is written; check it against the card before saving.
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-gray-500 dark:text-life-300">
+          For handwriting, turn on the assistant in <Link to="/settings#assistant" className="underline">Settings</Link> with a model that can look at pictures. Then a handwritten card can be read too.
+        </p>
+      )}
       {progress !== null && <p className="text-sm text-life-700 dark:text-life-200" role="status">{progress}</p>}
       {text !== null && (
         <>

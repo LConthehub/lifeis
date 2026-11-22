@@ -150,3 +150,28 @@ it("uses the phone's own model when chosen: no address, no tick, nothing fetched
   // The same records on a server, where there's no phone: it falls back to an address.
   expect((await helper(ana).status()).source).toBe('address');
 });
+
+it('copies a handwritten recipe out of a photo: the photo alone goes to the model, and only when allowed', async () => {
+  const me = helper(ana);
+  const photo = { type: 'image/jpeg', base64: '/9j/4AAQSkZJRg==' };
+  await expect(me.readRecipePhoto(photo)).rejects.toThrow('Turn the assistant on');
+  await me.save({ enabled: true, url: 'http://host.docker.internal:1234/v1', model: 'a-model-that-sees' });
+  await kitchen(db, ana).createRecipe({ title: 'Secret family stew', ingredients_text: '1 secret' });
+  reply = { choices: [{ message: { content: "```\nNana's biscuits\n2 cups flour\n1 [?] butter\nCut the butter in.\n```" } }] };
+  expect(await me.readRecipePhoto(photo)).toEqual({ text: "Nana's biscuits\n2 cups flour\n1 [?] butter\nCut the butter in." });
+  const sent = asked.at(-1)!;
+  expect(sent.url).toBe('http://host.docker.internal:1234/v1/chat/completions');
+  const content = (sent.body!.messages as { content: { type: string; text?: string; image_url?: { url: string } }[] }[])[0]!.content;
+  expect(content[1]).toEqual({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==' } });
+  expect(content[0]!.text).toMatch(/Copy out exactly what is written/);
+  // None of the household's records go with the photo.
+  expect(JSON.stringify(sent.body)).not.toContain('Secret family stew');
+
+  // Not a recipe, not a photo, a cloud model that wasn't allowed, or the phone's own model: each is said plainly.
+  reply = { choices: [{ message: { content: 'NOTHING' } }] };
+  await expect(me.readRecipePhoto(photo)).rejects.toThrow("couldn't read a recipe");
+  await expect(me.readRecipePhoto({ type: 'application/pdf', base64: 'AAAA' })).rejects.toThrow('Choose a photo');
+  await expect(me.readRecipePhoto({ type: 'image/png', base64: 'not base64!' })).rejects.toThrow('Choose a photo');
+  await db.run("UPDATE user_settings SET value = json_set(value, '$.url', 'https://api.example.com/v1') WHERE user_id = ? AND key = 'assistant'", [ana]);
+  await expect(me.readRecipePhoto(photo)).rejects.toThrow("a cloud AI hasn't been allowed");
+});

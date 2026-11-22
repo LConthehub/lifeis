@@ -25,6 +25,10 @@ export function assistantRoutes(db: Db, tools?: AssistantTools): Route[] {
     })],
     ['POST', /^\/api\/assistant\/models$/, async (c) => ({ json: { models: await helper(c).models() } })],
     ['POST', /^\/api\/assistant\/phone$/, async (c) => ({ json: await helper(c).phoneCheck() })],
+    // A photo of a handwritten recipe, copied out by the model. The photo goes to the model and is not kept.
+    ['POST', /^\/api\/assistant\/read-recipe$/, async (c) => ({
+      json: await helper(c).readRecipePhoto({ type: read.maybeText(c.body, 'type'), base64: read.maybeText(c.body, 'base64') }),
+    })],
     ['POST', /^\/api\/assistant\/ask$/, async (c) => ({ json: await helper(c).ask(read.maybeText(c.body, 'question')) })],
   ];
 }
