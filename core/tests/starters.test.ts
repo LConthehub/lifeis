@@ -23,3 +23,21 @@ it('every set has a heading the page knows, and no two sets share a kind name', 
   const names = STARTERS.flatMap((s) => s.kinds.map((k) => k.name.toLowerCase()));
   expect(new Set(names).size).toBe(names.length);
 });
+
+// The pages are built into the Docker image from frontend/ alone, so a page that reaches into core/ builds on
+// a developer's computer and fails in the image. Only the phone app's own code (frontend/src/device) may.
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
+
+it('no page reaches into core: what a page needs from core comes through the API', () => {
+  const pages = path.resolve(import.meta.dirname, '..', '..', 'frontend', 'src');
+  const reaching: string[] = [];
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      const at = path.join(dir, name);
+      if (statSync(at).isDirectory()) { if (name !== 'device') walk(at); } else if (/\.(jsx?|tsx?)$/.test(name) && /from ['"][./]+\/core\//.test(readFileSync(at, 'utf8'))) reaching.push(path.relative(pages, at));
+    }
+  };
+  walk(pages);
+  expect(reaching).toEqual([]);
+});
