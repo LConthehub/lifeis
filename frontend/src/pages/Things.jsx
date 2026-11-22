@@ -4,7 +4,8 @@ import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { ScanSticker } from './Places';
 import PlacePicker from '../components/PlacePicker';
-import { KIND_GROUPS, groupOfKind } from '../../../core/src/starters.ts';
+// The headings kinds sit under, in the order shown. Which heading a kind belongs to comes with the kind (its `group`).
+const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garden', 'Around the house', 'Clothes and linens'];
 
 const OTHER = 'Other';
 
@@ -78,7 +79,7 @@ export default function Things() {
   }
 
   // Kinds are filed under a few plain headings, worked out here from their names (the database doesn't keep which set a kind came from).
-  const groupOf = (k) => groupOfKind(k.name) ?? OTHER;
+  const groupOf = (k) => k.group ?? OTHER;
   const groupNames = [...KIND_GROUPS, OTHER].filter((g) => kinds.some((k) => groupOf(k) === g));
   const grouped = groupNames.length > 1;
   const chosenGroup = grouped && groupNames.includes(group) ? group : null;

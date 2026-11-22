@@ -15,7 +15,7 @@ import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { historyOf, noteHistory, noteMove, placePath, type HistoryEntry } from './history.ts';
 import { Problem } from './problem.ts';
 import { clean, dayNumber, dayOrNull, inOrder, labelKey, pictureType, rounded, stamp, todayOf, type Clock } from './small.ts';
-import { STARTERS, type Starter } from './starters.ts';
+import { STARTERS, groupOfKind, type Starter } from './starters.ts';
 import * as units from './units.ts';
 
 export const FIELD_TYPES = ['text', 'number', 'choice', 'yesno', 'date', 'link'] as const;
@@ -29,7 +29,11 @@ const MAX_DEPTH = 10;
 
 export type FieldInput = { name: string; type: FieldType; unit?: string | null; choices?: string[] };
 export type Field = { id: number; kind_id: number; name: string; type: FieldType; unit: string | null; choices: string[]; sort_order: number };
-export type Kind = { id: number; name: string; icon: string | null; unit: string | null; fields: Field[]; items: number };
+export type Kind = {
+  id: number; name: string; icon: string | null; unit: string | null; fields: Field[]; items: number;
+  /** The heading it sits under on the things page ("Cooking", "Crafts"), worked out from its name; null for one of the person's own. */
+  group: string | null;
+};
 export type KindInput = { name: string; icon?: string | null; unit?: string | null; fields?: FieldInput[] };
 
 export type Place = { id: number; parent_id: number | null; name: string; note: string | null; path: string; items: number };
@@ -235,7 +239,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       `SELECT k.id, k.name, k.icon, k.unit, (SELECT COUNT(*) FROM items i WHERE i.kind_id = k.id) AS items
        FROM kinds k WHERE k.owner_id = ? ORDER BY k.name COLLATE NOCASE`, [owner]);
     const out: Kind[] = [];
-    for (const row of rows) out.push({ ...row, fields: await fieldsOf(q, row.id) });
+    for (const row of rows) out.push({ ...row, group: groupOfKind(row.name), fields: await fieldsOf(q, row.id) });
     return out;
   }
 
