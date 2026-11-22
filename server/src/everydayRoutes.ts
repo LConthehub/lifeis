@@ -8,7 +8,7 @@
  * What reaches outside is handed in (`fetcher`, and the tools for each service), and is left out where
  * Life Is can't or shouldn't reach out.
  */
-import { home, life, lookups, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
+import { home, life, lookups, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
 import type { AssistantTools } from '../../core/src/index.ts';
 import { enjoyingRoutes } from './enjoyingRoutes.ts';
@@ -77,15 +77,17 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
       return { json: { ...await skies(c).turnOn({ name: read.text(c.body, 'name'), latitude, longitude, units: read.maybeText(c.body, 'units') }), service: WEATHER_SERVICE } };
     }],
     // Looking a book up from its barcode: an outside service too, off until turned on. See core/'s lookups.ts.
-    ['GET', /^\/api\/lookups$/, async (c) => ({ json: { ...await finder(c).status(), service: BOOK_SERVICE, grocery_service: GROCERY_SERVICE } })],
+    ['GET', /^\/api\/lookups$/, async (c) => ({ json: { ...await finder(c).status(), service: BOOK_SERVICE, grocery_service: GROCERY_SERVICE, title_services: TITLE_SERVICES } })],
     ['PUT', /^\/api\/lookups$/, async (c) => {
-      if (!Object.hasOwn(c.body, 'books') && !Object.hasOwn(c.body, 'groceries')) throw notUnderstood('books');
+      if (!['books', 'groceries', 'titles'].some((k) => Object.hasOwn(c.body, k))) throw notUnderstood('books');
       if (Object.hasOwn(c.body, 'books')) await finder(c).setBooks(read.yesNo(c.body, 'books'));
       if (Object.hasOwn(c.body, 'groceries')) await finder(c).setGroceries(read.yesNo(c.body, 'groceries'));
-      return { json: { ...await finder(c).status(), service: BOOK_SERVICE, grocery_service: GROCERY_SERVICE } };
+      if (Object.hasOwn(c.body, 'titles')) await finder(c).setTitles(read.yesNo(c.body, 'titles'));
+      return { json: { ...await finder(c).status(), service: BOOK_SERVICE, grocery_service: GROCERY_SERVICE, title_services: TITLE_SERVICES } };
     }],
     ['GET', /^\/api\/lookups\/product$/, async (c) => ({ json: { product: await finder(c).product(c.query.get('code') ?? '') } })],
     ['GET', /^\/api\/lookups\/book$/, async (c) => ({ json: { book: await finder(c).book(c.query.get('code') ?? '') } })],
+    ['GET', /^\/api\/lookups\/title$/, async (c) => ({ json: { title: await finder(c).title(c.query.get('code') ?? '') } })],
     ['DELETE', /^\/api\/weather$/, async (c) => ({ json: { ...await skies(c).turnOff(), service: WEATHER_SERVICE } })],
 
     // What the person wants Life Is to look after: asked once, theirs to change.

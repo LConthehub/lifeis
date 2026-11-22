@@ -35,7 +35,7 @@ const GROUPS = [
       { id: 'assistant', title: 'AI assistant', words: 'ai llm ollama lm studio chatgpt claude gemini model ask question', render: () => <Plain><AssistantService /></Plain> },
       { id: 'weather', title: 'Weather', words: 'forecast open-meteo town place', render: () => <Plain><WeatherService /></Plain> },
       { id: 'mail', title: 'Email', words: 'imap smtp inbox mail gmail icloud', render: () => <Plain><MailService /></Plain> },
-      { id: 'lookups', title: 'Barcode lookups', words: 'isbn book grocery scan open library food facts', render: () => <Plain><BookLookupService /></Plain> },
+      { id: 'lookups', title: 'Barcode lookups', words: 'isbn book grocery film music game album dvd blu-ray vinyl scan open library food facts musicbrainz upcitemdb', render: () => <Plain><BookLookupService /></Plain> },
       { id: 'photos', title: 'Photos from Immich', words: 'immich pictures plans memories', render: () => <Plain><PhotoLibraryService /></Plain> },
       { id: 'media', title: 'Jellyfin or Emby', words: 'media server films shows music jellyfin emby', render: () => <MediaServers /> },
       { id: 'recipe-web', title: 'Recipes from a website', words: 'import url link page photo ocr', render: () => <RecipesFromWeb /> },
@@ -713,6 +713,7 @@ function BookLookupService() {
   if (!l) return null;
   const turn = async (books) => { const { data } = await axios.put('/api/lookups', { books }); setL(data); };
   const turnGroceries = async (groceries) => { const { data } = await axios.put('/api/lookups', { groceries }); setL(data); };
+  const turnTitles = async (titles) => { const { data } = await axios.put('/api/lookups', { titles }); setL(data); };
   return (
     <>
     <div className="py-3">
@@ -738,6 +739,19 @@ function BookLookupService() {
       </p>
       {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p>
         : <button type="button" onClick={() => turn(!l.books)} className={`${quietButtonClass} mt-2`}>{l.books ? 'Turn off' : 'Turn on'}</button>}
+    </div>
+    <div className="py-3">
+      <div className="flex items-baseline gap-2">
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🎬 Look up films, music and games when you scan them</h3>
+        <span className={`rounded px-1.5 text-[11px] ${l.titles ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.titles ? 'On' : 'Off'}</span>
+      </div>
+      <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
+        Scan a DVD, record or game you don't have yet and its title, and what it's on, are filled in for you to check, from{' '}
+        {l.title_services.sites.map((s, i) => <span key={s.name}>{i > 0 && ' and '}<a href={s.site} target="_blank" rel="noreferrer" className="underline">{s.name}</a></span>)}.
+        {' '}<span className="font-medium">What it's sent:</span> {l.title_services.sends}
+      </p>
+      {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p>
+        : <button type="button" onClick={() => turnTitles(!l.titles)} className={`${quietButtonClass} mt-2`}>{l.titles ? 'Turn off' : 'Turn on'}</button>}
     </div>
     </>
   );

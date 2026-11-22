@@ -27,9 +27,23 @@ const outside: Fetcher = async (url) => {
     const data = url.includes('/3017620422003.json') ? { code: '3017620422003', status: 1, product: { product_name: 'Nutella', brands: 'Ferrero', quantity: '400 g' } } : { status: 0, status_verbose: 'product not found' };
     return { status: 200, type: 'application/json', json: async () => data, bytes: async () => new Uint8Array() };
   }
+  if (url.includes('musicbrainz.org')) {
+    if (url.includes('barcode:0883929106508')) return { status: 503, type: 'text/html', json: async () => { throw new Error('busy'); }, bytes: async () => new Uint8Array() };
+    const data = url.includes('barcode:0602547288288')
+      ? { releases: [{ score: 100, title: 'Lemonade', date: '2016-05-06', 'artist-credit': [{ name: 'Beyoncé' }], media: [{ format: '12" Vinyl' }] }] }
+      : { releases: [] };
+    return { status: 200, type: 'application/json', json: async () => data, bytes: async () => new Uint8Array() };
+  }
+  if (url.includes('upcitemdb.com')) {
+    const data = url.includes('upc=0883929106509') || url.includes('upc=0883929106508')
+      ? { code: 'OK', items: [{ title: 'The Matrix [Blu-ray] (Widescreen)', category: 'Media > DVDs & Videos' }] }
+      : { code: 'OK', items: [] };
+    return { status: 200, type: 'application/json', json: async () => data, bytes: async () => new Uint8Array() };
+  }
   if (url.includes('openlibrary.org')) {
     const known = url.includes('ISBN:9780441172719');
-    const data = known ? { 'ISBN:9780441172719': { title: 'Dune', authors: [{ name: 'Frank Herbert' }], publish_date: 'June 2020', number_of_pages: 896 } } : {};
+    const data = known ? { 'ISBN:9780441172719': { title: 'Dune', authors: [{ name: 'Frank Herbert' }], publish_date: 'June 2020', number_of_pages: 896,
+      subjects: [{ name: 'Science fiction' }, { name: 'Fiction, general' }, { name: 'nyt:mass_market_paperback=2021-11-07' }, { name: 'Accessible book' }, { name: 'Science Fiction' }] } } : {};
     return { status: 200, type: 'application/json', json: async () => data, bytes: async () => new Uint8Array() };
   }
   const data = url.includes('geocoding-api')
@@ -190,7 +204,7 @@ it('books are looked up by barcode only once that is turned on, and only the num
 
   expect((await admin.put('/api/lookups', { books: true })).json.books).toBe(true);
   expect((await admin.put('/api/lookups', { books: 'yes' })).status).toBe(422);
-  expect((await admin.get('/api/lookups/book?code=978-0-441-17271-9')).json).toEqual({ book: { isbn: '9780441172719', title: 'Dune', creator: 'Frank Herbert', edition_year: 2020, pages: 896 } });
+  expect((await admin.get('/api/lookups/book?code=978-0-441-17271-9')).json).toEqual({ book: { isbn: '9780441172719', title: 'Dune', creator: 'Frank Herbert', edition_year: 2020, pages: 896, genres: ['Science fiction', 'Fiction'] } });
   expect(asked).toEqual(['https://openlibrary.org/api/books?bibkeys=ISBN:9780441172719&format=json&jscmd=data']);
   expect((await admin.get('/api/lookups/book?code=9791234567896')).json).toEqual({ book: null }); // a book it doesn't know
   expect((await admin.get('/api/lookups/book?code=024543213465')).status).toBe(400); // a film's barcode isn't a book's
@@ -216,6 +230,25 @@ it('groceries are looked up by barcode only once that is turned on, apart from b
   expect((await admin.get('/api/lookups/product?code=0025500000276')).json).toEqual({ product: null });
   expect((await admin.get('/api/lookups/product?code=abc')).status).toBe(400);
   expect((await admin.put('/api/lookups', { groceries: false })).json.groceries).toBe(false);
+});
+
+it('films, music and games are looked up by barcode only once that is turned on: music first, then anything else', async () => {
+  const admin = await start(true);
+  const off = (await admin.get('/api/lookups')).json;
+  expect([off.titles, off.books, off.title_services.name]).toEqual([false, false, 'MusicBrainz and UPCitemdb']);
+  expect((await admin.get('/api/lookups/title?code=0883929106509')).status).toBe(400); // off: refused, and nothing asked
+  expect(asked).toEqual([]);
+
+  const on = (await admin.put('/api/lookups', { titles: true })).json;
+  expect([on.titles, on.books, on.groceries]).toEqual([true, false, false]);
+  expect((await admin.get('/api/lookups/title?code=0602547288288')).json).toEqual({ title: { barcode: '0602547288288', type: 'music', title: 'Lemonade', creator: 'Beyoncé', year: 2016, format: '12" Vinyl', from: 'MusicBrainz' } });
+  expect(asked).toEqual(['https://musicbrainz.org/ws/2/release/?query=barcode:0602547288288&fmt=json&limit=1']); // known as music: nothing more asked
+  expect((await admin.get('/api/lookups/title?code=0883929106509')).json).toEqual({ title: { barcode: '0883929106509', type: 'film', title: 'The Matrix', creator: null, year: null, format: 'Blu-ray', from: 'UPCitemdb' } });
+  expect(asked.slice(1)).toEqual(['https://musicbrainz.org/ws/2/release/?query=barcode:0883929106509&fmt=json&limit=1', 'https://api.upcitemdb.com/prod/trial/lookup?upc=0883929106509']);
+  expect((await admin.get('/api/lookups/title?code=0000000000017')).json).toEqual({ title: null }); // neither knows it
+  expect((await admin.get('/api/lookups/title?code=0883929106508')).json.title?.title).toBe('The Matrix'); // MusicBrainz too busy: UPCitemdb answers
+  expect((await admin.get('/api/lookups/title?code=abc')).status).toBe(400);
+  expect((await admin.put('/api/lookups', { titles: false })).json.titles).toBe(false);
 });
 
 it('the calendar link answers a calendar app without signing in, and only while it exists', async () => {

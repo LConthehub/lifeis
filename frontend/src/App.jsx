@@ -42,7 +42,7 @@ const SECTIONS = [
   { word: 'making', home: '/projects', owns: (path) => path.startsWith('/projects'),
     tabs: [['/projects', 'Projects', '🧵']] },
   { word: 'spending', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month', '💵']] },
-  { word: 'enjoying', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection', '🎞'], ['/media/books', 'Books', '📚'], ['/media/servers', 'Servers', '🖥']] },
+  { word: 'enjoying', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection', '🎞'], ['/media/books', 'Books', '📚'], ['/media/ebooks', 'Ebooks', '📱'], ['/media/audiobooks', 'Audiobooks', '🎧'], ['/media/servers', 'Servers', '🖥']] },
 ];
 
 export default function App() {
@@ -138,7 +138,9 @@ function Shell({ user, onLogout }) {
           <Route path="/plans" element={<PlansPage />} />
           <Route path="/plans/:id" element={<PlanPage />} />
           <Route path="/media" element={<MediaPage key="all" />} />
-          <Route path="/media/books" element={<MediaPage key="books" only="book" />} />
+          <Route path="/media/books" element={<MediaPage key="books" library="books" />} />
+          <Route path="/media/ebooks" element={<MediaPage key="ebooks" library="ebooks" />} />
+          <Route path="/media/audiobooks" element={<MediaPage key="audiobooks" library="audiobooks" />} />
           <Route path="/media/servers" element={<Servers />} />
           <Route path="/media/:id" element={<MediaTitlePage />} />
           <Route path="/money" element={<Money />} />

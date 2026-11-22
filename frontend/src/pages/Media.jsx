@@ -13,14 +13,36 @@ const DID = { film: 'Watched', show: 'Watched', music: 'Listened', book: 'Read',
 // Covers are only shown when Life Is keeps them itself: pictures are never fetched from other sites by the page.
 const localCover = (cover) => typeof cover === 'string' && cover.startsWith('/api/');
 const commaList = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
+const isAudio = (format) => /audio/i.test(format);
+const isEbook = (format) => /e-?book|kindle|kobo|epub|nook/i.test(format);
 
 /**
- * Everything you own to watch, hear, read or play, by title, with the formats you have it on. Given `only`
- * (as the Books tab is), the same collection shows one type alone.
+ * The libraries a book can be in, told apart by what it's on. A book you have on paper and as an audiobook
+ * is in both. One you only want, with no copy yet, is with the books.
  */
-export default function MediaPage({ only = '' }) {
+export const LIBRARIES = {
+  books: {
+    type: 'book', title: 'Books', fits: (m) => !m.formats.length || m.formats.some((f) => !isAudio(f) && !isEbook(f)),
+    empty: "No books yet. Scan the barcode on the back (its ISBN) and Life Is looks up the title and author, then asks where it's kept: a room, and a shelf in it.",
+  },
+  ebooks: {
+    type: 'book', title: 'Ebooks', format: 'Ebook', fits: (m) => m.formats.some(isEbook),
+    empty: "No ebooks yet. Add one and say what it's on: Ebook, Kindle, Kobo, or anything you like.",
+  },
+  audiobooks: {
+    type: 'book', title: 'Audiobooks', format: 'Audiobook', fits: (m) => m.formats.some(isAudio),
+    empty: 'No audiobooks yet. Add one and say what it\'s on: Audiobook, Audible, CD, or anything with "audio" in it.',
+  },
+};
+
+/**
+ * Everything you own to watch, hear, read or play, by title, with the formats you have it on. Given a
+ * `library` (books, ebooks, audiobooks), the same collection shows only what belongs in it.
+ */
+export default function MediaPage({ library = null }) {
+  const lib = library ? LIBRARIES[library] : null;
   const [titles, setTitles] = useState(null);
-  const [type, setType] = useState(only);
+  const [type, setType] = useState(lib?.type ?? '');
   const [show, setShow] = useState('');     // '', 'wanted' or 'lent'
   const [q, setQ] = useState('');
   const [adding, setAdding] = useState(null);       // null, or what the new title starts with
@@ -29,7 +51,7 @@ export default function MediaPage({ only = '' }) {
   const load = useCallback(() => { axios.get('/api/media').then(({ data }) => setTitles(data)).catch(() => setTitles([])); }, []);
   useEffect(() => { load(); }, [load]);
   if (!titles) return null;
-  const mine = only ? titles.filter((m) => m.type === only) : titles;
+  const mine = lib ? titles.filter((m) => m.type === lib.type && lib.fits(m)) : titles;
   const word = q.trim().toLowerCase();
   const shown = mine.filter((m) => (!type || m.type === type) && (show !== 'wanted' || m.wanted) && (show !== 'lent' || m.lent_to.length > 0)
     && (!word || [m.title, m.creator, ...m.genres, ...m.formats].some((v) => String(v ?? '').toLowerCase().includes(word))));
@@ -38,15 +60,12 @@ export default function MediaPage({ only = '' }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">{only ? typeOf(only)[1] : 'Collection'}</h1>
+        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">{lib ? lib.title : 'Collection'}</h1>
         <button type="button" onClick={() => setScanning(true)} className={quietButtonClass}>📷 Scan a barcode</button>
-        <button type="button" onClick={() => setAdding({ type: type || 'film' })} className={buttonClass}>+ Add</button>
+        <button type="button" onClick={() => setAdding({ type: type || 'film', format: lib?.format || '' })} className={buttonClass}>+ Add</button>
       </div>
-      {mine.length === 0 && only === 'book' ? (
-        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
-          No books yet. Scan the barcode on the back (its ISBN) and Life Is looks up the title and author, then asks
-          where it's kept: a room, and a shelf in it.
-        </div>
+      {mine.length === 0 && lib ? (
+        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>{lib.empty}</div>
       ) : mine.length === 0 ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
           Nothing here yet. Add a film, an album or a book, and say what you have it on: VHS, Blu-ray, vinyl, paperback, anything.
@@ -55,8 +74,8 @@ export default function MediaPage({ only = '' }) {
       ) : (
         <>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="What to show">
-            {!only && <button type="button" onClick={() => setType('')} aria-pressed={!type} className={chip(!type)}>Everything <span className="opacity-70">{titles.length}</span></button>}
-            {TYPES.filter(([id]) => !only && count(id) > 0).map(([id, label, icon]) => (
+            {!lib && <button type="button" onClick={() => setType('')} aria-pressed={!type} className={chip(!type)}>Everything <span className="opacity-70">{titles.length}</span></button>}
+            {TYPES.filter(([id]) => !lib && count(id) > 0).map(([id, label, icon]) => (
               <button key={id} type="button" onClick={() => setType(id)} aria-pressed={type === id} className={chip(type === id)}>{icon} {label} <span className="opacity-70">{count(id)}</span></button>
             ))}
             {mine.some((m) => m.wanted) && <button type="button" onClick={() => setShow(show === 'wanted' ? '' : 'wanted')} aria-pressed={show === 'wanted'} className={chip(show === 'wanted')}>Wanted</button>}
@@ -94,17 +113,52 @@ export default function MediaPage({ only = '' }) {
       )}
       {scanning && (
         <Modal title="Scan a barcode" onClose={() => setScanning(false)}>
-          <ScanToFind onAdd={(barcode, book) => { setScanning(false); setAdding(book ? { type: 'book', title: book.title, creator: book.creator || '', barcode } : { type: type || 'film', barcode }); }} />
+          <ScanToFind onAdd={(start) => { setScanning(false); setAdding({ ...start, type: start.type || type || 'film', format: start.format || lib?.format || '' }); }} />
         </Modal>
       )}
     </div>
   );
 }
 
-/** Scan, then: straight to the title if you have it, or the offer to add it with the barcode kept. */
+/**
+ * What a barcode is, from outside, when looking that kind of thing up is turned on: a book by its ISBN, a
+ * film, album or game by its product number. When it's off, what turning it on would send, to offer that.
+ */
+async function lookUp(code) {
+  const isbn = /^(97[89]\d{10}|\d{9}[\dXx])$/.test(code.replace(/[\s-]/g, ''));
+  const { data: can } = await axios.get('/api/lookups').catch(() => ({ data: {} }));
+  const which = isbn ? 'books' : 'titles';
+  if (!can[which]) {
+    if (!can.available) return {};
+    const service = isbn ? can.service : can.title_services;
+    return { offer: { which, name: service.name, sends: service.sends } };
+  }
+  try {
+    if (isbn) {
+      const { data: { book } } = await axios.get('/api/lookups/book', { params: { code } });
+      if (!book) return { hint: "Open Library doesn't know this book. Add it and type the title in." };
+      return {
+        from: 'Open Library', start: { type: 'book', title: book.title, creator: book.creator || '', genres: book.genres || [], barcode: code },
+        detail: [book.creator, book.edition_year && `this printing ${book.edition_year}`, book.pages && `${book.pages} pages`],
+      };
+    }
+    const { data: { title } } = await axios.get('/api/lookups/title', { params: { code } });
+    if (!title) return { hint: "Neither MusicBrainz nor UPCitemdb knows this barcode. Add it and type the title in." };
+    return {
+      from: title.from, start: { type: title.type, title: title.title, creator: title.creator || '', year: title.year ?? '', format: title.format || '', barcode: code },
+      detail: [title.creator, title.year, title.format],
+    };
+  } catch (err) { return { hint: errorMessage(err, "It couldn't be looked up just now.") }; }
+}
+
+/**
+ * Scan, then: straight to the title if you have it, or the offer to add it with the barcode kept and its
+ * details filled in from what was looked up.
+ */
 function ScanToFind({ onAdd }) {
   const [round, setRound] = useState(0);
-  const [found, setFound] = useState(null);         // null while scanning, else { code, matches } or { code, error }
+  const [found, setFound] = useState(null);         // null while scanning, else what was found, or { code, error }
+  const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
   const look = useCallback(async (code) => {
     // A place's sticker, scanned from here, goes to its place all the same.
@@ -112,20 +166,17 @@ function ScanToFind({ onAdd }) {
     try {
       const { data } = await axios.get('/api/media/barcode', { params: { code } });
       if (data.length === 1) { navigate(`/media/${data[0].id}`); return; }
-      // Not on the shelf yet. If it's a book and looking books up is turned on, ask what book it is.
-      let book = null;
-      let hint = '';
-      const isbn = /^(97[89]\d{10}|\d{9}[\dXx])$/.test(code.replace(/[\s-]/g, ''));
-      if (data.length === 0 && isbn) {
-        const { data: can } = await axios.get('/api/lookups').catch(() => ({ data: { books: false } }));
-        if (can.books) {
-          await axios.get('/api/lookups/book', { params: { code } }).then(({ data: got }) => { book = got.book; if (!book) hint = "Open Library doesn't know this book."; })
-            .catch((err) => { hint = errorMessage(err, "The book couldn't be looked up."); });
-        } else if (can.available) hint = 'This looks like a book. Life Is can fill in its title for you: turn on "Look up books" in Settings, under Outside services.';
-      }
-      setFound({ code, matches: data, book, hint });
+      setFound({ code, matches: data, ...(data.length === 0 ? await lookUp(code) : {}) });
     } catch (err) { setFound({ code, error: errorMessage(err, "Couldn't look that up") }); }
   }, [navigate]);
+  const turnOn = async () => {
+    setBusy(true);
+    try {
+      await axios.put('/api/lookups', { [found.offer.which]: true });
+      setFound({ code: found.code, matches: found.matches, ...await lookUp(found.code) });
+    } catch (err) { setFound({ ...found, offer: null, hint: errorMessage(err, "Couldn't turn that on") }); }
+    setBusy(false);
+  };
   if (!found) return <Scanner key={round} onCode={look} />;
   const again = <button type="button" onClick={() => { setFound(null); setRound(round + 1); }} className={quietButtonClass}>Scan another</button>;
   if (found.error) return <div className="space-y-3"><p className="text-sm text-red-600">{found.error}</p>{again}</div>;
@@ -133,16 +184,23 @@ function ScanToFind({ onAdd }) {
     return (
       <div className="space-y-3">
         <p className="text-sm text-gray-800 dark:text-life-50">Nothing in your collection has the barcode <span className="font-mono">{found.code}</span>.</p>
-        {found.book && (
-          <div className="rounded-lg bg-life-50 px-3 py-2 text-sm text-gray-800 dark:bg-life-700 dark:text-life-50">
-            <p className="text-xs text-gray-500 dark:text-life-300">Open Library says it's</p>
-            <p className="font-medium">📚 {found.book.title}</p>
-            <p className="text-xs text-gray-600 dark:text-life-200">{[found.book.creator, found.book.edition_year && `this printing ${found.book.edition_year}`, found.book.pages && `${found.book.pages} pages`].filter(Boolean).join(' · ')}</p>
+        {found.start && (
+          <div className="rounded-lg bg-life-50 px-3 py-2 text-sm text-gray-800 dark:bg-life-700 dark:text-life-50" data-found>
+            <p className="text-xs text-gray-500 dark:text-life-300">{found.from} says it's</p>
+            <p className="font-medium">{typeOf(found.start.type)[2]} {found.start.title}</p>
+            <p className="text-xs text-gray-600 dark:text-life-200">{found.detail.filter(Boolean).join(' · ')}</p>
+          </div>
+        )}
+        {found.offer && (
+          <div className="space-y-2 rounded-lg border border-life-200 p-3 text-sm text-gray-700 dark:border-life-700 dark:text-life-100">
+            <p>Life Is can fill in what this is for you, by asking {found.offer.name}. <span className="font-medium">What it's sent:</span> {found.offer.sends}</p>
+            <button type="button" onClick={turnOn} disabled={busy} className={quietButtonClass}>{busy ? 'Looking…' : 'Turn that on and look it up'}</button>
+            <p className="text-xs text-gray-500 dark:text-life-300">It stays on for next time. Turn it off in Settings, under Outside services.</p>
           </div>
         )}
         {found.hint && <p className="text-xs text-gray-500 dark:text-life-300">{found.hint}</p>}
         <div className="flex items-center justify-end gap-2">{again}
-          <button type="button" onClick={() => onAdd(found.code, found.book)} className={buttonClass}>{found.book ? 'Add this book' : 'Add it, keeping the barcode'}</button>
+          <button type="button" onClick={() => onAdd(found.start ?? { barcode: found.code })} className={buttonClass}>{found.start ? 'Add it' : 'Add it, keeping the barcode'}</button>
         </div>
       </div>
     );
@@ -162,7 +220,7 @@ function ScanToFind({ onAdd }) {
 function TitleForm({ title, withCopy = false, onDone }) {
   const [form, setForm] = useState({
     type: title.type || 'film', title: title.title || '', creator: title.creator || '', year: title.year ?? '', genres: (title.genres || []).join(', '),
-    minutes: title.minutes ?? '', cover: title.cover || '', summary: title.summary || '', note: title.note || '', wanted: !!title.wanted, format: '', place_id: '',
+    minutes: title.minutes ?? '', cover: title.cover || '', summary: title.summary || '', note: title.note || '', wanted: !!title.wanted, format: title.format || '', place_id: '',
     barcode: title.barcode || '',
   });
   const [formats, setFormats] = useState([]);
