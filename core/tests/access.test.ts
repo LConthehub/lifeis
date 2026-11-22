@@ -1,4 +1,4 @@
-/** What is free on the device, the 14-day trial of the rest, and what happens when it ends. */
+/** What is free on the device, the week's trial of the rest, and what happens when it ends. */
 import { expect, it } from 'vitest';
 import { accessNow, decide, isPaidPath, ENDED_MESSAGE } from '../src/access.ts';
 
@@ -6,13 +6,13 @@ const at = (iso: string) => new Date(iso);
 const BEGAN = '2046-03-01T09:00:00.000Z';
 
 it('counts fourteen days from when the trial began, and not before it begins', () => {
-  expect(accessNow({ trial_started: null, unlocked: false }, at('2046-03-01T09:00:00Z'))).toMatchObject({ state: 'unstarted', days_left: 14, price: '$14.99' });
-  expect(accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-03-01T09:00:01Z'))).toMatchObject({ state: 'trial', days_left: 14 });
-  expect(accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-03-14T08:00:00Z'))).toMatchObject({ state: 'trial', days_left: 2 });
-  expect(accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-03-15T08:59:59Z'))).toMatchObject({ state: 'trial', days_left: 1 });
-  expect(accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-03-15T09:00:00Z'))).toMatchObject({ state: 'ended', days_left: 0 });
+  expect(accessNow({ trial_started: null, unlocked: false }, at('2046-03-01T09:00:00Z'))).toMatchObject({ state: 'unstarted', days_left: 7, price: '$14.99' });
+  expect(accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-03-01T09:00:01Z'))).toMatchObject({ state: 'trial', days_left: 7 });
+  expect(accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-03-07T08:00:00Z'))).toMatchObject({ state: 'trial', days_left: 2 });
+  expect(accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-03-08T08:59:59Z'))).toMatchObject({ state: 'trial', days_left: 1 });
+  expect(accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-03-08T09:00:00Z'))).toMatchObject({ state: 'ended', days_left: 0 });
   // Setting the clock back doesn't buy more than the fourteen days.
-  expect(accessNow({ trial_started: BEGAN, unlocked: false }, at('2040-01-01T00:00:00Z'))).toMatchObject({ state: 'trial', days_left: 14 });
+  expect(accessNow({ trial_started: BEGAN, unlocked: false }, at('2040-01-01T00:00:00Z'))).toMatchObject({ state: 'trial', days_left: 7 });
   expect(accessNow({ trial_started: 'nonsense', unlocked: false }, at('2046-03-01T09:00:00Z')).state).toBe('unstarted');
   expect(accessNow({ trial_started: BEGAN, unlocked: true }, at('2050-01-01T00:00:00Z'))).toMatchObject({ state: 'unlocked', days_left: null });
 });

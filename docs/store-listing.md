@@ -51,7 +51,7 @@ are written once and reviewed before anything goes live.
     ONE FAIR PRICE
 
     • The kitchen (recipes, the week, groceries, pantry, prices) and backups are free, for good.
-    • Everything else is free to try for 14 days.
+    • Everything else is free to try for 7 days.
     • One payment unlocks all of it. No subscription, no per-category charges, no limits on how much you keep.
     • If you don't unlock, nothing you entered is hidden or deleted. You can still read it and back it up.
 

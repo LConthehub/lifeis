@@ -29,7 +29,7 @@ await firstRun();
 await page.goto(base + '/recipes'); await wait(1200);
 say('the kitchen carries no note about paying', (await page.locator('[data-access]').count()) === 0);
 await page.goto(base + '/projects'); await wait(1200);
-say('projects say they are free to try, from the first thing added: ' + (await note().getAttribute('data-access')), (await note().getAttribute('data-access')) === 'unstarted' && /free to try for 14 days/.test(await text()) && /\$14\.99, once/.test(await text()));
+say('projects say they are free to try, from the first thing added: ' + (await note().getAttribute('data-access')), (await note().getAttribute('data-access')) === 'unstarted' && /free to try for 7 days/.test(await text()) && /\$14\.99, once/.test(await text()));
 
 // ---------- a project and its budget ----------
 await page.getByRole('button', { name: /\+ New/ }).click(); await wait(400);
@@ -37,7 +37,7 @@ let form = page.getByRole('dialog');
 await form.getByLabel('What it is *').fill('Shirt dress');
 await form.getByRole('button', { name: /Save|Add|Create/ }).first().click(); await wait(1800);
 if (!/What it costs/.test(await text())) { await page.getByRole('link', { name: 'Shirt dress' }).first().click(); await wait(1200); }
-say('writing the first thing starts the trial: ' + (await note().getAttribute('data-access')), (await note().getAttribute('data-access')) === 'trial' && /14 days left/.test(await text()));
+say('writing the first thing starts the trial: ' + (await note().getAttribute('data-access')), (await note().getAttribute('data-access')) === 'trial' && /7 days left/.test(await text()));
 const budget = page.locator('[data-budget]');
 const add = async (what, cost) => {
   await budget.getByLabel('What the money is for').fill(what);

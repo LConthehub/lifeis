@@ -21,14 +21,14 @@ await page.getByRole('button', { name: 'Sign in' }).click();
 await wait(1000);
 { const skip = page.getByRole('dialog').getByRole('button', { name: 'Skip, show me everything' }); if (await skip.isVisible().catch(() => false)) { await skip.click(); await wait(900); } }
 const header = flat(await page.locator('nav[aria-label="Sections"]').innerText());
-say('the header has its sections: ' + header, /eating\s+planning\s+keeping\s+making\s+spending\s+enjoying/.test(header));
+say('the header has its sections: ' + header, /eating\s+keeping\s+spending\s+planning\s+making\s+entertaining/.test(header));
 
 // A place for the tapes, then the collection.
 await page.goto(base + '/things/places'); await wait();
 await page.getByRole('button', { name: '+ New place' }).click();
 await field('called').fill('Tape cabinet'); await page.getByRole('button', { name: 'Save' }).click(); await wait();
 
-await page.getByRole('link', { name: 'enjoying' }).click(); await wait();
+await page.getByRole('link', { name: 'entertaining' }).click(); await wait();
 say('an empty collection says what to do', /Nothing here yet/.test(await text()));
 await page.getByRole('button', { name: '+ Add' }).click();
 await field('Title').fill('Alien'); await field('Director').fill('Ridley Scott'); await field('Year').fill('1979');

@@ -43,16 +43,18 @@ axios.interceptors.request.use((config) => {
 });
 
 // Life is… each section finishes the sentence, and has its own few pages.
+// `word` is what Life Is calls the section inside; `shown` is the word people see, where that differs.
+// In this order: what a household needs first, then what it plans, makes and enjoys.
 const SECTIONS = [
   { word: 'eating', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
     tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫'], ['/prices', 'Prices', '💲']] },
-  { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar') || path.startsWith('/plans') || path.startsWith('/mail') || path.startsWith('/manual'), tabs: [['/calendar', 'Calendar', '📅'], ['/plans', 'Plans', '✨'], ['/manual', 'House manual', '📒'], ['/mail', 'Mail', '✉️']] },
   { word: 'keeping', home: '/things', owns: (path) => path.startsWith('/things'),
     tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/upkeep', 'Upkeep', '🔧'], ['/things/pets', 'Pets', '🐾'], ['/things/activities', 'Activities', '🛠'], ['/things/kinds', 'Kinds', '🏷']] },
+  { word: 'spending', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month', '💵']] },
+  { word: 'planning', home: '/calendar', owns: (path) => path.startsWith('/calendar') || path.startsWith('/plans') || path.startsWith('/mail') || path.startsWith('/manual'), tabs: [['/calendar', 'Calendar', '📅'], ['/plans', 'Plans', '✨'], ['/manual', 'House manual', '📒'], ['/mail', 'Mail', '✉️']] },
   { word: 'making', home: '/projects', owns: (path) => path.startsWith('/projects'),
     tabs: [['/projects', 'Projects', '🧵']] },
-  { word: 'spending', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month', '💵']] },
-  { word: 'enjoying', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection', '🎞'], ['/media/books', 'Books', '📚'], ['/media/ebooks', 'Ebooks', '📱'], ['/media/audiobooks', 'Audiobooks', '🎧'], ['/media/servers', 'Servers', '🖥']] },
+  { word: 'enjoying', shown: 'entertaining', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection', '🎞'], ['/media/books', 'Books', '📚'], ['/media/ebooks', 'Ebooks', '📱'], ['/media/audiobooks', 'Audiobooks', '🎧'], ['/media/servers', 'Servers', '🖥']] },
 ];
 
 export default function App() {
@@ -108,13 +110,13 @@ function Shell({ user, demo = false, onLogout }) {
           <nav className="order-3 flex w-full min-w-0 flex-wrap gap-1 sm:order-2 sm:w-auto" aria-label="Sections">
             {showing.map((s) => (
               <Link key={s.word} to={s.home} aria-current={s === section ? 'page' : undefined}
-                className={`rounded-full px-2 py-1 text-sm font-semibold sm:px-2.5 ${s === section ? 'bg-white text-life-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.word}</Link>
+                className={`rounded-full px-2 py-1 text-sm font-semibold sm:px-2.5 ${s === section ? 'bg-white text-life-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.shown ?? s.word}</Link>
             ))}
           </nav>
           <div className="order-2 ml-auto sm:order-3"><Search /></div>
           <NavLink to="/settings" aria-label="Settings" className="order-2 text-sm text-white/90 hover:text-white hover:underline sm:order-3"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="text-lg sm:hidden">⚙</span></NavLink>
           {tabs.length > 1 && (
-            <nav className="order-4 hidden w-full gap-1 sm:flex" aria-label={`Life is ${section.word}`}>
+            <nav className="order-4 hidden w-full gap-1 sm:flex" aria-label={`Life is ${section.shown ?? section.word}`}>
               {tabs.map(([to, label]) => (
                 <NavLink key={to} to={to} end={exact(to)} className={({ isActive }) => `rounded-full px-3 py-1 text-sm font-medium ${isActive ? 'bg-white/25 text-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}>{label}</NavLink>
               ))}
@@ -183,7 +185,7 @@ function Shell({ user, demo = false, onLogout }) {
       <LifeFirstRun open={!!life && life.areas === null} onDone={(data) => (data ? setLife(data) : loadLife())} />
       {/* On a phone the section's pages sit at the bottom, under your thumb. */}
       {tabs.length > 1 && (
-        <nav className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t border-life-100 bg-white/95 safe-bottom backdrop-blur dark:border-life-800 dark:bg-life-900/95 sm:hidden" aria-label={`Life is ${section.word}`}>
+        <nav className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t border-life-100 bg-white/95 safe-bottom backdrop-blur dark:border-life-800 dark:bg-life-900/95 sm:hidden" aria-label={`Life is ${section.shown ?? section.word}`}>
           {tabs.map(([to, label, icon]) => (
             <NavLink key={to} to={to} end={exact(to)} className={({ isActive }) => `flex flex-col items-center py-2 text-xs ${isActive ? 'text-life-600 font-semibold dark:text-life-200' : 'text-gray-500 dark:text-life-300'}`}>
               <span aria-hidden="true" className="text-lg">{icon}</span>{label}

@@ -184,7 +184,7 @@ ${shots.length > 1 ? `<div class="shots">\n${shots.slice(1).map(([file, caption]
 <p class="lede">No subscription, and nothing you entered is ever held hostage.</p>
 <div class="price">
   <div class="card"><h3>The phone app</h3><b>Free to download</b>
-    <ul class="plain"><li>The kitchen, backups, and connecting to your own server: free for good</li><li>Everything else: free for 14 days, then a single payment of $14.99</li><li>After the trial, nothing is hidden or deleted</li></ul></div>
+    <ul class="plain"><li>The kitchen, backups, and connecting to your own server: free for good</li><li>Everything else: free for 7 days, then a single payment of $14.99</li><li>After the trial, nothing is hidden or deleted</li></ul></div>
   <div class="card"><h3>On your own computer</h3><b>Free</b>
     <ul class="plain"><li>Run Life Is at home and open it from any browser</li><li>Every part included</li><li>Share it with the people you live with, each with their own sign-in</li></ul></div>
 </div>
