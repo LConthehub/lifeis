@@ -77,7 +77,7 @@ export default function Home({ user }) {
 
       {s.cards.length === 0 && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Every card is out of sight. Use "Choose what shows" to bring some back.</div>}
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {shows('days') && (
           <Card title="The next three days" to="/calendar" link="Calendar">
             <div className="space-y-3">

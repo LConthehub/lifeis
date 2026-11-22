@@ -87,22 +87,23 @@ function Shell({ user, onLogout }) {
   const tabs = section ? section.tabs : [];
   const exact = (to) => ['/recipes', '/things', '/projects', '/media'].includes(to);
   return (
-    <div className="min-h-screen pb-20 sm:pb-6">
-      <header className="sticky top-0 z-30 bg-life-bar text-white shadow-sm print:hidden">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
+    <div className="safe-sides safe-bottom-room min-h-screen">
+      <header className="safe-top sticky top-0 z-30 bg-life-bar text-white shadow-sm print:hidden">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 xl:max-w-6xl">
           <Link to="/" className="flex items-center gap-2 font-semibold text-white">
             <img src="/icon-192.png" alt="" className="h-7 w-7 rounded-lg" /> Life is
           </Link>
-          {/* Six words don't fit across a phone: they wrap onto a second line rather than run off the edge. */}
-          <nav className="flex min-w-0 flex-wrap gap-1" aria-label="Sections">
+          {/* Six words don't fit across a phone. There, Settings stays up beside the name and the words take
+              the row below, wrapping rather than running off the edge; on a wider screen it is all one row. */}
+          <nav className="order-3 flex w-full min-w-0 flex-wrap gap-1 sm:order-2 sm:w-auto" aria-label="Sections">
             {showing.map((s) => (
               <Link key={s.word} to={s.home} aria-current={s === section ? 'page' : undefined}
                 className={`rounded-full px-2 py-1 text-sm font-semibold sm:px-2.5 ${s === section ? 'bg-white text-life-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.word}</Link>
             ))}
           </nav>
-          <NavLink to="/settings" aria-label="Settings" className="ml-auto text-sm text-white/90 hover:text-white hover:underline"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="text-lg sm:hidden">⚙</span></NavLink>
+          <NavLink to="/settings" aria-label="Settings" className="order-2 ml-auto text-sm text-white/90 hover:text-white hover:underline sm:order-3"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="text-lg sm:hidden">⚙</span></NavLink>
           {tabs.length > 1 && (
-            <nav className="hidden w-full gap-1 sm:flex" aria-label={`Life is ${section.word}`}>
+            <nav className="order-4 hidden w-full gap-1 sm:flex" aria-label={`Life is ${section.word}`}>
               {tabs.map(([to, label]) => (
                 <NavLink key={to} to={to} end={exact(to)} className={({ isActive }) => `rounded-full px-3 py-1 text-sm font-medium ${isActive ? 'bg-white/25 text-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}>{label}</NavLink>
               ))}
@@ -112,7 +113,7 @@ function Shell({ user, onLogout }) {
         {/* All five colours, as a stripe under the bar. */}
         <div aria-hidden="true" className="h-1 bg-life-all" />
       </header>
-      <main className="mx-auto max-w-5xl px-3 py-4 sm:px-4">
+      <main className="mx-auto max-w-5xl px-3 py-4 sm:px-4 xl:max-w-6xl">
         {/* The page is a sheet of frosted glass over the gradient, so everything on it reads clearly. */}
         <div className="rounded-3xl bg-white/80 p-4 shadow-xl ring-1 ring-white/50 backdrop-blur-md dark:bg-life-900/75 dark:ring-white/10 sm:p-6">
         <AccessNote show={Boolean(section) && section.word !== 'eating' && pathname !== '/' && !pathname.startsWith('/settings')} pathname={pathname} />
@@ -150,7 +151,7 @@ function Shell({ user, onLogout }) {
       <LifeFirstRun open={!!life && life.areas === null} onDone={(data) => (data ? setLife(data) : loadLife())} />
       {/* On a phone the section's pages sit at the bottom, under your thumb. */}
       {tabs.length > 1 && (
-        <nav className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t border-life-100 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-life-800 dark:bg-life-900/95 sm:hidden" aria-label={`Life is ${section.word}`}>
+        <nav className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t border-life-100 bg-white/95 safe-bottom backdrop-blur dark:border-life-800 dark:bg-life-900/95 sm:hidden" aria-label={`Life is ${section.word}`}>
           {tabs.map(([to, label, icon]) => (
             <NavLink key={to} to={to} end={exact(to)} className={({ isActive }) => `flex flex-col items-center py-2 text-xs ${isActive ? 'text-life-600 font-semibold dark:text-life-200' : 'text-gray-500 dark:text-life-300'}`}>
               <span aria-hidden="true" className="text-lg">{icon}</span>{label}

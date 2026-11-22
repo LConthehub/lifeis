@@ -306,7 +306,7 @@ export function RecipePage() {
         <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Edit</button>
       </div>
       {r.description && <p className="whitespace-pre-wrap text-gray-700 dark:text-life-100">{r.description}</p>}
-      <div className="grid gap-4 md:grid-cols-[2fr_3fr]">
+      <div className="grid gap-4 sm:grid-cols-[2fr_3fr]">
         <section className={cardClass}>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold text-life-800 dark:text-life-50">Ingredients</h2>
