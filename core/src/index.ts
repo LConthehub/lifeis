@@ -61,3 +61,5 @@ export { search, SEARCH_KINDS } from './search.ts';
 export type { SearchKind, SearchResult } from './search.ts';
 export { DOCUMENT_KINDS, MAX_DOCUMENT } from './inventory.ts';
 export type { Records, RecordsInput, ItemDocument, DocumentKind, HomeReport, ReportLine } from './inventory.ts';
+export { JOB_KINDS } from './upkeep.ts';
+export type { JobKind } from './upkeep.ts';

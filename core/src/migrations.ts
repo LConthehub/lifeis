@@ -785,6 +785,19 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_item_documents ON item_documents(item_id)`,
     ],
   },
+  {
+    // Upkeep grows to the rest of what comes round in a household: bills and renewals, which stay on their
+    // date and have an amount, and chores, which carry points for whoever does them.
+    number: 25,
+    name: 'bills, renewals and chores, beside upkeep jobs',
+    statements: [
+      `ALTER TABLE upkeep_jobs ADD COLUMN kind TEXT NOT NULL DEFAULT 'job' CHECK(kind IN ('job', 'bill', 'renewal', 'chore'))`,
+      `ALTER TABLE upkeep_jobs ADD COLUMN amount_cents INTEGER CHECK(amount_cents IS NULL OR amount_cents >= 0)`,
+      `ALTER TABLE upkeep_jobs ADD COLUMN points INTEGER CHECK(points IS NULL OR points >= 0)`,
+      `ALTER TABLE upkeep_jobs ADD COLUMN autopay INTEGER NOT NULL DEFAULT 0 CHECK(autopay IN (0, 1))`,
+      `ALTER TABLE upkeep_done ADD COLUMN points INTEGER`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

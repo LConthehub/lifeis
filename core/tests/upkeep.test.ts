@@ -128,3 +128,46 @@ it('the calendar shows a job on the day it comes round, and anything late on tod
     ['2046-03-08', 'Test the alarms', null],
   ]);
 });
+
+it('a bill stays on its date however late it is paid, costs its usual amount, and can be taken back', async () => {
+  const rent = await jobs.create({ name: 'Rent', kind: 'bill', amount_cents: 120000, every_n: 1, every_unit: 'month', first_due: '2046-03-01' });
+  expect([rent.kind, rent.amount_cents, rent.due.next_day, rent.due.state, rent.due.days_left]).toEqual(['bill', 120000, '2046-03-01', 'overdue', -4]);
+  // Paid four days late: the next is still due on the 1st.
+  const paid = await jobs.done(rent.id, { spend: { category_id: null } });
+  expect([paid.job.due.next_day, paid.done[0]!.cost_cents, paid.done[0]!.money_entry_id !== null]).toEqual(['2046-04-01', 120000, true]);
+  expect((await money(db, owner, clock).month('2046-03')).entries.map((e: { label: string; cents: number }) => [e.label, e.cents])).toEqual([['Rent', 120000]]);
+  // Another amount this time.
+  expect((await jobs.done(rent.id, { cost_cents: 125000 })).done[0]!.cost_cents).toBe(125000);
+  const back = await jobs.undo((await jobs.get(rent.id)).done[0]!.id);
+  expect(back.due.next_day).toBe('2046-04-01');
+
+  // A renewal with no round to it is finished with once renewed.
+  const visa = await jobs.create({ name: 'Visa', kind: 'renewal', first_due: '2046-03-20' });
+  expect(visa.due).toMatchObject({ state: 'later', next_day: '2046-03-20' });
+  expect((await jobs.done(visa.id, {})).job.due.state).toBe('unscheduled');
+  await expect(jobs.create({ name: 'Bad', kind: 'tax' })).rejects.toEqual(problem(400));
+  await expect(jobs.create({ name: 'Bad', kind: 'chore', points: 5000 })).rejects.toEqual(problem(400));
+});
+
+it('a month back from the end of March is the end of February', () => {
+  expect([addInterval('2046-03-31', -1, 'month'), addInterval('2046-01-15', -2, 'month'), addInterval('2046-01-15', -1, 'year')]).toEqual(['2046-02-28', '2045-11-15', '2045-01-15']);
+});
+
+it('chores give their points to whoever does them, counted by the week', async () => {
+  const partner = await person('partner');
+  const theirs = upkeep(db, partner, clock);
+  const bins = await jobs.create({ name: 'Take out the trash', kind: 'chore', points: 2, every_n: 1, every_unit: 'week', assigned_to: partner });
+  const dishes = await jobs.create({ name: 'Do the dishes', kind: 'chore', points: 1, every_n: 1, every_unit: 'day', assigned_to: partner });
+  await jobs.create({ name: 'Change the furnace filter', every_n: 3, every_unit: 'month' }); // not a chore: no points
+  time = new Date(2046, 1, 27, 10, 0, 0); // the Tuesday before
+  await theirs.done(dishes.id, {});
+  time = new Date(2046, 2, 5, 10, 0, 0); // Monday
+  await theirs.done(bins.id, {});
+  await theirs.done(dishes.id, {});
+  await jobs.done(dishes.id, {});
+  expect(await jobs.scores()).toEqual({ week_start: '2046-03-05', people: [
+    { name: 'partner', this_week: 3, last_week: 1, done: 2 },
+    { name: 'owner', this_week: 1, last_week: 0, done: 1 },
+  ] });
+  expect((await theirs.scores()).people.map((p) => p.name)).toEqual(['partner', 'owner']); // the one given the chores sees the same board
+});

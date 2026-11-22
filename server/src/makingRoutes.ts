@@ -74,6 +74,10 @@ function jobFrom(body: Body): JobInput {
     every_reading: read.maybeNumber(body, 'every_reading'), reading_unit: read.maybeText(body, 'reading_unit'),
     first_due: read.maybeText(body, 'first_due'), assigned_to: read.maybeWhole(body, 'assigned_to'),
     steps: read.maybeText(body, 'steps'), note: read.maybeText(body, 'note'),
+    ...(sent(body, 'kind') ? { kind: read.maybeText(body, 'kind') } : {}),
+    ...(sent(body, 'amount_cents') ? { amount_cents: read.maybeWhole(body, 'amount_cents') } : {}),
+    ...(sent(body, 'points') ? { points: read.maybeWhole(body, 'points') } : {}),
+    ...(sent(body, 'autopay') ? { autopay: read.yesNo(body, 'autopay') } : {}),
     ...(tools !== undefined ? { tools: tools as number[] } : {}),
     ...(supplies !== undefined ? { supplies: (supplies as Body[]).map((x) => ({ item_id: read.maybeWhole(x, 'item_id') ?? 0, quantity: read.maybeNumber(x, 'quantity'), unit: read.maybeText(x, 'unit') })) } : {}),
     ...(last ? { last_done: { day: read.text(last, 'day'), reading: read.maybeNumber(last, 'reading') } } : {}),
@@ -198,6 +202,7 @@ export function makingRoutes(db: Db): Route[] {
 
     ['GET', at('things/upkeep'), async (c) => ({ json: await jobs(c).list() })],
     ['GET', at('things/upkeep/people'), async (c) => ({ json: await jobs(c).people() })],
+    ['GET', at('things/upkeep/scores'), async (c) => ({ json: await jobs(c).scores() })],
     ['GET', at('things/upkeep/starters'), async () => ({ json: STARTER_JOBS })],
     ['POST', at('things/upkeep'), async (c) => ({ status: 201, json: await jobs(c).create(jobFrom(c.body)) })],
     ['GET', at('things/upkeep/:id'), async (c) => ({ json: await jobs(c).get(c.id) })],

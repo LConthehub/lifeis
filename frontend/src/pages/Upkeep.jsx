@@ -4,6 +4,12 @@ import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
 const UNITS = [['day', 'days'], ['week', 'weeks'], ['month', 'months'], ['year', 'years']];
+export const KINDS = { job: ['Jobs', '🔧', 'Done'], bill: ['Bills', '💵', 'Paid'], renewal: ['Renewals', '📄', 'Renewed'], chore: ['Chores', '🧹', 'Done'] };
+const KIND_ONE = { job: 'A job around the home', bill: 'A bill', renewal: 'A renewal (insurance, registration, a passport)', chore: 'A chore' };
+const doneWord = (job) => KINDS[job.kind][2];
+/** What all the bills and renewals come to in a month, each spread over its own round. */
+const monthly = (jobs) => jobs.filter((j) => (j.kind === 'bill' || j.kind === 'renewal') && j.amount_cents && j.every)
+  .reduce((n, j) => n + j.amount_cents / (j.every.n * { day: 1 / 30.44, week: 7 / 30.44, month: 1, year: 12 }[j.every.unit]), 0);
 const number = (n) => Number(n).toLocaleString();
 const dayText = (day) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 const money = (cents) => (cents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
@@ -44,27 +50,58 @@ export default function UpkeepPage() {
   const [jobs, setJobs] = useState(null);
   const [starters, setStarters] = useState([]);
   const [modal, setModal] = useState(null);       // { job: {} } to make one, { done: job } to mark one done
+  const [kind, setKind] = useState('');           // '' for everything, or one kind
+  const [scores, setScores] = useState(null);
   const navigate = useNavigate();
-  const load = useCallback(() => { axios.get('/api/things/upkeep').then(({ data }) => setJobs(data)).catch(() => setJobs([])); }, []);
+  const load = useCallback(() => {
+    axios.get('/api/things/upkeep').then(({ data }) => setJobs(data)).catch(() => setJobs([]));
+    axios.get('/api/things/upkeep/scores').then(({ data }) => setScores(data)).catch(() => {});
+  }, []);
   useEffect(() => { load(); axios.get('/api/things/upkeep/starters').then(({ data }) => setStarters(data)).catch(() => {}); }, [load]);
   if (!jobs) return null;
   const have = new Set(jobs.map((j) => j.name.toLowerCase()));
-  const addStarter = async (s) => { await axios.post('/api/things/upkeep', s); load(); };
+  const addStarter = async (s) => { const { data } = await axios.post('/api/things/upkeep', s); if (s.kind === 'bill' || s.kind === 'renewal') navigate(`/things/upkeep/${data.id}?edit=1`); else load(); };
+  const shown = jobs.filter((j) => !kind || j.kind === kind);
+  const offered = starters.filter((s) => !have.has(s.name.toLowerCase()) && (!kind || (s.kind ?? 'job') === kind));
+  const perMonth = monthly(jobs);
+  const chip = (active) => `rounded-full px-3 py-1 text-sm ${active ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Upkeep</h1>
-        <button type="button" onClick={() => setModal({ job: {} })} className={buttonClass}>+ New job</button>
+        <button type="button" onClick={() => setModal({ job: { kind: kind || 'job' } })} className={buttonClass}>+ New</button>
       </div>
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="What to show">
+        <button type="button" onClick={() => setKind('')} aria-pressed={!kind} className={chip(!kind)}>Everything <span className="opacity-70">{jobs.length || ''}</span></button>
+        {Object.entries(KINDS).map(([k, [label, icon]]) => (
+          <button key={k} type="button" onClick={() => setKind(k)} aria-pressed={kind === k} className={chip(kind === k)}>{icon} {label} <span className="opacity-70">{jobs.filter((j) => j.kind === k).length || ''}</span></button>
+        ))}
+      </div>
+      {(!kind || kind === 'bill' || kind === 'renewal') && perMonth > 0 && (
+        <p className="text-sm text-gray-700 dark:text-life-100" data-monthly>Your bills and renewals come to about <span className="font-semibold">{money(Math.round(perMonth))}</span> a month.</p>
+      )}
+      {(!kind || kind === 'chore') && scores?.people.length > 0 && (
+        <section className={cardClass} aria-label="Chores this week">
+          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Chores this week</h2>
+          <ul className="space-y-1">
+            {scores.people.map((p, i) => (
+              <li key={p.name} className="flex items-baseline gap-2 text-sm">
+                <span className="flex-1 text-gray-800 dark:text-life-50">{i === 0 && p.this_week > 0 ? '🏆 ' : ''}{p.name} <span className="text-xs text-gray-500 dark:text-life-300">{p.done} done{p.last_week ? ` · ${p.last_week} points last week` : ''}</span></span>
+                <span className="font-semibold text-life-700 dark:text-life-100">{p.this_week} point{p.this_week === 1 ? '' : 's'}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {jobs.length === 0 && (
         <p className={`${cardClass} text-sm text-gray-600 dark:text-life-100`}>
-          The jobs that come round again: the furnace filter, the gutters, the oil. Say how often, by the calendar or by a reading like the car's miles,
-          and what each needs. Life Is tells you when each is due, gathers the tools, and keeps every time it was done.
+          Everything that comes round again: jobs like the furnace filter and the oil, bills and renewals like the rent and the car registration, and chores.
+          Say how often and what each needs. Life Is tells you when each is due, and keeps every time it was done.
         </p>
       )}
       {GROUPS.map(([title, states]) => {
-        const here = jobs.filter((j) => states.includes(j.due.state));
+        const here = shown.filter((j) => states.includes(j.due.state));
         if (!here.length) return null;
         return (
           <section key={title} className={cardClass} aria-label={title}>
@@ -73,35 +110,35 @@ export default function UpkeepPage() {
               {here.map((j) => (
                 <li key={j.id} className="flex items-center gap-2 py-2">
                   <Link to={`/things/upkeep/${j.id}`} className="min-w-0 flex-1">
-                    <span className="block text-sm text-gray-800 hover:underline dark:text-life-50">{j.name}</span>
+                    <span className="block text-sm text-gray-800 hover:underline dark:text-life-50"><span aria-hidden="true">{j.kind !== 'job' ? `${KINDS[j.kind][1]} ` : ''}</span>{j.name}</span>
                     <span className="block text-xs text-gray-500 dark:text-life-300">
-                      {[j.item?.name, j.activity, j.assigned_to && `${j.assigned_to.name} does it`, !j.mine && `${j.owner}'s`].filter(Boolean).join(' · ') || scheduleText(j)}
+                      {[j.amount_cents != null && money(j.amount_cents), j.autopay && 'pays itself', j.points != null && `${j.points} point${j.points === 1 ? '' : 's'}`, j.item?.name, j.activity, j.assigned_to && `${j.assigned_to.name} does it`, !j.mine && `${j.owner}'s`].filter(Boolean).join(' · ') || scheduleText(j)}
                     </span>
                   </Link>
                   <DueBadge job={j} />
-                  <button type="button" onClick={() => setModal({ done: j })} aria-label={`${j.name} done`} className="shrink-0 rounded-full border border-life-200 px-2.5 py-1 text-xs text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100">✓ Done</button>
+                  <button type="button" onClick={() => setModal({ done: j })} aria-label={`${j.name} ${doneWord(j).toLowerCase()}`} className="shrink-0 rounded-full border border-life-200 px-2.5 py-1 text-xs text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100">✓ {doneWord(j)}</button>
                 </li>
               ))}
             </ul>
           </section>
         );
       })}
-      {starters.some((s) => !have.has(s.name.toLowerCase())) && (
-        <section className={cardClass} aria-label="Common jobs">
-          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Common jobs to start from</h2>
-          <p className="mb-2 text-xs text-gray-500 dark:text-life-300">Add one, then say what it needs and when it was last done.</p>
+      {offered.length > 0 && (
+        <details className={cardClass} role="region" aria-label="Common jobs" open={shown.length === 0 || Boolean(kind)} key={`${kind}-${shown.length === 0}`}>
+          <summary className="cursor-pointer font-semibold text-life-800 dark:text-life-50">Common ones to start from <span className="text-sm font-normal text-gray-500 dark:text-life-300">{offered.length}</span></summary>
+          <p className="mb-2 mt-1 text-xs text-gray-500 dark:text-life-300">Add one, then say when it's due and what it needs or costs.</p>
           <ul className="grid gap-1.5 sm:grid-cols-2">
-            {starters.filter((s) => !have.has(s.name.toLowerCase())).map((s) => (
+            {offered.map((s) => (
               <li key={s.name} className="flex items-center gap-2 text-sm">
-                <span className="min-w-0 flex-1 text-gray-800 dark:text-life-50">{s.name} <span className="text-xs text-gray-500 dark:text-life-300">{scheduleText({ every: s.every_n ? { n: s.every_n, unit: s.every_unit } : null, every_reading: s.every_reading, reading_unit: s.reading_unit })}</span></span>
+                <span className="min-w-0 flex-1 text-gray-800 dark:text-life-50"><span aria-hidden="true">{KINDS[s.kind ?? 'job'][1]} </span>{s.name} <span className="text-xs text-gray-500 dark:text-life-300">{scheduleText({ every: s.every_n ? { n: s.every_n, unit: s.every_unit } : null, every_reading: s.every_reading, reading_unit: s.reading_unit })}</span></span>
                 <button type="button" onClick={() => addStarter(s)} className="text-xs text-life-600 hover:underline dark:text-life-200">Add</button>
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       )}
-      {modal?.job && <Modal title="A job that comes round again" wide onClose={() => setModal(null)}><JobForm job={modal.job} onDone={(j) => navigate(`/things/upkeep/${j.id}`)} /></Modal>}
-      {modal?.done && <Modal title={`${modal.done.name}: done`} onClose={() => setModal(null)}><DoneForm job={modal.done} onDone={() => { setModal(null); load(); }} /></Modal>}
+      {modal?.job && <Modal title="Something that comes round again" wide onClose={() => setModal(null)}><JobForm job={modal.job} onDone={(j) => navigate(`/things/upkeep/${j.id}`)} /></Modal>}
+      {modal?.done && <Modal title={`${modal.done.name}: ${doneWord(modal.done).toLowerCase()}`} onClose={() => setModal(null)}><DoneForm job={modal.done} onDone={() => { setModal(null); load(); }} /></Modal>}
     </div>
   );
 }
@@ -111,7 +148,7 @@ export function JobPage() {
   const id = Number(useParams().id);
   const navigate = useNavigate();
   const [job, setJob] = useState(undefined);
-  const [modal, setModal] = useState(null);       // 'edit', 'done' or 'reading'
+  const [modal, setModal] = useState(() => (new URLSearchParams(window.location.search).get('edit') ? 'edit' : null));       // 'edit', 'done' or 'reading'
   const [said, setSaid] = useState('');
   const load = useCallback(() => { axios.get(`/api/things/upkeep/${id}`).then(({ data }) => setJob(data)).catch(() => setJob(null)); }, [id]);
   useEffect(() => { load(); }, [load]);
@@ -134,7 +171,7 @@ export function JobPage() {
             <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">{job.name}</h1>
             <p className="text-sm text-gray-600 dark:text-life-100">
               {job.item && <>For <Link to={`/things/${job.item.id}`} className="underline">{job.item.name}</Link> · </>}
-              {scheduleText(job)}
+              {scheduleText(job)}{job.amount_cents != null && <> · {money(job.amount_cents)} each time</>}{job.autopay && ' · pays itself'}{job.points != null && <> · {job.points} point{job.points === 1 ? '' : 's'}</>}
             </p>
             <p className="text-xs text-gray-500 dark:text-life-300">
               {[job.activity, job.assigned_to ? `${job.assigned_to.name} usually does it` : null, !job.mine && `${job.owner}'s job`,
@@ -145,7 +182,7 @@ export function JobPage() {
           <DueBadge job={job} />
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setModal('done')} className={buttonClass}>✓ Done</button>
+          <button type="button" onClick={() => setModal('done')} className={buttonClass}>✓ {doneWord(job)}</button>
           {job.every_reading && <button type="button" onClick={() => setModal('reading')} className={quietButtonClass}>Note the {job.reading_unit || 'reading'}</button>}
           {job.mine && <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Change</button>}
         </div>
@@ -194,7 +231,7 @@ export function JobPage() {
               <li key={d.id} className="flex items-baseline gap-2 py-1.5 text-sm">
                 <span className="w-28 shrink-0 text-gray-800 dark:text-life-50">{dayText(d.day)}</span>
                 <span className="min-w-0 flex-1 text-xs text-gray-600 dark:text-life-200">
-                  {[d.by, d.reading !== null && `${number(d.reading)}${job.reading_unit ? ` ${job.reading_unit}` : ''}`, d.minutes !== null && minutesText(d.minutes), d.cost_cents !== null && money(d.cost_cents), d.note].filter(Boolean).join(' · ')}
+                  {[d.by, d.points != null && `${d.points} point${d.points === 1 ? '' : 's'}`, d.reading !== null && `${number(d.reading)}${job.reading_unit ? ` ${job.reading_unit}` : ''}`, d.minutes !== null && minutesText(d.minutes), d.cost_cents !== null && money(d.cost_cents), d.note].filter(Boolean).join(' · ')}
                 </span>
                 <button type="button" onClick={() => undo(d)} aria-label={`Take back ${d.day}`} className="text-xs text-gray-400 hover:text-red-600">✕</button>
               </li>
@@ -202,11 +239,11 @@ export function JobPage() {
           </ul>
         )}
       </section>
-      {job.mine && <p className="text-right"><button type="button" onClick={remove} className="text-xs text-red-600 hover:underline">Remove this job</button></p>}
+      {job.mine && <p className="text-right"><button type="button" onClick={remove} className="text-xs text-red-600 hover:underline">Remove this</button></p>}
 
       {modal === 'edit' && <Modal title={job.name} wide onClose={() => setModal(null)}><JobForm job={job} onDone={(j) => { setModal(null); setJob({ ...job, ...j }); load(); }} /></Modal>}
       {modal === 'done' && (
-        <Modal title={`${job.name}: done`} onClose={() => setModal(null)}>
+        <Modal title={`${job.name}: ${doneWord(job).toLowerCase()}`} onClose={() => setModal(null)}>
           <DoneForm job={job} onDone={(r) => {
             setModal(null);
             setJob({ ...r.job, done: r.done });
@@ -225,6 +262,8 @@ function JobForm({ job, onDone }) {
   const [things, setThings] = useState([]);
   const [people, setPeople] = useState([]);
   const [form, setForm] = useState({
+    kind: job.kind || 'job', amount: job.amount_cents != null ? (job.amount_cents / 100).toFixed(2) : '', points: job.points ?? '', autopay: Boolean(job.autopay),
+    first_due: job.first_due || '',
     name: job.name || '', activity: job.activity || '', item_id: job.item?.id ?? '',
     every_n: job.every?.n ?? '', every_unit: job.every?.unit ?? 'month', by_time: job.id ? Boolean(job.every) : true,
     every_reading: job.every_reading ?? '', reading_unit: job.reading_unit || '', by_reading: Boolean(job.every_reading),
@@ -242,21 +281,33 @@ function JobForm({ job, onDone }) {
 
   const submit = async (e) => {
     e.preventDefault();
+    const dated = form.kind === 'bill' || form.kind === 'renewal';
     const body = {
+      kind: form.kind, amount_cents: dated && form.amount.trim() !== '' ? Math.round(Number(form.amount.replace(/[^0-9.]/g, '')) * 100) : null,
+      points: form.kind === 'chore' && form.points !== '' ? Number(form.points) : null, autopay: dated && form.autopay,
+      ...(dated ? { first_due: form.first_due || null } : {}),
       name: form.name, activity: form.activity || null, item_id: form.item_id === '' ? null : Number(form.item_id),
       every_n: form.by_time && form.every_n !== '' ? Number(form.every_n) : null, every_unit: form.by_time && form.every_n !== '' ? form.every_unit : null,
       every_reading: form.by_reading && form.every_reading !== '' ? Number(form.every_reading) : null, reading_unit: form.by_reading ? form.reading_unit || null : null,
       assigned_to: form.assigned_to === '' ? null : Number(form.assigned_to), steps: form.steps || null, note: form.note || null,
       tools: form.tools, supplies: form.supplies.map((s) => ({ item_id: s.item_id, quantity: s.quantity === '' ? null : Number(s.quantity), unit: s.unit || null })),
-      ...(making && form.last_day ? { last_done: { day: form.last_day, reading: form.last_reading === '' ? null : Number(form.last_reading) } } : {}),
+      ...(making && !dated && form.last_day ? { last_done: { day: form.last_day, reading: form.last_reading === '' ? null : Number(form.last_reading) } } : {}),
     };
     try { onDone((job.id ? await axios.put(`/api/things/upkeep/${job.id}`, body) : await axios.post('/api/things/upkeep', body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
 
+  const dated = form.kind === 'bill' || form.kind === 'renewal';
+  const example = { job: 'Change the furnace filter', bill: 'Electricity', renewal: 'Car registration', chore: 'Take out the trash' }[form.kind];
   return (
     <form onSubmit={submit} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="The job *"><input required autoFocus={making} value={form.name} onChange={set('name')} placeholder="Change the furnace filter" className={inputClass} /></Field>
+        <Field label="What it is">
+          <select value={form.kind} onChange={set('kind')} className={inputClass}>{Object.entries(KIND_ONE).map(([k, label]) => <option key={k} value={k}>{KINDS[k][1]} {label}</option>)}</select>
+        </Field>
+        <Field label="Its name *"><input required autoFocus={making} value={form.name} onChange={set('name')} placeholder={example} className={inputClass} /></Field>
+        {dated && <Field label={form.kind === 'bill' ? 'Next due on' : 'Runs out on'}><input type="date" value={form.first_due} onChange={set('first_due')} className={inputClass} /></Field>}
+        {dated && <Field label="What it costs each time"><input inputMode="decimal" value={form.amount} onChange={set('amount')} placeholder="0.00" className={inputClass} /></Field>}
+        {form.kind === 'chore' && <Field label="Points for doing it"><input type="number" min="0" max="1000" step="1" value={form.points} onChange={set('points')} placeholder="2" className={inputClass} /></Field>}
         <Field label="Part of (an activity)"><input value={form.activity} onChange={set('activity')} placeholder="Home maintenance, Car, Garden" className={inputClass} /></Field>
         <Field label="It's for">
           <select value={form.item_id} onChange={set('item_id')} className={inputClass}>
@@ -288,7 +339,12 @@ function JobForm({ job, onDone }) {
           <datalist id="reading-units">{['miles', 'km', 'hours', 'cycles'].map((u) => <option key={u} value={u} />)}</datalist>
         </label>
         {form.by_time && form.by_reading && <p className="text-xs text-gray-500 dark:text-life-300">Whichever comes first.</p>}
-        {making && (
+        {dated && (
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-life-100">
+            <input type="checkbox" checked={form.autopay} onChange={(e) => setForm({ ...form, autopay: e.target.checked })} className="accent-life-600" /> It pays itself (a reminder that money is about to leave)
+          </label>
+        )}
+        {making && !dated && (
           <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-life-100">
             Last done
             <input type="date" value={form.last_day} onChange={set('last_day')} aria-label="Last done" className={`${inputClass} w-40`} />
@@ -298,6 +354,7 @@ function JobForm({ job, onDone }) {
         )}
       </fieldset>
 
+      {!dated && (
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <span className="block text-xs font-medium text-gray-600 dark:text-life-200">Tools it needs</span>
@@ -332,8 +389,9 @@ function JobForm({ job, onDone }) {
           </select>
         </div>
       </div>
-      <Field label="Steps, one on each line"><textarea rows={3} value={form.steps} onChange={set('steps')} className={inputClass} /></Field>
-      <Field label="Notes"><textarea rows={2} value={form.note} onChange={set('note')} placeholder="filter size, part numbers, who to call" className={inputClass} /></Field>
+      )}
+      {!dated && <Field label="Steps, one on each line"><textarea rows={3} value={form.steps} onChange={set('steps')} className={inputClass} /></Field>}
+      <Field label="Notes"><textarea rows={2} value={form.note} onChange={set('note')} placeholder={dated ? 'account number, who to call, where to pay' : 'filter size, part numbers, who to call'} className={inputClass} /></Field>
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
       <div className="flex justify-end"><button type="submit" className={buttonClass}>Save</button></div>
     </form>
@@ -342,7 +400,8 @@ function JobForm({ job, onDone }) {
 
 /** The job done: when, the reading then, how long it took, what it cost, and whether that goes into spending. */
 function DoneForm({ job, onDone }) {
-  const [form, setForm] = useState({ day: toDateInput(new Date()), reading: '', minutes: '', cost: '', spend: false, category_id: '', note: '' });
+  const dated = job.kind === 'bill' || job.kind === 'renewal';
+  const [form, setForm] = useState({ day: toDateInput(new Date()), reading: '', minutes: '', cost: dated && job.amount_cents != null ? (job.amount_cents / 100).toFixed(2) : '', spend: dated, category_id: '', note: '' });
   const [categories, setCategories] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -365,13 +424,13 @@ function DoneForm({ job, onDone }) {
       {gather.length > 0 && <p className="text-xs text-gray-600 dark:text-life-200">Each tool notes it was used for this; supplies come out of what you have. {gather.join(' · ')}</p>}
       <div className="grid grid-cols-2 gap-3">
         <Field label="When"><input type="date" required value={form.day} onChange={set('day')} className={inputClass} /></Field>
-        {job.every_reading
+        {dated ? null : job.every_reading
           ? <Field label={`${job.reading_unit ? job.reading_unit[0].toUpperCase() + job.reading_unit.slice(1) : 'Reading'} then`}><input type="number" min="0" step="any" value={form.reading} onChange={set('reading')} placeholder={job.due.latest_reading !== null ? `last ${number(job.due.latest_reading)}` : ''} className={inputClass} /></Field>
           : <Field label="Minutes it took"><input type="number" min="0" step="1" value={form.minutes} onChange={set('minutes')} className={inputClass} /></Field>}
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="What it cost"><input inputMode="decimal" value={form.cost} onChange={set('cost')} placeholder="0.00" className={inputClass} /></Field>
-        {job.every_reading && <Field label="Minutes it took"><input type="number" min="0" step="1" value={form.minutes} onChange={set('minutes')} className={inputClass} /></Field>}
+        <Field label={dated ? 'How much' : 'What it cost'}><input inputMode="decimal" value={form.cost} onChange={set('cost')} placeholder="0.00" className={inputClass} /></Field>
+        {!dated && job.every_reading && <Field label="Minutes it took"><input type="number" min="0" step="1" value={form.minutes} onChange={set('minutes')} className={inputClass} /></Field>}
       </div>
       {form.cost.trim() !== '' && (
         <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-life-100">
@@ -386,7 +445,7 @@ function DoneForm({ job, onDone }) {
       )}
       <Field label="A note"><input value={form.note} onChange={set('note')} placeholder="what was found, the part used" className={inputClass} /></Field>
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
-      <div className="flex justify-end"><button type="submit" disabled={busy} className={buttonClass}>{busy ? 'Keeping it…' : 'Done'}</button></div>
+      <div className="flex justify-end"><button type="submit" disabled={busy} className={buttonClass}>{busy ? 'Keeping it…' : doneWord(job)}</button></div>
     </form>
   );
 }

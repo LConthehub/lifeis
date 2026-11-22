@@ -33,7 +33,7 @@ const ids = await page.evaluate(async () => {
 });
 
 await page.goto(`${base}/things/upkeep`); await page.waitForTimeout(1000);
-check('Upkeep explains itself and offers common jobs', await page.getByText('The jobs that come round again').isVisible() && await page.getByRole('region', { name: 'Common jobs' }).isVisible());
+check('Upkeep explains itself and offers common jobs', await page.getByText('Everything that comes round again').isVisible() && await page.getByRole('region', { name: 'Common jobs' }).isVisible());
 await page.getByRole('region', { name: 'Common jobs' }).getByRole('listitem').filter({ hasText: 'Change the furnace filter' }).getByRole('button', { name: 'Add' }).click();
 await page.waitForTimeout(1000);
 const due = await page.getByRole('region', { name: 'Late or due' }).innerText().catch(() => '');
@@ -65,9 +65,9 @@ await page.screenshot({ path: `${shots}/upkeep-job.png`, fullPage: true });
 
 // A job by miles, made from scratch.
 await page.goto(`${base}/things/upkeep`); await page.waitForTimeout(800);
-await page.getByRole('button', { name: '+ New job' }).click(); await page.waitForTimeout(600);
+await page.getByRole('button', { name: '+ New', exact: true }).click(); await page.waitForTimeout(600);
 const make = page.getByRole('dialog');
-await make.getByLabel('The job *').fill('Change the oil');
+await make.getByLabel('Its name *').fill('Change the oil');
 await make.getByLabel('Part of (an activity)').fill('Car');
 await make.getByLabel("It's for").selectOption({ label: 'The car (Garage)' });
 await make.getByLabel('How many').fill('6');

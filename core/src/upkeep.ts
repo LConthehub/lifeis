@@ -26,8 +26,21 @@ export const EVERY_UNITS = ['day', 'week', 'month', 'year'] as const;
 export type EveryUnit = (typeof EVERY_UNITS)[number];
 export type DueState = 'overdue' | 'due' | 'soon' | 'later' | 'unscheduled';
 
+export const JOB_KINDS = ['job', 'bill', 'renewal', 'chore'] as const;
+export type JobKind = (typeof JOB_KINDS)[number];
+/** A bill or a renewal stays on its date: rent is due on the 1st however late last month's was paid. */
+const anchored = (kind: JobKind) => kind === 'bill' || kind === 'renewal';
+
 export type JobInput = {
   name: string;
+  /** A job around the home (the default), a bill, a renewal, or a chore. Left out: unchanged. */
+  kind?: string | null;
+  /** What a bill or a renewal costs each time. */
+  amount_cents?: number | null;
+  /** What a chore is worth to whoever does it. */
+  points?: number | null;
+  /** A bill that pays itself: it's a reminder that money is about to leave, not something to do. */
+  autopay?: boolean;
   activity?: string | null;
   /** The thing the job is for: the car, the furnace. */
   item_id?: number | null;
@@ -66,10 +79,14 @@ export type Due = {
 };
 export type JobTool = { id: number; name: string; icon: string | null; place: string | null };
 export type JobSupply = { id: number; item_id: number; name: string; quantity: number | null; unit: string | null; amount: string; have: string; low: boolean; place: string | null };
-export type DoneRecord = { id: number; day: string; by: string | null; reading: number | null; minutes: number | null; cost_cents: number | null; money_entry_id: number | null; note: string | null };
+export type DoneRecord = { id: number; day: string; by: string | null; reading: number | null; minutes: number | null; cost_cents: number | null; points: number | null; money_entry_id: number | null; note: string | null };
 export type Job = {
   id: number;
   name: string;
+  kind: JobKind;
+  amount_cents: number | null;
+  points: number | null;
+  autopay: boolean;
   activity: string | null;
   /** Whether the person asking owns it (and so can change it). */
   mine: boolean;
@@ -93,6 +110,7 @@ type JobRow = {
   id: number; owner_id: number; owner: string; name: string; activity: string | null; item_id: number | null;
   every_n: number | null; every_unit: EveryUnit | null; every_reading: number | null; reading_unit: string | null;
   first_due: string | null; assigned_to: number | null; assigned_name: string | null; steps: string | null; note: string | null;
+  kind: JobKind; amount_cents: number | null; points: number | null; autopay: number;
 };
 
 const MAX_TOOLS = 40;
@@ -107,7 +125,7 @@ export function addInterval(day: string, n: number, unit: EveryUnit): string {
   const [y, m, d] = day.split('-').map(Number) as [number, number, number];
   const total = m - 1 + (unit === 'month' ? n : n * 12);
   const year = y + Math.floor(total / 12);
-  const month = total % 12;
+  const month = ((total % 12) + 12) % 12;
   const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   return `${year}-${pad(month + 1)}-${pad(Math.min(d, last))}`;
 }
@@ -122,11 +140,12 @@ function soonWindow(n: number, unit: EveryUnit): number {
  * When a job is next due, and how pressing that is: by time, by reading, or by whichever comes first.
  * `last` is the last time it was done; `latest` the latest reading of what it goes by.
  */
-export function dueOf(job: Pick<JobRow, 'every_n' | 'every_unit' | 'every_reading' | 'first_due'>, last: { day: string; reading: number | null } | null, latest: number | null, today: string): Due {
+export function dueOf(job: Pick<JobRow, 'every_n' | 'every_unit' | 'every_reading' | 'first_due'> & { kind?: JobKind }, last: { day: string; reading: number | null } | null, latest: number | null, today: string): Due {
   const out: Due = { state: 'unscheduled', next_day: null, days_left: null, next_reading: null, latest_reading: latest, reading_left: null };
   const states: DueState[] = [];
   if (job.every_n && job.every_unit) {
-    out.next_day = last ? addInterval(last.day, job.every_n, job.every_unit) : (job.first_due ?? today);
+    // A bill or renewal is due on its own date; anything else, so long after it was last done.
+    out.next_day = anchored(job.kind ?? 'job') && job.first_due ? job.first_due : last ? addInterval(last.day, job.every_n, job.every_unit) : (job.first_due ?? today);
     out.days_left = dayNumber(out.next_day) - dayNumber(today);
     states.push(out.days_left < 0 ? 'overdue' : out.days_left === 0 ? 'due' : out.days_left <= soonWindow(job.every_n, job.every_unit) ? 'soon' : 'later');
   }
@@ -151,7 +170,21 @@ export function dueOf(job: Pick<JobRow, 'every_n' | 'every_unit' | 'every_readin
 }
 
 /** Common upkeep around a home, to start from. Each is only a suggestion: every part can be changed. */
-export const STARTER_JOBS: { name: string; activity: string; every_n?: number; every_unit?: EveryUnit; every_reading?: number; reading_unit?: string; steps?: string }[] = [
+export const STARTER_JOBS: { name: string; activity: string; kind?: JobKind; points?: number; every_n?: number; every_unit?: EveryUnit; every_reading?: number; reading_unit?: string; steps?: string }[] = [
+  { name: 'Rent or mortgage', activity: 'Home', kind: 'bill', every_n: 1, every_unit: 'month' },
+  { name: 'Electricity', activity: 'Home', kind: 'bill', every_n: 1, every_unit: 'month' },
+  { name: 'Internet', activity: 'Home', kind: 'bill', every_n: 1, every_unit: 'month' },
+  { name: 'Phone', activity: 'Home', kind: 'bill', every_n: 1, every_unit: 'month' },
+  { name: 'Car registration', activity: 'Car', kind: 'renewal', every_n: 1, every_unit: 'year' },
+  { name: 'Car insurance', activity: 'Car', kind: 'renewal', every_n: 6, every_unit: 'month' },
+  { name: 'Home or renters insurance', activity: 'Home', kind: 'renewal', every_n: 1, every_unit: 'year' },
+  { name: 'Passport', activity: 'Papers', kind: 'renewal', every_n: 10, every_unit: 'year' },
+  { name: "Driver's license", activity: 'Papers', kind: 'renewal', every_n: 4, every_unit: 'year' },
+  { name: 'Take out the trash', activity: 'Chores', kind: 'chore', points: 2, every_n: 1, every_unit: 'week' },
+  { name: 'Vacuum', activity: 'Chores', kind: 'chore', points: 3, every_n: 1, every_unit: 'week' },
+  { name: 'Clean the bathroom', activity: 'Chores', kind: 'chore', points: 5, every_n: 1, every_unit: 'week' },
+  { name: 'Do the dishes', activity: 'Chores', kind: 'chore', points: 1, every_n: 1, every_unit: 'day' },
+  { name: 'Tidy your room', activity: 'Chores', kind: 'chore', points: 2, every_n: 1, every_unit: 'week' },
   { name: 'Change the furnace filter', activity: 'Home maintenance', every_n: 3, every_unit: 'month', steps: 'Turn the system off.\nNote the size printed on the old filter.\nArrow on the new one points toward the furnace.' },
   { name: 'Test the smoke and CO alarms', activity: 'Home maintenance', every_n: 1, every_unit: 'month' },
   { name: 'Replace smoke alarm batteries', activity: 'Home maintenance', every_n: 1, every_unit: 'year' },
@@ -173,7 +206,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
   async function rows(q: Queries, where = '', args: Value[] = []): Promise<JobRow[]> {
     return q.all<JobRow>(
       `SELECT j.id, j.owner_id, o.username AS owner, j.name, j.activity, j.item_id, j.every_n, j.every_unit, j.every_reading, j.reading_unit,
-              j.first_due, j.assigned_to, a.username AS assigned_name, j.steps, j.note
+              j.first_due, j.assigned_to, a.username AS assigned_name, j.steps, j.note, j.kind, j.amount_cents, j.points, j.autopay
        FROM upkeep_jobs j JOIN users o ON o.id = j.owner_id LEFT JOIN users a ON a.id = j.assigned_to
        WHERE (j.owner_id = ? OR j.assigned_to = ?) ${where} ORDER BY j.name COLLATE NOCASE, j.id`, [viewer, viewer, ...args]);
   }
@@ -216,7 +249,8 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
       ? ((await q.get<{ reading: number }>('SELECT reading FROM upkeep_done WHERE job_id = ? AND reading IS NOT NULL ORDER BY day DESC, id DESC LIMIT 1', [row.id]))?.reading ?? null)
       : (last?.reading ?? null);
     return {
-      id: row.id, name: row.name, activity: row.activity, mine: owner === viewer, owner: row.owner,
+      id: row.id, name: row.name, kind: row.kind, amount_cents: row.amount_cents, points: row.points, autopay: row.autopay === 1,
+      activity: row.activity, mine: owner === viewer, owner: row.owner,
       item: item ? { id: item.id, name: item.name, place: item.place } : null,
       every: row.every_n && row.every_unit ? { n: row.every_n, unit: row.every_unit } : null,
       every_reading: row.every_reading, reading_unit: row.reading_unit, first_due: row.first_due,
@@ -229,7 +263,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
 
   async function doneList(q: Queries, jobId: number): Promise<DoneRecord[]> {
     return q.all<DoneRecord>(
-      `SELECT d.id, d.day, u.username AS by, d.reading, d.minutes, d.cost_cents, d.money_entry_id, d.note
+      `SELECT d.id, d.day, u.username AS by, d.reading, d.minutes, d.cost_cents, d.points, d.money_entry_id, d.note
        FROM upkeep_done d LEFT JOIN users u ON u.id = d.done_by WHERE d.job_id = ? ORDER BY d.day DESC, d.id DESC`, [jobId]);
   }
 
@@ -249,6 +283,20 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
     if (input.assigned_to != null && !(await q.get('SELECT id FROM users WHERE id = ?', [input.assigned_to]))) throw new Problem(404, "That person isn't in this Life Is");
     return [name, clean(input.activity, 60), input.item_id ?? null, n, unit, reading, reading !== null ? clean(input.reading_unit, 20) : null,
       dayOrNull(input.first_due), input.assigned_to ?? null, clean(input.steps, 5000), clean(input.note, 2000)];
+  }
+
+  /** What kind it is, and what goes with that: an amount for a bill or renewal, points for a chore. */
+  async function saveKind(q: Queries, jobId: number, input: JobInput, making: boolean) {
+    if (input.kind != null && !JOB_KINDS.includes(input.kind as JobKind)) throw new Problem(400, "It's a job, a bill, a renewal or a chore");
+    if (input.amount_cents != null && !(Number.isInteger(input.amount_cents) && input.amount_cents >= 0 && input.amount_cents < 1e11)) throw new Problem(400, 'What it costs is an amount, 0 or more');
+    if (input.points != null && !(Number.isInteger(input.points) && input.points >= 0 && input.points <= 1000)) throw new Problem(400, 'Points are a whole number, up to 1000');
+    const sets: string[] = [];
+    const args: Value[] = [];
+    if (input.kind != null) { sets.push('kind = ?'); args.push(input.kind); }
+    if (input.amount_cents !== undefined || making) { sets.push('amount_cents = ?'); args.push(input.amount_cents ?? null); }
+    if (input.points !== undefined || making) { sets.push('points = ?'); args.push(input.points ?? null); }
+    if (input.autopay !== undefined) { sets.push('autopay = ?'); args.push(input.autopay ? 1 : 0); }
+    if (sets.length) await q.run(`UPDATE upkeep_jobs SET ${sets.join(', ')} WHERE id = ?`, [...args, jobId]);
   }
 
   async function saveParts(q: Queries, jobId: number, input: JobInput) {
@@ -310,6 +358,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
           `INSERT INTO upkeep_jobs (owner_id, name, activity, item_id, every_n, every_unit, every_reading, reading_unit, first_due, assigned_to, steps, note, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [viewer, ...(await checked(tx, input)), now(), now()]);
         await saveParts(tx, made.lastId, input);
+        await saveKind(tx, made.lastId, input, true);
         if (input.last_done) {
           const day = dayOrNull(input.last_done.day);
           if (!day) throw new Problem(400, 'Pick the day it was last done');
@@ -329,6 +378,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
           `UPDATE upkeep_jobs SET name = ?, activity = ?, item_id = ?, every_n = ?, every_unit = ?, every_reading = ?, reading_unit = ?, first_due = ?,
              assigned_to = ?, steps = ?, note = ?, updated_at = ? WHERE id = ?`, [...(await checked(tx, input)), now(), id]);
         await saveParts(tx, id, input);
+        await saveKind(tx, id, input, false);
       }).then(async () => whole(db, await seen(db, id)));
     },
 
@@ -359,12 +409,19 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
       const runningLow: string[] = [];
       const checkByHand: string[] = [];
       let doneId = 0;
+      let cost: number | null = null;
       let row!: JobRow;
       await atomic(db, async (tx) => {
         row = await seen(tx, id);
-        const made = await tx.run('INSERT INTO upkeep_done (job_id, day, done_by, reading, minutes, cost_cents, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          [id, day, viewer, input.reading ?? null, input.minutes ?? null, input.cost_cents ?? null, clean(input.note, 1000), now()]);
+        // A bill's usual amount is what it cost, unless another is said.
+        cost = input.cost_cents ?? (anchored(row.kind) ? row.amount_cents : null);
+        const made = await tx.run('INSERT INTO upkeep_done (job_id, day, done_by, reading, minutes, cost_cents, points, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [id, day, viewer, input.reading ?? null, input.minutes ?? null, cost, row.kind === 'chore' ? row.points : null, clean(input.note, 1000), now()]);
         doneId = made.lastId;
+        // Paid or renewed: its date moves on by one round (or, with no round, it's finished with).
+        if (anchored(row.kind) && row.first_due) {
+          await tx.run('UPDATE upkeep_jobs SET first_due = ? WHERE id = ?', [row.every_n && row.every_unit ? addInterval(row.first_due, row.every_n, row.every_unit) : null, id]);
+        }
         if (input.reading != null) await noteReading(tx, row, input.reading, day);
         const when = { day, at: now() };
         for (const tool of await tx.all<{ item_id: number }>('SELECT item_id FROM upkeep_tools WHERE job_id = ?', [id])) {
@@ -394,8 +451,8 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
           toBuy.push(name);
         }
       }
-      if (input.spend && input.cost_cents) {
-        const entry = await money(db, viewer, clock).addEntry({ label: row.name, cents: input.cost_cents, day, note: clean(input.note, 300), category_id: input.spend.category_id ?? null });
+      if (input.spend && cost) {
+        const entry = await money(db, viewer, clock).addEntry({ label: row.name, cents: cost, day, note: clean(input.note, 300), category_id: input.spend.category_id ?? null });
         await db.run('UPDATE upkeep_done SET money_entry_id = ? WHERE id = ?', [entry.id, doneId]);
       }
       return { job: await whole(db, await seen(db, id)), done: await doneList(db, id), to_buy: toBuy, check_by_hand: checkByHand };
@@ -405,8 +462,12 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
     async undo(doneId: number): Promise<Job & { done: DoneRecord[] }> {
       const found = await db.get<{ job_id: number }>('SELECT job_id FROM upkeep_done WHERE id = ?', [doneId]);
       if (!found) throw new Problem(404, 'Not found');
-      await seen(db, found.job_id);
+      const row = await seen(db, found.job_id);
       await db.run('DELETE FROM upkeep_done WHERE id = ?', [doneId]);
+      // A bill or renewal goes back to the date it was on.
+      if (anchored(row.kind) && row.first_due && row.every_n && row.every_unit) {
+        await db.run('UPDATE upkeep_jobs SET first_due = ? WHERE id = ?', [addInterval(row.first_due, -row.every_n, row.every_unit), row.id]);
+      }
       return getJob(found.job_id);
     },
 
@@ -421,6 +482,25 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
         if (on && on >= start && on <= end) out.push({ day: on, job });
       }
       return out;
+    },
+
+    /**
+     * Who has done what this week (Monday to Sunday) and last: the points of the chores each person did, among
+     * the chores this person owns or was given.
+     */
+    async scores(): Promise<{ week_start: string; people: { name: string; this_week: number; last_week: number; done: number }[] }> {
+      const day = today();
+      const start = addDays(day, -((dayNumber(day) + 3) % 7));
+      const rows = await db.all<{ name: string | null; day: string; points: number | null }>(
+        `SELECT u.username AS name, d.day, d.points FROM upkeep_done d JOIN upkeep_jobs j ON j.id = d.job_id LEFT JOIN users u ON u.id = d.done_by
+         WHERE j.kind = 'chore' AND (j.owner_id = ? OR j.assigned_to = ?) AND d.day >= ? AND d.done_by IS NOT NULL`, [viewer, viewer, addDays(start, -7)]);
+      const people = new Map<string, { name: string; this_week: number; last_week: number; done: number }>();
+      for (const r of rows) {
+        const one = people.get(r.name ?? '?') ?? { name: r.name ?? '?', this_week: 0, last_week: 0, done: 0 };
+        if (r.day >= start) { one.this_week += r.points ?? 0; one.done += 1; } else one.last_week += r.points ?? 0;
+        people.set(one.name, one);
+      }
+      return { week_start: start, people: [...people.values()].sort((a, b) => b.this_week - a.this_week || a.name.localeCompare(b.name)) };
     },
 
     /** What a thing's latest reading is, and the place it's kept, for a job's page. */
