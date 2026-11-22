@@ -380,7 +380,7 @@ it('a home inventoried over the web: scanning, moving, uses, activities, sticker
   expect((await admin.post(`/api/things/items/${drill.id}/move`, { place_id: garage })).json.place).toBe('Garage');
   expect((await admin.post(`/api/things/items/${drill.id}/uses`, { activity: 'Repairs', note: 'gate hinge' })).status).toBe(201);
   expect((await admin.get(`/api/things/items/${drill.id}/history`)).json.map((h: { what: string }) => h.what)).toEqual(['used', 'moved', 'added']);
-  expect((await admin.get('/api/things/activities')).json).toEqual([{ name: 'DIY', things: 1, projects: 0 }]);
+  expect((await admin.get('/api/things/activities')).json).toEqual([{ name: 'DIY', things: 1, projects: 0, jobs: 0 }]);
   expect((await admin.get('/api/things/activity?name=diy')).json.things.map((t: { name: string }) => t.name)).toEqual(['Drill']);
 
   // A sheet of blank stickers; one scanned is new, until it's put on something.
@@ -401,6 +401,33 @@ it('a home inventoried over the web: scanning, moving, uses, activities, sticker
   const other = await member(admin, 'partner');
   expect((await other.get(`/api/things/items/${drill.id}/photo`)).status).toBe(404);
   expect((await other.get('/api/things/scan?code=5012345678900')).json.kind).toBe('unknown');
+});
+
+it('upkeep over the web: a job with its tools, done, on the calendar, and given to someone else', async () => {
+  const admin = await owner();
+  const kind = (await admin.post('/api/things/kinds', { name: 'Tools' })).json[0];
+  const ladder = (await admin.post('/api/things/items', { kind_id: kind.id, name: 'Ladder' })).json;
+  expect((await admin.get('/api/things/upkeep/starters')).json.map((j: { name: string }) => j.name)).toContain('Clean the gutters');
+  const made = await admin.post('/api/things/upkeep', { name: 'Clean the gutters', every_n: 6, every_unit: 'month', tools: [ladder.id], last_done: { day: '2020-08-01' } });
+  expect([made.status, made.json.tools.map((t: { name: string }) => t.name), made.json.due.state]).toEqual([201, ['Ladder'], 'overdue']);
+  expect((await admin.post('/api/things/upkeep', { name: 'x', tools: 'ladder' })).status).toBe(422);
+  // Late, so it shows on today.
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  expect((await admin.get(`/api/calendar?start=${today}&days=1`)).json.some((e: { kind: string; title: string }) => e.kind === 'upkeep' && e.title === 'Clean the gutters')).toBe(true);
+
+  const done = (await admin.post(`/api/things/upkeep/${made.json.id}/done`, { minutes: 45 })).json;
+  expect([done.job.due.state, done.done[0].minutes]).toEqual(['later', 45]);
+  expect((await admin.get(`/api/things/items/${ladder.id}/history`)).json[0]).toMatchObject({ what: 'used', job: 'Clean the gutters' });
+
+  const partner = await member(admin, 'partner');
+  const people = (await admin.get('/api/things/upkeep/people')).json;
+  const partnerId = people.find((p: { name: string }) => p.name === 'partner').id;
+  await admin.put(`/api/things/upkeep/${made.json.id}`, { name: 'Clean the gutters', every_n: 6, every_unit: 'month', assigned_to: partnerId });
+  expect((await partner.get('/api/things/upkeep')).json.map((j: { name: string; mine: boolean }) => [j.name, j.mine])).toEqual([['Clean the gutters', false]]);
+  expect((await partner.put(`/api/things/upkeep/${made.json.id}`, { name: 'Mine' })).status).toBe(403);
+  expect((await partner.delete(`/api/things/upkeep/${made.json.id}`)).status).toBe(403);
+  expect((await admin.delete(`/api/things/upkeep/${made.json.id}`)).status).toBe(204);
 });
 
 it('what Life Is looks after is asked once, and sets up what fits', async () => {
@@ -520,7 +547,7 @@ it('the front page gathers today, and each person chooses what it shows', async 
   const admin = await owner();
   const day = { 'X-Local-Day': new Date().toISOString().slice(0, 10) };
   const empty = (await admin.get('/api/home', day)).json;
-  expect([empty.day, empty.cards]).toEqual([day['X-Local-Day'], ['days', 'dates', 'kitchen', 'pantry', 'projects', 'things', 'collection', 'week']]);
+  expect([empty.day, empty.cards]).toEqual([day['X-Local-Day'], ['days', 'dates', 'kitchen', 'pantry', 'projects', 'upkeep', 'things', 'collection', 'week']]);
   await admin.post('/api/calendar/events', { title: 'Dentist', day: empty.day, time: '14:30' });
   await admin.post('/api/kitchen/plan', { day: empty.day, title: 'Leftovers' });
   await admin.post('/api/projects', { name: 'Shirt dress', status: 'active' });
@@ -529,12 +556,12 @@ it('the front page gathers today, and each person chooses what it shows', async 
   expect([full.kitchen.meals.length, full.projects.map((p: { name: string }) => p.name)]).toEqual([1, ['Shirt dress']]);
 
   const fewer = (await admin.put('/api/home/cards', { hidden: ['pantry', 'things'] })).json;
-  expect(fewer.cards).toEqual(['days', 'dates', 'kitchen', 'projects', 'collection', 'week']);
+  expect(fewer.cards).toEqual(['days', 'dates', 'kitchen', 'projects', 'upkeep', 'collection', 'week']);
   expect((await admin.put('/api/home/cards', { hidden: ['horoscope'] })).status).toBe(400);
   expect((await admin.put('/api/home/cards', {})).status).toBe(422);
   const other = await member(admin, 'partner');
   const theirs = (await other.get('/api/home', day)).json;
-  expect([theirs.cards.length, theirs.days[0].entries, theirs.projects]).toEqual([8, [], []]);
+  expect([theirs.cards.length, theirs.days[0].entries, theirs.projects]).toEqual([9, [], []]);
   expect((await visitor().get('/api/home')).status).toBe(401);
 });
 
@@ -542,7 +569,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.

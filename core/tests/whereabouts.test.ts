@@ -75,8 +75,8 @@ it('activities gather what things are for and what projects are, without minding
   await things.createItem({ kind_id: kind, name: 'Pinking shears', activities: ['sewing', 'Quilting'] });
   await making.createProject({ name: 'Linen dress', activity: 'SEWING' });
   expect(await things.listActivities()).toEqual([
-    { name: 'Quilting', things: 1, projects: 0 },
-    { name: 'Sewing', things: 2, projects: 1 },
+    { name: 'Quilting', things: 1, projects: 0, jobs: 0 },
+    { name: 'Sewing', things: 2, projects: 1, jobs: 0 },
   ]);
   const sewing = await things.activity('sewing');
   expect([sewing.name, sewing.things.map((t) => t.name), sewing.projects.map((p) => p.name)]).toEqual(['Sewing', ['Pinking shears', 'Sewing machine'], ['Linen dress']]);

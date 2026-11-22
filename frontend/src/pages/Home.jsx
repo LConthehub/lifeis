@@ -6,7 +6,7 @@ import { AskCard } from '../components/Assistant';
 import { whoText, whenText } from './Mail';
 import Modal, { buttonClass, quietButtonClass, cardClass, fromDateInput, minutesText } from '../components/ui';
 
-const ICONS = { plan: '✨', event: '📌', outside: '🗓', meal: '🍽', session: '🧵', due: '⏳', use_by: '🥫', media: '🎞' };
+const ICONS = { plan: '✨', event: '📌', outside: '🗓', meal: '🍽', session: '🧵', due: '⏳', upkeep: '🔧', use_by: '🥫', media: '🎞' };
 const TYPE_ICONS = { film: '🎬', show: '📺', music: '🎵', book: '📚', game: '🎮', other: '🗃' };
 const STATUS = { active: 'working on it', paused: 'paused', planned: 'planned' };
 
@@ -260,6 +260,22 @@ export default function Home({ user }) {
                       </span>
                       {p.short_count > 0 && <Flag>short of {p.short_count}</Flag>}
                     </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        )}
+
+        {shows('upkeep') && (
+          <Card title="Upkeep" to="/things/upkeep">
+            {s.upkeep.length === 0 ? <Quiet>Nothing due around the home.</Quiet> : (
+              <ul className="space-y-1 text-sm">
+                {s.upkeep.map((j) => (
+                  <li key={j.id} className="flex items-baseline gap-2">
+                    <Link to={`/things/upkeep/${j.id}`} className="flex-1 text-gray-800 hover:underline dark:text-life-50">{j.name}{j.who && <span className="text-xs text-gray-500 dark:text-life-300"> · {j.who}</span>}</Link>
+                    <Flag>{j.state === 'overdue' ? (j.days_left !== null && j.days_left < 0 ? `late ${-j.days_left} d` : 'past due') : j.state === 'due' ? 'today'
+                      : j.days_left !== null ? `in ${j.days_left} d` : j.reading_left !== null ? `in ${j.reading_left.toLocaleString()}${j.reading_unit ? ` ${j.reading_unit}` : ''}` : 'soon'}</Flag>
                   </li>
                 ))}
               </ul>

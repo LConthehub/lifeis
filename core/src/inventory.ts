@@ -146,7 +146,7 @@ function bestSpelling(names: string[]): string {
 }
 
 export type ThingSticker = { id: number; name: string; place: string | null; code: string };
-export type ActivitySummary = { name: string; things: number; projects: number };
+export type ActivitySummary = { name: string; things: number; projects: number; jobs: number };
 export const MAX_THING_PHOTO = 8_000_000;
 
 const asField = (row: FieldRow): Field => ({ ...row, choices: row.choices ? (JSON.parse(row.choices) as string[]) : [] });
@@ -720,15 +720,16 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     /** The activities in use: those things are for, and those projects are, with how many of each. */
     async listActivities(): Promise<ActivitySummary[]> {
       const found = new Map<string, ActivitySummary & { spellings: string[] }>();
-      const add = (name: string, which: 'things' | 'projects') => {
+      const add = (name: string, which: 'things' | 'projects' | 'jobs') => {
         const key = labelKey(name);
-        const one = found.get(key) ?? { name, things: 0, projects: 0, spellings: [] };
+        const one = found.get(key) ?? { name, things: 0, projects: 0, jobs: 0, spellings: [] };
         one[which] += 1;
         one.spellings.push(name);
         found.set(key, one);
       };
       for (const row of await db.all<{ activity: string }>('SELECT a.activity FROM item_activities a JOIN items i ON i.id = a.item_id WHERE i.owner_id = ?', [owner])) add(row.activity, 'things');
       for (const row of await db.all<{ activity: string }>("SELECT activity FROM projects WHERE owner_id = ? AND activity IS NOT NULL AND activity != ''", [owner])) add(row.activity, 'projects');
+      for (const row of await db.all<{ activity: string }>("SELECT activity FROM upkeep_jobs WHERE owner_id = ? AND activity IS NOT NULL AND activity != ''", [owner])) add(row.activity, 'jobs');
       return [...found.values()].map(({ spellings, ...one }) => ({ ...one, name: bestSpelling(spellings) }))
         .sort((a, b) => inOrder(a.name.toLowerCase(), b.name.toLowerCase()));
     },

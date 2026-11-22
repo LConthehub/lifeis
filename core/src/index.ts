@@ -53,3 +53,5 @@ export { accessNow, decide, isPaidPath, ENDED_MESSAGE, PAID_PARTS, PRICE, TRIAL_
 export { money } from './money.ts';
 export { assistant, isLocal as isLocalAddress, ASSISTANT_SERVICE, AREAS as ASSISTANT_AREAS, type AssistantTools, type PhoneModel } from './assistant.ts';
 export { actions, ACTION_LIST, type ActionInfo, type ActionResult } from './actions.ts';
+export { upkeep, dueOf, addInterval, STARTER_JOBS, EVERY_UNITS } from './upkeep.ts';
+export type { Job, JobInput, DoneInput, DoneRecord, Due, DueState, Upkeep } from './upkeep.ts';

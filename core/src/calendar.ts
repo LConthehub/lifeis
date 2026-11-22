@@ -10,6 +10,7 @@
  *
  * `calendar(db, owner)` is one person's calendar: everything it reads and writes is theirs.
  */
+import { upkeep } from './upkeep.ts';
 import type { Db, Value } from './db.ts';
 import { Problem } from './problem.ts';
 import { addDays, clean, dayNumber, dayOrNull, inOrder, stamp, type Clock } from './small.ts';
@@ -30,7 +31,7 @@ export type Event = { id: number; title: string; day: string; end_day: string | 
 /** One coming round of a date that returns every year. */
 export type YearlyDate = { id: number; title: string; day: string; time: string | null; note: string | null; /** How many years since the first. */ years: number };
 
-export type EntryKind = 'plan' | 'event' | 'outside' | 'meal' | 'session' | 'due' | 'use_by' | 'media';
+export type EntryKind = 'plan' | 'event' | 'outside' | 'meal' | 'session' | 'due' | 'upkeep' | 'use_by' | 'media';
 /** One line on one day of the calendar. */
 export type Entry = {
   kind: EntryKind;
@@ -46,7 +47,7 @@ export type Entry = {
   id: number | null;
 };
 
-const KIND_ORDER: EntryKind[] = ['plan', 'event', 'outside', 'due', 'meal', 'session', 'media', 'use_by'];
+const KIND_ORDER: EntryKind[] = ['plan', 'event', 'outside', 'due', 'upkeep', 'meal', 'session', 'media', 'use_by'];
 const MEAL_TIME: Record<string, number> = { breakfast: 0, lunch: 1, dinner: 2, snack: 3 };
 const leap = (year: number) => (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 /** The day a yearly date falls on in one year. The 29th of February is kept on the 28th in the years without one. */
@@ -157,6 +158,13 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
          WHERE m.owner_id = ? AND l.day >= ? AND l.day <= ? ORDER BY l.id`, [owner, start, end])) {
         entries.push({ kind: 'media', day: l.day, time: null, title: l.title, detail: [l.project ? `while working on ${l.project}` : null, l.note].filter(Boolean).join(' · ') || null,
           link: `/media/${l.media_id}`, id: null });
+      }
+
+      // Upkeep due: on the day it comes round, and anything late on today.
+      for (const { day, job } of await upkeep(db, owner, clock).dueBetween(start, days)) {
+        const late = job.due.state === 'overdue' ? (job.due.days_left !== null && job.due.days_left < 0 ? `late by ${-job.due.days_left} day${job.due.days_left === -1 ? '' : 's'}` : 'past its reading') : null;
+        const who = job.assigned_to && job.assigned_to.id !== owner ? job.assigned_to.name : !job.mine ? `for ${job.owner}` : null;
+        entries.push({ kind: 'upkeep', day, time: null, title: job.name, detail: [late ?? (job.item ? job.item.name : null), who].filter(Boolean).join(' · ') || null, link: `/things/upkeep/${job.id}`, id: null });
       }
 
       const mealOrder = (e: Entry) => (e.kind === 'meal' ? (MEAL_TIME[e.detail ?? ''] ?? 9) : 0);

@@ -670,6 +670,78 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_item_history_copy ON item_history(copy_id, id)`,
     ],
   },
+  {
+    // Upkeep: jobs that come round again (the furnace filter every three months, the oil every 5,000 miles),
+    // with the tools they need and the supplies they use up, the thing they're for, who usually does them, and
+    // each time they were done. A reading (an odometer, an hour meter) is kept on the thing it's read from, so
+    // every job for that thing knows it.
+    number: 22,
+    name: 'upkeep: jobs that come round again, their tools and supplies, and each time they were done',
+    statements: [
+      `CREATE TABLE upkeep_jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        activity TEXT,
+        item_id INTEGER REFERENCES items(id) ON DELETE SET NULL,
+        every_n INTEGER CHECK(every_n IS NULL OR every_n > 0),
+        every_unit TEXT CHECK(every_unit IS NULL OR every_unit IN ('day', 'week', 'month', 'year')),
+        every_reading REAL CHECK(every_reading IS NULL OR every_reading > 0),
+        reading_unit TEXT,
+        first_due TEXT,
+        assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        steps TEXT,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_upkeep_jobs_owner ON upkeep_jobs(owner_id)`,
+      `CREATE INDEX idx_upkeep_jobs_assigned ON upkeep_jobs(assigned_to)`,
+      `CREATE TABLE upkeep_tools (
+        job_id INTEGER NOT NULL REFERENCES upkeep_jobs(id) ON DELETE CASCADE,
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        sort_order INTEGER NOT NULL,
+        PRIMARY KEY (job_id, item_id)
+      )`,
+      `CREATE TABLE upkeep_supplies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER NOT NULL REFERENCES upkeep_jobs(id) ON DELETE CASCADE,
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        quantity REAL CHECK(quantity IS NULL OR quantity > 0),
+        unit TEXT,
+        sort_order INTEGER NOT NULL
+      )`,
+      `CREATE INDEX idx_upkeep_supplies ON upkeep_supplies(job_id, sort_order)`,
+      `CREATE TABLE upkeep_done (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER NOT NULL REFERENCES upkeep_jobs(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        done_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        reading REAL,
+        minutes INTEGER CHECK(minutes IS NULL OR minutes >= 0),
+        cost_cents INTEGER CHECK(cost_cents IS NULL OR cost_cents >= 0),
+        money_entry_id INTEGER REFERENCES money_entries(id) ON DELETE SET NULL,
+        note TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_upkeep_done ON upkeep_done(job_id, day)`,
+      // An odometer or hour meter read on a day: on the thing it's read from, or on a job that's for no thing.
+      `CREATE TABLE readings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        item_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
+        job_id INTEGER REFERENCES upkeep_jobs(id) ON DELETE CASCADE,
+        value REAL NOT NULL,
+        day TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_readings_item ON readings(item_id, day)`,
+      `CREATE INDEX idx_readings_job ON readings(job_id, day)`,
+      // A tool's history can say which upkeep job it was used for.
+      `ALTER TABLE item_history ADD COLUMN job_id INTEGER REFERENCES upkeep_jobs(id) ON DELETE SET NULL`,
+      `ALTER TABLE item_history ADD COLUMN job TEXT`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

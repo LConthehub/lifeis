@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { cardClass } from '../components/ui';
+import { DueBadge } from './Upkeep';
 
 /**
  * What you do, and what you do it with: each activity your things are for, or your projects are, with the
@@ -12,7 +13,11 @@ export default function Activities() {
   const chosen = params.get('name');
   const [all, setAll] = useState(null);
   const [one, setOne] = useState(null);
-  useEffect(() => { axios.get('/api/things/activities').then(({ data }) => setAll(data)).catch(() => setAll([])); }, []);
+  const [jobs, setJobs] = useState([]);
+  useEffect(() => {
+    axios.get('/api/things/activities').then(({ data }) => setAll(data)).catch(() => setAll([]));
+    axios.get('/api/things/upkeep').then(({ data }) => setJobs(data)).catch(() => {});
+  }, []);
   useEffect(() => {
     setOne(null);
     if (chosen) axios.get('/api/things/activity', { params: { name: chosen } }).then(({ data }) => setOne(data)).catch(() => setOne(false));
@@ -31,10 +36,23 @@ export default function Activities() {
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Activities">
           {all.map((a) => (
             <button key={a.name} type="button" aria-pressed={chosen?.toLowerCase() === a.name.toLowerCase()} onClick={() => setParams({ name: a.name })} className={chip(chosen?.toLowerCase() === a.name.toLowerCase())}>
-              {a.name} <span className="opacity-70">{a.things + a.projects}</span>
+              {a.name} <span className="opacity-70">{a.things + a.projects + a.jobs}</span>
             </button>
           ))}
         </div>
+      )}
+      {one && jobs.some((j) => j.activity?.toLowerCase() === one.name.toLowerCase()) && (
+        <section className={cardClass} aria-label="Its upkeep">
+          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Upkeep for {one.name}</h2>
+          <ul className="divide-y divide-life-50 dark:divide-life-700">
+            {jobs.filter((j) => j.activity?.toLowerCase() === one.name.toLowerCase()).map((j) => (
+              <li key={j.id} className="flex items-center gap-2 py-1.5 text-sm">
+                <Link to={`/things/upkeep/${j.id}`} className="flex-1 text-gray-800 hover:underline dark:text-life-50">{j.name}</Link>
+                <DueBadge job={j} />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       {one && (
         <div className="grid gap-3 md:grid-cols-2">

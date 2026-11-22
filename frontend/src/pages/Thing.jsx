@@ -6,6 +6,7 @@ import PlacePicker from '../components/PlacePicker';
 import { shrink } from '../components/shrink';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput } from '../components/ui';
 import { ItemForm } from './Things';
+import { DueBadge } from './Upkeep';
 
 const dayText = (day) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -29,7 +30,9 @@ export function HistoryList({ history }) {
         <li key={h.id} className="flex gap-2 text-sm">
           <span aria-hidden="true" className="w-5 text-center">{HISTORY_ICONS[h.what]}</span>
           <span className="flex-1 text-gray-800 dark:text-life-50">
-            {h.what === 'used' && h.project_id ? <>Used for <Link to={`/projects/${h.project_id}`} className="underline">{h.project}</Link></> : historyLine(h)}
+            {h.what === 'used' && h.project_id ? <>Used for <Link to={`/projects/${h.project_id}`} className="underline">{h.project}</Link></>
+              : h.what === 'used' && h.job ? <>Used for {h.job_id ? <Link to={`/things/upkeep/${h.job_id}`} className="underline">{h.job}</Link> : h.job}</>
+                : historyLine(h)}
             {h.note && <span className="block text-xs text-gray-500 dark:text-life-300">{h.note}</span>}
           </span>
           <span className="whitespace-nowrap text-xs text-gray-500 dark:text-life-300">{dayText(h.day)}</span>
@@ -51,6 +54,7 @@ export default function Thing() {
   const [kinds, setKinds] = useState([]);
   const [places, setPlaces] = useState([]);
   const [modal, setModal] = useState(null);       // 'edit' or 'use'
+  const [jobs, setJobs] = useState([]);
   const [error, setError] = useState('');
   const picker = useRef(null);
 
@@ -62,7 +66,8 @@ export default function Thing() {
     load();
     axios.get('/api/things/kinds').then(({ data }) => setKinds(data)).catch(() => {});
     axios.get('/api/things/places').then(({ data }) => setPlaces(data)).catch(() => {});
-  }, [load]);
+    axios.get('/api/things/upkeep').then(({ data }) => setJobs(data.filter((j) => j.item?.id === id || j.tools.some((x) => x.id === id) || j.supplies.some((x) => x.item_id === id)))).catch(() => {});
+  }, [load, id]);
 
   if (item === undefined) return null;
   if (item === null) return <Navigate to="/things" replace />;
@@ -126,6 +131,21 @@ export default function Thing() {
           {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
         </section>
       </div>
+
+      {jobs.length > 0 && (
+        <section className={cardClass} aria-label="Upkeep">
+          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Upkeep</h2>
+          <ul className="divide-y divide-life-50 dark:divide-life-700">
+            {jobs.map((j) => (
+              <li key={j.id} className="flex items-center gap-2 py-1.5 text-sm">
+                <Link to={`/things/upkeep/${j.id}`} className="flex-1 text-gray-800 hover:underline dark:text-life-50">{j.name}
+                  <span className="text-xs text-gray-500 dark:text-life-300"> · {j.item?.id === id ? 'for this' : 'needs this'}</span></Link>
+                <DueBadge job={j} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className={cardClass}>
         <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">Its history</h2>

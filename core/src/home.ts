@@ -5,6 +5,7 @@
  * projects, your collection) and links back there. A person can put any card out of sight; that choice is
  * the only thing this saves.
  */
+import { upkeep, type DueState } from './upkeep.ts';
 import { calendar, type Entry, type YearlyDate } from './calendar.ts';
 import type { Fetcher } from './connections.ts';
 import type { Db } from './db.ts';
@@ -34,6 +35,7 @@ export const CARDS = [
   { key: 'pantry', label: 'Pantry: running low and use soon', section: 'eating' },
   { key: 'coupons', label: 'Coupons about to run out', section: 'eating' },
   { key: 'projects', label: 'Projects in hand', section: 'making' },
+  { key: 'upkeep', label: 'Upkeep: jobs due around the home', section: 'keeping' },
   { key: 'things', label: 'Things running low', section: 'keeping' },
   { key: 'collection', label: 'Collection: lent out, and lately watched, read or heard', section: 'enjoying' },
   { key: 'week', label: 'This week in numbers', section: null },
@@ -52,6 +54,8 @@ export type HomeSummary = {
   pantry: { low: string[]; expiring: { name: string; days_left: number }[] };
   projects: ProjectSummary[];
   things: { low: { id: number; name: string; amount: string; kind: string }[]; total: number };
+  /** Upkeep late, due or coming up soon, most pressing first. */
+  upkeep: { id: number; name: string; state: DueState; days_left: number | null; reading_left: number | null; reading_unit: string | null; who: string | null }[];
   collection: {
     total: number;
     wanted: number;
@@ -107,7 +111,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
         day, cards,
         choices: offered.map((card) => ({ key: card.key, label: card.label, shown: !out.includes(card.key) })),
         days: [], kitchen: { meals: [], to_buy: 0, short: [] }, pantry: { low: [], expiring: [] }, projects: [],
-        things: { low: [], total: 0 }, collection: { total: 0, wanted: 0, lent: [], lately: [] },
+        things: { low: [], total: 0 }, upkeep: [], collection: { total: 0, wanted: 0, lent: [], lately: [] },
         dates: [], plans: [], coupons: { currency: '$', soon: [] }, weather: null,
         week: { start: day, end: day, events: null, meals_planned: null, meals_cooked: null, sessions: null, minutes: null, enjoyed: null },
       };
@@ -139,6 +143,11 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
       if (shows('things')) {
         const all = await inventory(db, owner, clock).listItems();
         summary.things = { total: all.length, low: all.filter((item) => item.low).map(({ id, name, amount, kind }) => ({ id, name, amount, kind })).slice(0, 12) };
+      }
+      if (shows('upkeep')) {
+        summary.upkeep = (await upkeep(db, owner, clock).list()).filter((j) => ['overdue', 'due', 'soon'].includes(j.due.state)).slice(0, 8)
+          .map((j) => ({ id: j.id, name: j.name, state: j.due.state, days_left: j.due.days_left, reading_left: j.due.reading_left, reading_unit: j.reading_unit,
+            who: j.assigned_to && j.assigned_to.id !== owner ? j.assigned_to.name : null }));
       }
       if (shows('collection')) {
         const titles = await media(db, owner, clock).list();

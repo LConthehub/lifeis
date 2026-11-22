@@ -2,7 +2,7 @@
  * The addresses for the things you keep (/api/things) and the projects that use them (/api/projects).
  * What they do is core/'s inventory.ts and projects.ts; this only reads what was sent and passes it on.
  */
-import { inventory, projects, whatIsThis, MAX_THING_PHOTO, type Db, type FieldInput, type FieldType } from '../../core/src/index.ts';
+import { inventory, projects, upkeep, whatIsThis, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
 import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -47,12 +47,32 @@ const costFrom = (body: Body) => ({
   ...(sent(body, 'note') ? { note: read.maybeText(body, 'note') } : {}),
 });
 
+/** An upkeep job as sent. Tools and supplies left out are left as they are. */
+function jobFrom(body: Body): JobInput {
+  const supplies = sent(body, 'supplies') ? body.supplies : undefined;
+  if (supplies !== undefined && !(Array.isArray(supplies) && supplies.every((x) => x && typeof x === 'object' && !Array.isArray(x)))) throw notUnderstood('supplies');
+  const tools = sent(body, 'tools') ? body.tools : undefined;
+  if (tools !== undefined && !(Array.isArray(tools) && tools.every((id) => Number.isInteger(id) && (id as number) > 0))) throw notUnderstood('tools');
+  const last = sent(body, 'last_done') && body.last_done !== null ? read.record(body, 'last_done') : null;
+  return {
+    name: read.text(body, 'name'), activity: read.maybeText(body, 'activity'), item_id: read.maybeWhole(body, 'item_id'),
+    every_n: read.maybeWhole(body, 'every_n'), every_unit: read.maybeText(body, 'every_unit'),
+    every_reading: read.maybeNumber(body, 'every_reading'), reading_unit: read.maybeText(body, 'reading_unit'),
+    first_due: read.maybeText(body, 'first_due'), assigned_to: read.maybeWhole(body, 'assigned_to'),
+    steps: read.maybeText(body, 'steps'), note: read.maybeText(body, 'note'),
+    ...(tools !== undefined ? { tools: tools as number[] } : {}),
+    ...(supplies !== undefined ? { supplies: (supplies as Body[]).map((x) => ({ item_id: read.maybeWhole(x, 'item_id') ?? 0, quantity: read.maybeNumber(x, 'quantity'), unit: read.maybeText(x, 'unit') })) } : {}),
+    ...(last ? { last_done: { day: read.text(last, 'day'), reading: read.maybeNumber(last, 'reading') } } : {}),
+  };
+}
+
 /** Whether a field was sent at all: left out means "leave it as it is", where null means "clear it". */
 const sent = (body: Body, name: string) => Object.hasOwn(body, name);
 
 export function makingRoutes(db: Db): Route[] {
   const things = (c: Context) => inventory(db, c.user.id, c.clock);
   const making = (c: Context) => projects(db, c.user.id, c.clock);
+  const jobs = (c: Context) => upkeep(db, c.user.id, c.clock);
 
   return [
     // ==================== THE THINGS YOU KEEP ====================
@@ -143,6 +163,34 @@ export function makingRoutes(db: Db): Route[] {
     ['GET', at('things/items/:id'), async (c) => ({ json: await things(c).getItem(c.id) })],
     ['PUT', at('things/items/:id'), async (c) => ({ json: await things(c).updateItem(c.id, itemFrom(c.body)) })],
     ['DELETE', at('things/items/:id'), async (c) => (await things(c).deleteItem(c.id), { status: 204 })],
+
+    // ==================== UPKEEP ====================
+    // Jobs that come round again. See core/'s upkeep.ts.
+
+    ['GET', at('things/upkeep'), async (c) => ({ json: await jobs(c).list() })],
+    ['GET', at('things/upkeep/people'), async (c) => ({ json: await jobs(c).people() })],
+    ['GET', at('things/upkeep/starters'), async () => ({ json: STARTER_JOBS })],
+    ['POST', at('things/upkeep'), async (c) => ({ status: 201, json: await jobs(c).create(jobFrom(c.body)) })],
+    ['GET', at('things/upkeep/:id'), async (c) => ({ json: await jobs(c).get(c.id) })],
+    ['PUT', at('things/upkeep/:id'), async (c) => ({ json: await jobs(c).update(c.id, jobFrom(c.body)) })],
+    ['DELETE', at('things/upkeep/:id'), async (c) => (await jobs(c).remove(c.id), { status: 204 })],
+    ['POST', at('things/upkeep/:id/done'), async (c) => {
+      const spend = sent(c.body, 'spend') && c.body.spend !== null ? read.record(c.body, 'spend') : null;
+      return {
+        status: 201,
+        json: await jobs(c).done(c.id, {
+          day: read.maybeText(c.body, 'day'), reading: read.maybeNumber(c.body, 'reading'), minutes: read.maybeWhole(c.body, 'minutes'),
+          cost_cents: read.maybeWhole(c.body, 'cost_cents'), note: read.maybeText(c.body, 'note'),
+          spend: spend ? { category_id: read.maybeWhole(spend, 'category_id') } : null,
+        }),
+      };
+    }],
+    ['POST', at('things/upkeep/:id/reading'), async (c) => {
+      const value = read.maybeNumber(c.body, 'value');
+      if (value === null) throw notUnderstood('value');
+      return { json: await jobs(c).reading(c.id, value, read.maybeText(c.body, 'day')) };
+    }],
+    ['DELETE', at('things/upkeep/done/:id'), async (c) => ({ json: await jobs(c).undo(c.id) })],
 
     // ==================== PROJECTS ====================
 

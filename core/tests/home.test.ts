@@ -30,7 +30,7 @@ beforeEach(async () => {
 
 it('an empty home shows every card, with nothing on them', async () => {
   const s = await front.summary();
-  expect([s.day, s.cards]).toEqual([TODAY, ['days', 'dates', 'kitchen', 'pantry', 'projects', 'things', 'collection', 'week']]);
+  expect([s.day, s.cards]).toEqual([TODAY, ['days', 'dates', 'kitchen', 'pantry', 'projects', 'upkeep', 'things', 'collection', 'week']]);
   expect(s.days.map((d) => [d.day, d.entries])).toEqual([[TODAY, []], ['2046-03-06', []], ['2046-03-07', []]]);
   expect([s.kitchen, s.pantry, s.projects, s.things, s.collection]).toEqual([
     { meals: [], to_buy: 0, short: [] }, { low: [], expiring: [] }, [], { low: [], total: 0 }, { total: 0, wanted: 0, lent: [], lately: [] }]);
@@ -69,11 +69,11 @@ it('it gathers today from every section', async () => {
 
 it('a person chooses what shows, and a section they do not use brings no cards', async () => {
   let s = await front.hideCards(['pantry', 'collection']);
-  expect(s.cards).toEqual(['days', 'dates', 'kitchen', 'projects', 'things', 'week']);
+  expect(s.cards).toEqual(['days', 'dates', 'kitchen', 'projects', 'upkeep', 'things', 'week']);
   expect(s.choices.filter((c) => !c.shown).map((c) => c.key)).toEqual(['pantry', 'collection']);
-  expect((await front.summary()).cards).toEqual(['days', 'dates', 'kitchen', 'projects', 'things', 'week']); // remembered
+  expect((await front.summary()).cards).toEqual(['days', 'dates', 'kitchen', 'projects', 'upkeep', 'things', 'week']); // remembered
   s = await front.hideCards([]);
-  expect(s.cards).toHaveLength(8);
+  expect(s.cards).toHaveLength(9);
   await expect(front.hideCards(['horoscope'])).rejects.toMatchObject({ name: 'Problem', status: 400 });
 
   await life(db, owner, clock).saveProfile(['eating']); // only the kitchen
@@ -83,7 +83,7 @@ it('a person chooses what shows, and a section they do not use brings no cards',
   // Someone else's front page is their own.
   await kitchen(db, owner, clock).savePantry({ name: 'Cream', quantity: 1, low_at: 1 });
   const theirs = await home(db, await person('other'), clock).summary();
-  expect([theirs.cards.length, theirs.pantry.low]).toEqual([8, []]);
+  expect([theirs.cards.length, theirs.pantry.low]).toEqual([9, []]);
 });
 
 it('plans coming up and coupons about to run out get a card once there is one', async () => {
