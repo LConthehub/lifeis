@@ -22,9 +22,10 @@ Under **Servers**, connect a server you run and its library is brought in and ke
 
 - **Jellyfin** and **Emby** for films, shows and music.
 - **Audiobookshelf** for audiobooks and eBooks. It asks for an API token.
+- **Calibre** itself, through its Content server (Connect/share, then Start Content server). A username and password only if you set it to ask.
 - **Calibre-Web** for eBooks. It asks for your username and password, and reads the catalog at `/opds`.
 - **Kavita** for eBooks and comics. It asks for your API key.
-- **Any other OPDS catalog** (Calibre, Komga, COPS). Give the address of a list of books, not of a menu.
+- **Any other OPDS catalog** (Komga, COPS). Give the address of a list of books, not of a menu.
 
 Life Is only reads from a server. Nothing on it is ever changed. The sign-in is stored locked on your own computer and is never shown again. Each book keeps a link that opens it on its server.
 

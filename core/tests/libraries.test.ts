@@ -296,3 +296,23 @@ it('"they are all on Kindle" overrides what the list says', async () => {
   expect(result).toMatchObject({ added: 2, copies: 2 });
   expect((await shelf.list()).map((m) => m.formats)).toEqual([['Kindle'], ['Kindle']]);
 });
+
+// ---------- Calibre's own Content server ----------
+
+it('Calibre: "By Title" is read page by page, tags become genres, and each book opens in its reader', async () => {
+  // Shaped like Calibre 8's own feed: the date in dc:date, tags on a TAGS line, files under /get/<format>/<number>/<library>.
+  const entry = (n: number, title: string, author: string, tags: string) => `<entry><title>${title}</title><author><name>${author}</name></author>
+    <id>urn:uuid:calibre-${n}</id><published>2026-09-24T18:17:05+00:00</published><dc:date>2024-02-06T19:42:36+00:00</dc:date>
+    <content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml">${tags ? `TAGS: ${tags}<br/>` : ''}<p>About ${title}.</p></div></content>
+    <link type="application/epub+zip" href="/get/epub/${n}/calibre" rel="http://opds-spec.org/acquisition"/>
+    <link type="image/jpeg" href="/get/cover/${n}/calibre" rel="http://opds-spec.org/cover"/>
+    <link type="image/jpeg" href="/get/cover/${n}/calibre" rel="http://opds-spec.org/image"/></entry>`;
+  pages['http://calibre.test/opds/navcatalog/4f7469746c65'] = { body: feed(entry(44, 'Reasons', 'Chris Ferrie &amp; Wade Fairclough', 'Humor, Physics'), '/opds/navcatalog/4f7469746c65?library_id=calibre&amp;offset=30') };
+  pages['http://calibre.test/opds/navcatalog/4f7469746c65?library_id=calibre&offset=30'] = { body: feed(entry(45, 'Emma', 'Jane Austen', '')) };
+  const [server] = await servers().create({ kind: 'calibre', url: 'http://calibre.test' });
+  expect(server).toMatchObject({ kind: 'calibre', name: 'Calibre' });
+  expect(await servers().sync(server!.id)).toMatchObject({ total: 2, added: 2 });
+  const reasons = await shelf.get((await shelf.list({ q: 'Reasons' }))[0]!.id);
+  expect(reasons).toMatchObject({ creator: 'Chris Ferrie, Wade Fairclough', year: 2024, genres: ['Humor', 'Physics'], summary: 'About Reasons.' });
+  expect(reasons.copies[0]).toMatchObject({ format: 'eBook', source: 'calibre', link: 'http://calibre.test/#book_id=44&library_id=calibre&panel=book_details' });
+});

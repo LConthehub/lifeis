@@ -21,12 +21,13 @@ import { atomic, type Db, type Queries } from './db.ts';
 import { Problem } from './problem.ts';
 import { clean, stamp, type Clock } from './small.ts';
 
-export const LIBRARY_KINDS = ['audiobookshelf', 'calibre-web', 'kavita', 'opds'] as const;
+export const LIBRARY_KINDS = ['audiobookshelf', 'calibre', 'calibre-web', 'kavita', 'opds'] as const;
 export type LibraryKind = (typeof LIBRARY_KINDS)[number];
-export const LIBRARY_NAMES: Record<LibraryKind, string> = { audiobookshelf: 'Audiobookshelf', 'calibre-web': 'Calibre-Web', kavita: 'Kavita', opds: 'An OPDS catalog' };
+export const LIBRARY_NAMES: Record<LibraryKind, string> = { audiobookshelf: 'Audiobookshelf', calibre: 'Calibre', 'calibre-web': 'Calibre-Web', kavita: 'Kavita', opds: 'An OPDS catalog' };
 /** What each asks for, so the page can ask the right questions. */
 export const LIBRARY_NEEDS: Record<LibraryKind, { address: string; key?: string; login?: boolean; hint: string }> = {
   audiobookshelf: { address: 'http://192.168.1.20:13378', key: 'API token', hint: 'In Audiobookshelf: Settings, Users, your user, then copy the API token.' },
+  calibre: { address: 'http://192.168.1.20:8080', login: true, hint: 'In Calibre: Connect/share, then Start Content server. A username and password only if you have set it to ask for them.' },
   'calibre-web': { address: 'http://192.168.1.20:8083', login: true, hint: 'Your Calibre-Web username and password. Life Is reads its catalog at /opds.' },
   kavita: { address: 'http://192.168.1.20:5000', key: 'API key', hint: 'In Kavita: your user settings, then 3rd Party Clients, then copy the API key.' },
   opds: { address: 'http://192.168.1.20:8080/opds/books', login: true, hint: 'The address of a list of books, not a menu. A username and password only if it asks for them.' },
@@ -99,7 +100,11 @@ export function readOpdsPage(xml: string, at: string): OpdsPage {
     const types = get.map((l) => l.type.toLowerCase()).join(' ');
     const id = plain(tag(entry, 'id')) ?? title;
     // Calibre-Web starts its description with lines of its own ("TAGS: ...", "SERIES: ..."), which aren't part of the book's.
-    const described = (tag(entry, 'summary') ?? tag(entry, 'content'))?.replace(/\b(?:RATING|TAGS|SERIES):[^<]*<br\s*\/?>/g, '');
+    const raw = tag(entry, 'summary') ?? tag(entry, 'content');
+    // The tags on that line are the book's genres, where the entry gives none another way.
+    const tagLine = plain(/\bTAGS:([^<]*)<br/.exec(raw ?? '')?.[1]);
+    if (genres.length === 0 && tagLine) genres.push(...tagLine.split(',').map((g) => g.trim()).filter(Boolean));
+    const described = raw?.replace(/\b(?:RATING|TAGS|SERIES):[^<]*<br\s*\/?>/g, '');
     entries.push({
       sourceId: id.slice(0, 300), type: 'book', title, creator: authors.length ? authors.slice(0, 4).join(', ') : null,
       year: year ? Number(year) : null, summary: words(described), genres: [...new Set(genres)].slice(0, 12), minutes: null, ids,
@@ -223,6 +228,16 @@ export async function readLibrary(fetcher: Fetcher, kind: LibraryKind, url: stri
     return { items, coverHeaders: {} };
   }
   const headers = basic(secret);
+  if (kind === 'calibre') {
+    // Calibre's own Content server. Its catalogue starts with a menu; "By Title" is every book, a page at a time.
+    // Each book's files are at /get/<format>/<number>/<library>, which gives the page that opens it in Calibre's reader.
+    const items = (await readOpds(fetcher, who, `${url}/opds/navcatalog/4f7469746c65`, headers, false, limit)).map((e) => {
+      const at = /\/get\/[^/]+\/(\d+)\/([^/?#]+)/.exec(e.files[0] ?? e.coverUrl ?? '');
+      // Calibre joins several authors with an ampersand.
+      return { ...e, creator: e.creator?.replaceAll(' & ', ', ') ?? null, link: at ? `${url}/#book_id=${at[1]}&library_id=${at[2]}&panel=book_details` : e.link };
+    });
+    return { items, coverHeaders: headers };
+  }
   if (kind === 'calibre-web') {
     // Its own ids can't be trusted (books added without Calibre all share "urn:uuid:None"), so the book's number is the id.
     const items = (await readOpds(fetcher, who, `${url}/opds/books/letter/00`, headers, false, limit)).map((e) => {
@@ -271,7 +286,7 @@ export function libraries(db: Db, owner: number, clock: Clock, tools: { fetcher:
     const username = text(input.username);
     if (LIBRARY_NEEDS[kind].key) return key ? { key } : null;
     if (username) return { username, password: input.password ?? '' };
-    return kind === 'opds' ? {} : null;
+    return kind === 'opds' || kind === 'calibre' ? {} : null;
   }
   const opened = (r: Row): Secret => {
     const plainText = r.secret ? tools.sealer.unseal(r.secret) : null;

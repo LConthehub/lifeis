@@ -5,6 +5,7 @@ import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, err
 // What each book server asks for. The same words are in core/'s libraries.ts.
 export const BOOK_SERVERS = {
   audiobookshelf: { name: 'Audiobookshelf', address: 'http://192.168.1.20:13378', key: 'API token', hint: 'In Audiobookshelf: Settings, then Users, then your user. Copy the API token.' },
+  calibre: { name: 'Calibre', address: 'http://192.168.1.20:8080', login: true, optional: true, hint: 'In Calibre: Connect/share, then Start Content server. A username and password only if you have set it to ask for them.' },
   'calibre-web': { name: 'Calibre-Web', address: 'http://192.168.1.20:8083', login: true, hint: 'Your Calibre-Web username and password. Life Is reads its catalog at /opds, which that user must be allowed to see.' },
   kavita: { name: 'Kavita', address: 'http://192.168.1.20:5000', key: 'API key', hint: 'In Kavita: your user settings, then 3rd Party Clients (or API key / OPDS). Copy the API key.' },
   opds: { name: 'Another catalog (OPDS)', address: 'http://192.168.1.20:8080/opds/books', login: true, optional: true, hint: 'For Calibre, Komga, COPS and others: the address of a list of books, not of a menu. A username and password only if it asks for them.' },
@@ -44,7 +45,7 @@ export default function BookServers() {
         <button type="button" onClick={() => setEditing({})} className={buttonClass}>+ Connect a book server</button>
       </div>
       <p className="text-sm text-gray-600 dark:text-life-200">
-        Bring in your Audiobookshelf, Calibre-Web or Kavita library, so every book you have is in one place: on the shelf, on a server, or both.
+        Bring in your Calibre, Calibre-Web, Kavita or Audiobookshelf library, so every book you have is in one place: on the shelf, on a server, or both.
         Each one keeps a link that opens it on its server. Life Is only reads: nothing on the server is ever changed.
         Kindle, Apple Books and Google Play Books can't be read this way; for those, bring in a list from Books.
       </p>
