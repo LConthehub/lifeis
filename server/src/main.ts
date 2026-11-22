@@ -13,6 +13,7 @@ import { createApp } from './app.ts';
 import { patientFetcher, syncDue, webFetcher } from './connectionRoutes.ts';
 import { followedDue, remindersDue } from '../../core/src/index.ts';
 import { browserPush } from './push.ts';
+import { demoFromEnv, keepDemoFresh } from './demo.ts';
 import { openDatabase } from './database.ts';
 import { realPostbox } from './postbox.ts';
 import { vault } from './vault.ts';
@@ -23,18 +24,23 @@ const port = Number(process.env.PORT || 8008);
 const idle = Number(process.env.SESSION_IDLE_MINUTES || 15);
 
 const database = await openDatabase(dataDir, keyDir);
+// A demo (DEMO_MODE=1) is filled with a made-up household, reset each night, and reaches nothing outside.
+const demo = demoFromEnv();
+if (demo) await keepDemoFresh(database.db, demo, path.join(dataDir, 'lifeis.db')).ready;
 const reach = { fetcher: webFetcher, sealer: vault(keyDir, 'media_source') };
 const calendars = { fetcher: webFetcher, sealer: vault(keyDir, 'calendar_source') };
 const mail = { postbox: realPostbox, sealer: vault(keyDir, 'mail_account') };
 const push = browserPush(keyDir);
 const server = createServer(createApp({
   db: database.db,
-  reach,
-  photos: { fetcher: webFetcher, sealer: vault(keyDir, 'photo_library') },
-  calendars,
-  assistant: { fetcher: patientFetcher, sealer: vault(keyDir, 'assistant') },
-  mail,
-  push,
+  ...(demo ? { demo } : {
+    reach,
+    photos: { fetcher: webFetcher, sealer: vault(keyDir, 'photo_library') },
+    calendars,
+    assistant: { fetcher: patientFetcher, sealer: vault(keyDir, 'assistant') },
+    mail,
+    push,
+  }),
   staticDir: process.env.STATIC_DIR || undefined,
   idleMinutes: Number.isInteger(idle) && idle >= 0 ? idle : 15,
 }));
@@ -43,7 +49,7 @@ server.listen(port, process.env.HOST || '0.0.0.0', () => console.log(`Life Is is
 // Media servers that sync by themselves are looked at every five minutes, one sync at a time.
 let syncing = false;
 const timer = setInterval(async () => {
-  if (syncing) return;
+  if (syncing || demo) return;
   syncing = true;
   try {
     await syncDue(database.db, () => new Date(), reach);
@@ -60,7 +66,7 @@ timer.unref();
 // The morning reminders: looked at every minute, each person's sent once a day at their own time.
 let reminding = false;
 const reminderTimer = setInterval(async () => {
-  if (reminding) return;
+  if (reminding || demo) return;
   reminding = true;
   try {
     for (const r of await remindersDue(database.db, new Date(), { fetcher: webFetcher, mail, push: push.send })) {

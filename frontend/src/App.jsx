@@ -60,7 +60,7 @@ export default function App() {
   const check = useCallback(async () => {
     try {
       const { data } = await axios.get('/api/auth/status');
-      setAuth({ user: data.user, setupRequired: data.setup_required, local: data.local });
+      setAuth({ user: data.user, setupRequired: data.setup_required, local: data.local, demo: data.demo ?? null });
     } catch {
       setAuth({ user: null, setupRequired: false, offline: true });
     }
@@ -76,17 +76,17 @@ export default function App() {
   }, []);
 
   if (auth.user === undefined) return null;
-  if (!auth.user) return <Login setupRequired={auth.setupRequired} local={auth.local} offline={auth.offline} onDone={check} />;
+  if (!auth.user) return <Login setupRequired={auth.setupRequired} local={auth.local} offline={auth.offline} demo={auth.demo} onDone={check} />;
   const logout = async () => { await axios.post('/api/auth/logout').catch(() => {}); check(); };
 
   return (
     <BrowserRouter>
-      <Shell user={auth.user} onLogout={logout} />
+      <Shell user={auth.user} demo={Boolean(auth.demo)} onLogout={logout} />
     </BrowserRouter>
   );
 }
 
-function Shell({ user, onLogout }) {
+function Shell({ user, demo = false, onLogout }) {
   const { pathname } = useLocation();
   // What the person asked Life Is to look after decides which sections show. Until they answer, all do.
   const [life, setLife] = useState(null);
@@ -127,6 +127,12 @@ function Shell({ user, onLogout }) {
       <main className="mx-auto max-w-5xl px-3 py-4 sm:px-4 xl:max-w-6xl">
         {/* The page is a sheet of frosted glass over the gradient, so everything on it reads clearly. */}
         <div className="rounded-3xl bg-white/80 p-4 shadow-xl ring-1 ring-white/50 backdrop-blur-md dark:bg-life-900/75 dark:ring-white/10 sm:p-6">
+        {demo && (
+          <p className="mb-4 rounded-xl bg-white/90 px-4 py-2.5 text-sm text-gray-700 shadow print:hidden dark:bg-life-800 dark:text-life-100" role="note" data-demo-banner>
+            <strong className="text-life-700 dark:text-life-100">Demo.</strong> This household is made up, and everything is reset to the sample data each night. Try anything.
+            Things that reach outside (email, look-ups, sharing links) are turned off here. <a href="https://lifeis.living" className="underline">About Life Is</a>
+          </p>
+        )}
         <AccessNote show={Boolean(section) && section.word !== 'eating' && pathname !== '/' && !pathname.startsWith('/settings')} pathname={pathname} />
         <Routes>
           <Route path="/" element={<Home user={user} />} />

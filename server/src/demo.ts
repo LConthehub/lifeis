@@ -1,0 +1,216 @@
+/**
+ * Demo mode: a copy of Life Is filled with a made-up household, for anyone to try.
+ *
+ * Turned on with DEMO_MODE=1 (see docker-compose.demo.yml). Then:
+ * - The database is emptied and refilled with sample recipes, things, upkeep, pets and the rest, dated around
+ *   today, when it starts and again every night, so visitors can change anything.
+ * - Visitors sign in as DEMO_USERNAME / DEMO_PASSWORD, an ordinary account; the sign-in page offers it. The
+ *   admin account gets a random password nobody knows, so nobody can add people.
+ * - Changing the demo password is refused, so one visitor can't lock the others out.
+ * - Nothing reaches outside: no email, look-ups, weather, calendars to follow or reminders to send. And the
+ *   house manual can't be shared by link, so the demo can't be used to put words on a public page.
+ *
+ * Never point DEMO_MODE at a real database: a reset deletes everything in it.
+ */
+import { randomBytes } from 'node:crypto';
+import { statSync } from 'node:fs';
+import {
+  calendar, inventory, kitchen, life, manual, media, money, packing, pets, plans, projects, upkeep, type Db,
+} from '../../core/src/index.ts';
+import { AREAS } from '../../core/src/life.ts';
+import { addDays } from '../../core/src/small.ts';
+import * as auth from './auth.ts';
+
+export type Demo = { username: string; password: string };
+
+/** The demo's sign-in, from the environment; null when this isn't a demo. Refuses to start one without a password. */
+export function demoFromEnv(env: NodeJS.ProcessEnv = process.env): Demo | null {
+  if (env.DEMO_MODE !== '1') return null;
+  const username = (env.DEMO_USERNAME || 'demo').trim().toLowerCase();
+  const password = env.DEMO_PASSWORD || '';
+  if (password.length < auth.MIN_PASSWORD_LENGTH) throw new Error(`DEMO_PASSWORD must be set (at least ${auth.MIN_PASSWORD_LENGTH} characters) when DEMO_MODE=1`);
+  return { username, password };
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+
+/** Empty every table and fill the database with the sample household. */
+export async function resetDemo(db: Db, demo: Demo): Promise<void> {
+  const tables = (await db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")).map((t) => t.name);
+  await db.run('PRAGMA foreign_keys = OFF');
+  try {
+    for (const table of tables) await db.run(`DELETE FROM "${table}"`);
+    await db.run('DELETE FROM sqlite_sequence').catch(() => {});
+  } finally {
+    await db.run('PRAGMA foreign_keys = ON');
+  }
+  const now = new Date().toISOString();
+  await db.run('INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, 1, ?)', ['demo-admin', await auth.hashPassword(randomBytes(24).toString('base64url')), now]);
+  const made = await db.run('INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, 0, ?)', [demo.username, await auth.hashPassword(demo.password), now]);
+  await fill(db, made.lastId);
+}
+
+/** The sample household: a little of everything, so each page has something on it. */
+async function fill(db: Db, me: number): Promise<void> {
+  const day = (offset: number) => addDays(today(), offset);
+  await life(db, me).saveProfile(AREAS.map((a) => a.key));
+
+  // ---- eating ----
+  const k = kitchen(db, me);
+  const soup = await k.createRecipe({ title: 'Leek and potato soup', servings: 4, ingredients_text: '3 leeks, sliced\n2 large potatoes, diced\n1 onion\n4 cups vegetable stock\n1/2 cup cream', steps_text: 'Soften the leeks and onion in butter.\nAdd the potatoes and stock; simmer 20 minutes.\nBlend, then stir in the cream.', tags: ['soup', 'winter'] });
+  const tacos = await k.createRecipe({ title: 'Sheet-pan chicken tacos', servings: 4, ingredients_text: '1.5 lb chicken thighs\n2 bell peppers\n1 red onion\n2 tbsp taco seasoning\n8 tortillas\n1 lime', steps_text: 'Toss everything but the tortillas with the seasoning.\nRoast at 425°F for 25 minutes.\nServe in warm tortillas with lime.', tags: ['weeknight'] });
+  const muffins = await k.createRecipe({ title: 'Blueberry muffins', servings: 12, ingredients_text: '2 cups flour\n3/4 cup sugar\n2 tsp baking powder\n1 egg\n1 cup milk\n1/3 cup oil\n1.5 cups blueberries', steps_text: 'Mix dry and wet separately, then fold together with the berries.\nBake at 400°F for 20 minutes.', tags: ['baking', 'breakfast'] });
+  await k.createRecipe({ title: "Grandma's Sunday pot roast", servings: 6, ingredients_text: '3 lb chuck roast\n4 carrots\n3 potatoes\n1 onion\n2 cups beef stock\n2 sprigs rosemary', steps_text: 'Brown the roast on all sides.\nAdd everything else, cover, and cook low for 3 hours.', tags: ['sunday'] });
+  await k.addPlan({ day: day(0), meal: 'dinner', recipe_id: tacos.id });
+  await k.addPlan({ day: day(1), meal: 'dinner', recipe_id: soup.id });
+  await k.addPlan({ day: day(2), meal: 'breakfast', recipe_id: muffins.id });
+  for (const item of ['2 litres milk', '1 dozen eggs', 'Tortillas', 'Limes', 'Dish soap']) await k.addGrocery({ label: item });
+  await k.savePantry({ name: 'Flour', quantity: 3, unit: 'lb', low_at: 1 });
+  await k.savePantry({ name: 'Cream', quantity: 1, unit: 'cup', expires_on: day(2) });
+  await k.savePantry({ name: 'Vegetable stock', quantity: 2, unit: 'cup', low_at: 4 });
+
+  // ---- keeping: places, things with their records ----
+  const things = inventory(db, me);
+  await things.addStarter('home');
+  await things.addStarter('sewing');
+  const kinds = await things.listKinds();
+  const kind = (name: string) => (kinds.find((x) => x.name === name) ?? kinds[0]!).id;
+  const household = kinds.find((x) => /appliance|household|tool/i.test(x.name))?.id ?? (await things.createKind({ name: 'Household', icon: '🏠' })).find((x) => x.name === 'Household')!.id;
+  const place = async (name: string, parent: number | null = null) => (await things.createPlace({ name, parent_id: parent })).filter((p) => p.name === name && p.parent_id === parent).at(-1)!.id;
+  const garage = await place('Garage');
+  const toolShelf = await place('Tool shelf', garage);
+  const living = await place('Living room');
+  const kitchenRoom = await place('Kitchen');
+  const sewing = await place('Sewing room');
+  const fabricBin = await place('Fabric bin', sewing);
+  const basement = await place('Basement');
+  const kidsRoom = await place("Leo's room");
+  const bookshelf = await place('Bookshelf', kidsRoom);
+
+  const tv = await things.createItem({ kind_id: household, name: 'Television', place_id: living, records: { bought_on: day(-400), bought_at: 'Costco', price_cents: 79900, value_cents: 55000, model: 'QN55', serial: 'SN-48213-A', warranty_until: day(30) } });
+  await things.createItem({ kind_id: household, name: 'Stand mixer', place_id: kitchenRoom, records: { bought_on: day(-900), price_cents: 32900, serial: 'KM-77120' }, activities: ['Baking'] });
+  const drill = await things.createItem({ kind_id: household, name: 'Cordless drill', place_id: toolShelf, records: { price_cents: 12900, model: 'DCD771' }, activities: ['DIY', 'Home maintenance'] });
+  const ladder = await things.createItem({ kind_id: household, name: 'Step ladder', place_id: garage, activities: ['Home maintenance', 'Painting'] });
+  const filters = await things.createItem({ kind_id: household, name: 'Furnace filter 16x25', quantity: 1, low_at: 1, place_id: basement });
+  const car = await things.createItem({ kind_id: household, name: 'The car', place_id: garage, records: { model: 'Outback 2019' } });
+  await things.createItem({ kind_id: household, name: 'Motor oil', quantity: 5, unit: 'qt', low_at: 5, place_id: garage });
+  const machine = await things.createItem({ kind_id: household, name: 'Sewing machine', place_id: sewing, activities: ['Sewing'], records: { price_cents: 24900, serial: 'JN-20931' } });
+  const fabric = kinds.find((x) => x.name === 'Fabric');
+  const linen = await things.createItem({ kind_id: fabric?.id ?? kind('Fabric'), name: 'Blue linen', quantity: 4, unit: 'yd', place_id: fabricBin, activities: ['Sewing'] });
+  await things.createItem({ kind_id: fabric?.id ?? kind('Fabric'), name: 'Striped cotton', quantity: 1.5, unit: 'yd', low_at: 2, place_id: fabricBin, activities: ['Sewing'] });
+  await things.moveItem(drill.id, garage, 'left out after the shelf job');
+  await things.moveItem(drill.id, toolShelf);
+
+  // ---- enjoying ----
+  const shelf = media(db, me);
+  await shelf.create({ type: 'book', title: 'The Hobbit', creator: 'J.R.R. Tolkien', year: 1937, genres: ['Fantasy'] }, { format: 'Paperback', place_id: bookshelf });
+  await shelf.create({ type: 'book', title: 'Salt, Fat, Acid, Heat', creator: 'Samin Nosrat', year: 2017, genres: ['Cooking'] }, { format: 'Hardcover', place_id: kitchenRoom });
+  await shelf.create({ type: 'book', title: 'Project Hail Mary', creator: 'Andy Weir', year: 2021, genres: ['Science fiction'] }, { format: 'Audiobook' });
+  await shelf.create({ type: 'film', title: 'Spirited Away', creator: 'Hayao Miyazaki', year: 2001, genres: ['Animation'] }, { format: 'Blu-ray', place_id: living });
+  await shelf.create({ type: 'music', title: 'Rumours', creator: 'Fleetwood Mac', year: 1977 }, { format: 'Vinyl', place_id: living, lent_to: 'Sam', lent_on: day(-40) });
+  await shelf.create({ type: 'game', title: 'Ticket to Ride', year: 2004 }, { format: 'Board game', place_id: living });
+
+  // ---- making ----
+  const making = projects(db, me);
+  const dress = await making.createProject({ name: 'Linen summer dress', activity: 'Sewing', status: 'active', due_on: day(21) });
+  await making.addLine(dress.id, { item_id: linen.id, quantity: 3 });
+  await making.addLine(dress.id, { label: '9 inch zip', quantity: 1 });
+  await making.addSession(dress.id, { day: day(-3), minutes: 90, note: 'Cut out the pieces' });
+  await things.logUse(machine.id, { project_id: dress.id, day: day(-3) });
+  await making.createProject({ name: 'Garage shelves', activity: 'DIY', status: 'planned' });
+
+  // ---- upkeep: jobs, bills, renewals, chores ----
+  const jobs = upkeep(db, me);
+  await jobs.create({ name: 'Change the furnace filter', activity: 'Home maintenance', every_n: 3, every_unit: 'month', tools: [ladder.id], supplies: [{ item_id: filters.id, quantity: 1 }],
+    steps: 'Turn the system off.\nNote the size printed on the old filter.\nArrow on the new one points toward the furnace.', last_done: { day: day(-95) } });
+  await jobs.create({ name: 'Change the oil', activity: 'Car', item_id: car.id, every_n: 6, every_unit: 'month', every_reading: 5000, reading_unit: 'miles', last_done: { day: day(-120), reading: 61200 } })
+    .then((j) => jobs.reading(j.id, 65900));
+  await jobs.create({ name: 'Clean the gutters', activity: 'Home maintenance', every_n: 6, every_unit: 'month', tools: [ladder.id], last_done: { day: day(-150) } });
+  await jobs.create({ name: 'Test the smoke alarms', activity: 'Home maintenance', every_n: 1, every_unit: 'month', last_done: { day: day(-12) } });
+  await jobs.create({ name: 'Electricity', kind: 'bill', amount_cents: 8450, every_n: 1, every_unit: 'month', first_due: day(6) });
+  await jobs.create({ name: 'Internet', kind: 'bill', amount_cents: 6000, every_n: 1, every_unit: 'month', first_due: day(14), autopay: true });
+  await jobs.create({ name: 'Car registration', kind: 'renewal', activity: 'Car', item_id: car.id, amount_cents: 18000, every_n: 1, every_unit: 'year', first_due: day(48) });
+  await jobs.create({ name: 'Passport', kind: 'renewal', activity: 'Papers', every_n: 10, every_unit: 'year', first_due: day(700) });
+  const family = await jobs.addMember('Leo');
+  const leo = family[0]!.id;
+  const mia = (await jobs.addMember('Mia')).find((m) => m.name === 'Mia')!.id;
+  await jobs.setPointValue(50);
+  const room = await jobs.create({ name: 'Tidy your room', kind: 'chore', points: 2, every_n: 1, every_unit: 'week', assigned_member: leo });
+  const dishes = await jobs.create({ name: 'Do the dishes', kind: 'chore', points: 1, every_n: 1, every_unit: 'day' });
+  const trash = await jobs.create({ name: 'Take out the trash', kind: 'chore', points: 2, every_n: 1, every_unit: 'week', assigned_member: mia });
+  await jobs.done(room.id, { by_member: leo });
+  await jobs.done(dishes.id, { by_member: mia });
+  await jobs.done(trash.id, { by_member: mia });
+  await jobs.done(dishes.id, { day: day(-8), by_member: leo });
+
+  // ---- pets ----
+  const animals = pets(db, me);
+  const biscuit = await animals.create({ name: 'Biscuit', species: 'dog', breed: 'Beagle mix', born_on: day(-365 * 4 - 60), vet_name: 'Oak Lane Vets', vet_phone: '555 0100', microchip: '985112004512345', food: 'One cup, morning and evening', note: 'Scared of fireworks. No chicken treats.' });
+  await animals.addCare(biscuit.id, { name: 'Vaccinations', every_n: 1, every_unit: 'year', last_done: day(-340) });
+  await animals.addCare(biscuit.id, { name: 'Flea and tick treatment', every_n: 1, every_unit: 'month', last_done: day(-33) });
+  await animals.addWeight(biscuit.id, { value: 27.5, unit: 'lb', day: day(-90) });
+  await animals.addWeight(biscuit.id, { value: 28.2, unit: 'lb', day: day(-5) });
+  const pepper = await animals.create({ name: 'Pepper', species: 'cat', born_on: day(-365 * 7), vet_name: 'Oak Lane Vets', vet_phone: '555 0100', food: 'Half a tin twice a day; dry food always out' });
+  await animals.addCare(pepper.id, { name: 'Vet check-up', every_n: 1, every_unit: 'year', last_done: day(-200) });
+
+  // ---- the house manual ----
+  const book = manual(db, me);
+  await book.addEntry({ section: 'emergency', title: 'Water shut-off', body: 'Red lever behind the boiler.\nTurn it a quarter until it stops.', place_id: basement });
+  await book.addEntry({ section: 'emergency', title: 'Breaker box', body: 'Grey panel by the side door. Each switch is labelled.', place_id: garage });
+  await book.addEntry({ section: 'contacts', title: 'Plumber', phone: '555 0142', body: 'Ask for Dana.' });
+  await book.addEntry({ section: 'contacts', title: 'A neighbor with a key', phone: '555 0177', body: 'The Okafors, at number 14.' });
+  await book.addEntry({ section: 'house', title: 'Wi-Fi', body: 'Network: SampleHome\nPassword: made-up-for-the-demo' });
+  await book.addEntry({ section: 'house', title: 'Alarm', body: 'A code would go here. It is marked private, so it never appears on a shared link.', private: true });
+  await book.addEntry({ section: 'routines', title: 'Trash and recycling days', body: 'Trash on Tuesday. Recycling every other Friday.' });
+
+  // ---- packing ----
+  const move = packing(db, me);
+  const boxes = (await move.makeBoxes({ count: 3, destination: 'Storage', parent_id: garage })).boxes;
+  await things.createItem({ kind_id: household, name: 'Holiday lights', place_id: boxes[0]!.id });
+  await things.createItem({ kind_id: household, name: 'Camping stove', place_id: boxes[0]!.id, activities: ['Camping'] });
+  await move.setBox(boxes[0]!.id, { state: 'packed' });
+
+  // ---- spending ----
+  const spend = money(db, me);
+  const groceries = await spend.addCategory({ name: 'Groceries', monthly_cents: 60000 });
+  const house = await spend.addCategory({ name: 'House', monthly_cents: 25000 });
+  await spend.addCategory({ name: 'Fun', monthly_cents: 15000 });
+  await spend.addEntry({ label: 'Farmers market', cents: 4250, category_id: groceries.id, day: day(-2) });
+  await spend.addEntry({ label: 'Weekly shop', cents: 11830, category_id: groceries.id, day: day(-5) });
+  await spend.addEntry({ label: 'Furnace filters (pack of 4)', cents: 3999, category_id: house.id, day: day(-6) });
+
+  // ---- planning ----
+  const cal = calendar(db, me);
+  await cal.createEvent({ title: 'Dentist', day: day(1), time: '15:30' });
+  await cal.createEvent({ title: "Mum's birthday", day: `1958-${day(9).slice(5)}`, yearly: true });
+  await cal.createEvent({ title: 'School concert', day: day(11), time: '18:00' });
+  const trip = await plans(db, me).create({ name: 'Cabin weekend', start_day: day(18), end_day: day(20), note: 'Bring the camping stove.' });
+  await plans(db, me).addItem(trip.id, { kind: 'recipe', ref_id: soup.id }).catch(() => {});
+  void tv;
+}
+
+/**
+ * Keeps a demo fresh: reset when it starts, every night at `hour` UTC, and at once if visitors have filled
+ * it past `maxBytes` (photos and papers are kept in the database).
+ */
+export function keepDemoFresh(db: Db, demo: Demo, file: string, options: { hour?: number; maxBytes?: number } = {}): { ready: Promise<void>; stop(): void } {
+  const hour = options.hour ?? 9;      // 9:00 UTC is the middle of the night in the Americas
+  const maxBytes = options.maxBytes ?? 200_000_000;
+  let last = '';
+  let busy = false;
+  const reset = async (why: string) => {
+    if (busy) return;
+    busy = true;
+    try { await resetDemo(db, demo); last = new Date().toISOString().slice(0, 10); console.log(`Demo data was reset (${why})`); } catch (problem) { console.error('The demo could not be reset:', problem); } finally { busy = false; }
+  };
+  const ready = reset('starting up');
+  const timer = setInterval(() => {
+    const now = new Date();
+    const size = (() => { try { return statSync(file).size; } catch { return 0; } })();
+    if (size > maxBytes) void reset('it had grown too large');
+    else if (now.getUTCHours() === hour && now.toISOString().slice(0, 10) !== last) void reset('the nightly reset');
+  }, 5 * 60_000);
+  timer.unref();
+  return { ready, stop: () => clearInterval(timer) };
+}

@@ -34,6 +34,7 @@ const SUITE = [
   { specs: ['upkeep'] },
   { specs: ['household'] },
   { specs: ['family'] },
+  { specs: ['demo'], demo: true },
   { specs: ['pets'] },
   { specs: ['manual'] },
   { specs: ['packing'] },
@@ -103,7 +104,8 @@ async function startLifeIs(group) {
   const base = `http://127.0.0.1:${port}`;
   const server = spawn(process.execPath, ['server/src/main.ts'], {
     cwd: root, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, DATA_DIR: data, PORT: String(port), HOST: '127.0.0.1', STATIC_DIR: group.phone ? 'frontend/dist-device' : 'frontend/dist' },
+    env: { ...process.env, DATA_DIR: data, PORT: String(port), HOST: '127.0.0.1', STATIC_DIR: group.phone ? 'frontend/dist-device' : 'frontend/dist',
+      ...(group.demo ? { DEMO_MODE: '1', DEMO_PASSWORD: 'a-demo-password-for-walk-throughs' } : {}) },
   });
   let said = '';
   server.stdout.on('data', (d) => { said += d; });

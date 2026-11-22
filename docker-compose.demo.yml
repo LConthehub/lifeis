@@ -1,0 +1,33 @@
+# A demo copy of Life Is with a made-up household, for anyone to try. It has its own database (the
+# lifeis_demo_data volume) and never touches your real one. The sample data is reset every night.
+#
+#   docker compose build                                         build Life Is first: the demo runs the same image
+#   docker compose -f docker-compose.demo.yml up -d              start (or restart after a new build)
+#   docker compose -f docker-compose.demo.yml down               stop
+#
+# Then open http://localhost:8021 (demo.lifeis.living points here through Caddy).
+# The demo sign-in is in .env.demo (DEMO_USERNAME / DEMO_PASSWORD). That file is not committed to git.
+# In demo mode nothing reaches outside: no email, look-ups, weather, reminders or links to share.
+
+name: lifeis-demo
+
+services:
+  lifeis:
+    image: lifeis-lifeis          # what "docker compose build" makes from this folder
+    ports:
+      - "127.0.0.1:8021:8008"
+    volumes:
+      - lifeis_demo_data:/data
+      - lifeis_demo_keys:/keys
+    env_file: .env.demo
+    environment:
+      - DEMO_MODE=1               # empties and refills this database: never point it at real data
+      - SESSION_IDLE_MINUTES=60
+    restart: unless-stopped
+    # A public demo gets a small, fixed share of the computer.
+    mem_limit: 384m
+    cpus: 1.0
+
+volumes:
+  lifeis_demo_data:
+  lifeis_demo_keys:

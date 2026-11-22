@@ -43,6 +43,8 @@ export type Options = {
   assistant?: Reach;
   /** How a browser is sent a reminder. Left out: browsers can't be sent any. */
   push?: { publicKey: string; send: PushSender };
+  /** A demo for anyone to try: its sign-in is offered on the sign-in page, and a few things are refused. See demo.ts. */
+  demo?: { username: string; password: string };
   /** Told about anything that went wrong inside Life Is itself (never about a person's mistake). */
   onError?: (problem: unknown) => void;
 };
@@ -120,7 +122,9 @@ export function createApp(options: Options) {
 
     ['GET', /^\/api\/auth\/status$/, async (c) => {
       const people = (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM users'))!.n;
-      return { json: { setup_required: people === 0, local: c.local, user: await auth.userForToken(db, c.token, clock, idleDefault, false) } };
+      return { json: { setup_required: people === 0, local: c.local, user: await auth.userForToken(db, c.token, clock, idleDefault, false),
+        // A demo says so, and hands out its sign-in: it is the same for everyone and opens only made-up data.
+        ...(options.demo ? { demo: options.demo } : {}) } };
     }],
 
     // Make the first (admin) account. Only works while there are none, and only on this computer: otherwise
@@ -224,6 +228,13 @@ export function createApp(options: Options) {
     // Refuse changes that another website started.
     if (!SAFE_METHODS.has(method) && ['cross-site', 'same-site'].includes(String(req.headers['sec-fetch-site']))) {
       throw new Refusal(403, 'Request blocked: it came from another website');
+    }
+    // A demo is shared by strangers: nobody may lock the others out, add people, or use it to put words on a
+    // public page.
+    if (options.demo && !SAFE_METHODS.has(method)) {
+      if (path === '/api/auth/change-password') throw new Refusal(403, "The demo's password can't be changed: everyone shares it");
+      if (path === '/api/auth/setup' || path === '/api/users') throw new Refusal(403, "People can't be added to the demo");
+      if (path === '/api/manual/share') throw new Refusal(403, "The demo's manual can't be shared by a link. In your own Life Is it can.");
     }
     const token = cookie(req, auth.SESSION_COOKIE);
     let user: auth.User | null = null;
