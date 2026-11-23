@@ -9,6 +9,7 @@ import Art from '../components/Art';
 import { AssistantService } from '../components/Assistant';
 import { RemindersSettings } from '../components/Reminders';
 import { RecallAlertsService } from '../components/Recalls';
+import { BankReadingService } from '../components/BankReading';
 import { PeopleSignIn, SignInSecurity } from '../components/Security';
 import YourFiles, { CopyNotice, noteCopyMade } from '../components/YourFiles';
 
@@ -52,6 +53,7 @@ const GROUPS = [
       { id: 'lookups', title: 'Barcode and title lookups', words: 'isbn book grocery film music game album dvd blu-ray vinyl scan open library food facts musicbrainz upcitemdb tmdb movie database show poster director key', render: () => <Plain><BookLookupService /></Plain> },
       { id: 'photos', title: 'Photos from Immich', words: 'immich pictures plans memories', render: () => <Plain><PhotoLibraryService /></Plain> },
       { id: 'media', title: 'Jellyfin or Emby', words: 'media server films shows music jellyfin emby', render: () => <MediaServers /> },
+      { id: 'bank', title: 'Bank accounts (SimpleFIN)', words: 'bank account simplefin spending transactions read import card checking credit union token bridge', render: () => <Plain><BankReadingService /></Plain> },
       { id: 'recalls', title: 'Recall alerts', words: 'car vehicle recall nhtsa safety make model year vin', render: () => <Plain><RecallAlertsService /></Plain> },
       { id: 'recipe-web', title: 'Recipes from a website', words: 'import url link page photo ocr', render: () => <RecipesFromWeb /> },
     ],
