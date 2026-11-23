@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { hintsFor, kindChoices } from '../projectKinds';
 import Budget from '../components/Budget';
+import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
 const STATUSES = [['idea', 'An idea'], ['planned', 'Planned'], ['active', 'Working on it'], ['paused', 'Paused'], ['done', 'Finished'], ['dropped', 'Dropped']];
@@ -14,11 +15,12 @@ export default function Projects() {
   const [projects, setProjects] = useState(null);
   const [activities, setActivities] = useState([]);
   const [adding, setAdding] = useState(false);
+  const [tag, setTag] = useState('');
+  const sel = useSelecting();
   const navigate = useNavigate();
-  useEffect(() => {
-    axios.get('/api/projects').then(({ data }) => setProjects(data)).catch(() => setProjects([]));
-    axios.get('/api/projects/activities').then(({ data }) => setActivities(data)).catch(() => {});
-  }, []);
+  const load = useCallback(() => { axios.get('/api/projects', { params: { tag: tag || undefined } }).then(({ data }) => setProjects(data)).catch(() => setProjects([])); }, [tag]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { axios.get('/api/projects/activities').then(({ data }) => setActivities(data)).catch(() => {}); }, []);
   if (!projects) return null;
   return (
     <div className="space-y-4">
@@ -26,7 +28,13 @@ export default function Projects() {
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Projects</h1>
         <button type="button" onClick={() => setAdding(true)} className={buttonClass}>+ New project</button>
       </div>
-      {projects.length === 0 && (
+      <div className="flex flex-wrap items-center gap-2">
+        <TagFilter value={tag} onChange={setTag} />
+        {(projects.length > 0 || tag) && <SelectButton sel={sel} />}
+      </div>
+      <BulkBar sel={sel} kind="project" list={projects.map((p) => p.id)} noun="projects" onDone={load} />
+      {projects.length === 0 && tag && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing matches.</div>}
+      {projects.length === 0 && !tag && (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
           No projects yet. A project is anything you make or do over more than a day: a dress, a sweater, a bookshelf, the spring planting.
           It lists what it uses from <Link to="/things" className="underline">your things</Link>, tells you what you're short of, and keeps the days you worked on it.
@@ -40,7 +48,10 @@ export default function Projects() {
             <h2 className="text-xs font-semibold uppercase tracking-wide text-life-600 dark:text-life-300">{title}</h2>
             <div className="grid gap-3 md:grid-cols-2">
               {here.map((p) => (
-                <Link key={p.id} to={`/projects/${p.id}`} className={`${cardClass} block hover:ring-life-300`}>
+                <div key={p.id} className={`${cardClass} hover:ring-life-300`}>
+                <div className="flex items-start gap-2">
+                <PickBox sel={sel} id={p.id} name={p.name} />
+                <Link to={`/projects/${p.id}`} className="block min-w-0 flex-1">
                   <div className="flex items-start gap-2">
                     <span className="flex-1 font-medium text-life-800 dark:text-life-50">{p.name}</span>
                     {p.status === 'paused' && <span className="rounded bg-gray-100 px-1.5 text-[11px] text-gray-600">paused</span>}
@@ -50,6 +61,9 @@ export default function Projects() {
                     {[p.activity, p.due_on && !['done', 'dropped'].includes(p.status) && `for ${p.due_on}`, p.minutes > 0 && minutesText(p.minutes), p.finished_on && `finished ${p.finished_on}`].filter(Boolean).join(' · ')}
                   </p>
                 </Link>
+                </div>
+                <TagChips tags={p.tag_list} className="mt-2" />
+                </div>
               ))}
             </div>
           </section>
@@ -66,12 +80,13 @@ export default function Projects() {
 
 function ProjectForm({ project, activities, onDone }) {
   const [form, setForm] = useState({ name: project.name || '', activity: project.activity || '', status: project.status || 'idea', due_on: project.due_on || '', notes: project.notes || '' });
+  const [tags, setTags] = useState(project.tag_list || []);
   const [error, setError] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const submit = async (e) => {
     e.preventDefault();
     const body = { name: form.name, activity: form.activity || null, status: form.status, due_on: form.due_on || null, notes: form.notes || null };
-    try { onDone((project.id ? await axios.put(`/api/projects/${project.id}`, body) : await axios.post('/api/projects', body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+    try { const { data } = project.id ? await axios.put(`/api/projects/${project.id}`, body) : await axios.post('/api/projects', body); data.tag_list = await saveTags('project', data.id, tags); onDone(data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   return (
     <form onSubmit={submit} className="space-y-3">
@@ -85,6 +100,7 @@ function ProjectForm({ project, activities, onDone }) {
       <datalist id="project-activities">{kindChoices(activities).map((a) => <option key={a} value={a} />)}</datalist>
       <Field label="Wanted by"><input type="date" value={form.due_on} onChange={set('due_on')} className={inputClass} /></Field>
       <Field label="Notes"><textarea rows={4} value={form.notes} onChange={set('notes')} placeholder={hintsFor(form.activity).notes} className={inputClass} /></Field>
+      <TagPicker value={tags} onChange={setTags} />
       {form.status === 'done' && project.status !== 'done' && <p className="text-xs text-gray-500 dark:text-life-300">Finishing takes what it hadn't used yet out of your things.</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="text-right"><button type="submit" className={buttonClass}>Save</button></div>

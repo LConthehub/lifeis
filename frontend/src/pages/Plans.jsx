@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { shrink } from '../components/shrink';
 import Picture from '../components/Picture';
+import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, fromDateInput } from '../components/ui';
 
 const ENTRY_ICONS = { meal: '🍽', session: '🧵', media: '🎞' };
@@ -62,8 +63,11 @@ export const photoAddress = (photo) => `/api/plans/photos/${photo.id ?? photo}`;
 export default function PlansPage() {
   const [plans, setPlans] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [tag, setTag] = useState('');
+  const sel = useSelecting();
   const navigate = useNavigate();
-  useEffect(() => { axios.get('/api/plans').then(({ data }) => setPlans(data)).catch(() => setPlans([])); }, []);
+  const load = useCallback(() => { axios.get('/api/plans', { params: { tag: tag || undefined } }).then(({ data }) => setPlans(data)).catch(() => setPlans([])); }, [tag]);
+  useEffect(() => { load(); }, [load]);
   if (!plans) return null;
   const now = plans.filter((p) => p.when === 'now');
   const ahead = plans.filter((p) => p.when === 'ahead').reverse();
@@ -71,7 +75,10 @@ export default function PlansPage() {
   const years = [...new Set(past.map((p) => p.start_day.slice(0, 4)))];
   const tile = (p) => (
     <li key={p.id}>
-      <Link to={`/plans/${p.id}`} className={`${cardClass} flex h-full gap-3 hover:ring-life-300`}>
+      <div className={`${cardClass} flex h-full flex-col gap-2 hover:ring-life-300`}>
+      <div className="flex gap-2">
+      <PickBox sel={sel} id={p.id} name={p.name} />
+      <Link to={`/plans/${p.id}`} className="flex min-w-0 flex-1 gap-3">
         {p.cover_photo ? <Picture src={photoAddress(p.cover_photo)} alt="" loading="lazy" className="h-16 w-16 flex-none rounded-lg object-cover" />
           : <span aria-hidden="true" className="flex h-16 w-16 flex-none items-center justify-center rounded-lg bg-life-50 text-2xl dark:bg-life-700">✨</span>}
         <span className="min-w-0 flex-1">
@@ -82,6 +89,9 @@ export default function PlansPage() {
           </span>
         </span>
       </Link>
+      </div>
+      <TagChips tags={p.tag_list} />
+      </div>
     </li>
   );
   const group = (title, list) => list.length > 0 && (
@@ -96,7 +106,13 @@ export default function PlansPage() {
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Plans and memories</h1>
         <button type="button" onClick={() => setAdding(true)} className={buttonClass}>+ New</button>
       </div>
-      {plans.length === 0 && (
+      <div className="flex flex-wrap items-center gap-2">
+        <TagFilter value={tag} onChange={setTag} />
+        {(plans.length > 0 || tag) && <SelectButton sel={sel} />}
+      </div>
+      <BulkBar sel={sel} kind="plan" list={plans.map((p) => p.id)} noun="plans" onDone={load} />
+      {plans.length === 0 && tag && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing matches.</div>}
+      {plans.length === 0 && !tag && (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
           A plan is anything with a day and things that belong to it: a vacation with its menu, dishes and films, or one afternoon's sewing.
           Make one ahead, or write one down afterwards. Either way it stays here to look back on.
@@ -116,12 +132,13 @@ export default function PlansPage() {
 
 function PlanForm({ plan, onDone }) {
   const [form, setForm] = useState({ name: plan.name || '', start_day: plan.start_day, end_day: plan.end_day && plan.end_day !== plan.start_day ? plan.end_day : '', note: plan.note || '' });
+  const [tags, setTags] = useState(plan.tag_list || []);
   const [error, setError] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const submit = async (e) => {
     e.preventDefault();
     const body = { name: form.name, start_day: form.start_day, end_day: form.end_day || null, note: form.note || null, story: plan.story ?? null };
-    try { onDone((plan.id ? await axios.put(`/api/plans/${plan.id}`, body) : await axios.post('/api/plans', body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+    try { const { data } = plan.id ? await axios.put(`/api/plans/${plan.id}`, body) : await axios.post('/api/plans', body); data.tag_list = await saveTags('plan', data.id, tags); onDone(data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   return (
     <form onSubmit={submit} className="space-y-3">
@@ -131,6 +148,7 @@ function PlanForm({ plan, onDone }) {
         <Field label="Until (if longer)"><input type="date" min={form.start_day} value={form.end_day} onChange={set('end_day')} className={inputClass} /></Field>
       </div>
       <Field label="What it's for"><textarea rows={2} value={form.note} onChange={set('note')} className={inputClass} /></Field>
+      <TagPicker value={tags} onChange={setTags} />
       {!plan.id && <p className="text-xs text-gray-500 dark:text-life-300">A day that has already gone is fine: that's a memory, written down afterwards.</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="text-right"><button type="submit" className={buttonClass}>Save</button></div>

@@ -7,6 +7,7 @@ import BookList from '../components/BookList';
 import BulkScan from '../components/BulkScan';
 import CollectionSummary from '../components/CollectionSummary';
 import Art from '../components/Art';
+import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import { SORTS, centsFromDollars, decadeOf, dollarsField, dollarsText, labelKey, sameTitles, sortTitles } from '../components/collectionTools';
 import { bookServerName } from '../components/BookServers';
 import { onDevice } from '../where';
@@ -92,12 +93,14 @@ export default function MediaPage({ library = null }) {
   const [from, setFrom] = useState('');     // the years asked for: from, and to
   const [to, setTo] = useState('');
   const [sort, setSort] = useState(savedSort);
+  const [tag, setTag] = useState('');
+  const sel = useSelecting();
   const [adding, setAdding] = useState(null);       // null, or what the new title starts with
   const [scanning, setScanning] = useState(false);
   const [scanMany, setScanMany] = useState(false);
   const [listing, setListing] = useState(false);
   const navigate = useNavigate();
-  const load = useCallback(() => { axios.get('/api/media').then(({ data }) => setTitles(data)).catch(() => setTitles([])); }, []);
+  const load = useCallback(() => { axios.get('/api/media', { params: { tag: tag || undefined } }).then(({ data }) => setTitles(data)).catch(() => setTitles([])); }, [tag]);
   useEffect(() => { load(); }, [load]);
   if (!titles) return null;
   const mine = lib ? titles.filter((m) => m.type === lib.type && lib.fits(m)) : titles;
@@ -112,8 +115,8 @@ export default function MediaPage({ library = null }) {
   const genres = [...new Map(mine.flatMap((m) => m.genres).map((g) => [labelKey(g), g])).values()].sort((a, b) => labelKey(a).localeCompare(labelKey(b)));
   const decades = [...new Set(mine.filter((m) => m.year != null).map((m) => decadeOf(m.year)))].sort((a, b) => b - a);
   const decade = from !== '' && to !== '' && Number(from) % 10 === 0 && Number(to) === Number(from) + 9 ? String(from) : '';
-  const filtering = Boolean((!lib && type) || show || word || genre || from !== '' || to !== '');
-  const clearFilters = () => { setType(lib?.type ?? ''); setShow(''); setQ(''); setGenre(''); setFrom(''); setTo(''); };
+  const filtering = Boolean((!lib && type) || show || word || genre || from !== '' || to !== '' || tag);
+  const clearFilters = () => { setType(lib?.type ?? ''); setShow(''); setQ(''); setGenre(''); setFrom(''); setTo(''); setTag(''); };
   // The print page reads the tab, the filters and the sort back from the address.
   const printAddress = `/media/print?${new URLSearchParams(Object.entries({ lib: library ?? '', type: lib ? '' : type, show, q: q.trim(), genre, from, to, sort }).filter(([, v]) => v !== '' && v != null))}`;
   const count = (id) => titles.filter((m) => m.type === id).length;
@@ -128,7 +131,12 @@ export default function MediaPage({ library = null }) {
         <button type="button" onClick={() => setScanMany(true)} className={`${quietButtonClass} ${control}`}>📷 Scan many</button>
         <button type="button" onClick={() => setAdding({ type: type || 'film', format: lib?.format || '' })} className={`${buttonClass} ${control}`}>+ Add</button>
       </div>
-      {mine.length === 0 && lib ? (
+      {mine.length === 0 && tag ? (
+        <>
+          <div className="flex flex-wrap items-center gap-2"><TagFilter value={tag} onChange={setTag} /></div>
+          <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing with that tag.</div>
+        </>
+      ) : mine.length === 0 && lib ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}><Art slot="empty" className="mx-auto mb-2 block h-12 w-12" />{lib.empty}</div>
       ) : mine.length === 0 ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
@@ -165,6 +173,7 @@ export default function MediaPage({ library = null }) {
                 </select>
               </div>
             )}
+            <div className="self-end"><TagFilter value={tag} onChange={setTag} className={control} /></div>
             {decades.length > 0 && (
               <div className="space-y-1">
                 <span id="decade-is" className="block text-xs font-medium text-gray-600 dark:text-life-200">Decade</span>
@@ -188,13 +197,18 @@ export default function MediaPage({ library = null }) {
           <p className="flex flex-wrap items-center gap-x-3 text-xs text-gray-500 dark:text-life-300" role="status">
             <span>Showing {shown.length} of {mine.length}</span>
             {filtering && <button type="button" onClick={clearFilters} className="inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200">Clear filters</button>}
+            <SelectButton sel={sel} />
           </p>
+          <BulkBar sel={sel} kind="title" list={shown.map((m) => m.id)} noun="titles" onDone={load} />
           <CollectionSummary titles={shown} />
           {shown.length === 0 ? <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing matches.</div> : (
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {shown.map((m) => (
                 <li key={m.id}>
-                  <Link to={`/media/${m.id}`} className={`${cardClass} flex h-full gap-3 hover:ring-life-300`}>
+                  <div className={`${cardClass} flex h-full flex-col gap-2 hover:ring-life-300`}>
+                  <div className="flex gap-2">
+                  <PickBox sel={sel} id={m.id} name={m.title} />
+                  <Link to={`/media/${m.id}`} className="flex min-w-0 flex-1 gap-3">
                     {localCover(m.cover) ? <img src={m.cover} alt="" loading="lazy" className="h-20 w-14 flex-none rounded object-cover" />
                       : <span aria-hidden="true" className="flex h-20 w-14 flex-none items-center justify-center rounded bg-life-50 text-2xl dark:bg-life-700">{typeOf(m.type)[2]}</span>}
                     <span className="min-w-0 flex-1">
@@ -211,6 +225,9 @@ export default function MediaPage({ library = null }) {
                       ) : null}
                     </span>
                   </Link>
+                  </div>
+                  <TagChips tags={m.tag_list} />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -428,6 +445,7 @@ function TitleForm({ title, withCopy = false, known = [], onDone }) {
     minutes: title.minutes ?? '', cover: title.cover || '', summary: title.summary || '', note: title.note || '', wanted: !!title.wanted, format: title.format || '', place_id: '',
     barcode: title.barcode || '',
   });
+  const [tags, setTags] = useState(title.tag_list || []);
   const [formats, setFormats] = useState([]);
   const [places, setPlaces] = useState([]);
   const [error, setError] = useState('');
@@ -457,6 +475,7 @@ function TitleForm({ title, withCopy = false, known = [], onDone }) {
       if (tmdb?.poster) {
         try { saved.cover = (await axios.post('/api/lookups/films/cover', { media_id: saved.id, path: tmdb.poster })).data.cover; } catch { /* the title is saved all the same */ }
       }
+      saved.tag_list = await saveTags('title', saved.id, tags);
       onDone(saved);
     } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
@@ -519,6 +538,7 @@ function TitleForm({ title, withCopy = false, known = [], onDone }) {
         </>
       )}
       <Field label="Your notes"><textarea rows={2} value={form.note} onChange={set('note')} className={inputClass} /></Field>
+      <TagPicker value={tags} onChange={setTags} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="text-right"><button type="submit" className={buttonClass}>Save</button></div>
     </form>

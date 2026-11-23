@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
 const UNITS = [['day', 'days'], ['week', 'weeks'], ['month', 'months'], ['year', 'years']];
@@ -137,14 +138,16 @@ export default function UpkeepPage() {
   const [setsOpen, setSetsOpen] = useState(null);  // null until the person opens or closes the sets: then open when there are no jobs yet
   const [modal, setModal] = useState(null);       // { job: {} } to make one, { done: job } to mark one done
   const [kind, setKind] = useState('');           // '' for everything, or one kind
+  const [tag, setTag] = useState('');
+  const sel = useSelecting();
   const [scores, setScores] = useState(null);
   const [members, setMembers] = useState([]);
   const navigate = useNavigate();
   const load = useCallback(() => {
-    axios.get('/api/things/upkeep').then(({ data }) => setJobs(data)).catch(() => setJobs([]));
+    axios.get('/api/things/upkeep', { params: { tag: tag || undefined } }).then(({ data }) => setJobs(data)).catch(() => setJobs([]));
     axios.get('/api/things/upkeep/scores').then(({ data }) => setScores(data)).catch(() => {});
     axios.get('/api/things/upkeep/members').then(({ data }) => setMembers(data)).catch(() => {});
-  }, []);
+  }, [tag]);
   useEffect(() => { load(); axios.get('/api/things/upkeep/starters').then(({ data }) => setStarters(data)).catch(() => {}); axios.get('/api/things/upkeep/sets').then(({ data }) => setSets(data)).catch(() => {}); }, [load]);
   if (!jobs) return null;
   const have = new Set(jobs.map((j) => j.name.toLowerCase()));
@@ -166,6 +169,11 @@ export default function UpkeepPage() {
           <button key={k} type="button" onClick={() => setKind(k)} aria-pressed={kind === k} className={chip(kind === k)}>{icon} {label} <span className="opacity-80">{jobs.filter((j) => j.kind === k).length || ''}</span></button>
         ))}
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <TagFilter value={tag} onChange={setTag} />
+        {(jobs.length > 0 || tag) && <SelectButton sel={sel} />}
+      </div>
+      <BulkBar sel={sel} kind="job" list={shown.map((j) => j.id)} noun="jobs" onDone={load} />
       {(!kind || kind === 'bill' || kind === 'renewal') && perMonth > 0 && (
         <p className="text-sm text-gray-700 dark:text-life-100" data-monthly>Your bills and renewals come to about <span className="font-semibold">{money(Math.round(perMonth))}</span> a month.</p>
       )}
@@ -185,7 +193,8 @@ export default function UpkeepPage() {
         </section>
       )}
       {scores && kind === 'chore' && members.length > 0 && <Allowance scores={scores} members={members} />}
-      {jobs.length === 0 && (
+      {jobs.length === 0 && tag && <p className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing matches.</p>}
+      {jobs.length === 0 && !tag && (
         <p className={`${cardClass} text-sm text-gray-600 dark:text-life-100`}>
           Everything that comes round again: jobs like the furnace filter and the oil, bills and renewals like the rent and the car registration, and chores.
           Say how often and what each needs. Life Is tells you when each is due, and keeps every time it was done.
@@ -200,7 +209,8 @@ export default function UpkeepPage() {
             {states === 'date' && <p className="mb-1 text-xs text-gray-500 dark:text-life-300">These need a date from you: open one and choose Change. Until then they are not counted as late.</p>}
             <ul className="divide-y divide-life-50 dark:divide-life-700">
               {here.map((j) => (
-                <li key={j.id} className="flex items-center gap-2 py-2">
+                <li key={j.id} className="flex flex-wrap items-center gap-2 py-2">
+                  <PickBox sel={sel} id={j.id} name={j.name} />
                   <Link to={`/things/upkeep/${j.id}`} className="min-w-0 flex-1">
                     <span className="block text-sm text-gray-800 hover:underline dark:text-life-50"><span aria-hidden="true">{j.kind !== 'job' ? `${KINDS[j.kind][1]} ` : ''}</span>{j.name}</span>
                     <span className="block text-xs text-gray-500 dark:text-life-300">
@@ -209,20 +219,21 @@ export default function UpkeepPage() {
                   </Link>
                   <DueBadge job={j} />
                   <button type="button" onClick={() => setModal({ done: j })} aria-label={`${j.name} ${doneWord(j).toLowerCase()}`} className="shrink-0 rounded-full border border-life-200 px-2.5 py-1 text-xs text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100">✓ {doneWord(j)}</button>
+                  <TagChips tags={j.tag_list} className="basis-full" />
                 </li>
               ))}
             </ul>
           </section>
         );
       })}
-      {sets.length > 0 && !kind && (
+      {sets.length > 0 && !kind && !tag && (
         <details className={cardClass} role="region" aria-label="Ready-made sets" open={setsOpen ?? jobs.length === 0} onToggle={(e) => setSetsOpen(e.currentTarget.open)}>
           <summary className="flex min-h-[44px] cursor-pointer items-center font-semibold text-life-800 dark:text-life-50">Add a ready-made set</summary>
           <p className="mb-2 text-xs text-gray-500 dark:text-life-300">Each set is a group of jobs and renewals for an American household. Look inside, uncheck what you don't need, then add it. You can change or remove each one afterward. A job with no fixed day is first due one round from today, so adding a set does not put a dozen jobs on your late list. Dates that vary by state or plan are left for you to set.</p>
           <ReadySets sets={sets} jobs={jobs} onAdded={load} />
         </details>
       )}
-      {offered.length > 0 && (
+      {offered.length > 0 && !tag && (
         <details className={cardClass} role="region" aria-label="Common jobs" open={shown.length === 0 || Boolean(kind)} key={`${kind}-${shown.length === 0}`}>
           <summary className="cursor-pointer font-semibold text-life-800 dark:text-life-50">Common ones to start from <span className="text-sm font-normal text-gray-500 dark:text-life-300">{offered.length}</span></summary>
           <p className="mb-2 mt-1 text-xs text-gray-500 dark:text-life-300">Add one, then say when it's due and what it needs or costs.</p>
@@ -371,6 +382,7 @@ function JobForm({ job, onDone }) {
     tools: (job.tools || []).map((t) => t.id), supplies: (job.supplies || []).map((s) => ({ item_id: s.item_id, quantity: s.quantity ?? '', unit: s.unit || '' })),
     last_day: '', last_reading: '',
   });
+  const [tags, setTags] = useState(job.tag_list || []);
   const [error, setError] = useState('');
   useEffect(() => {
     axios.get('/api/things/items').then(({ data }) => setThings(data)).catch(() => {});
@@ -395,7 +407,7 @@ function JobForm({ job, onDone }) {
       tools: form.tools, supplies: form.supplies.map((s) => ({ item_id: s.item_id, quantity: s.quantity === '' ? null : Number(s.quantity), unit: s.unit || null })),
       ...(making && !dated && form.last_day ? { last_done: { day: form.last_day, reading: form.last_reading === '' ? null : Number(form.last_reading) } } : {}),
     };
-    try { onDone((job.id ? await axios.put(`/api/things/upkeep/${job.id}`, body) : await axios.post('/api/things/upkeep', body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+    try { const { data } = job.id ? await axios.put(`/api/things/upkeep/${job.id}`, body) : await axios.post('/api/things/upkeep', body); data.tag_list = await saveTags('job', data.id, tags); onDone(data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
 
   const dated = form.kind === 'bill' || form.kind === 'renewal';
@@ -494,6 +506,7 @@ function JobForm({ job, onDone }) {
       </div>
       )}
       {!dated && <Field label="Steps, one on each line"><textarea rows={3} value={form.steps} onChange={set('steps')} className={inputClass} /></Field>}
+      <TagPicker value={tags} onChange={setTags} />
       <Field label="Notes"><textarea rows={2} value={form.note} onChange={set('note')} placeholder={dated ? 'account number, who to call, where to pay' : 'filter size, part numbers, who to call'} className={inputClass} /></Field>
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
       <div className="flex justify-end"><button type="submit" className={buttonClass}>Save</button></div>

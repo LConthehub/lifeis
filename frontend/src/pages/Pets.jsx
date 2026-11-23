@@ -5,6 +5,7 @@ import Picture from '../components/Picture';
 import { shrink } from '../components/shrink';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput } from '../components/ui';
 import { DueBadge, scheduleText } from './Upkeep';
+import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 
 const ICONS = { dog: '🐕', cat: '🐈', rabbit: '🐇', bird: '🐦', fish: '🐟', hamster: '🐹', 'guinea pig': '🐹', horse: '🐎', reptile: '🦎', ferret: '🦦' };
 const iconOf = (pet) => ICONS[pet.species] ?? '🐾';
@@ -29,8 +30,11 @@ const careName = (job, pet) => (job.name.startsWith(`${pet.name}: `) ? job.name.
 export default function PetsPage() {
   const [pets, setPets] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [tag, setTag] = useState('');
+  const sel = useSelecting();
   const navigate = useNavigate();
-  useEffect(() => { axios.get('/api/things/pets').then(({ data }) => setPets(data)).catch(() => setPets([])); }, []);
+  const load = useCallback(() => { axios.get('/api/things/pets', { params: { tag: tag || undefined } }).then(({ data }) => setPets(data)).catch(() => setPets([])); }, [tag]);
+  useEffect(() => { load(); }, [load]);
   if (!pets) return null;
   return (
     <div className="space-y-4">
@@ -38,7 +42,12 @@ export default function PetsPage() {
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Pets</h1>
         <button type="button" onClick={() => setAdding(true)} className={buttonClass}>+ Add a pet</button>
       </div>
-      {pets.length === 0 ? (
+      <div className="flex flex-wrap items-center gap-2">
+        <TagFilter value={tag} onChange={setTag} />
+        {(pets.length > 0 || tag) && <SelectButton sel={sel} />}
+      </div>
+      <BulkBar sel={sel} kind="pet" list={pets.map((p) => p.id)} noun="pets" onDone={load} />
+      {pets.length === 0 && tag ? <p className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing matches.</p> : pets.length === 0 ? (
         <p className={`${cardClass} text-sm text-gray-600 dark:text-life-100`}>
           Who they are, their vet and microchip number, how their weight goes, and their care: vaccinations, flea treatment, the vet.
           Life Is reminds you when each is due and keeps every time it was done.
@@ -47,7 +56,10 @@ export default function PetsPage() {
         <ul className="grid gap-3 sm:grid-cols-2">
           {pets.map((p) => (
             <li key={p.id}>
-              <Link to={`/things/pets/${p.id}`} className={`${cardClass} flex h-full items-center gap-3 hover:ring-life-300`}>
+              <div className={`${cardClass} flex h-full flex-col gap-2 hover:ring-life-300`}>
+              <div className="flex items-center gap-2">
+              <PickBox sel={sel} id={p.id} name={p.name} />
+              <Link to={`/things/pets/${p.id}`} className="flex min-w-0 flex-1 items-center gap-3">
                 {p.photo ? <Picture src={`/api/things/pets/${p.id}/photo`} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover" />
                   : <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-life-50 text-3xl dark:bg-life-700" aria-hidden="true">{iconOf(p)}</span>}
                 <span className="min-w-0 flex-1">
@@ -58,6 +70,9 @@ export default function PetsPage() {
                   </span>}
                 </span>
               </Link>
+              </div>
+              <TagChips tags={p.tag_list} />
+              </div>
             </li>
           ))}
         </ul>
@@ -200,12 +215,13 @@ function Weights({ pet, onChanged, onRemoved }) {
 function PetForm({ pet, onDone }) {
   const [form, setForm] = useState({ name: pet.name || '', species: pet.species || '', breed: pet.breed || '', born_on: pet.born_on || '', microchip: pet.microchip || '',
     vet_name: pet.vet_name || '', vet_phone: pet.vet_phone || '', food: pet.food || '', note: pet.note || '' });
+  const [tags, setTags] = useState(pet.tag_list || []);
   const [error, setError] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const submit = async (e) => {
     e.preventDefault();
     const body = Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v === '' && k !== 'name' ? null : v]));
-    try { onDone((pet.id ? await axios.put(`/api/things/pets/${pet.id}`, body) : await axios.post('/api/things/pets', body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+    try { const { data } = pet.id ? await axios.put(`/api/things/pets/${pet.id}`, body) : await axios.post('/api/things/pets', body); data.tag_list = await saveTags('pet', data.id, tags); onDone(data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   return (
     <form onSubmit={submit} className="space-y-3">
@@ -221,6 +237,7 @@ function PetForm({ pet, onDone }) {
       <Field label="Microchip number"><input value={form.microchip} onChange={set('microchip')} className={inputClass} /></Field>
       <Field label="Food: what, how much, when"><input value={form.food} onChange={set('food')} placeholder="Two cups, morning and evening" className={inputClass} /></Field>
       <Field label="Notes"><textarea rows={2} value={form.note} onChange={set('note')} placeholder="allergies, medicines, what scares them" className={inputClass} /></Field>
+      <TagPicker value={tags} onChange={setTags} />
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
       <div className="flex justify-end"><button type="submit" className={buttonClass}>Save</button></div>
     </form>

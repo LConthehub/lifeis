@@ -5,6 +5,7 @@ import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, err
 import { ScanSticker } from './Places';
 import PlacePicker from '../components/PlacePicker';
 import { kindChoices } from '../projectKinds';
+import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 // The headings kinds sit under, in the order shown. Which heading a kind belongs to comes with the kind (its `group`).
 const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garage', 'Garden', 'Outdoors', 'Electronics', 'Music', 'Around the house', 'Clothes and linens'];
 
@@ -57,12 +58,14 @@ export default function Things() {
   const [group, setGroup] = useState(null);
   const [kind, setKind] = useState(null);
   const [q, setQ] = useState('');
+  const [tag, setTag] = useState('');
+  const sel = useSelecting();
   const [editing, setEditing] = useState(null);
   const load = useCallback(() => {
     axios.get('/api/things/kinds').then(({ data }) => setKinds(data)).catch(() => setKinds([]));
     axios.get('/api/things/places').then(({ data }) => setPlaces(data)).catch(() => {});
-    axios.get('/api/things/items').then(({ data }) => setItems(data)).catch(() => setItems([]));
-  }, []);
+    axios.get('/api/things/items', { params: { tag: tag || undefined } }).then(({ data }) => setItems(data)).catch(() => setItems([]));
+  }, [tag]);
   useEffect(() => { load(); }, [load]);
   if (!kinds) return null;
 
@@ -115,7 +118,9 @@ export default function Things() {
               {here.map((item) => {
                 const details = k.fields.map((f) => shown(f, item.values[f.id])).filter(Boolean).slice(0, 4);
                 return (
-                  <li key={item.id}>
+                  <li key={item.id} className="flex items-start">
+                    <PickBox sel={sel} id={item.id} name={item.name} />
+                    <div className="min-w-0 flex-1">
                     <Link to={`/things/${item.id}`} className="flex w-full items-start gap-2 py-2 text-left">
                       <span className="flex-1">
                         <span className="block text-sm text-gray-800 dark:text-life-50">{item.name}</span>
@@ -127,6 +132,8 @@ export default function Things() {
                       {item.low && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">low</span>}
                       <span className="text-sm text-gray-500 dark:text-life-300">{item.amount}</span>
                     </Link>
+                    <TagChips tags={item.tag_list} className="pb-2" />
+                    </div>
                   </li>
                 );
               })}
@@ -166,9 +173,14 @@ export default function Things() {
           {kindsOfChosen.length > 1 && kindChips(kindsOfChosen, `Kind of thing in ${chosenGroup}`, `All ${chosenGroup}`)}
         </>
       ) : kindChips(kinds, 'Kind of thing', 'Everything')}
-      {items.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find something" aria-label="Find a thing" className={`${inputClass} max-w-sm`} />}
+      <div className="flex flex-wrap items-center gap-2">
+        {items.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find something" aria-label="Find a thing" className={`${inputClass} max-w-sm`} />}
+        <TagFilter value={tag} onChange={setTag} />
+        {items.length > 0 && <SelectButton sel={sel} />}
+      </div>
+      <BulkBar sel={sel} kind="thing" list={shownItems.map((i) => i.id)} noun="things" onDone={load} />
       {shownItems.length === 0 ? (
-        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>{items.length === 0 ? 'Nothing here yet. Add the first thing you keep.' : 'Nothing matches.'}</div>
+        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>{items.length === 0 && !tag ? 'Nothing here yet. Add the first thing you keep.' : 'Nothing matches.'}</div>
       ) : grouped ? (
         <div className="space-y-6">
           {groupsShown.map((g) => (
@@ -219,6 +231,7 @@ export function ItemForm({ item, kinds, places, onPlaces, onDone }) {
     low_at: item.low_at ?? '', note: item.note || '', values: { ...(item.values || {}) },
     activities: (item.activities || []).join(', '), barcode: item.barcode || '',
   });
+  const [tags, setTags] = useState(item.tag_list || []);
   const [error, setError] = useState('');
   const kind = kinds.find((k) => k.id === Number(form.kind_id)) || kinds[0];
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -233,8 +246,8 @@ export function ItemForm({ item, kinds, places, onPlaces, onDone }) {
       place_id: form.place_id === '' ? null : Number(form.place_id), low_at: form.low_at === '' ? null : Number(form.low_at), note: form.note || null, values,
       activities: commaList(form.activities), barcode: form.barcode || null };
     try {
-      if (item.id) await axios.put(`/api/things/items/${item.id}`, body);
-      else await axios.post('/api/things/items', { ...body, kind_id: kind.id });
+      const { data } = item.id ? await axios.put(`/api/things/items/${item.id}`, body) : await axios.post('/api/things/items', { ...body, kind_id: kind.id });
+      await saveTags('thing', data.id, tags);
       onDone();
     } catch (err) {
       setError(errorMessage(err, "Couldn't save"));
@@ -280,6 +293,7 @@ export function ItemForm({ item, kinds, places, onPlaces, onDone }) {
         <Field label="Barcode on it or its box"><input inputMode="numeric" value={form.barcode} onChange={set('barcode')} className={inputClass} /></Field>
       </div>
       <Field label="Notes"><textarea rows={2} value={form.note} onChange={set('note')} className={inputClass} /></Field>
+      <TagPicker value={tags} onChange={setTags} />
       {item.set_aside > 0 && <p className="text-xs text-life-600 dark:text-life-200">{item.set_aside} {item.unit || ''} is set aside for projects, leaving {item.free} free.</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex items-center justify-between">

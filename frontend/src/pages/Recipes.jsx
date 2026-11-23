@@ -5,6 +5,7 @@ import { inApp } from '../where';
 import Picture from '../components/Picture';
 import RecipeFile from '../components/RecipeFile';
 import { shrink } from '../components/shrink';
+import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, minutesText, toDateInput } from '../components/ui';
 
 /** Where a recipe's picture is asked for; the version makes a changed picture show at once instead of the one remembered. */
@@ -15,13 +16,13 @@ export default function Recipes() {
   const [rows, setRows] = useState(null);
   const [q, setQ] = useState('');
   const [tag, setTag] = useState('');
+  const sel = useSelecting();
   const [modal, setModal] = useState(null);
   const navigate = useNavigate();
   const load = useCallback(() => {
     axios.get('/api/kitchen/recipes', { params: { q: q || undefined, tag: tag || undefined } }).then(({ data }) => setRows(data)).catch(() => setRows([]));
   }, [q, tag]);
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
-  const tags = [...new Set((rows || []).flatMap((r) => r.tags))].sort();
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -31,13 +32,10 @@ export default function Recipes() {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a recipe or an ingredient" aria-label="Search recipes" className={`${inputClass} max-w-sm`} />
-        {(tags.length > 0 || tag) && (
-          <select value={tag} onChange={(e) => setTag(e.target.value)} aria-label="Tag" className={`${inputClass} !w-auto`}>
-            <option value="">All tags</option>
-            {tags.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-        )}
+        <TagFilter value={tag} onChange={setTag} />
+        {rows && rows.length > 0 && <SelectButton sel={sel} />}
       </div>
+      <BulkBar sel={sel} kind="recipe" list={(rows || []).map((r) => r.id)} noun="recipes" onDone={load} />
       {rows && rows.length === 0 ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
           {q || tag ? 'Nothing matches.' : 'No recipes yet. Add one, or paste one in from anywhere: it’s kept exactly as written.'}
@@ -46,7 +44,10 @@ export default function Recipes() {
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {(rows || []).map((r) => (
             <li key={r.id}>
-              <Link to={`/recipes/${r.id}`} className={`${cardClass} flex h-full gap-3 hover:ring-life-300`}>
+              <div className={`${cardClass} flex h-full flex-col gap-2 hover:ring-life-300`}>
+              <div className="flex gap-2">
+              <PickBox sel={sel} id={r.id} name={r.title} />
+              <Link to={`/recipes/${r.id}`} className="flex min-w-0 flex-1 gap-3">
                 {r.has_photo && (
                   <Picture src={photoAddress(r)} alt={r.title} loading="lazy" decoding="async" className="h-16 w-16 shrink-0 rounded-lg bg-life-50 object-cover dark:bg-life-700" />
                 )}
@@ -56,9 +57,11 @@ export default function Recipes() {
                     {[r.servings && `serves ${r.servings}`, (r.prep_minutes || r.cook_minutes) && minutesText((r.prep_minutes || 0) + (r.cook_minutes || 0))].filter(Boolean).join(' · ')}
                   </span>
                   {r.description && <span className="mt-1 block line-clamp-2 text-sm text-gray-600 dark:text-life-100">{r.description}</span>}
-                  {r.tags.length > 0 && <span className="mt-2 flex flex-wrap gap-1">{r.tags.map((t) => <span key={t} className="rounded-full bg-life-50 px-2 py-0.5 text-[11px] text-life-700 dark:bg-life-700 dark:text-life-100">{t}</span>)}</span>}
                 </span>
               </Link>
+              </div>
+              <TagChips tags={r.tag_list} />
+              </div>
             </li>
           ))}
         </ul>
@@ -254,8 +257,9 @@ export function RecipeForm({ recipe, draft, onSaved }) {
     title: from?.title || '', description: from?.description || '', servings: from?.servings ?? '',
     prep_minutes: from?.prep_minutes ?? '', cook_minutes: from?.cook_minutes ?? '', source_url: from?.source_url || '',
     ingredients_text: from?.ingredients_text || '', steps_text: from?.steps_text || '', notes: from?.notes || '',
-    tags: (from?.tags || []).join(', '),
   });
+  // What it came in with (a file, a page) is names with no tag behind them yet; each is found or made when the recipe is saved.
+  const [tags, setTags] = useState(() => (from?.tag_list ?? (from?.tags || []).map((t) => ({ id: null, name: t, path: t }))));
   // What it's cooked in: each row is one of your things, or a name typed in.
   const [equipment, setEquipment] = useState(() => (recipe?.equipment || []).map((e) => ({ item_id: e.item_id ?? '', label: e.item_id ? '' : e.label, quantity: e.quantity, note: e.note || '' })));
   const [things, setThings] = useState([]);
@@ -268,12 +272,12 @@ export function RecipeForm({ recipe, draft, onSaved }) {
     e.preventDefault();
     // What was read is kept alongside, as it was, so a correction can always be checked against it.
     const body = { ...form, ...(draft?.original_text ? { original_text: draft.original_text } : {}), servings: num(form.servings), prep_minutes: num(form.prep_minutes), cook_minutes: num(form.cook_minutes),
-      tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
       equipment: equipment.filter((row) => row.item_id !== '' || row.label.trim()).map((row) => ({
         item_id: row.item_id === '' ? null : Number(row.item_id), label: row.item_id === '' ? row.label : null,
         quantity: row.quantity === '' ? null : Number(row.quantity), note: row.note || null })) };
     try {
       const { data } = recipe ? await axios.put(`/api/kitchen/recipes/${recipe.id}`, body) : await axios.post('/api/kitchen/recipes', body);
+      await saveTags('recipe', data.id, tags);
       onSaved(data);
     } catch (err) {
       setError(errorMessage(err, "Couldn't save"));
@@ -314,7 +318,7 @@ export function RecipeForm({ recipe, draft, onSaved }) {
       </div>
       <Field label="Notes"><textarea rows={3} value={form.notes} onChange={set('notes')} className={inputClass} /></Field>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Tags, with commas"><input value={form.tags} onChange={set('tags')} placeholder="dinner, freezes well" className={inputClass} /></Field>
+        <TagPicker value={tags} onChange={setTags} />
         <Field label="Where it's from"><input value={form.source_url} onChange={set('source_url')} placeholder="A link, a book, Grandma" className={inputClass} /></Field>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}

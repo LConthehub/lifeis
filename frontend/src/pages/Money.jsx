@@ -4,6 +4,7 @@ import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { money, toCents } from '../components/Budget';
 import Statement from '../components/Statement';
+import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 
 const pad = (n) => String(n).padStart(2, '0');
 const thisMonth = () => { const now = new Date(); return `${now.getFullYear()}-${pad(now.getMonth() + 1)}`; };
@@ -27,7 +28,9 @@ export default function Money() {
   const [data, setData] = useState(null);
   const [modal, setModal] = useState(null);
   const [error, setError] = useState('');
-  const load = useCallback(() => { axios.get('/api/money', { params: { month } }).then(({ data: d }) => setData(d)).catch(() => {}); }, [month]);
+  const [tag, setTag] = useState('');
+  const sel = useSelecting();
+  const load = useCallback(() => { axios.get('/api/money', { params: { month, tag: tag || undefined } }).then(({ data: d }) => setData(d)).catch(() => {}); }, [month, tag]);
   useEffect(() => { load(); }, [load]);
   if (!data) return null;
   const sign = data.currency;
@@ -94,15 +97,25 @@ export default function Money() {
       </section>
 
       <section className={cardClass}>
-        <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">What was spent</h2>
-        {data.entries.length === 0 && data.projects.lines.length === 0 && <p className="text-sm text-gray-500 dark:text-life-300">Nothing written down this month.</p>}
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          <h2 className="mr-auto font-semibold text-life-800 dark:text-life-50">What was spent</h2>
+          <TagFilter value={tag} onChange={setTag} />
+          {data.entries.some((e) => e.mine) && <SelectButton sel={sel} />}
+        </div>
+        <BulkBar sel={sel} kind="spending" list={data.entries.filter((e) => e.mine).map((e) => e.id)} noun="entries" onDone={load} />
+        {data.entries.length === 0 && data.projects.lines.length === 0 && <p className="text-sm text-gray-500 dark:text-life-300">{tag ? 'Nothing with that tag this month.' : 'Nothing written down this month.'}</p>}
         <ul className="divide-y divide-life-100 dark:divide-life-800">
           {data.entries.map((e) => (
-            <li key={e.id} className="flex flex-wrap items-baseline gap-x-2 py-2 text-sm">
+            <li key={e.id} className="flex flex-wrap items-center gap-x-2 py-2 text-sm">
+              {e.mine && <PickBox sel={sel} id={e.id} name={e.label} />}
               <span className="w-12 shrink-0 text-xs text-gray-500 dark:text-life-300">{e.day.slice(5).replace('-', '/')}</span>
-              <span className="min-w-0 flex-1 text-gray-800 dark:text-life-50">{e.label}<span className="text-xs text-gray-500 dark:text-life-300">{e.category ? ` · ${e.category}` : ''}{e.mine ? '' : ` · ${e.by}`}</span></span>
+              <span className="min-w-0 flex-1 text-gray-800 dark:text-life-50">
+                {e.mine ? <button type="button" onClick={() => setModal({ entry: e })} aria-label={`Change ${e.label}`} className="min-h-[44px] text-left hover:underline">{e.label}</button> : e.label}
+                <span className="text-xs text-gray-500 dark:text-life-300">{e.category ? ` · ${e.category}` : ''}{e.mine ? '' : ` · ${e.by}`}</span>
+              </span>
               <span className="tabular-nums text-gray-800 dark:text-life-50">{money(e.cents, sign)}</span>
-              {e.mine && <button type="button" aria-label={`Remove ${e.label}`} onClick={() => remove(e)} className="text-gray-400 hover:text-red-600">✕</button>}
+              {e.mine && <button type="button" aria-label={`Remove ${e.label}`} onClick={() => remove(e)} className="flex h-11 w-11 items-center justify-center text-gray-400 hover:text-red-600">✕</button>}
+              <TagChips tags={e.tag_list} className="basis-full pb-1 pl-14" />
             </li>
           ))}
           {data.projects.lines.map((l, i) => (
@@ -115,22 +128,26 @@ export default function Money() {
         </ul>
         {error && <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>}
       </section>
-      {modal?.entry && <Modal title="Something spent" onClose={() => setModal(null)}><EntryForm categories={data.categories} onDone={done} /></Modal>}
+      {modal?.entry && <Modal title={modal.entry.id ? modal.entry.label : 'Something spent'} onClose={() => setModal(null)}><EntryForm entry={modal.entry} categories={data.categories} onDone={done} /></Modal>}
       {modal?.statement && <Modal title="Import a statement" wide onClose={() => { setModal(null); load(); }}><Statement categories={data.categories} currency={sign} onDone={broughtIn} /></Modal>}
       {modal?.category && <Modal title={modal.category.id ? modal.category.name : 'A category'} onClose={() => setModal(null)}><CategoryForm category={modal.category} people={data.people} onDone={done} /></Modal>}
     </div>
   );
 }
 
-function EntryForm({ categories, onDone }) {
-  const [form, setForm] = useState({ label: '', amount: '', category_id: '', day: today(), note: '' });
+function EntryForm({ entry = {}, categories, onDone }) {
+  const [form, setForm] = useState({ label: entry.label || '', amount: entry.id ? (entry.cents / 100).toFixed(2) : '', category_id: entry.category_id ?? '', day: entry.day || today(), note: entry.note || '' });
+  const [tags, setTags] = useState(entry.tag_list || []);
   const [error, setError] = useState('');
   const set = (name) => (e) => setForm({ ...form, [name]: e.target.value });
   const submit = async (e) => {
     e.preventDefault();
     setError('');
     try {
-      await axios.post('/api/money/entries', { label: form.label, cents: toCents(form.amount), category_id: form.category_id ? Number(form.category_id) : null, day: form.day, note: form.note });
+      const body = { label: form.label, cents: toCents(form.amount), category_id: form.category_id ? Number(form.category_id) : null, day: form.day, note: form.note };
+      if (entry.id) await axios.put(`/api/money/entries/${entry.id}`, body);
+      const id = entry.id ?? (await axios.post('/api/money/entries', body)).data.id;
+      await saveTags('spending', id, tags);
       onDone();
     } catch (err) { setError(errorMessage(err, "Couldn't save that")); }
   };
@@ -148,6 +165,7 @@ function EntryForm({ categories, onDone }) {
         </select>
       </Field>
       <Field label="Note"><input value={form.note} onChange={set('note')} className={inputClass} /></Field>
+      <TagPicker value={tags} onChange={setTags} />
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
       <div className="flex justify-end"><button type="submit" className={buttonClass}>Save</button></div>
     </form>

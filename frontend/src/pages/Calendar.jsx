@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput } from '../components/ui';
 
 const ICONS = { plan: '✨', event: '📌', outside: '🗓', meal: '🍽', session: '🧵', due: '⏳', upkeep: '🔧', use_by: '🥫', media: '🎞' };
@@ -27,10 +28,12 @@ export default function Calendar() {
   });
   const [entries, setEntries] = useState(null);
   const [editing, setEditing] = useState(null);
+  const [tag, setTag] = useState('');
+  const sel = useSelecting();
   const startText = toDateInput(start);
   const load = useCallback(() => {
-    axios.get('/api/calendar', { params: { start: startText, days: 7 } }).then(({ data }) => setEntries(data)).catch(() => setEntries([]));
-  }, [startText]);
+    axios.get('/api/calendar', { params: { start: startText, days: 7, tag: tag || undefined } }).then(({ data }) => setEntries(data)).catch(() => setEntries([]));
+  }, [startText, tag]);
   useEffect(() => { load(); }, [load]);
   const move = (days) => { const d = new Date(start); d.setDate(d.getDate() + days); setStart(d); };
   const days = [...Array(7)].map((_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return d; });
@@ -50,6 +53,12 @@ export default function Calendar() {
         <button type="button" onClick={() => move(7)} className={quietButtonClass} aria-label="Week after">→</button>
         <button type="button" onClick={() => setEditing({ day: today })} className={buttonClass}>+ Add</button>
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <TagFilter value={tag} onChange={setTag} />
+        <SelectButton sel={sel} />
+      </div>
+      <BulkBar sel={sel} kind="event" list={[...new Set((entries || []).filter((e) => e.kind === 'event' && e.id !== null).map((e) => e.id))]} noun="dates" onDone={load} />
+      {tag && <p className="text-sm text-gray-600 dark:text-life-200">Showing only the dates with this tag.</p>}
       <p className="text-xs text-gray-500 dark:text-life-300">Meals, project time, use-by dates and what you watched show here from their own pages. Tap one to go there. <Link to="/settings#calendar-link" className="text-life-600 hover:underline dark:text-life-200">See this on your phone's calendar</Link></p>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {days.map((d) => {
@@ -74,11 +83,15 @@ export default function Calendar() {
                       </>
                     );
                     return (
-                      <li key={`${e.kind}-${e.id ?? e.link}-${i}`}>
+                      <li key={`${e.kind}-${e.id ?? e.link}-${i}`} className="flex flex-wrap items-start">
+                        {e.kind === 'event' && e.id !== null && <PickBox sel={sel} id={e.id} name={e.title} />}
+                        <div className="min-w-0 flex-1">
                         {e.link
                           ? <Link to={e.link} className="flex items-start gap-2 rounded-lg px-1 py-0.5 hover:bg-life-50 dark:hover:bg-life-700">{body}</Link>
                           : e.kind === 'outside' ? <span className="flex items-start gap-2 px-1 py-0.5">{body}</span>
                           : <button type="button" onClick={() => edit(e)} className="flex w-full items-start gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-life-50 dark:hover:bg-life-700">{body}</button>}
+                        <TagChips tags={e.tag_list} className="pl-7" />
+                        </div>
                       </li>
                     );
                   })}
@@ -99,13 +112,15 @@ export default function Calendar() {
 
 function EventForm({ event, onDone }) {
   const [form, setForm] = useState({ title: event.title || '', day: event.day, end_day: event.end_day || '', time: event.time || '', note: event.note || '', yearly: Boolean(event.yearly) });
+  const [tags, setTags] = useState(event.tag_list || []);
   const [error, setError] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const submit = async (e) => {
     e.preventDefault();
     const body = { title: form.title, day: form.day, end_day: form.yearly ? null : form.end_day || null, time: form.time || null, note: form.note || null, yearly: form.yearly };
     try {
-      if (event.id) await axios.put(`/api/calendar/events/${event.id}`, body); else await axios.post('/api/calendar/events', body);
+      const { data } = event.id ? await axios.put(`/api/calendar/events/${event.id}`, body) : await axios.post('/api/calendar/events', body);
+      await saveTags('event', data.id, tags);
       onDone();
     } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
@@ -119,6 +134,7 @@ function EventForm({ event, onDone }) {
         <Field label="Time (empty: all day)"><input type="time" value={form.time} onChange={set('time')} className={inputClass} /></Field>
       </div>
       <Field label="A note"><input value={form.note} onChange={set('note')} className={inputClass} /></Field>
+      <TagPicker value={tags} onChange={setTags} />
       <label className="flex cursor-pointer items-start gap-2 text-sm text-gray-800 dark:text-life-50">
         <input type="checkbox" checked={form.yearly} onChange={(e) => setForm({ ...form, yearly: e.target.checked })} className="mt-0.5 accent-life-600" />
         <span>Every year <span className="block text-xs text-gray-500 dark:text-life-300">A birthday or an anniversary. Give the day it first happened, year and all, and the calendar counts the years.</span></span>
