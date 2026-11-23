@@ -1,0 +1,55 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            core/package-lock.json
+            server/package-lock.json
+            frontend/package-lock.json
+
+      - name: Core - install packages
+        working-directory: core
+        run: npm ci
+
+      - name: Core - type check
+        working-directory: core
+        run: npx tsc --noEmit -p .
+
+      - name: Core - tests
+        working-directory: core
+        run: npx vitest run
+
+      - name: Server - install packages
+        working-directory: server
+        run: npm ci
+
+      - name: Server - type check
+        working-directory: server
+        run: npx tsc --noEmit -p .
+
+      - name: Server - tests
+        working-directory: server
+        run: npx vitest run
+
+      - name: Frontend - install packages
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend - build
+        working-directory: frontend
+        run: npx vite build
