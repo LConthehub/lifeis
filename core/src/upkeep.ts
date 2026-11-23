@@ -568,10 +568,15 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
 
   /** The chores the household's children did from one day to another, with their points. */
   async function memberPoints(from: string, to: string): Promise<{ member_id: number; day: string; points: number }[]> {
+    // Chores done, and times of a routine made for them that they finished (a routine can be worth points too).
     return db.all<{ member_id: number; day: string; points: number }>(
       `SELECT d.done_member AS member_id, d.day, COALESCE(d.points, 0) AS points
        FROM upkeep_done d JOIN upkeep_jobs j ON j.id = d.job_id JOIN household_members hm ON hm.id = d.done_member AND hm.owner_id = ?
-       WHERE j.kind = 'chore' AND (j.owner_id = ? OR j.assigned_to = ?) AND d.day >= ? AND d.day <= ?`, [viewer, viewer, viewer, from, to]);
+       WHERE j.kind = 'chore' AND (j.owner_id = ? OR j.assigned_to = ?) AND d.day >= ? AND d.day <= ?
+       UNION ALL
+       SELECT r.for_member AS member_id, f.day, COALESCE(f.points, 0) AS points
+       FROM routine_finished f JOIN routine_times t ON t.id = f.time_id JOIN routines r ON r.id = t.routine_id
+       WHERE r.owner_id = ? AND r.for_member IS NOT NULL AND COALESCE(f.points, 0) > 0 AND f.day >= ? AND f.day <= ?`, [viewer, viewer, viewer, from, to, viewer, from, to]);
   }
 
   return {

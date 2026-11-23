@@ -1249,6 +1249,72 @@ export const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    // Routines: checklists for parts of the day ("Morning"), each with times and steps. A routine belongs to one
+    // person with a sign-in (for_user), to a household member without one (for_member), or to everyone (neither).
+    // Steps can be every day, on chosen weekdays, or on one night of a cycle that only moves on when that time
+    // was finished. routine_ticks and routine_finished remember each day; routine_sent, reminders already sent.
+    number: 43,
+    name: 'routines: times of day with steps, ticked each day',
+    statements: [
+      `CREATE TABLE routines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        for_user INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        for_member INTEGER REFERENCES household_members(id) ON DELETE CASCADE,
+        cycle_length INTEGER CHECK(cycle_length IS NULL OR (cycle_length >= 2 AND cycle_length <= 14)),
+        points INTEGER CHECK(points IS NULL OR points >= 0),
+        note TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        CHECK(for_user IS NULL OR for_member IS NULL)
+      )`,
+      `CREATE INDEX idx_routines_owner ON routines(owner_id)`,
+      `CREATE TABLE routine_times (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        routine_id INTEGER NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        at_time TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )`,
+      `CREATE INDEX idx_routine_times ON routine_times(routine_id)`,
+      `CREATE TABLE routine_steps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        time_id INTEGER NOT NULL REFERENCES routine_times(id) ON DELETE CASCADE,
+        words TEXT NOT NULL,
+        rule TEXT NOT NULL DEFAULT 'daily' CHECK(rule IN ('daily', 'weekdays', 'cycle')),
+        weekdays TEXT,
+        night INTEGER CHECK(night IS NULL OR (night >= 1 AND night <= 14)),
+        item_id INTEGER REFERENCES items(id) ON DELETE SET NULL,
+        wait_seconds INTEGER CHECK(wait_seconds IS NULL OR (wait_seconds >= 1 AND wait_seconds <= 3600)),
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )`,
+      `CREATE INDEX idx_routine_steps_time ON routine_steps(time_id)`,
+      `CREATE INDEX idx_routine_steps_item ON routine_steps(item_id)`,
+      `CREATE TABLE routine_ticks (
+        step_id INTEGER NOT NULL REFERENCES routine_steps(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        by_user INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        PRIMARY KEY (step_id, day)
+      )`,
+      `CREATE TABLE routine_finished (
+        time_id INTEGER NOT NULL REFERENCES routine_times(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        night INTEGER,
+        points INTEGER,
+        by_user INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        PRIMARY KEY (time_id, day)
+      )`,
+      `CREATE TABLE routine_sent (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        key TEXT NOT NULL,
+        sent_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, key)
+      )`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

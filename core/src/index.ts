@@ -64,6 +64,8 @@ export { reminders, remindersDue, zoneNow, digestText, newTopic, COVERS, NTFY_SE
 export { prep, prepDue, prepTime, prepAsText, prepFromText, whenWords, ruleWords, clockWords, EAT_DEFAULTS, PREP_RULES } from './prep.ts';
 export type { Prep, PrepStep, PrepStepInput, PrepRule, Coming } from './prep.ts';
 export type { Reminders, ReminderSettings, ReminderTools, Digest, DigestLine, Channel, PushSender, PushSubscription } from './reminders.ts';
+export { routines, routinesDue, ROUTINE_STARTERS, STEP_RULES, DAY_NAMES, daysWords, daysAsText, daysFromText, weekdaysWords, fallsOn } from './routines.ts';
+export type { Routines, Routine, DayTime, DayStep, Time as RoutineTime, Step as RoutineStep, StepInput as RoutineStepInput, TimeInput as RoutineTimeInput, RoutineInput, Starter as RoutineStarter, StepRule as RoutineStepRule } from './routines.ts';
 export { tags, TAG_KINDS, isTagKind, MAX_TAG_NAME } from './tags.ts';
 export type { TagKind, TagRef, TagNode, Tagged, TagPage, Tags } from './tags.ts';
 export { search, SEARCH_KINDS } from './search.ts';

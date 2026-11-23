@@ -11,7 +11,7 @@ import { placePaths } from './inventory.ts';
 import { Problem } from './problem.ts';
 import { idsWithAny, tagsMatching, tagsOnto, type TagKind } from './tags.ts';
 
-export const SEARCH_KINDS = ['tag', 'recipe', 'pantry', 'thing', 'place', 'title', 'project', 'job', 'pet', 'license', 'plan', 'event'] as const;
+export const SEARCH_KINDS = ['tag', 'recipe', 'pantry', 'thing', 'place', 'title', 'project', 'job', 'pet', 'license', 'plan', 'event', 'routine'] as const;
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 export type SearchResult = { kind: SearchKind; id: number; icon: string; title: string; detail: string | null; link: string };
 
@@ -104,6 +104,14 @@ export async function search(db: Db, owner: number, query: string, only?: Search
     for (const j of await db.all<{ id: number; name: string; activity: string | null }>(
       `SELECT id, name, activity FROM upkeep_jobs WHERE (owner_id = ? OR assigned_to = ?) AND (${w.sql}${await tagged('job', 'id')}) ORDER BY name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, owner, ...w.args])) {
       out.push({ kind: 'job', id: j.id, icon: '🔧', title: j.name, detail: join('Upkeep', j.activity), link: `/things/upkeep/${j.id}` });
+    }
+  }
+  if (wants('routine')) {
+    // The words of a routine's steps and times count too, so "retinoid" finds the routine it is in.
+    const w = every(['name', 'note', "(SELECT group_concat(t.name || ' ' || COALESCE((SELECT group_concat(s.words, ' ') FROM routine_steps s WHERE s.time_id = t.id), ''), ' ') FROM routine_times t WHERE t.routine_id = routines.id)"]);
+    for (const r of await db.all<{ id: number; name: string; for_member: number | null; for_user: number | null }>(
+      `SELECT id, name, for_member, for_user FROM routines WHERE (owner_id = ? OR for_user = ? OR (for_user IS NULL AND for_member IS NULL)) AND (${w.sql}${await tagged('routine', 'id')}) ORDER BY name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, owner, ...w.args])) {
+      out.push({ kind: 'routine', id: r.id, icon: '✅', title: r.name, detail: 'Routine', link: '/routines' });
     }
   }
   if (wants('pet')) {

@@ -2,7 +2,8 @@
  * What is free and what the one-time unlock covers, when Life Is keeps everything on the device.
  *
  * Free for good: the kitchen (recipes, the week, groceries, the pantry, prices) and backups.
- * Covered by the unlock: everything else kept on the device. Each of those can be tried for a week, counted
+ * Covered by the unlock: everything else kept on the device (routines included: making and changing them. Ticking a
+ * step, or finishing a time, lives under /api/routine-day and stays free after the trial, so a routine can always be used). Each of those can be tried for a week, counted
  * from the first time something is written in one of them.
  *
  * The promise that matters: when the trial ends, nothing that was entered is hidden or taken away. Those
@@ -16,7 +17,7 @@ import { ACTION_LIST } from './actions.ts';
 export const TRIAL_DAYS = 7;
 export const PRICE = '$14.99';
 /** The first part of an address (/api/<this>/…) for each part the unlock covers. */
-export const PAID_PARTS = ['things', 'projects', 'plans', 'calendar', 'media', 'mail', 'money', 'assistant'] as const;
+export const PAID_PARTS = ['things', 'projects', 'plans', 'calendar', 'media', 'mail', 'money', 'assistant', 'routines'] as const;
 
 export type Held = { trial_started: string | null; unlocked: boolean };
 export type Access = {

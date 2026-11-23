@@ -25,6 +25,7 @@ import { kitchen } from './kitchen.ts';
 import { Problem } from './problem.ts';
 import { prepAsText, prepFromText, type PrepRule } from './prep.ts';
 import { recipeKey } from './recipeFiles.ts';
+import { daysAsText, daysFromText, MAX_STEPS, MAX_TIMES, type StepRule } from './routines.ts';
 import { cut, linesAsText, splitLines } from './recipeText.ts';
 import { clean, dayNumber, labelKey, pictureType, stamp, todayOf, type Clock } from './small.ts';
 import { ensurePath, exportRows, setByPaths, tagKindOfLabel, tagsOnto, targetsByTitle, type TagKind } from './tags.ts';
@@ -68,6 +69,7 @@ export const KINDS: KindInfo[] = [
   { key: 'household', label: 'People in the household (for chores)', file: 'household.csv', importable: true, matched: 'by name' },
   { key: 'pets', label: 'Pets, with their weights and photos', file: 'pets.csv', importable: true, matched: 'by name' },
   { key: 'upkeep', label: 'Upkeep jobs, bills, renewals and chores, with when each was done', file: 'upkeep.csv', importable: true, matched: 'by name (and pet)' },
+  { key: 'routines', label: 'Routines, with their times and steps, and the days each time was finished', file: 'routines.csv', importable: true, matched: 'by name' },
   { key: 'manual', label: 'The house manual', file: 'house-manual.csv', importable: true, matched: 'by part and title' },
   { key: 'licenses', label: 'Licenses and permits', file: 'licenses.csv', importable: true, matched: 'by name and holder' },
   { key: 'collection', label: 'The collection: titles, copies and what was watched or read', file: 'collection.csv', importable: true, matched: 'by title and type' },
@@ -456,6 +458,23 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('household.csv', ['Name', 'Chores done', 'Points earned'],
     (await all('SELECT id, name FROM household_members WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id')).map((m) => [str(m.name), str(earned.get(m.id as number)?.n ?? 0), str(earned.get(m.id as number)?.points ?? 0)]));
 
+  // ---------- routines ----------
+  const routineRows = await all('SELECT r.id, r.name, r.cycle_length, r.points, r.note, u.username AS signin, m.name AS member FROM routines r LEFT JOIN users u ON u.id = r.for_user LEFT JOIN household_members m ON m.id = r.for_member WHERE r.owner_id = ? ORDER BY r.sort_order, r.id');
+  const routineSteps = await all(`SELECT t.routine_id, t.name AS time_name, t.at_time, s.words, s.rule, s.weekdays, s.night, i.name AS thing, s.wait_seconds
+    FROM routine_steps s JOIN routine_times t ON t.id = s.time_id JOIN routines r ON r.id = t.routine_id LEFT JOIN items i ON i.id = s.item_id
+    WHERE r.owner_id = ? ORDER BY r.sort_order, r.id, t.sort_order, t.id, s.sort_order, s.id`);
+  const routineById = new Map(routineRows.map((r) => [r.id as number, r]));
+  out.csv('routines.csv', ['Routine', 'For (sign-in)', 'For (household)', 'Cycle nights', 'Points', 'Notes', 'Time', 'At', 'Step', 'Days', 'Thing', 'Wait (seconds)'],
+    routineSteps.map((s) => {
+      const r = routineById.get(s.routine_id as number)!;
+      const weekdays = str(s.weekdays).split(',').map(Number).filter((n) => n >= 1 && n <= 7);
+      return [str(r.name), str(r.signin), str(r.member), str(r.cycle_length), str(r.points), str(r.note), str(s.time_name), str(s.at_time), str(s.words),
+        daysAsText({ rule: str(s.rule) as StepRule, weekdays, night: num(s.night) }), str(s.thing), str(s.wait_seconds)];
+    }));
+  out.csv('routine-history.csv', ['Routine', 'Time', 'Day finished', 'Night of the cycle', 'Points'],
+    (await all(`SELECT r.name, t.name AS time_name, f.day, f.night, f.points FROM routine_finished f JOIN routine_times t ON t.id = f.time_id JOIN routines r ON r.id = t.routine_id
+      WHERE r.owner_id = ? ORDER BY r.id, t.id, f.day`)).map((f) => [str(f.name), str(f.time_name), str(f.day), str(f.night), str(f.points)]));
+
   // ---------- pets ----------
   const pets = await all('SELECT id, name, species, breed, born_on, microchip, vet_name, vet_phone, food, note, photo_type, photo FROM pets WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id');
   const petPhoto = new Map<number, string>();
@@ -637,6 +656,7 @@ const FILE_ABOUT: [string, string][] = [
   ['upkeep.csv', 'Jobs that come round again, bills, renewals and chores: how often, when last done and next due.'],
   ['upkeep-history.csv', 'Each time each job was done.'],
   ['household.csv', 'People in the household, and the chore points each has earned.'],
+  ['routines.csv', 'Routines: one row for each step, with its time of day, which days it falls on and the thing it uses. routine-history.csv has the days each time was finished.'],
   ['pets.csv', 'Your pets.'],
   ['pet-weights.csv', 'Your pets’ weights over time. Their care is in upkeep.csv, with the pet’s name.'],
   ['house-manual.csv', 'The house manual. Entries marked private in the Private column are included: this is your own copy.'],
@@ -1226,6 +1246,96 @@ const importers: Record<string, Importer> = {
     return d;
   },
 
+  async routines(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'routines.csv');
+    if (!t) return d;
+    const things = new Map((await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM items WHERE owner_id = ? ORDER BY id DESC', [c.owner])).map((i) => [labelKey(i.name), i.id]));
+    const people = new Map((await c.tx.all<{ id: number; username: string }>('SELECT id, username FROM users')).map((u) => [u.username.toLowerCase(), u.id]));
+    const members = new Map((await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM household_members WHERE owner_id = ?', [c.owner])).map((m) => [labelKey(m.name), m.id]));
+    const kept = new Set((await c.tx.all<{ name: string }>('SELECT name FROM routines WHERE owner_id = ?', [c.owner])).map((r) => labelKey(r.name)));
+    const history = tableOf(c.files, 'routine-history.csv')?.rows ?? [];
+    // One row for each step: the steps of a routine are the rows that share its name, in the order they come.
+    const groups = new Map<string, { name: string; at: number; rows: Record<string, string>[] }>();
+    for (const [at, row] of t.rows.entries()) {
+      const name = clean(cellOf(row, 'Routine'), 80);
+      if (!name) { skip(d, at, 'it has no name'); continue; }
+      const g = groups.get(labelKey(name)) ?? { name, at, rows: [] };
+      g.rows.push(row);
+      groups.set(labelKey(name), g);
+    }
+    let membersMade = 0;
+    let next = (await c.tx.get<{ n: number | null }>('SELECT MAX(sort_order) AS n FROM routines WHERE owner_id = ?', [c.owner]))?.n ?? -1;
+    for (const [key, g] of groups) {
+      d.found += 1;
+      if (kept.has(key)) { d.already += 1; continue; }
+      const first = g.rows[0]!;
+      let lost = false;
+      const signin = cellOf(first, 'For (sign-in)');
+      let forUser = signin ? people.get(signin.toLowerCase()) ?? null : null;
+      // A routine for someone who isn't here stays the importer's own, rather than becoming everyone's.
+      if (signin && forUser === null) { forUser = c.owner; lost = true; }
+      const memberName = clean(cellOf(first, 'For (household)'), 60);
+      let forMember: number | null = null;
+      if (memberName && forUser === null) {
+        forMember = members.get(labelKey(memberName)) ?? null;
+        if (forMember === null) {
+          forMember = (await c.tx.run('INSERT INTO household_members (owner_id, name, created_at) VALUES (?, ?, ?)', [c.owner, memberName, c.at])).lastId;
+          members.set(labelKey(memberName), forMember);
+          membersMade += 1;
+        }
+      }
+      const cycleSaid = wholeOf(cellOf(first, 'Cycle nights'));
+      const cycle = cycleSaid !== null && cycleSaid >= 2 && cycleSaid <= 14 ? cycleSaid : null;
+      const pointsSaid = wholeOf(cellOf(first, 'Points'));
+      next += 1;
+      const made = await c.tx.run('INSERT INTO routines (owner_id, name, for_user, for_member, cycle_length, points, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, g.name, forUser, forMember, cycle, forMember !== null && pointsSaid !== null && pointsSaid >= 0 && pointsSaid <= 1000 ? pointsSaid : null, clean(cellOf(first, 'Notes'), 1000), next, c.at, c.at]);
+      const timeIds = new Map<string, number>();
+      const perTime = new Map<number, number>();
+      for (const row of g.rows) {
+        const timeName = clean(cellOf(row, 'Time'), 40);
+        const words = clean(cellOf(row, 'Step'), 200);
+        if (!timeName || !words) { lost = true; continue; }
+        let timeId = timeIds.get(labelKey(timeName));
+        if (timeId === undefined) {
+          if (timeIds.size >= MAX_TIMES) { lost = true; continue; }
+          const at = cellOf(row, 'At');
+          timeId = (await c.tx.run('INSERT INTO routine_times (routine_id, name, at_time, sort_order) VALUES (?, ?, ?, ?)',
+            [made.lastId, timeName, /^([01]\d|2[0-3]):[0-5]\d$/.test(at) ? at : null, timeIds.size])).lastId;
+          timeIds.set(labelKey(timeName), timeId);
+        }
+        const count = perTime.get(timeId) ?? 0;
+        if (count >= MAX_STEPS) { lost = true; continue; }
+        perTime.set(timeId, count + 1);
+        let days = daysFromText(cellOf(row, 'Days'));
+        if (days.rule === 'cycle' && (!cycle || (days.night ?? 0) > cycle)) { days = { rule: 'daily' }; lost = true; }
+        const thing = cellOf(row, 'Thing');
+        const itemId = thing ? things.get(labelKey(thing)) ?? null : null;
+        if (thing && itemId === null) lost = true;
+        const wait = wholeOf(cellOf(row, 'Wait (seconds)'));
+        await c.tx.run('INSERT INTO routine_steps (time_id, words, rule, weekdays, night, item_id, wait_seconds, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [timeId, words, days.rule ?? 'daily', days.rule === 'weekdays' ? days.weekdays!.join(',') : null, days.rule === 'cycle' ? days.night! : null, itemId, wait !== null && wait >= 1 && wait <= 3600 ? wait : null, count]);
+      }
+      // The days each time was finished come with a routine that is new, never added to one already kept.
+      for (const h of history) {
+        if (labelKey(cellOf(h, 'Routine')) !== key) continue;
+        const timeId = timeIds.get(labelKey(cellOf(h, 'Time')));
+        const day = dayOf(cellOf(h, 'Day finished'));
+        if (timeId === undefined || !day) continue;
+        const night = wholeOf(cellOf(h, 'Night of the cycle'));
+        const hp = wholeOf(cellOf(h, 'Points'));
+        await c.tx.run('INSERT OR IGNORE INTO routine_finished (time_id, day, night, points) VALUES (?, ?, ?, ?)',
+          [timeId, day, night !== null && night >= 1 && night <= 14 ? night : null, hp !== null && hp >= 0 && forMember !== null ? hp : null]);
+      }
+      if (timeIds.size === 0) { skip(d, g.at, `"${g.name}" has no steps`); d.found -= 1; await c.tx.run('DELETE FROM routines WHERE id = ?', [made.lastId]); continue; }
+      if (lost) d.unlinked += 1;
+      d.fresh += 1;
+    }
+    if (membersMade) d.note = `${membersMade} household member${membersMade === 1 ? '' : 's'} added for the routines`;
+    return d;
+  },
+
   async manual(c) {
     const d = blank();
     const t = tableOf(c.files, 'house-manual.csv');
@@ -1667,7 +1777,7 @@ const importers: Record<string, Importer> = {
     return d;
   },
 };
-const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'manual', 'licenses', 'collection', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'budget', 'tags'];
+const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'manual', 'licenses', 'collection', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'budget', 'tags'];
 
 function rowsIn(files: Files, info: KindInfo): number {
   return tableOf(files, info.file)?.rows.length ?? 0;

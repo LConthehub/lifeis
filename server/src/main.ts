@@ -11,7 +11,7 @@ import { createServer } from 'node:http';
 import path from 'node:path';
 import { createApp } from './app.ts';
 import { patientFetcher, syncDue, webFetcher } from './connectionRoutes.ts';
-import { followedDue, prepDue, recalls, recallsDue, remindersDue } from '../../core/src/index.ts';
+import { followedDue, prepDue, recalls, recallsDue, remindersDue, routinesDue } from '../../core/src/index.ts';
 import { nhtsaBase } from './recallRoutes.ts';
 import { browserPush } from './push.ts';
 import { demoFromEnv, keepDemoFresh } from './demo.ts';
@@ -80,6 +80,10 @@ const reminderTimer = setInterval(async () => {
     // Prep steps ("thaw the chicken") go at their own time, by the same ways.
     for (const r of await prepDue(database.db, new Date(), { fetcher: webFetcher, mail, push: push.send })) {
       if (r.problems.length) console.error(`Prep reminders for person ${r.user}: ${r.problems.join('; ')}`);
+    }
+    // Routines with a clock time go at that time, by the same ways.
+    for (const r of await routinesDue(database.db, new Date(), { fetcher: webFetcher, mail, push: push.send })) {
+      if (r.problems.length) console.error(`Routine reminders for person ${r.user}: ${r.problems.join('; ')}`);
     }
   } catch (problem) {
     console.error(problem);

@@ -13,7 +13,7 @@ import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { Problem } from './problem.ts';
 import { clean, labelKey, stamp, todayOf, type Clock } from './small.ts';
 
-export const TAG_KINDS = ['thing', 'recipe', 'project', 'plan', 'spending', 'title', 'pet', 'job', 'event'] as const;
+export const TAG_KINDS = ['thing', 'recipe', 'project', 'plan', 'spending', 'title', 'pet', 'job', 'event', 'routine'] as const;
 export type TagKind = (typeof TAG_KINDS)[number];
 /** A tag as shown on a row: its name, and where it sits ("Kitchen > Appliances"). */
 export type TagRef = { id: number; name: string; path: string };
@@ -53,6 +53,7 @@ const KINDS: Record<TagKind, { label: string; icon: string; rows: string; args: 
     label: 'Upkeep', icon: '🔧', args: (o) => [o, o],
     rows: 'SELECT id, name AS title, activity AS detail, NULL AS extra FROM upkeep_jobs WHERE (owner_id = ? OR assigned_to = ?)', link: (r) => `/things/upkeep/${r.id}`,
   },
+  routine: { label: 'Routines', icon: '✅', args: (o) => [o], rows: 'SELECT id, name AS title, NULL AS detail, NULL AS extra FROM routines WHERE owner_id = ?', link: () => '/routines' },
   event: {
     label: 'Calendar dates', icon: '📌', args: (o) => [o],
     rows: "SELECT id, title, CASE WHEN yearly = 1 THEN 'Every year, ' || SUBSTR(day, 6) ELSE day END AS detail, CASE WHEN yearly = 1 THEN SUBSTR(day, 6) ELSE day END AS extra FROM events WHERE owner_id = ?",

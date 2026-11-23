@@ -47,3 +47,16 @@ it('begins the trial at the first thing written, and afterwards only stops chang
   expect(decide(paid, 'DELETE', '/api/projects/3')).toBe('go');
   expect(ENDED_MESSAGE).toMatch(/still here to read/);
 });
+
+it('covers making and changing routines, and keeps ticking them free after the trial', () => {
+  for (const paid of ['/api/routines', '/api/routines/4', '/api/routines/starters', '/api/tags/on/routine/4']) expect(isPaidPath(paid)).toBe(true);
+  for (const free of ['/api/routine-day', '/api/routine-day/steps/7', '/api/routine-day/times/3', '/api/routine-day/steps/7/low']) expect(isPaidPath(free)).toBe(false);
+  const ended = accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-06-01T00:00:00Z'));
+  // After the trial: reading is still fine, making and changing are not, and ticking (and un-ticking) is.
+  expect(decide(ended, 'GET', '/api/routines')).toBe('go');
+  expect([decide(ended, 'POST', '/api/routines'), decide(ended, 'PUT', '/api/routines/4'), decide(ended, 'DELETE', '/api/routines/4'), decide(ended, 'POST', '/api/routines/starters')]).toEqual(['read_only', 'read_only', 'read_only', 'read_only']);
+  expect([decide(ended, 'PUT', '/api/routine-day/steps/7'), decide(ended, 'PUT', '/api/routine-day/times/3'), decide(ended, 'POST', '/api/routine-day/steps/7/low')]).toEqual(['go', 'go', 'go']);
+  // Ticking never begins the trial; making a routine does.
+  const fresh = accessNow({ trial_started: null, unlocked: false }, at(BEGAN));
+  expect([decide(fresh, 'PUT', '/api/routine-day/steps/7'), decide(fresh, 'POST', '/api/routines')]).toEqual(['go', 'start']);
+});
