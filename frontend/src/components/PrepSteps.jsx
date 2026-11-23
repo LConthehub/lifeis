@@ -25,7 +25,7 @@ export function PrepEditor({ steps, onChange }) {
       {steps.length === 0 && <p className="text-sm text-gray-500 dark:text-life-300">No prep steps yet.</p>}
       {steps.map((s, i) => (
         <div key={i} className="space-y-2 rounded-lg bg-life-50/70 p-2 dark:bg-life-700/60" data-prep-step>
-          <input value={s.words} onChange={(e) => change(i, { words: e.target.value })} placeholder="Thaw the chicken" aria-label="What to do" className={inputClass} />
+          <input value={s.words} onChange={(e) => change(i, { words: e.target.value })} placeholder="Thaw the chicken" aria-label="What to do" className={`${inputClass} min-h-[44px]`} />
           <div className="flex flex-wrap items-center gap-2">
             <select value={s.rule} onChange={(e) => pick(i, e.target.value)} aria-label="When" className={`${inputClass} w-auto min-h-[44px]`}>
               {RULES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
