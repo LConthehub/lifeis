@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { inApp } from '../where';
+import CookingView from '../components/CookingView';
 import Picture from '../components/Picture';
 import RecipeFile from '../components/RecipeFile';
 import { shrink } from '../components/shrink';
@@ -337,6 +338,8 @@ export function RecipePage() {
   const [missing, setMissing] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
   const [pictureError, setPictureError] = useState('');
+  const [cooking, setCooking] = useState(false);
+  const stopCooking = useCallback(() => setCooking(false), []);
   const picker = useRef(null);
   const load = useCallback(() => {
     axios.get(`/api/kitchen/recipes/${id}`, { params: { servings: servings ? Number(servings) : undefined } })
@@ -372,7 +375,8 @@ export function RecipePage() {
             {[r.prep_minutes != null && `prep ${minutesText(r.prep_minutes)}`, r.cook_minutes != null && `cook ${minutesText(r.cook_minutes)}`, r.source_url].filter(Boolean).join(' · ')}
           </p>
         </div>
-        <button type="button" onClick={() => setModal('plan')} className={buttonClass}>Add to the week</button>
+        <button type="button" onClick={() => setCooking(true)} className={buttonClass}>Start cooking</button>
+        <button type="button" onClick={() => setModal('plan')} className={quietButtonClass}>Add to the week</button>
         <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Edit</button>
       </div>
       {r.description && <p className="whitespace-pre-wrap text-gray-700 dark:text-life-100">{r.description}</p>}
@@ -441,6 +445,7 @@ export function RecipePage() {
         <button type="button" onClick={remove} className="ml-auto text-red-700 hover:underline dark:text-red-300">Delete recipe</button>
       </div>
       {showOriginal && <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-xl bg-life-50 p-3 text-xs text-gray-700 dark:bg-life-800 dark:text-life-100">{r.original_text}</pre>}
+      {cooking && <CookingView recipe={r} servings={servings === '' ? r.servings : Number(servings)} onDone={stopCooking} />}
       {modal === 'edit' && (
         <Modal title={`Edit ${r.title}`} onClose={() => setModal(null)} wide>
           <RecipeForm recipe={r} onSaved={() => { setModal(null); load(); }} />

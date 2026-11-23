@@ -55,6 +55,7 @@ const SUITE = [
   { specs: ['collection'], account: TRIAL },
   { specs: ['bring-in'], account: TRIAL },
   { specs: ['recipe-photos'], account: TRIAL },
+  { specs: ['cooking'], account: TRIAL },
   { specs: ['mail'], account: TRIAL, docker: true },
   { specs: ['media-servers'], account: TRIAL, fixtures: [['jellyfin', 8097]] },
   { specs: ['recalls'], account: TRIAL, fixtures: [['nhtsa', 8100]], env: { NHTSA_API: 'http://127.0.0.1:8100' } },
