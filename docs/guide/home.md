@@ -1,10 +1,10 @@
 ---
 title: Your home
-blurb: Places, things, records for your insurer, filling a shelf by scanning, pets, and the house manual.
+blurb: Places, things, records for your insurer, filling a shelf by scanning, pets, and the House Manual.
 ---
 # Your home
 
-The **organized** section holds what you own, where it is, what it is for, and where it has been. It also holds the records that go with each thing, your pets, and a house manual for a sitter. Jobs that come round again are in [Upkeep](upkeep.html).
+The **organized** section holds what you own, where it is, what it is for, and where it has been. It also holds the records that go with each thing, your pets, and a House Manual for a sitter. Jobs that come round again are in [Upkeep](upkeep.html).
 
 ## Places
 
@@ -82,9 +82,9 @@ Each pet has a profile: what they are, their breed and birthday, their vet with 
 
 A pet's **care** is upkeep that belongs to them. Pick from what suits their kind (heartworm prevention for a dog, the litter box for a cat) or add anything else. Say when it was last done and Life Is knows when it is next due. Care works like any other job in [Upkeep](upkeep.html): it shows in your morning reminder and on the calendar, and each time it was done is kept.
 
-## The house manual
+## The House Manual
 
-The house manual is what someone else needs to know to look after your home: a sitter, a guest, family, or you on the day something goes wrong. It has four parts, each with ideas to start from:
+The House Manual is what someone else needs to know to look after your home: a sitter, a guest, family, or you on the day something goes wrong. It has four parts, each with ideas to start from:
 
 - **In an emergency:** where the water and gas shut off, the breaker box
 - **Who to call:** the plumber, a neighbor with a key

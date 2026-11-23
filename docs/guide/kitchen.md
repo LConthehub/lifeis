@@ -4,11 +4,11 @@ blurb: Recipes kept as you wrote them, the week's meals, groceries, the pantry a
 ---
 # The kitchen
 
-The **delicious** section is recipes, the week, the grocery list and the pantry. In the phone app, all of it is free for good.
+The **tasty** section is recipes, the week, the grocery list and the pantry. In the phone app, all of it is free for good.
 
 ## Recipes
 
-Bring a recipe in four ways:
+Import a recipe four ways:
 
 - **Paste or type it.** Ingredients one to a line, steps one to a line.
 - **From a website.** Give the address and Life Is reads the recipe off the page. This reaches outside, so it is off until you turn it on.

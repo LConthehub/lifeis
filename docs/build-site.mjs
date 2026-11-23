@@ -132,11 +132,10 @@ const DEMO = 'https://demo.lifeis.living';
 // One card for each section of the app, in the app's order and by the app's names (frontend/src/App.jsx).
 // Each name finishes the sentence "Life is…".
 const FEATURES = [
-  ['🍳', 'delicious', 'Food. Recipes kept exactly as you wrote them, the meals for the week, a grocery list that knows your pantry, and what things cost at each store.'],
-  ['🏠', 'organized', 'Home. Everything you own, room by room, with its receipt, manual and warranty. Upkeep that comes due: the furnace filter, the oil change, the bills, the chores. Care for your pets. And a house manual to hand a sitter.'],
+  ['🍳', 'tasty', 'Food. Recipes kept exactly as you wrote them, the meals for the week, a grocery list that knows your pantry, and what things cost at each store.'],
+  ['🏠', 'organized', 'Home. Everything you own, room by room, with its receipt, manual and warranty. Upkeep that comes due: the furnace filter, the oil change, the bills, the chores. Care for your pets. A House Manual to hand a sitter. And one calendar for your dates, the week\'s meals and what is due.'],
   ['💵', 'budgeted', 'Money. A plan for the month by category, private unless you share it. Bills you pay go straight in.'],
-  ['📅', 'planned', 'Calendar. One calendar for your dates, the meals for the week and what is due. Plans for a trip or a party, with their food, their packing and their photos.'],
-  ['🧵', 'projects', 'Anything you make or do. Projects with what they use, what they cost and the time on them, tied to the things and tools you already have.'],
+  ['🧵', 'doing', 'Projects, with what they use, what they cost and the time on them. Plans for a trip or a party, with their food, their packing and their photos.'],
   ['📚', 'entertaining', 'Media. Books, films, music and games on every format, on the shelf or on your own server. Who has borrowed what, and what you watched or read and when.'],
 ];
 const SHOTS = [['demo-home.png', 'The front page: today, tomorrow and what needs you'], ['demo-upkeep.png', 'Upkeep: jobs, bills, renewals and chores, by how soon they are due'],

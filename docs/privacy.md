@@ -39,7 +39,7 @@ The app reaches outside your device only when you use a feature that needs to, a
 | Turn on the weather | Open-Meteo | The town name you type, then the rounded position (to about half a mile) of the place you pick |
 | Scan a book's barcode | Open Library | The number under the barcode |
 | Scan a grocery's barcode | Open Food Facts | The number under the barcode |
-| Bring in a recipe from a website | The website whose address you paste | A request for that one page, as a browser would make |
+| Import a recipe from a website | The website whose address you paste | A request for that one page, as a browser would make |
 | Connect to a Life Is you host | Your own computer | Your sign-in, and what you do in the app |
 
 Each of those services has its own privacy policy, and sees the internet address the request comes from, as any website does.

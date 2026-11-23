@@ -27,7 +27,7 @@ Under **Servers**, connect a server you run and its library is brought in and ke
 - **Kavita** for eBooks and comics. It asks for your API key.
 - **Any other OPDS catalog** (Komga, COPS). Give the address of a list of books, not of a menu.
 
-Life Is only reads from a server. Nothing on it is ever changed. The sign-in is stored locked on your own computer and is never shown again. Each book keeps a link that opens it on its server.
+Life Is only reads from a server. The server itself is never changed. The sign-in is stored locked on your own computer and is never shown again. Each book keeps a link that opens it on its server.
 
 If the server is on the same computer as Life Is, and Life Is runs in Docker, use `http://host.docker.internal` and the port, not `localhost`.
 
@@ -35,7 +35,7 @@ If the server is on the same computer as Life Is, and Life Is runs in Docker, us
 
 These offer no way for another program to read your library, so Life Is cannot link to them as it does to a server. Two ways round it:
 
-- **Bring in a list.** On Books, eBooks or Audiobooks, choose **Bring in a list**. It takes the file Goodreads gives you (My Books, then Import and export), one from StoryGraph, any spreadsheet saved as CSV with a Title column, or plain lines such as `Dune by Frank Herbert`. You see what was found before anything is added. Books on a to-read shelf can become books you want. A book you already have is not added twice, so you can bring the same list in again later.
+- **Import a list.** On Books, eBooks or Audiobooks, choose **Import a list**. It takes the file Goodreads gives you (My Books, then Import and export), one from StoryGraph, any spreadsheet saved as CSV with a Title column, or plain lines such as `Dune by Frank Herbert`. You see what was found before anything is added. Books on a to-read shelf can become books you want. A book you already have is not added twice, so you can import the same list again later.
 - **Keep a link on a copy.** Open the book in Kindle, Apple Books or Google Play Books, copy its address or use Share, and paste it into the copy. Life Is shows an **Open in Kindle** button. The link is only followed when you press it.
 
 Nothing in a list is looked up or sent anywhere.

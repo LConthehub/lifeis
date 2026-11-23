@@ -36,7 +36,7 @@ All of them are listed in one place: **Settings › Connections**.
 
 ## Taking it with you
 
-Recipes download as a zip. The home inventory prints or saves as a PDF. A backup holds everything.
+**Export everything** (Settings › Your data, under Import and export) makes one zip of it all. Recipes export as a zip on their own. The home inventory prints or saves as a PDF. A backup holds everything.
 
 ## Sharing inside a household
 

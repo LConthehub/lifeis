@@ -33,11 +33,11 @@ are written once and reviewed before anything goes live.
 
     WHAT IT DOES
 
-    • Recipes, kept exactly as you wrote them. Bring one in from a website, from a photo of a card or a cookbook page, or by pasting the text. Nothing is shortened or rewritten.
+    • Recipes, kept exactly as you wrote them. Import one from a website, from a photo of a card or a cookbook page, or by pasting the text. Nothing is shortened or rewritten.
     • The week's meals, a grocery list built from them, and your pantry.
     • Everything you own, in kinds you define yourself: cast iron with its maker and care notes, fabric by the yard, tools, books, films. Say where each thing lives, by room, shelf and bin.
     • Projects: what each one uses, the time you spend on it, and what it costs against what you planned.
-    • Plans that become memories: a holiday or a single afternoon, with its food, its things and its photos, to look back on.
+    • Plans that become memories: a vacation or a single afternoon, with its food, its things and its photos, to look back on.
     • Spending: an amount for each kind of spending each month, and what is left.
     • A calendar that pulls the meals, plans and projects together.
 
