@@ -88,7 +88,7 @@ it('no page reaches into core: what a page needs from core comes through the API
 
 // The names of the kinds of project (frontend/src/projectKinds.js). Core cannot import from the frontend, so this is a copy:
 // change both together. "Your gear for <kind of project>" finds things whose activity is one of these, whatever its capitals.
-const PROJECT_KIND_NAMES = ['Sewing', 'Knitting & crochet', 'Woodworking', 'Gardening', 'Home repair', 'Car & mechanics',
+const PROJECT_KIND_NAMES = ['Sewing', 'Yarn crafts', 'Woodworking', 'Gardening', 'Home repair', 'Car & mechanics',
   'Cooking & baking', 'Art & crafts', 'Electronics & computers', 'Music', 'Writing & study', 'Outdoors'];
 
 it('every ready-made kind that is for an activity names one of the kinds of project, and clothes and linens name none', () => {
@@ -102,7 +102,7 @@ it('every ready-made kind that is for an activity names one of the kinds of proj
   const of = (slug: string) => [...new Set(STARTERS.find((s) => s.slug === slug)!.kinds.map((k) => k.activity))];
   expect(of('clothing')).toEqual([undefined]);
   expect(of('sewing')).toEqual(['Sewing']);
-  expect(of('knitting')).toEqual(['Knitting & crochet']);
+  expect(of('knitting')).toEqual(['Yarn crafts']);
   expect(of('woodworking')).toEqual(['Woodworking']);
   expect(of('gardening')).toEqual(['Gardening']);
   expect(of('car')).toEqual(['Car & mechanics']);

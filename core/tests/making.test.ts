@@ -388,10 +388,10 @@ it('a kind can be for an activity, and a new thing of it starts out for that unl
   expect((await things.createItem({ kind_id: rocks.id, name: 'Quartz' })).activities).toEqual([]);
 
   // Changing it, clearing it, and leaving it out.
-  kinds = await things.updateKind(notions.id, { activity: 'Knitting & crochet' });
-  expect(kindNamed(kinds, 'Notions').activity).toBe('Knitting & crochet');
+  kinds = await things.updateKind(notions.id, { activity: 'Yarn crafts' });
+  expect(kindNamed(kinds, 'Notions').activity).toBe('Yarn crafts');
   kinds = await things.updateKind(notions.id, { name: 'Notions and trims' });
-  expect(kindNamed(kinds, 'Notions and trims').activity).toBe('Knitting & crochet');
+  expect(kindNamed(kinds, 'Notions and trims').activity).toBe('Yarn crafts');
   kinds = await things.updateKind(notions.id, { activity: null });
   expect(kindNamed(kinds, 'Notions and trims').activity).toBeNull();
   expect((await things.createItem({ kind_id: notions.id, name: 'Pins' })).activities).toEqual([]);
@@ -425,7 +425,7 @@ it('adding the kind activity to its things adds without removing, skips what has
 
 it('one person cannot set or apply the activity of another person kind', async () => {
   const other = inventory(db, await person('other'), clock);
-  const mine = kindNamed(await things.createKind({ name: 'Yarn', activity: 'Knitting & crochet' }), 'Yarn');
+  const mine = kindNamed(await things.createKind({ name: 'Yarn', activity: 'Yarn crafts' }), 'Yarn');
   await expect(other.applyKindActivity(mine.id)).rejects.toEqual(problem(404));
   await expect(other.updateKind(mine.id, { activity: 'Gardening' })).rejects.toEqual(problem(404));
 });

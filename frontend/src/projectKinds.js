@@ -10,7 +10,7 @@ export const PROJECT_KINDS = [
   { name: 'Sewing', match: /sew|quilt|dressmak|tailor|embroider|cross.?stitch|needlepoint/i,
     project: 'Linen shirt dress', notes: "Measurements, changes to the pattern, what you'd do differently",
     uses: '9 inch zipper', usesNote: 'for the lining, view B…', did: 'Cut out the bodice.' },
-  { name: 'Knitting & crochet', match: /knit|crochet|yarn|macram/i,
+  { name: 'Yarn crafts', match: /knit|crochet|yarn|macram/i,
     project: 'Cabled cardigan', notes: "Gauge, needle size, changes to the pattern, what you'd do differently",
     uses: 'Stitch markers', usesNote: 'for the cuffs, held double…', did: 'Finished the left sleeve.' },
   { name: 'Woodworking', match: /wood|carpent|furniture|cabinet|whittl|turning/i,

@@ -81,7 +81,7 @@ time in Settings; unticking something only puts it out of sight.
 
 - **Your own kinds of things.** Fabric, yarn, tools, seeds, board games: a kind is whatever you say it is, with
   the fields you care about (a fabric's width, a seed packet's sow-by date). Start from a ready-made set (sewing,
-  knitting, woodworking, gardening, around the house, cookware with cast iron, clothes and shoes with their sizes,
+  yarn crafts (knitting, crochet, macrame), woodworking, gardening, around the house, cookware with cast iron, clothes and shoes with their sizes,
   bedding by bed size) and change it, or make your own
   from nothing.
 - **Where everything is.** A room, a shelf in it, a bin on the shelf, as far down as helps you find things.

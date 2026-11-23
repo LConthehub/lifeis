@@ -1089,6 +1089,20 @@ export const MIGRATIONS: Migration[] = [
           AND NOT (choices LIKE '%"Crib"%')`,
     ],
   },
+  {
+    // "Knitting & crochet" becomes "Yarn crafts" (it takes in macrame too). Kinds, things, projects and upkeep
+    // that said the old name say the new one, so old things still show as gear on yarn projects. A thing that
+    // already had both keeps one. The history is left as it was written.
+    number: 38,
+    name: 'Yarn crafts, not Knitting & crochet',
+    statements: [
+      `UPDATE kinds SET activity = 'Yarn crafts' WHERE activity = 'Knitting & crochet' COLLATE NOCASE`,
+      `UPDATE OR IGNORE item_activities SET activity = 'Yarn crafts', key = 'yarn crafts' WHERE key = 'knitting & crochet'`,
+      `DELETE FROM item_activities WHERE key = 'knitting & crochet'`,
+      `UPDATE projects SET activity = 'Yarn crafts' WHERE activity = 'Knitting & crochet' COLLATE NOCASE`,
+      `UPDATE upkeep_jobs SET activity = 'Yarn crafts' WHERE activity = 'Knitting & crochet' COLLATE NOCASE`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

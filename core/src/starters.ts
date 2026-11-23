@@ -25,7 +25,7 @@ const link = (name: string): FieldInput => ({ name, type: 'link' });
  * gear for Car & mechanics" finds them. Clothes and linens are for nothing in particular.
  */
 const ACTIVITY_OF_SET: Record<string, string | undefined> = {
-  sewing: 'Sewing', cookware: 'Cooking & baking', knitting: 'Knitting & crochet', woodworking: 'Woodworking', gardening: 'Gardening',
+  sewing: 'Sewing', cookware: 'Cooking & baking', knitting: 'Yarn crafts', woodworking: 'Woodworking', gardening: 'Gardening',
   clothing: undefined, home: 'Home repair', car: 'Car & mechanics', art: 'Art & crafts', electronics: 'Electronics & computers',
   music: 'Music', outdoors: 'Outdoors',
 };
@@ -64,8 +64,8 @@ const SETS: Starter[] = [
   },
   {
     slug: 'knitting',
-    name: 'Knitting & crochet',
-    about: 'Yarn, needles and hooks, and patterns.',
+    name: 'Yarn crafts',
+    about: 'Yarn and cord, needles and hooks, and patterns for knitting, crochet and macrame, the 1970s favorite.',
     group: 'Crafts',
     kinds: [
       { name: 'Yarn', icon: '🧶', unit: 'skein', fields: [
