@@ -35,6 +35,20 @@ A bill stays on its date. Rent paid four days late is still due on the 1st next 
 
 Give a bill its usual amount and Life Is tells you what your bills and renewals come to in a month, with yearly ones spread over the year. A bill that pays itself can be marked so: it becomes a reminder that money is about to leave.
 
+### In the budget
+
+The budget under **budgeted** reads your bills from here, so there is one list. Add a bill from **Income and bills** and it is added to Upkeep too; open it there to change it or mark it paid.
+
+The budget also keeps:
+
+- **Income:** what comes in (a paycheck, a pension, a gift), how often, and a first and last day if it has them. It is shown as an amount a month.
+- **Savings goals:** a target, a day to reach it if there is one, and the money you put toward it. Take money out with a minus. Life Is says what is left and what a month takes. It does not move any money.
+- **The month:** income, bills due, planned spending, what went into goals, and what is left over.
+- **The year:** twelve months side by side, and the totals. Bills count from the month you wrote them down.
+- **Spending by tag:** a tag shows what was spent with it, with the tags inside it, for a month or a year, and on the tag's own page.
+
+If you mark a bill paid and put it in the month's spending, the budget counts it once, as the bill. Income and goals are yours alone. A spending category you share is counted for everyone it is shared with.
+
 ## Chores, and children
 
 A chore is worth points to whoever does it. **Chores this week** counts them for everyone.

@@ -10,8 +10,9 @@
  * paid is upkeep's; when that put the cost into spending, the budget leaves that entry out of "spent", because
  * the bill is already counted as a bill.
  *
- * What a month leaves over: income, less the bills due that month, less spending (the larger of what was
- * planned in the categories and what was spent), less what was put into goals. Categories and what was spent in
+ * What a month leaves over: income, less the bills due that month, less spending (for this month and months
+ * to come, the larger of what was planned in the categories and what was spent; for a month gone by, what was
+ * spent), less what was put into goals. Categories and what was spent in
  * them follow the same sharing as in money.ts: a shared category counts for everyone it is shared with.
  *
  * Money is whole cents. An amount "per month" is rounded to the nearest cent.
@@ -47,8 +48,10 @@ export type Budget = {
   planned: { total: number; categories: { id: number; name: string; cents: number; spent: number }[] };
   /** What was spent this month (bills paid through spending and nothing else left out), projects included. */
   spent: number;
-  /** The larger of planned and spent: what the month is counted as spending. */
+  /** What the month is counted as spending: the larger of planned and spent, or only what was spent once the month is past. */
   spending: number;
+  /** The month is before this one. */
+  past: boolean;
   saved: { total: number; goals: { id: number; name: string; cents: number }[] };
   left_over: number;
   by_tag: TagSpend[];
@@ -328,7 +331,8 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
       const planned = cats.reduce((n, c) => n + c.monthly_cents, 0);
       const puts = (await savedByGoal(from, to)).filter((g) => g.cents !== 0);
       const total = (xs: { cents: number }[]) => xs.reduce((n, x) => n + x.cents, 0);
-      const spending = Math.max(planned, spentHere);
+      const past = month < today().slice(0, 7);
+      const spending = past ? spentHere : Math.max(planned, spentHere);
       const bills = total(lines);
       const incomeTotal = total(income);
       const saved = total(puts);
@@ -337,7 +341,7 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
         income: { total: incomeTotal, lines: income },
         bills: { total: bills, lines, unscheduled },
         planned: { total: planned, categories: cats.map((c) => ({ id: c.id, name: c.name, cents: c.monthly_cents, spent: inCategory.find((x) => x.category_id === c.id)?.n ?? 0 })) },
-        spent: spentHere, spending,
+        spent: spentHere, spending, past,
         saved: { total: saved, goals: puts.map((g) => ({ id: g.id, name: g.name, cents: g.cents })) },
         left_over: incomeTotal - bills - spending - saved,
         by_tag: await spendingByTag(db, owner, from, to),
@@ -351,6 +355,7 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
       const incs = await incomes(db);
       const bills = await billJobs();
       const planned = (await categories()).reduce((n, c) => n + c.monthly_cents, 0);
+      const thisMonth = today().slice(0, 7);
       const spent = await spentByMonth(from, to);
       const puts = await savedByGoal(from, to);
       const months = monthsOf(year).map((month): YearMonth => {
@@ -358,7 +363,7 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
         const owed = bills.reduce((n, b) => n + (b.job.amount_cents ? dueOf(b, `${month}-01`, lastOf(month)).length * b.job.amount_cents : 0), 0);
         const s = spent.get(month) ?? 0;
         const saved = puts.filter((p) => p.month === month).reduce((n, p) => n + p.cents, 0);
-        const spending = Math.max(planned, s);
+        const spending = month < thisMonth ? s : Math.max(planned, s);
         return { month, income, bills: owed, planned, spent: s, spending, saved, left: income - owed - spending - saved };
       });
       const sum = (key: keyof Omit<YearMonth, 'month'>) => months.reduce((n, m) => n + m[key], 0);

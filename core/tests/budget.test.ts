@@ -171,6 +171,7 @@ it('a month says what comes in, what is due, what is planned and saved, and what
   // Overspending counts for more than the plan.
   await spend.addEntry({ label: 'Big shop', cents: 70000, category_id: groceries.id });
   expect((await of(ana).month()).spending).toBe(90750);
+  expect(await of(ana).month('2046-02')).toMatchObject({ past: true, spending: 0, left_over: 0 });
   // The existing month view is as it was.
   expect((await spend.month()).total).toEqual({ planned: 70000, spent: 90750, left: -20750 });
 });
@@ -195,7 +196,7 @@ it('a year has twelve months side by side, and the totals', async () => {
   expect(year.months.map((m) => m.month)).toEqual(['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((m) => `2046-${m}`));
   const [jan, march, april] = [year.months[0]!, year.months[2]!, year.months[3]!];
   // Bills only count from the month they were written down: nothing for January.
-  expect([jan.income, jan.bills, jan.saved]).toEqual([0, 0, 0]);
+  expect([jan.income, jan.bills, jan.saved, jan.spending, jan.left]).toEqual([0, 0, 0, 0, 0]); // a month gone by counts what was spent, not the plan
   expect(march).toMatchObject({ income: 450000, bills: 180000, planned: 70000, spent: 90000, spending: 90000, saved: 30000, left: 450000 - 180000 - 90000 - 30000 });
   expect(april).toMatchObject({ income: 300000, bills: 120000, spent: 0, spending: 70000, saved: 5000 });
   const sum = (key: 'income' | 'bills' | 'saved' | 'left') => year.months.reduce((n, m) => n + m[key], 0);
