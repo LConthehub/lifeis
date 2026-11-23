@@ -12,6 +12,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { LATEST, splitDownload } from '../../core/src/index.ts';
 import { createApp } from '../src/app.ts';
 import { verifyPassword } from '../src/auth.ts';
+import { vault } from '../src/vault.ts';
 import { openDatabase, type OpenDatabase } from '../src/database.ts';
 
 const PASSWORD = 'correct-horse-battery';
@@ -1216,4 +1217,77 @@ it('download everything: a zip with a dated name that holds only your own, and a
   // What cannot be read is said in words.
   expect([(await other.post('/api/export/look', { files: { 'notes.txt': 'hello' } })).status, (await other.post('/api/export/look', {})).status, (await other.post('/api/export/pictures', { pictures: [{ as: 'thing-photo', id: 1, data: 5 }] })).status]).toEqual([400, 422, 422]);
   expect((await visitor().post('/api/export/look', { files })).status).toBe(401);
+});
+
+it('films and shows are looked up on TMDB with the persons own key, kept sealed, and the poster comes through Life Is', async () => {
+  // This one needs a way outside, so it runs its own server in place of the usual one: a stand-in for TMDB.
+  await stop();
+  const KEY = 'eyJhbGciOiJIUzI1NiJ9.a-long-read-access-token-for-tests.signature';
+  const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
+  const asked: Array<{ url: string; authorization: string | undefined }> = [];
+  const fetcher = async (url: string, headers: Record<string, string>) => {
+    asked.push({ url, authorization: headers.Authorization });
+    const reply = (status: number, body: unknown, type = 'application/json') => ({ status, type, json: async () => body, bytes: async () => (body instanceof Uint8Array ? body : new Uint8Array()) });
+    if (url.startsWith('https://image.tmdb.org/')) return reply(200, PNG, 'image/png');
+    if (headers.Authorization !== `Bearer ${KEY}`) return reply(401, {});
+    if (url.includes('/3/configuration')) return reply(200, { images: {} });
+    if (url.includes('/3/search/movie')) return reply(200, { results: [{ id: 348, title: 'Alien', release_date: '1979-05-25', poster_path: '/alien-poster.jpg' }] });
+    if (url.includes('/3/movie/348')) return reply(200, { id: 348, title: 'Alien', release_date: '1979-05-25', runtime: 117, overview: 'In space.', poster_path: '/alien-poster.jpg', genres: [{ name: 'Horror' }], credits: { crew: [{ job: 'Director', name: 'Ridley Scott' }] } });
+    return reply(404, {});
+  };
+  database = await openDatabase(path.join(folder, 'data'), path.join(folder, 'keys'));
+  server = createServer(createApp({ db: database.db, reach: { fetcher, sealer: vault(path.join(folder, 'keys'), 'media_source') }, onError: (problem) => errors.push(problem) }));
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  const admin = await owner();
+  const off = (await admin.get('/api/lookups')).json;
+  expect([off.films, off.film_key, off.film_service.name]).toEqual([false, false, 'Films and shows from TMDB']);
+  expect(off.film_service.sends).toContain('image.tmdb.org');
+  expect(off.film_service.notice).toContain('not endorsed');
+  expect((await admin.get('/api/lookups/films/search?q=Alien&kind=film')).status).toBe(400); // off: nothing asked
+  expect((await admin.put('/api/lookups', { films: true })).status).toBe(400); // and it needs a key
+  expect((await admin.put('/api/lookups', { films: true, films_key: 'short' })).status).toBe(400);
+  expect(asked).toEqual([]);
+
+  const on = await admin.put('/api/lookups', { films: true, films_key: KEY });
+  expect([on.json.films, on.json.film_key]).toEqual([true, true]);
+  expect(JSON.stringify(on.json)).not.toContain(KEY);
+  expect(JSON.stringify((await admin.get('/api/lookups')).json)).not.toContain(KEY);
+  expect((await admin.post('/api/lookups/films/test')).json).toEqual({ ok: true });
+
+  const search = await admin.get('/api/lookups/films/search?q=Alien&year=1979&kind=film');
+  expect(search.json.matches).toEqual([{ kind: 'movie', id: '348', title: 'Alien', year: 1979, poster: '/alien-poster.jpg', overview: null }]);
+  expect(asked.at(-1)).toEqual({ url: 'https://api.themoviedb.org/3/search/movie?query=Alien&year=1979', authorization: `Bearer ${KEY}` });
+
+  const picked = (await admin.post('/api/lookups/films/pick', { kind: 'movie', id: '348', current: { title: 'Alien (my tape)', year: '', creator: '', genres: [], summary: 'Mine.' } })).json;
+  expect(picked.fields).toEqual({ title: 'Alien (my tape)', year: 1979, creator: 'Ridley Scott', minutes: 117, genres: ['Horror'], summary: 'Mine.' });
+  expect([picked.filled, picked.kept]).toEqual([['year', 'creator', 'minutes', 'genres'], ['title', 'summary']]);
+
+  // The poster is asked for through Life Is, and kept as the title's cover.
+  const poster = await admin.get('/api/lookups/films/poster?path=/alien-poster.jpg');
+  expect([poster.status, poster.headers.get('content-type'), [...poster.bytes]]).toEqual([200, 'image/png', [...PNG]]);
+  expect((await admin.get('/api/lookups/films/poster?path=/../../x.jpg')).status).toBe(400);
+  const film = (await admin.post('/api/media', { type: 'film', title: 'Alien', ids: { tmdb: '348', tmdb_kind: 'movie' } })).json;
+  expect((await admin.post('/api/lookups/films/cover', { media_id: film.id, path: '/alien-poster.jpg' })).json).toEqual({ cover: `/api/media/${film.id}/cover` });
+  const cover = await admin.get(`/api/media/${film.id}/cover`);
+  expect([cover.status, cover.headers.get('content-type'), [...cover.bytes]]).toEqual([200, 'image/png', [...PNG]]);
+  expect((await admin.get(`/api/media/${film.id}`)).json).toMatchObject({ cover: `/api/media/${film.id}/cover`, ids: { tmdb: '348', tmdb_kind: 'movie' } });
+
+  // Another person has no key of their own, and cannot use this one or give this title a cover.
+  const other = await member(admin, 'partner');
+  expect((await other.get('/api/lookups')).json).toMatchObject({ films: false, film_key: false });
+  const before = asked.length;
+  expect((await other.get('/api/lookups/films/search?q=Alien&kind=film')).status).toBe(400);
+  expect((await other.get('/api/lookups/films/poster?path=/alien-poster.jpg')).status).toBe(400);
+  expect(asked).toHaveLength(before);
+  // With a key of their own that TMDB does not accept, they are told so plainly, and only then.
+  await other.put('/api/lookups', { films: true, films_key: 'a-different-key-that-tmdb-does-not-know' });
+  const refused = await other.post('/api/lookups/films/test');
+  expect([refused.status, refused.json.detail]).toEqual([400, expect.stringContaining("didn't accept that key")]);
+  expect((await other.post('/api/lookups/films/cover', { media_id: film.id, path: '/alien-poster.jpg' })).status).toBe(404);
+  expect((await visitor().get('/api/lookups/films/search?q=Alien')).status).toBe(401);
+
+  // Forgetting the key turns it off.
+  expect((await admin.put('/api/lookups', { forget_films_key: true })).json).toMatchObject({ films: false, film_key: false });
 });

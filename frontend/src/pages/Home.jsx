@@ -196,6 +196,13 @@ export default function Home({ user }) {
                 ))}
               </ul>
             )}
+            {s.kitchen.use_up && (
+              <p className="mt-3 text-sm">
+                <Link to="/pantry" className="text-gray-800 hover:underline dark:text-life-50">
+                  Use up soon: {s.kitchen.use_up.soon.join(', ')}.{s.kitchen.use_up.suggestion && ` ${s.kitchen.use_up.suggestion.title} uses ${s.kitchen.use_up.suggestion.uses.join(' and ')}.`}
+                </Link>
+              </p>
+            )}
             <p className="mt-3 text-sm">
               <Link to="/groceries" className="text-life-700 hover:underline dark:text-life-100">{s.kitchen.to_buy === 0 ? 'Nothing on the grocery list' : `${s.kitchen.to_buy} to buy on the grocery list`} →</Link>
             </p>

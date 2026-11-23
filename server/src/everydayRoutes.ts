@@ -13,6 +13,7 @@ import { search, type SearchKind } from '../../core/src/index.ts';
 import { manual } from '../../core/src/index.ts';
 import { reminders, COVERS, EMAIL_SERVICE, NTFY_SERVICE, PUSH_SERVICE, type PushSender, type ReminderSettings } from '../../core/src/index.ts';
 import { home, life, lookups, MAX_THING_PHOTO, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
+import { FILM_SERVICE, fillFrom, TMDB_API, TMDB_IMAGES } from '../../core/src/lookups.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
 import type { AssistantTools } from '../../core/src/index.ts';
 import { enjoyingRoutes } from './enjoyingRoutes.ts';
@@ -89,10 +90,23 @@ function recipeFrom(body: Body) {
   };
 }
 
+/** Where TMDB and its pictures are asked. A walk-through can point them at a stand-in with TMDB_API and TMDB_IMAGES; nothing else changes them. */
+const tmdbAddress = (name: 'TMDB_API' | 'TMDB_IMAGES', real: string): string => {
+  const set = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.[name];
+  return set && /^https?:\/\//.test(set) ? set : real;
+};
+
+/** A number a page sent for a field of a title, or null for none. */
+const maybeCount = (v: unknown): number | null => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Math.round(Number(v)));
+
 export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
   const outside = options.fetcher;
   const skies = (c: Context) => weather(db, c.user.id, c.clock, outside);
-  const finder = (c: Context) => lookups(db, c.user.id, c.clock, outside);
+  // TMDB's key is locked with the same lock as the assistant's (or a media server's), and so is kept only where one of them is.
+  const finder = (c: Context) => lookups(db, c.user.id, c.clock, outside, {
+    sealer: options.assistant?.sealer ?? options.reach?.sealer, api: tmdbAddress('TMDB_API', TMDB_API), images: tmdbAddress('TMDB_IMAGES', TMDB_IMAGES),
+  });
+  const lookupState = async (c: Context) => ({ ...await finder(c).status(), service: BOOK_SERVICE, grocery_service: GROCERY_SERVICE, title_services: TITLE_SERVICES, film_service: FILM_SERVICE });
   const book = (c: Context) => manual(db, c.user.id, c.clock);
   const entryFrom = (body: Body) => ({
     section: read.text(body, 'section'), title: read.text(body, 'title'), body: read.maybeText(body, 'body'), phone: read.maybeText(body, 'phone'),
@@ -129,14 +143,34 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
       return { json: { ...await skies(c).turnOn({ name: read.text(c.body, 'name'), latitude, longitude, units: read.maybeText(c.body, 'units') }), service: WEATHER_SERVICE } };
     }],
     // Looking a book up from its barcode: an outside service too, off until turned on. See core/'s lookups.ts.
-    ['GET', /^\/api\/lookups$/, async (c) => ({ json: { ...await finder(c).status(), service: BOOK_SERVICE, grocery_service: GROCERY_SERVICE, title_services: TITLE_SERVICES } })],
+    ['GET', /^\/api\/lookups$/, async (c) => ({ json: await lookupState(c) })],
     ['PUT', /^\/api\/lookups$/, async (c) => {
-      if (!['books', 'groceries', 'titles'].some((k) => Object.hasOwn(c.body, k))) throw notUnderstood('books');
+      if (!['books', 'groceries', 'titles', 'films', 'forget_films_key'].some((k) => Object.hasOwn(c.body, k))) throw notUnderstood('books');
       if (Object.hasOwn(c.body, 'books')) await finder(c).setBooks(read.yesNo(c.body, 'books'));
       if (Object.hasOwn(c.body, 'groceries')) await finder(c).setGroceries(read.yesNo(c.body, 'groceries'));
       if (Object.hasOwn(c.body, 'titles')) await finder(c).setTitles(read.yesNo(c.body, 'titles'));
-      return { json: { ...await finder(c).status(), service: BOOK_SERVICE, grocery_service: GROCERY_SERVICE, title_services: TITLE_SERVICES } };
+      // TMDB: the key typed here is locked and kept, and never sent back to the page.
+      if (Object.hasOwn(c.body, 'films')) await finder(c).setFilms(read.yesNo(c.body, 'films'), read.maybeText(c.body, 'films_key'));
+      if (read.yesNo(c.body, 'forget_films_key', false)) await finder(c).forgetFilmsKey();
+      return { json: await lookupState(c) };
     }],
+    // Films and shows from TMDB, with the person's own key. See core/'s lookups.ts for what is sent.
+    ['POST', /^\/api\/lookups\/films\/test$/, async (c) => ({ json: await finder(c).testFilms() })],
+    ['GET', /^\/api\/lookups\/films\/search$/, async (c) => ({ json: { matches: await finder(c).searchFilms({ title: c.query.get('q') ?? '', year: maybeCount(c.query.get('year')), kind: c.query.get('kind') ?? 'film' }) } })],
+    // A title chosen from the matches: its details, set against what the form already says (the person's own words stay unless `all`).
+    ['POST', /^\/api\/lookups\/films\/pick$/, async (c) => {
+      const found = await finder(c).filmDetails(read.text(c.body, 'kind'), read.text(c.body, 'id'));
+      if (!found) return { json: { found: null } };
+      const mine = read.record(c.body, 'current');
+      const current = { title: typeof mine.title === 'string' ? mine.title.trim() : '', year: maybeCount(mine.year), creator: typeof mine.creator === 'string' ? mine.creator.trim() : '', minutes: maybeCount(mine.minutes),
+        genres: Array.isArray(mine.genres) ? mine.genres.filter((g): g is string => typeof g === 'string' && g.trim() !== '') : [], summary: typeof mine.summary === 'string' ? mine.summary.trim() : '' };
+      return { json: { found, ...fillFrom(current, found, read.yesNo(c.body, 'all', false)) } };
+    }],
+    ['GET', /^\/api\/lookups\/films\/poster$/, async (c) => {
+      const picture = await finder(c).poster(c.query.get('path') ?? '', c.query.get('size') ?? 'w92');
+      return { body: picture.bytes, headers: { 'Content-Type': picture.type, 'Cache-Control': 'private, max-age=86400' } };
+    }],
+    ['POST', /^\/api\/lookups\/films\/cover$/, async (c) => ({ json: await finder(c).keepPoster(read.maybeWhole(c.body, 'media_id') ?? (() => { throw notUnderstood('media_id'); })(), read.text(c.body, 'path')) })],
     ['GET', /^\/api\/lookups\/product$/, async (c) => ({ json: { product: await finder(c).product(c.query.get('code') ?? '') } })],
     ['GET', /^\/api\/lookups\/book$/, async (c) => ({ json: { book: await finder(c).book(c.query.get('code') ?? '') } })],
     ['GET', /^\/api\/lookups\/title$/, async (c) => ({ json: { title: await finder(c).title(c.query.get('code') ?? '') } })],

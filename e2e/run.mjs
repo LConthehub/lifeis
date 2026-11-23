@@ -57,6 +57,7 @@ const SUITE = [
   { specs: ['mail'], account: TRIAL, docker: true },
   { specs: ['media-servers'], account: TRIAL, fixtures: [['jellyfin', 8097]] },
   { specs: ['recalls'], account: TRIAL, fixtures: [['nhtsa', 8100]], env: { NHTSA_API: 'http://127.0.0.1:8100' } },
+  { specs: ['film-lookup'], account: TRIAL, fixtures: [['tmdb', 8101]], env: { TMDB_API: 'http://127.0.0.1:8101', TMDB_IMAGES: 'http://127.0.0.1:8101/t/p/' } },
   { specs: ['book-servers'], account: TRIAL, fixtures: [['books', 8099]] },
   { specs: ['photo-library'], account: TRIAL, docker: true },
   { specs: ['kitchen-week'], account: TRIAL },

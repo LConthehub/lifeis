@@ -159,6 +159,54 @@ await page.reload(); await wait(900);
 say('the sort is remembered on this device', (await sortBy.inputValue()) === 'value' && JSON.stringify(await order()).startsWith('["Heat","Alien"'));
 await sortBy.selectOption('title'); await wait(300);
 
+// ---- print or save a list: what the page was showing, as a plain sheet and a spreadsheet ----
+await page.evaluate(async () => {
+  const post = (body) => fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  await post({ type: 'film', title: '=SUM(1+1)', creator: '@someone', year: 1990, genres: ['Horror'], copy: { format: 'DVD' } });
+  await post({ type: 'film', title: 'Hello, "World"', creator: 'Pat', year: 1991, genres: ['Horror'], copy: { format: 'DVD' } });
+});
+await page.goto(base + '/media'); await wait(900);
+await genre.selectOption('Horror'); await wait(300);
+await page.getByRole('link', { name: 'Print or save a list' }).click(); await wait(1200);
+const sheet = page.locator('.list-sheet');
+const sheetText = async () => flat(await sheet.innerText());
+say('the print page carries the filter in the address: ' + page.url().replace(base, ''), /\/media\/print\?/.test(page.url()) && /genre=Horror/.test(page.url()) && /sort=title/.test(page.url()));
+t = await sheetText();
+say('and lists only the Horror titles, in the sort: ' + t.slice(0, 160), /Alien/.test(t) && /The Thing/.test(t) && /Hello, "World"/.test(t) && !/Heat|Rumours|Blade Runner|Dune/.test(t) && await sheet.locator('[data-row]').count() === 4);
+for (let i = 0; i < 20 && await page.getByRole('button', { name: 'Save as spreadsheet' }).isDisabled(); i += 1) await wait(300);
+say('where each is kept is looked up and shown: ' + t.match(/Alien[^]{0,80}/)?.[0], /Tape cabinet/.test(await sheetText()));
+say('a total is at the bottom', /Total: 4 titles · cost \$20\.00 · worth \$35\.50/.test(await sheetText()));
+await page.getByLabel('Where it is', { exact: true }).uncheck(); await wait(200);
+say('a column can be left out', !/Where it is/.test(await sheetText()));
+await page.getByLabel('Where it is', { exact: true }).check(); await wait(800);
+await page.getByLabel('Where it is kept').check(); await wait(1000);
+say('grouped by place, with a heading for it: ' + (await sheet.locator('h3').allInnerTexts()).join(' | '), /Tape cabinet/.test(await sheet.locator('h3').first().innerText()) && await sheet.locator('h3').count() >= 2);
+await page.getByLabel('Nothing: one list').check(); await wait(300);
+const [csvDownload] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }), page.getByRole('button', { name: 'Save as spreadsheet' }).click()]);
+const csvFile = shots + '/' + csvDownload.suggestedFilename();
+await csvDownload.saveAs(csvFile);
+const csv = (await import('node:fs')).readFileSync(csvFile);
+const csvTextOut = csv.toString('utf8');
+say('the spreadsheet is named for the day and begins with a byte-order mark: ' + csvDownload.suggestedFilename(), /^collection-list-\d{4}-\d\d-\d\d\.csv$/.test(csvDownload.suggestedFilename()) && csv[0] === 0xef && csv[1] === 0xbb && csv[2] === 0xbf);
+say('with the header, and a known row: ' + csvTextOut.split('\r\n').slice(0, 3).join(' // '), csvTextOut.includes('Title,Creator,Year,Formats,Where it is,Lent to,Cost,Worth\r\n') && csvTextOut.includes('Alien,Ridley Scott,1979,VHS; Blu-ray,Tape cabinet,Sam,20.00,35.50\r\n'));
+say('a cell with a comma and quotes is quoted, and one starting with = or @ is made safe', csvTextOut.includes('"Hello, ""World"""') && csvTextOut.includes("'=SUM(1+1),'@someone") && csvTextOut.includes('Total: 4 titles'));
+// On paper: only the sheet prints.
+await page.emulateMedia({ media: 'print' }); await wait(300);
+const appHeader = page.locator('header.sticky');
+say('printing hides the app header, the choices and the buttons',
+  !(await appHeader.isVisible()) && !(await page.getByRole('button', { name: 'Print or save as PDF' }).isVisible()) && !(await page.getByRole('button', { name: 'Save as spreadsheet' }).isVisible()) && !(await page.getByLabel('Where it is kept').isVisible()));
+say('and the sheet is there, black on white', await sheet.isVisible() && (await sheet.evaluate((e) => getComputedStyle(e).color + '|' + getComputedStyle(e).backgroundColor)) === 'rgb(0, 0, 0)|rgb(255, 255, 255)');
+await page.screenshot({ path: shots + '/collection-print.png', fullPage: true });
+await page.emulateMedia({ media: 'screen' });
+// On a phone: nothing scrolls sideways, and every control is tall enough to tap.
+await page.setViewportSize({ width: 375, height: 900 }); await wait(500);
+const narrow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+const tiny = await page.locator('main button, main a, main label, main input:not([type=checkbox]):not([type=radio]), main select').evaluateAll((els) => els.filter((e) => !e.closest('.list-sheet') && e.getBoundingClientRect().height > 0 && e.getBoundingClientRect().height < 43.5).map((e) => (e.textContent || e.tagName).slice(0, 30) + ' ' + Math.round(e.getBoundingClientRect().height)));
+say('at 375 px nothing scrolls sideways, and every control is at least 44 px tall: ' + (tiny.join(', ') || 'none smaller'), narrow <= 0 && tiny.length === 0);
+await page.screenshot({ path: shots + '/collection-print-phone.png', fullPage: true });
+await page.setViewportSize({ width: 1100, height: 860 });
+await page.goto(base + '/media'); await wait(800);
+
 // A name you already have is asked about, not blocked.
 await page.getByRole('button', { name: '+ Add' }).click();
 await field('Title').fill('alien'); await wait(300);

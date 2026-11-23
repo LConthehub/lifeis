@@ -45,6 +45,7 @@ await addRecipe('Kept omelette');
 // ---------- making one ----------
 await page.goto(base + '/settings/data'); await wait(1200);
 say('settings offer a backup, and say no copies are made otherwise', /A backup you hold/.test(await text()) && /makes no copies of itself/.test(await text()));
+say('before any backup, it says no copy was made', /No copy made yet/.test(await text()));
 await page.getByRole('button', { name: 'Make a backup' }).click(); await wait(300);
 await page.getByLabel('A passphrase for this backup').fill(PASS);
 await page.getByLabel('The same passphrase again').fill(PASS + 'x');
@@ -59,6 +60,9 @@ const bytes = readFileSync(file);
 const seen = bytes.toString('latin1');
 say(`a file is handed over: ${download.suggestedFilename()}, ${bytes.length} bytes`, /^life-is-backup-\d{4}-\d\d-\d\d\.lifeis$/.test(download.suggestedFilename()) && bytes.length > 200);
 say('and nothing in it can be read', seen.startsWith('LIFEIS-BACKUP-1\n') && !/omelette|eggs|recipes/i.test(seen));
+
+await wait(1000);
+say('and afterwards, that the last copy was made today', /Last copy made: today/.test(await text()) && !/No copy made yet/.test(await text()));
 
 // ---------- bringing it back ----------
 await addRecipe('Written afterwards');

@@ -12,6 +12,7 @@ page.on('pageerror', (e) => bad.push('page error: ' + e.message));
 const say = (what, ok) => console.log((ok ? 'ok   ' : 'FAIL ') + what);
 const text = async () => page.locator('main').innerText();
 const wait = (ms = 800) => page.waitForTimeout(ms);
+const send = (method, address, body) => page.evaluate(async ([m, a, b]) => { const r = await fetch(a, { method: m, headers: { 'Content-Type': 'application/json' }, body: b === undefined ? undefined : JSON.stringify(b) }); return r.status === 204 ? null : r.json(); }, [method, address, body]);
 const field = (label) => page.locator('label').filter({ hasText: label }).locator('input, select, textarea').first();
 const flat = (s) => s.replace(/\n/g, ' ');
 const heads = async () => (await page.locator('main h2').allInnerTexts()).join(' | ');
@@ -47,6 +48,18 @@ await page.goto(base + '/'); await wait(1200);
 t = await text();
 const years = soon.getFullYear() - 1958;
 say(`the birthday shows as coming round, counting ${years} years: ` + flat(t).match(/Mum's birthday[^|]{0,60}/)?.[0], new RegExp(`Mum's birthday\\s*${years} years`).test(flat(t)) && /in 2 days/.test(t));
+
+// Something going off in the pantry, and a recipe that uses it: the kitchen card says so, and the line opens the pantry.
+await send('POST', '/api/kitchen/recipes', { title: 'Yogurt flatbread', servings: 4, ingredients_text: '2 cups flour\n1 cup yogurt', steps_text: 'Bake.' });
+const twoDaysOn = new Date(); twoDaysOn.setDate(twoDaysOn.getDate() + 2);
+await send('PUT', '/api/kitchen/pantry', { name: 'yogurt', quantity: 1, unit: 'cup', location: 'fridge', expires_on: `${twoDaysOn.getFullYear()}-${String(twoDaysOn.getMonth() + 1).padStart(2, '0')}-${String(twoDaysOn.getDate()).padStart(2, '0')}` });
+await page.goto(base + '/'); await wait(1200);
+t = await text();
+say('the kitchen card says what is going off, and the recipe for it: ' + flat(t).match(/Use up soon:.{0,70}/)?.[0], /Use up soon: [^.]*yogurt\./i.test(flat(t)) && /Yogurt flatbread uses yogurt\./.test(flat(t)));
+const useUp = page.getByRole('link', { name: /Use up soon/ });
+say('the line goes to the pantry', (await useUp.getAttribute('href')) === '/pantry');
+await useUp.click(); await wait(1200);
+say('and following it opens the pantry, with the yogurt in it', /\/pantry$/.test(page.url()) && /yogurt/i.test(await text()));
 
 // The weather: off, explained, then on.
 await page.goto(base + '/settings/connections'); await wait(1000);

@@ -50,7 +50,8 @@ export type HomeSummary = {
   /** Every card they could show, for choosing. */
   choices: { key: CardKey; label: string; shown: boolean }[];
   days: { day: string; entries: Entry[] }[];
-  kitchen: { meals: PlannedMeal[]; to_buy: number; short: EquipmentShortage[] };
+  /** `use_up` is null when nothing in the pantry is going off; else what is, and the best recipe for it. */
+  kitchen: { meals: PlannedMeal[]; to_buy: number; short: EquipmentShortage[]; use_up: { soon: string[]; suggestion: { recipe_id: number; title: string; uses: string[] } | null } | null };
   pantry: { low: string[]; expiring: { name: string; days_left: number }[] };
   projects: ProjectSummary[];
   things: { low: { id: number; name: string; amount: string; kind: string }[]; total: number };
@@ -110,7 +111,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
       const summary: HomeSummary = {
         day, cards,
         choices: offered.map((card) => ({ key: card.key, label: card.label, shown: !out.includes(card.key) })),
-        days: [], kitchen: { meals: [], to_buy: 0, short: [] }, pantry: { low: [], expiring: [] }, projects: [],
+        days: [], kitchen: { meals: [], to_buy: 0, short: [], use_up: null }, pantry: { low: [], expiring: [] }, projects: [],
         things: { low: [], total: 0 }, upkeep: [], collection: { total: 0, wanted: 0, lent: [], lately: [] },
         dates: [], plans: [], coupons: { currency: '$', soon: [] }, weather: null,
         week: { start: day, end: day, events: null, meals_planned: null, meals_cooked: null, sessions: null, minutes: null, enjoyed: null },
@@ -127,7 +128,14 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
             meals: await k.listPlan(day, 1),
             to_buy: (await k.listGrocery()).filter((item) => !item.done).length,
             short: await k.equipmentCheck(day, 7),
+            use_up: null,
           };
+          // The same question the pantry page asks, with one answer: the best recipe for what is going off.
+          const useUp = await k.useItUp(5, 1);
+          if (useUp.soon.length > 0) {
+            const best = useUp.suggestions[0];
+            summary.kitchen.use_up = { soon: useUp.soon.map((item) => item.name), suggestion: best ? { recipe_id: best.recipe_id, title: best.title, uses: best.uses } : null };
+          }
         }
         if (shows('pantry')) {
           const pantry = await k.listPantry();

@@ -5,7 +5,7 @@ import { inputClass, quietButtonClass, errorMessage } from './ui';
 import { inApp, onDevice } from '../where';
 import { CopyLine } from './Copy';
 
-const COVERS = [['upkeep', '🔧 Upkeep due'], ['low', '📦 Running low, or food to use soon'], ['dates', '🎂 Birthdays, plans and today’s events'], ['coupons', '🏷 Coupons running out, things lent a long time']];
+const COVERS = [['upkeep', '🔧 Upkeep due'], ['low', '📦 Running low, or food to use soon'], ['dates', '🎂 Birthdays, plans and today’s events'], ['coupons', '🏷 Coupons running out, things lent a long time'], ['copy', '💾 A reminder to make a copy']];
 const zone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
 const bytesOf = (base64) => {
   const padded = (base64 + '='.repeat((4 - (base64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/');

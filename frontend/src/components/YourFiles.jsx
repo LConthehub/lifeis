@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Field, buttonClass, quietButtonClass, cardClass, errorMessage } from './ui';
 import { zipEntries } from './unpackRecipes';
@@ -35,8 +35,15 @@ function whyNot(err, fallback) {
 
 const nameFromHeader = (headers) => /filename="([^"]+)"/.exec(headers?.['content-disposition'] ?? headers?.['Content-Disposition'] ?? '')?.[1];
 
-/** Every record, picture and paper in open files: one zip, made here and handed to the person's own device. */
-export function DownloadEverything() {
+/** Tells every part of the page that a copy was just made, so each shows the new day. */
+export const COPIED = 'lifeis-copied';
+/** After a copy was handed over: Life Is notes the day (a note it keeps for itself, to say how long ago), then the page is told. */
+export async function noteCopyMade() {
+  try { await axios.post('/api/your-data/copied'); } catch { /* the copy was made; the note is only a reminder */ }
+  window.dispatchEvent(new Event(COPIED));
+}
+
+function useDownloadEverything() {
   const [busy, setBusy] = useState(false);
   const [said, setSaid] = useState('');
   const [error, setError] = useState('');
@@ -50,9 +57,70 @@ export function DownloadEverything() {
       const { handOver } = await import('../device/handOver.js');
       await handOver(bytes, name);
       setSaid(`Made ${name} (${megabytes(bytes.length)}). It was made here and sent nowhere. Open README.txt inside it first.`);
+      await noteCopyMade();
     } catch (err) { setError(whyNot(err, "Couldn't make the download")); }
     setBusy(false);
   };
+  return { busy, said, error, download };
+}
+
+const DAY_WORDS = (days) => (days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`);
+const dayText = (day) => {
+  const [y, m, d] = day.split('-').map(Number);
+  const when = new Date(y, m - 1, d);
+  return when.toLocaleDateString('en-US', { month: 'long', day: 'numeric', ...(y !== new Date().getFullYear() ? { year: 'numeric' } : {}) });
+};
+
+/**
+ * When a copy was last made, and, when it has been a while, a gentle line with the two ways to make one.
+ * Never a popup: it sits in Your data and nowhere else.
+ */
+export function CopyNotice({ hasBackup }) {
+  const [state, setState] = useState(null);
+  const [turning, setTurning] = useState(false);
+  const { busy, said, error, download } = useDownloadEverything();
+  useEffect(() => {
+    const load = () => axios.get('/api/your-data/copy').then(({ data }) => setState(data)).catch(() => {});
+    load();
+    window.addEventListener(COPIED, load);
+    return () => window.removeEventListener(COPIED, load);
+  }, []);
+  if (!state) return null;
+  const turn = async (on) => {
+    setTurning(true);
+    try { await axios.put('/api/reminders', { covers: { copy: on } }); setState({ ...state, remind: on }); } catch { /* it stays as it was */ }
+    setTurning(false);
+  };
+  const backup = () => window.dispatchEvent(new Event('lifeis-make-backup'));
+
+  return (
+    <section className={cardClass} data-copy-notice>
+      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Your copy</h2>
+      <p className="text-sm text-gray-800 dark:text-life-50" data-last-copy>
+        {state.last ? `Last copy made: ${state.days === 0 ? 'today' : `${dayText(state.last)} (${DAY_WORDS(state.days)})`}` : 'No copy made yet'}
+      </p>
+      {state.stale && (
+        <div className="mt-2 rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700" data-copy-stale>
+          <p>It's been a while. A copy kept somewhere else is the only way back if this phone is lost.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" onClick={download} disabled={busy} className={`${buttonClass} ${touch}`}>{busy ? 'Making the zip…' : 'Download everything'}</button>
+            {hasBackup && <button type="button" onClick={backup} className={`${quietButtonClass} ${touch}`}>Make a backup</button>}
+          </div>
+        </div>
+      )}
+      {said && <p className="mt-2 break-words rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-800 dark:text-life-50" role="status">{said}</p>}
+      {error && <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>}
+      <label className={`mt-2 flex ${touch} items-center gap-3 text-sm text-gray-700 dark:text-life-100`}>
+        <input type="checkbox" checked={state.remind} disabled={turning} onChange={(e) => turn(e.target.checked)} className="h-5 w-5 flex-none accent-life-600" />
+        <span>Say so in the morning digest when it has been over a month (at most once a week)</span>
+      </label>
+    </section>
+  );
+}
+
+/** Every record, picture and paper in open files: one zip, made here and handed to the person's own device. */
+export function DownloadEverything() {
+  const { busy, said, error, download } = useDownloadEverything();
 
   return (
     <section className={cardClass}>

@@ -9,7 +9,7 @@ import { AssistantService } from '../components/Assistant';
 import { RemindersSettings } from '../components/Reminders';
 import { RecallAlertsService } from '../components/Recalls';
 import { PeopleSignIn, SignInSecurity } from '../components/Security';
-import YourFiles from '../components/YourFiles';
+import YourFiles, { CopyNotice, noteCopyMade } from '../components/YourFiles';
 
 const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 120: '2 hours', 480: '8 hours', 0: 'Stay signed in' };
 
@@ -46,7 +46,7 @@ const GROUPS = [
       { id: 'assistant', title: 'AI assistant', words: 'ai llm ollama lm studio chatgpt claude gemini model ask question', render: () => <Plain><AssistantService /></Plain> },
       { id: 'weather', title: 'Weather', words: 'forecast open-meteo town place', render: () => <Plain><WeatherService /></Plain> },
       { id: 'mail', title: 'Email', words: 'imap smtp inbox mail gmail icloud', render: () => <Plain><MailService /></Plain> },
-      { id: 'lookups', title: 'Barcode lookups', words: 'isbn book grocery film music game album dvd blu-ray vinyl scan open library food facts musicbrainz upcitemdb', render: () => <Plain><BookLookupService /></Plain> },
+      { id: 'lookups', title: 'Barcode and title lookups', words: 'isbn book grocery film music game album dvd blu-ray vinyl scan open library food facts musicbrainz upcitemdb tmdb movie database show poster director key', render: () => <Plain><BookLookupService /></Plain> },
       { id: 'photos', title: 'Photos from Immich', words: 'immich pictures plans memories', render: () => <Plain><PhotoLibraryService /></Plain> },
       { id: 'media', title: 'Jellyfin or Emby', words: 'media server films shows music jellyfin emby', render: () => <MediaServers /> },
       { id: 'recalls', title: 'Recall alerts', words: 'car vehicle recall nhtsa safety make model year vin', render: () => <Plain><RecallAlertsService /></Plain> },
@@ -69,6 +69,7 @@ const GROUPS = [
     id: 'data', label: 'Your data', icon: '🗄',
     sections: [
       { id: 'unlock', title: 'Unlocking Life Is', words: 'trial pay price purchase buy free', when: onDevice, render: () => <Unlock /> },
+      { id: 'last-copy', title: 'Your copy', words: 'last copy made backup download how long ago lost phone remind digest', render: () => <CopyNotice hasBackup={onDevice()} /> },
       { id: 'backup', title: 'Backups', words: 'backup restore export file passphrase drive icloud', when: onDevice, render: () => <DeviceBackup /> },
       { id: 'your-files', title: 'Download everything, and bring it back in', words: 'download everything export import bring in zip csv spreadsheet open files data stays with you portable pictures merge', render: () => <YourFiles hasBackup={onDevice()} /> },
       { id: 'recipes-out', title: 'Download recipes', words: 'export nextcloud cookbook zip', when: () => !inApp(), render: () => <RecipesOut /> },
@@ -276,6 +277,12 @@ function DeviceBackup() {
   const [said, setSaid] = useState('');
   const [error, setError] = useState('');
   const start = (what) => { setDoing(what); setPass(''); setAgain(''); setFile(null); setError(''); setSaid(''); };
+  // "Make a backup", pressed in the line that says it has been a while.
+  useEffect(() => {
+    const open = () => { start('save'); document.getElementById('backup')?.scrollIntoView?.({ block: 'center' }); };
+    window.addEventListener('lifeis-make-backup', open);
+    return () => window.removeEventListener('lifeis-make-backup', open);
+  }, []);
 
   const save = async (e) => {
     e.preventDefault();
@@ -289,6 +296,7 @@ function DeviceBackup() {
       await handOver(new Uint8Array(data), name);
       setDoing(null);
       setSaid(`Made ${name}. Keep it wherever you like; without the passphrase it is unreadable.`);
+      await noteCopyMade();
     } catch (err) { setError(errorMessage(err, "Couldn't make the backup")); }
     setBusy(false);
   };
@@ -764,7 +772,62 @@ function BookLookupService() {
       {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p>
         : <button type="button" onClick={() => turnTitles(!l.titles)} className={`${quietButtonClass} mt-2`}>{l.titles ? 'Turn off' : 'Turn on'}</button>}
     </div>
+    {!inApp() && <FilmLookupService l={l} setL={setL} />}
     </>
+  );
+}
+
+// TMDB's terms restrict apps people pay for, so film lookups are offered only where Life Is is self-hosted,
+// not in the phone app, until TMDB has said a paid app may use them with the person's own key.
+/** TMDB, for the details and poster of a film or show: it needs a key of your own, kept locked, and asks for a notice. */
+function FilmLookupService({ l, setL }) {
+  const s = l.film_service;
+  const [key, setKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState({ text: '', bad: false });
+  if (!s) return null;
+  const send = async (body, done) => {
+    setBusy(true); setMessage({ text: '', bad: false });
+    try { const { data } = await axios.put('/api/lookups', body); setL(data); setKey(''); if (done) setMessage({ text: done, bad: false }); } catch (err) { setMessage({ text: errorMessage(err, "Couldn't change that"), bad: true }); }
+    setBusy(false);
+  };
+  const test = async () => {
+    setBusy(true); setMessage({ text: '', bad: false });
+    try { await axios.post('/api/lookups/films/test'); setMessage({ text: 'TMDB accepted the key.', bad: false }); } catch (err) { setMessage({ text: errorMessage(err, "Couldn't test it"), bad: true }); }
+    setBusy(false);
+  };
+  return (
+    <div className="py-3" data-tmdb>
+      <div className="flex items-baseline gap-2">
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🎞 {s.name}</h3>
+        <span className={`rounded px-1.5 text-[11px] ${l.films ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.films ? 'On' : 'Off'}</span>
+      </div>
+      <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
+        In a film or show's form, "Look it up" by title fills in its year, director or creator, length, genres, summary and poster, from <a href={s.site} target="_blank" rel="noreferrer" className="underline">The Movie Database (TMDB)</a>.
+        It needs a key of your own, which TMDB gives free to one person for their own use: <a href={s.keys} target="_blank" rel="noreferrer" className="underline">get one under your TMDB account's API settings</a> (the long "API Read Access Token" is the one to paste, though the shorter API key works too).
+        {' '}<span className="font-medium">What it's sent:</span> {s.sends}
+      </p>
+      <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Your key is kept locked on this computer and is never shown again, to you or to the page.</p>
+      {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : (
+        <div className="mt-2 space-y-2">
+          <Field label={l.film_key ? 'TMDB key (one is saved; type a new one to replace it)' : 'TMDB key'}>
+            <input type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} className={inputClass} />
+          </Field>
+          <div className="flex flex-wrap gap-2">
+            {l.films
+              ? <>
+                <button type="button" disabled={busy} onClick={() => (key.trim() ? send({ films: true, films_key: key }, 'The new key is kept.') : send({ films: false }))} className={quietButtonClass}>{key.trim() ? 'Keep this key' : 'Turn off'}</button>
+                <button type="button" disabled={busy} onClick={test} className={quietButtonClass}>Test it</button>
+              </>
+              : <button type="button" disabled={busy || (!key.trim() && !l.film_key)} onClick={() => send({ films: true, ...(key.trim() ? { films_key: key } : {}) })} className={quietButtonClass}>Turn on</button>}
+            {l.film_key && <button type="button" disabled={busy} onClick={() => send({ forget_films_key: true }, 'The key is forgotten.')} className={quietButtonClass}>Forget the key</button>}
+          </div>
+          {message.text && <p role="status" className={`text-sm ${message.bad ? 'text-red-600' : 'text-gray-700 dark:text-life-100'}`}>{message.text}</p>}
+          <p className="text-xs text-gray-500 dark:text-life-300">Test it asks TMDB for its list of settings, with your key, and nothing else.</p>
+        </div>
+      )}
+      <p className="mt-2 text-xs text-gray-500 dark:text-life-300" data-tmdb-notice>{s.notice}</p>
+    </div>
   );
 }
 

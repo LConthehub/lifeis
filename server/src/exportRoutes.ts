@@ -7,7 +7,7 @@
  * pieces: the spreadsheets first, to look at and to bring in, then the pictures and papers a few at a time.
  * That keeps every request under the size the server reads at once. Nothing is sent anywhere else.
  */
-import { bringInDownload, bringInPictures, exportEverything, lookAtDownload, MAX_SENT_BYTES, type PictureIn } from '../../core/src/index.ts';
+import { bringInDownload, bringInPictures, exportEverything, lookAtDownload, MAX_SENT_BYTES, reminders, type PictureIn } from '../../core/src/index.ts';
 import { notUnderstood, read, Refusal, type Body, type Route } from './http.ts';
 import type { Db } from '../../core/src/index.ts';
 
@@ -51,5 +51,8 @@ export function exportRoutes(db: Db): Route[] {
       }));
       return { json: await bringInPictures(db, c.user.id, pictures, c.clock) };
     }],
+    // The day of the person's last copy (an encrypted backup or a download), and noting one was just made. Kept in user_settings.
+    ['GET', /^\/api\/your-data\/copy$/, async (c) => ({ json: await reminders(db, c.user.id, c.clock).copyState() })],
+    ['POST', /^\/api\/your-data\/copied$/, async (c) => ({ json: await reminders(db, c.user.id, c.clock).copyMade() })],
   ];
 }

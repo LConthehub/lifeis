@@ -33,7 +33,32 @@ it('an empty home shows every card, with nothing on them', async () => {
   expect([s.day, s.cards]).toEqual([TODAY, ['days', 'dates', 'kitchen', 'pantry', 'projects', 'upkeep', 'things', 'collection', 'week']]);
   expect(s.days.map((d) => [d.day, d.entries])).toEqual([[TODAY, []], ['2046-03-06', []], ['2046-03-07', []]]);
   expect([s.kitchen, s.pantry, s.projects, s.things, s.collection]).toEqual([
-    { meals: [], to_buy: 0, short: [] }, { low: [], expiring: [] }, [], { low: [], total: 0 }, { total: 0, wanted: 0, lent: [], lately: [] }]);
+    { meals: [], to_buy: 0, short: [], use_up: null }, { low: [], expiring: [] }, [], { low: [], total: 0 }, { total: 0, wanted: 0, lent: [], lately: [] }]);
+});
+
+it('the kitchen card names what is going off, and the best recipe for it, when something is', async () => {
+  const k = kitchen(db, owner, clock);
+  await k.savePantry({ name: 'cream', quantity: 1, unit: 'cup', expires_on: '2046-03-07' });   // 2 days
+  await k.savePantry({ name: 'spinach', quantity: 1, unit: 'bag', expires_on: '2046-03-09' });  // 4 days
+  await k.savePantry({ name: 'milk', quantity: 1, unit: 'l', expires_on: '2046-03-20' });       // not soon
+  await k.createRecipe({ title: 'Cream pasta', servings: 2, ingredients_text: '1 cup cream\n1 bag spinach\n200 g pasta', steps_text: 'Cook it.' });
+  await k.createRecipe({ title: 'Milk pudding', servings: 2, ingredients_text: '1 l milk', steps_text: 'Cook it.' });
+
+  const s = await front.summary();
+  expect(s.kitchen.use_up).toEqual({ soon: ['cream', 'spinach'], suggestion: { recipe_id: expect.any(Number), title: 'Cream pasta', uses: ['cream', 'spinach'] } });
+  expect(s.kitchen.use_up!.suggestion!.recipe_id).toBeGreaterThan(0);
+  await front.hideCards(['kitchen']);
+  expect((await front.summary()).kitchen.use_up).toBeNull(); // out of sight: not read
+});
+
+it('the kitchen card has no use-up line when nothing is going off, and no recipe when none uses it', async () => {
+  const k = kitchen(db, owner, clock);
+  await k.savePantry({ name: 'milk', quantity: 1, unit: 'l', expires_on: '2046-03-20' });
+  await k.createRecipe({ title: 'Milk pudding', servings: 2, ingredients_text: '1 l milk', steps_text: 'Cook it.' });
+  expect((await front.summary()).kitchen.use_up).toBeNull();
+
+  await k.savePantry({ name: 'cream', quantity: 1, unit: 'cup', expires_on: '2046-03-06' });  // tomorrow, and no recipe uses it
+  expect((await front.summary()).kitchen.use_up).toEqual({ soon: ['cream'], suggestion: null });
 });
 
 it('it gathers today from every section', async () => {

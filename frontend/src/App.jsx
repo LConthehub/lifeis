@@ -30,6 +30,7 @@ import ManualPage from './pages/Manual';
 import PackingPage from './pages/Packing';
 import UpkeepPage, { JobPage } from './pages/Upkeep';
 import ChoreChart from './pages/ChoreChart';
+import CollectionPrint from './pages/CollectionPrint';
 import { ThingStickersPage, ThingStickerLanding } from './pages/ThingStickers';
 import AccessNote from './components/AccessNote';
 import Money from './pages/Money';
@@ -184,6 +185,7 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/media/books" element={<MediaPage key="books" library="books" />} />
           <Route path="/media/ebooks" element={<MediaPage key="ebooks" library="ebooks" />} />
           <Route path="/media/audiobooks" element={<MediaPage key="audiobooks" library="audiobooks" />} />
+          <Route path="/media/print" element={<CollectionPrint />} />
           <Route path="/media/servers" element={<Servers />} />
           <Route path="/media/:id" element={<MediaTitlePage />} />
           <Route path="/money" element={<Money />} />

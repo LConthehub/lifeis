@@ -69,9 +69,15 @@ await api(ana, 'POST', '/api/users', { username: 'sam', password: PASS });
 await ana.goto(base + '/settings/data'); await wait(ana, 1200);
 let text = await ana.locator('main').innerText();
 say('Settings, Your data, offers both, with what sets them apart', /Download everything/.test(text) && /Bring in from a download/.test(text) && /open files you can read anywhere/.test(text));
+say('before any copy, it says so, and does not nag a new account', /No copy made yet/.test(text) && !/It's been a while/.test(text));
 const [download] = await Promise.all([ana.waitForEvent('download', { timeout: 60000 }), ana.getByRole('button', { name: 'Download everything' }).click()]);
 const file = shots + '/' + download.suggestedFilename();
 await download.saveAs(file);
+await wait(ana, 1000);
+text = await ana.locator('main').innerText();
+say('after downloading everything, it says the last copy was made today', /Last copy made: today/.test(text) && !/No copy made yet/.test(text), text.slice(0, 300));
+await ana.reload(); await wait(ana, 1200);
+say('and still says so after opening the page again', /Last copy made: today/.test(await ana.locator('main').innerText()));
 const zip = unzip(readFileSync(file));
 say(`a zip with a dated name is handed over: ${download.suggestedFilename()}`, /^lifeis-everything-\d{4}-\d\d-\d\d\.zip$/.test(download.suggestedFilename()));
 const readme = zip.get('README.txt')?.toString('utf8') ?? '';
@@ -98,7 +104,7 @@ say('it shows what the file holds, per kind, with counts', /Recipes/.test(text) 
 say('and says nothing is overwritten or deleted', /ever overwritten or deleted/.test(text));
 // Only recipes and things.
 const only = async (page) => {
-  for (const box of await page.getByRole('checkbox').all()) {
+  for (const box of await page.getByLabel('What the download holds').getByRole('checkbox').all()) {
     const name = (await box.evaluate((e) => e.closest('label').innerText)) ?? '';
     if (/^(Recipes|Things)/.test(name)) await box.check(); else await box.uncheck();
   }

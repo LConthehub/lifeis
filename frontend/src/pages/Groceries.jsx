@@ -5,6 +5,7 @@ import ArrangeAisles from '../components/ArrangeAisles';
 import PasteList from '../components/PasteList';
 import Scanner from '../components/Scanner';
 import ShareList from '../components/ShareList';
+import { lookUpProduct } from '../components/productLookup';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, fromDateInput } from '../components/ui';
 
 /** Cents as money: 349 is $3.49. */
@@ -407,11 +408,8 @@ function ScanGrocery({ open, sign, putAway, onChanged }) {
       setSize(data.ingredient?.size || data.last?.amount || '');
       if (!data.ingredient) {
         // A new product: if looking groceries up is on, ask what it's called, to save typing.
-        const { data: can } = await axios.get('/api/lookups').catch(() => ({ data: {} }));
-        if (can.groceries) {
-          const found = await axios.get('/api/lookups/product', { params: { code: data.barcode } }).then(({ data: d }) => d.product).catch(() => null);
-          if (found) { setProduct(found); setName(found.name); setSize(found.size || ''); }
-        }
+        const found = await lookUpProduct(data.barcode);
+        if (found) { setProduct(found); setName(found.name); setSize(found.size || ''); }
       }
     } catch (err) { setError(errorMessage(err, "Couldn't look that up")); setSeen({ failed: true }); }
   }, []);

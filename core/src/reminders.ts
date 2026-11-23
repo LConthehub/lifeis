@@ -23,7 +23,7 @@ import { Problem } from './problem.ts';
 import { addDays, clean, dayNumber, todayOf, type Clock } from './small.ts';
 import { upkeep } from './upkeep.ts';
 
-export const COVERS = ['upkeep', 'low', 'dates', 'coupons'] as const;
+export const COVERS = ['upkeep', 'low', 'dates', 'coupons', 'copy'] as const;
 export type Cover = (typeof COVERS)[number];
 export type NtfySettings = { server: string; topic: string; detail: 'full' | 'count' };
 export type ReminderSettings = {
@@ -40,6 +40,25 @@ export type ReminderSettings = {
   origin: string | null;
   /** The last day a digest went, so it goes once a day. */
   last_sent: string | null;
+  /** The last day the line about making a copy was said, so it comes at most once a week. */
+  copy_nudged: string | null;
+};
+/** Where a person stands on having a copy of their data kept somewhere else. */
+export type CopyState = {
+  /** The day they last made a backup or a download, or null. */
+  last: string | null;
+  /** Days since then; null when never. */
+  days: number | null;
+  /** Whether they keep anything in Life Is yet. */
+  records: boolean;
+  /** Days since they began. */
+  started_days: number;
+  /** Whether the gentle line in Your data is shown: records, and a copy more than 30 days old (or none, after a week of use). */
+  stale: boolean;
+  /** Whether the morning digest has this line in it as the state stands, apart from how recently it was said. */
+  nudge: boolean;
+  /** Whether the morning digest line is turned on. */
+  remind: boolean;
 };
 export type DigestLine = { kind: Cover; icon: string; title: string; detail: string | null; link: string; urgent: boolean };
 export type Digest = { day: string; lines: DigestLine[]; title: string; text: string };
@@ -64,9 +83,12 @@ export const EMAIL_SERVICE = {
 
 const SETTING = 'reminders';
 const DEFAULTS: ReminderSettings = {
-  time: '07:30', zone: null, covers: { upkeep: true, low: true, dates: true, coupons: true },
-  email: false, ntfy: null, push: false, phone: false, origin: null, last_sent: null,
+  time: '07:30', zone: null, covers: { upkeep: true, low: true, dates: true, coupons: true, copy: true },
+  email: false, ntfy: null, push: false, phone: false, origin: null, last_sent: null, copy_nudged: null,
 };
+const COPY_KEY = 'last_copy_made';
+/** What a person keeps in Life Is: any one of these having a row means there is something to lose. */
+const KEPT_IN = ['recipes', 'items', 'media', 'events', 'pets', 'upkeep_jobs', 'plans', 'money_entries', 'projects'];
 const pad = (n: number) => String(n).padStart(2, '0');
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -109,6 +131,27 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
   async function keep(s: ReminderSettings): Promise<void> {
     await db.run(`INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value`,
       [owner, SETTING, JSON.stringify(s)]);
+  }
+
+  const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d\d-\d\d$/.test(v);
+
+  /** Where the person stands on a copy kept elsewhere. Nothing about it leaves here. */
+  async function copyState(): Promise<CopyState> {
+    const s = await settings();
+    const day = todayOf(clock);
+    const row = await db.get<{ value: string | null }>('SELECT value FROM user_settings WHERE user_id = ? AND key = ?', [owner, COPY_KEY]);
+    const last = isDay(row?.value) ? row!.value : null;
+    const days = last ? Math.max(0, dayNumber(day) - dayNumber(last)) : null;
+    const began = await db.get<{ created_at: string | null }>('SELECT created_at FROM users WHERE id = ?', [owner]);
+    const startDay = (began?.created_at ?? '').slice(0, 10);
+    const started_days = isDay(startDay) ? Math.max(0, dayNumber(day) - dayNumber(startDay)) : 0;
+    let records = false;
+    for (const table of KEPT_IN) {
+      if (await db.get(`SELECT 1 AS one FROM ${table} WHERE owner_id = ? LIMIT 1`, [owner])) { records = true; break; }
+    }
+    const stale = records && (days === null ? started_days > 7 : days > 30);
+    const nudge = records && (days === null ? started_days : days) > 30;
+    return { last, days, records, started_days, stale, nudge, remind: s.covers.copy };
   }
 
   /** What needs the person today. `day` is their today. */
@@ -170,6 +213,15 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
         `SELECT m.id, m.title, c.lent_to, c.lent_on FROM media_copies c JOIN media m ON m.id = c.media_id
          WHERE m.owner_id = ? AND c.lent_to IS NOT NULL AND c.lent_on IS NOT NULL AND c.lent_on <= ? ORDER BY c.lent_on`, [owner, addDays(day, -30)])) {
         lines.push({ kind: 'coupons', icon: '🤝', title: m.title, detail: `with ${m.lent_to} for ${plural(dayNumber(day) - dayNumber(m.lent_on), 'day')}`, link: `/media/${m.id}`, urgent: false });
+      }
+    }
+    if (s.covers.copy) {
+      // A copy kept somewhere else: said when it has been over a month, and then at most once a week.
+      const c = await copyState();
+      const saidAgo = isDay(s.copy_nudged) ? dayNumber(day) - dayNumber(s.copy_nudged) : null;
+      if (c.nudge && (saidAgo === null || saidAgo >= 7)) {
+        const n = c.days ?? c.started_days;
+        lines.push({ kind: 'copy', icon: '💾', title: `Make a copy of your Life Is: it's been ${n} days.`, detail: null, link: '/settings/data', urgent: false });
       }
     }
     lines.sort((a, b) => Number(b.urgent) - Number(a.urgent));
@@ -235,9 +287,17 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
     settings,
     digest,
     send,
+    copyState,
+
+    /** Note that the person has just made a backup or a download: today is the day of their last copy. */
+    async copyMade(): Promise<CopyState> {
+      await db.run(`INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value`,
+        [owner, COPY_KEY, todayOf(clock)]);
+      return copyState();
+    },
 
     /** Change the settings. A new ntfy topic is made when none is given. `origin` is where the person reached Life Is. */
-    async save(input: Partial<Omit<ReminderSettings, 'last_sent'>>, origin?: string | null): Promise<ReminderSettings> {
+    async save(input: Partial<Omit<ReminderSettings, 'last_sent' | 'copy_nudged' | 'covers'>> & { covers?: Partial<Record<Cover, boolean>> }, origin?: string | null): Promise<ReminderSettings> {
       const s = await settings();
       if (input.time !== undefined) {
         if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(input.time))) throw new Problem(400, 'Pick a time of day, like 07:30');
@@ -286,10 +346,11 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
       return db.all('SELECT endpoint, label FROM push_subscriptions WHERE user_id = ? ORDER BY id', [owner]);
     },
 
-    /** Mark today's digest as gone. */
-    async markSent(day: string): Promise<void> {
+    /** Mark today's digest as gone (and, when it held the line about a copy, that it was said today). */
+    async markSent(day: string, sent?: Digest): Promise<void> {
       const s = await settings();
       s.last_sent = day;
+      if (sent?.lines.some((l) => l.kind === 'copy')) s.copy_nudged = day;
       await keep(s);
     },
   };
@@ -313,7 +374,7 @@ export async function remindersDue(db: Db, now: Date, tools: ReminderTools): Pro
     const theirs = reminders(db, row.user_id, clock, tools);
     const d = await theirs.digest();
     const result = d.lines.length ? await theirs.send(d) : { sent: [] as Channel[], problems: [] as string[] };
-    await theirs.markSent(here.day);
+    await theirs.markSent(here.day, d);
     out.push({ user: row.user_id, ...result });
   }
   return out;

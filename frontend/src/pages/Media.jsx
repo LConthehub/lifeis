@@ -8,6 +8,7 @@ import BulkScan from '../components/BulkScan';
 import CollectionSummary from '../components/CollectionSummary';
 import { SORTS, centsFromDollars, decadeOf, dollarsField, dollarsText, labelKey, sameTitles, sortTitles } from '../components/collectionTools';
 import { bookServerName } from '../components/BookServers';
+import { inApp } from '../where';
 import { HistoryList } from './Thing';
 import { stickerCode } from './Places';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
@@ -112,12 +113,15 @@ export default function MediaPage({ library = null }) {
   const decade = from !== '' && to !== '' && Number(from) % 10 === 0 && Number(to) === Number(from) + 9 ? String(from) : '';
   const filtering = Boolean((!lib && type) || show || word || genre || from !== '' || to !== '');
   const clearFilters = () => { setType(lib?.type ?? ''); setShow(''); setQ(''); setGenre(''); setFrom(''); setTo(''); };
+  // The print page reads the tab, the filters and the sort back from the address.
+  const printAddress = `/media/print?${new URLSearchParams(Object.entries({ lib: library ?? '', type: lib ? '' : type, show, q: q.trim(), genre, from, to, sort }).filter(([, v]) => v !== '' && v != null))}`;
   const count = (id) => titles.filter((m) => m.type === id).length;
   const chip = (active) => `rounded-full px-3 py-1 text-sm ${active ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">{lib ? lib.title : 'Collection'}</h1>
+        {mine.length > 0 && <Link to={printAddress} className={`${quietButtonClass} ${control} inline-flex items-center`}>Print or save a list</Link>}
         <button type="button" onClick={() => setListing(true)} className={`${quietButtonClass} ${control}`}>Bring in a list</button>
         <button type="button" onClick={() => setScanning(true)} className={`${quietButtonClass} ${control}`}>📷 Scan a barcode</button>
         <button type="button" onClick={() => setScanMany(true)} className={`${quietButtonClass} ${control}`}>📷 Scan many</button>
@@ -263,6 +267,8 @@ async function lookUp(code) {
     return {
       from: title.from, start: { type: title.type, title: title.title, creator: title.creator || '', year: title.year ?? '', format, barcode: code },
       detail: [title.creator, title.year, format],
+      // A film found by its name can be looked up further on TMDB, when that is on.
+      tmdb: title.type === 'film' && Boolean(can.films),
     };
   } catch (err) { return { hint: errorMessage(err, "It couldn't be looked up just now.") }; }
 }
@@ -315,7 +321,8 @@ function ScanToFind({ onAdd }) {
           </div>
         )}
         {found.hint && <p className="text-xs text-gray-500 dark:text-life-300">{found.hint}</p>}
-        <div className="flex items-center justify-end gap-2">{again}
+        <div className="flex flex-wrap items-center justify-end gap-2">{again}
+          {found.tmdb && !inApp() && <button type="button" onClick={() => onAdd({ ...found.start, findOnTmdb: true })} className={quietButtonClass}>Find it on TMDB</button>}
           <button type="button" onClick={() => onAdd(found.start ?? { barcode: found.code })} className={buttonClass}>{found.start ? 'Add it' : 'Add it, keeping the barcode'}</button>
         </div>
       </div>
@@ -332,6 +339,86 @@ function ScanToFind({ onAdd }) {
   );
 }
 
+const FILLED = { title: 'title', year: 'year', minutes: 'length', genres: 'genres', summary: 'summary' };
+
+/**
+ * "Look it up" for a film or show, from TMDB, when the person has turned it on with their own key. Shows up to
+ * eight matches with a small poster (fetched through Life Is: the page never asks another site for anything),
+ * and choosing one fills the form's empty fields. What the person typed stays, unless they press "Use all of it".
+ */
+function FilmFinder({ form, setForm, hasCover, autoSearch, onPicked }) {
+  const [can, setCan] = useState(null);
+  const [matches, setMatches] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [picked, setPicked] = useState(null);   // { match, filled, kept }
+  const eligible = form.type === 'film' || form.type === 'show';
+  useEffect(() => { if (eligible && !can) axios.get('/api/lookups').then(({ data }) => setCan(data)).catch(() => setCan({})); }, [eligible, can]);
+  const look = async () => {
+    setBusy(true); setMessage(''); setPicked(null);
+    try {
+      const { data } = await axios.get('/api/lookups/films/search', { params: { q: form.title, kind: form.type, ...(form.year !== '' ? { year: form.year } : {}) } });
+      setMatches(data.matches);
+      if (data.matches.length === 0) setMessage('TMDB has nothing by that name. Check the spelling, or leave the year out.');
+    } catch (err) { setMatches(null); setMessage(errorMessage(err, "Couldn't look it up just now")); }
+    setBusy(false);
+  };
+  // Scanned a film and chose "Find it on TMDB": the name that was found is searched for as soon as the form opens.
+  useEffect(() => { if (autoSearch && can?.films && form.title) look(); }, [autoSearch, can?.films]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!eligible || !can?.available) return null;
+  if (!can.films) {
+    return <p className="text-xs text-gray-500 dark:text-life-300">Films and shows can be filled in from TMDB: turn that on, with your own key, in <Link to="/settings/connections" className="underline">Settings</Link>.</p>;
+  }
+  const choose = async (match, all) => {
+    setBusy(true); setMessage('');
+    try {
+      const { data } = await axios.post('/api/lookups/films/pick', {
+        kind: match.kind, id: match.id, all,
+        current: { title: form.title, year: form.year, creator: form.creator, minutes: form.minutes, genres: commaList(form.genres), summary: form.summary },
+      });
+      if (!data.found) { setMessage("TMDB doesn't have that one any more."); setBusy(false); return; }
+      const f = data.fields;
+      setForm((cur) => ({ ...cur, title: f.title, year: f.year ?? '', creator: f.creator ?? '', minutes: f.minutes ?? '', genres: f.genres.join(', '), summary: f.summary ?? '' }));
+      // A cover of your own is kept unless you take all of it.
+      const poster = data.found.poster && (all || !hasCover) ? data.found.poster : null;
+      onPicked({ kind: match.kind, id: match.id, poster });
+      const name = (k) => (k === 'creator' ? (form.type === 'show' ? 'who made it' : 'director') : FILLED[k]);
+      setPicked({ match, filled: [...data.filled.map(name), ...(poster ? ['poster'] : [])], kept: data.kept.map(name) });
+    } catch (err) { setMessage(errorMessage(err, "Couldn't fetch its details just now")); }
+    setBusy(false);
+  };
+  return (
+    <div className="space-y-2 rounded-lg border border-life-200 p-3 text-sm dark:border-life-700" data-film-finder>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={look} disabled={busy || !form.title.trim()} className={quietButtonClass}>{busy ? 'Looking…' : 'Look it up'}</button>
+        <span className="text-xs text-gray-500 dark:text-life-300">Sends the title{form.year !== '' ? ' and year' : ''} to TMDB with your key, and nothing else.</span>
+      </div>
+      {message && <p role="status" className="text-sm text-red-600">{message}</p>}
+      {matches && matches.length > 0 && (
+        <ul className="space-y-1" data-matches>
+          {matches.map((m) => (
+            <li key={`${m.kind}-${m.id}`} className="flex items-start gap-2">
+              {m.poster ? <img src={`/api/lookups/films/poster?path=${encodeURIComponent(m.poster)}`} alt="" loading="lazy" className="h-14 w-10 flex-none rounded object-cover" /> : <span className="h-14 w-10 flex-none rounded bg-life-50 dark:bg-life-700" />}
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium text-gray-800 dark:text-life-50">{m.title}{m.year ? ` (${m.year})` : ''}</span>
+                {m.overview && <span className="block truncate text-xs text-gray-500 dark:text-life-300">{m.overview}</span>}
+              </span>
+              <button type="button" onClick={() => choose(m, false)} disabled={busy} className={quietButtonClass}>Use this</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {picked && (
+        <div role="status" className="space-y-1 text-xs text-gray-700 dark:text-life-100" data-picked>
+          <p>From TMDB, {picked.match.title}{picked.match.year ? ` (${picked.match.year})` : ''}. {picked.filled.length ? `Filled in: ${picked.filled.join(', ')}.` : 'Nothing new to fill in.'}{picked.kept.length ? ` Kept what you typed: ${picked.kept.join(', ')}.` : ''}</p>
+          {picked.kept.length > 0 && <button type="button" onClick={() => choose(picked.match, true)} disabled={busy} className={quietButtonClass}>Use all of it</button>}
+        </div>
+      )}
+      <p className="text-xs text-gray-500 dark:text-life-300">{can.film_service?.notice}</p>
+    </div>
+  );
+}
+
 /** A title's own details. With `withCopy`, also the first copy: what it's on and where it is. */
 function TitleForm({ title, withCopy = false, known = [], onDone }) {
   const [form, setForm] = useState({
@@ -343,6 +430,7 @@ function TitleForm({ title, withCopy = false, known = [], onDone }) {
   const [places, setPlaces] = useState([]);
   const [error, setError] = useState('');
   const [different, setDifferent] = useState('');   // the type and name the person said are a different one
+  const [tmdb, setTmdb] = useState(null);           // the film or show chosen from TMDB: { kind, id, poster }
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   // A new title whose name is one you already have, of the same kind: asked about, never blocked.
   const askAbout = `${form.type}|${labelKey(form.title)}`;
@@ -359,7 +447,16 @@ function TitleForm({ title, withCopy = false, known = [], onDone }) {
     const body = { type: form.type, title: form.title, creator: form.creator || null, year: form.year === '' ? null : Number(form.year), genres: commaList(form.genres),
       minutes: form.minutes === '' ? null : Number(form.minutes), cover: form.cover || null, summary: form.summary || null, note: form.note || null, wanted: form.wanted };
     if (withCopy && !form.wanted && form.format) body.copy = { format: form.format, place_id: form.place_id === '' ? null : Number(form.place_id), barcode: form.barcode || null };
-    try { onDone((title.id ? await axios.put(`/api/media/${title.id}`, body) : await axios.post('/api/media', body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+    // What TMDB calls it is kept with the title, beside any other catalogue's number.
+    if (tmdb) body.ids = { ...(title.ids || {}), tmdb: tmdb.id, tmdb_kind: tmdb.kind };
+    try {
+      const saved = (title.id ? await axios.put(`/api/media/${title.id}`, body) : await axios.post('/api/media', body)).data;
+      // The poster is fetched once, through Life Is, and kept as the cover. A poster that can't be fetched doesn't undo the save.
+      if (tmdb?.poster) {
+        try { saved.cover = (await axios.post('/api/lookups/films/cover', { media_id: saved.id, path: tmdb.poster })).data.cover; } catch { /* the title is saved all the same */ }
+      }
+      onDone(saved);
+    } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   return (
     <form onSubmit={submit} className="space-y-3">
@@ -383,6 +480,9 @@ function TitleForm({ title, withCopy = false, known = [], onDone }) {
           <button type="button" onClick={() => setDifferent(askAbout)} className="min-h-[44px] text-left underline">It's a different one</button>
         </div>
       )}
+      {/* TMDB's terms restrict apps people pay for, so film lookups are offered only where Life Is is self-hosted,
+          not in the phone app, until TMDB has said a paid app may use them with the person's own key. */}
+      {!inApp() && <FilmFinder form={form} setForm={setForm} hasCover={Boolean(form.cover)} autoSearch={Boolean(title.findOnTmdb)} onPicked={setTmdb} />}
       <div className="grid grid-cols-3 gap-3">
         <div className="col-span-2"><Field label={CREATOR[form.type]}><input value={form.creator} onChange={set('creator')} className={inputClass} /></Field></div>
         <Field label="Year"><input type="number" min="0" max="9999" step="1" value={form.year} onChange={set('year')} className={inputClass} /></Field>
@@ -408,9 +508,9 @@ function TitleForm({ title, withCopy = false, known = [], onDone }) {
         <div className="col-span-2"><Field label="Genres, with commas between"><input value={form.genres} onChange={set('genres')} placeholder="Horror, Science fiction" className={inputClass} /></Field></div>
         <Field label="Runs for (minutes)"><input type="number" min="0" step="1" value={form.minutes} onChange={set('minutes')} className={inputClass} /></Field>
       </div>
+      {(title.id || form.summary) && <Field label="What it's about"><textarea rows={3} value={form.summary} onChange={set('summary')} className={inputClass} /></Field>}
       {title.id && (
         <>
-          <Field label="What it's about"><textarea rows={3} value={form.summary} onChange={set('summary')} className={inputClass} /></Field>
           <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-life-100">
             <input type="checkbox" checked={form.wanted} onChange={(e) => setForm({ ...form, wanted: e.target.checked })} className="accent-life-600" /> I want (another copy of) it
           </label>
@@ -420,6 +520,18 @@ function TitleForm({ title, withCopy = false, known = [], onDone }) {
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="text-right"><button type="submit" className={buttonClass}>Save</button></div>
     </form>
+  );
+}
+
+/** What TMDB's terms ask to be shown beside details that came from it, in plain words. */
+function TmdbNotice({ ids }) {
+  const [notice, setNotice] = useState('');
+  useEffect(() => { axios.get('/api/lookups').then(({ data }) => setNotice(data.film_service?.notice || '')).catch(() => {}); }, []);
+  const kind = ids.tmdb_kind === 'tv' ? 'tv' : 'movie';
+  return (
+    <p className="mt-2 text-xs text-gray-500 dark:text-life-300" data-tmdb-notice>
+      Details from <a href={`https://www.themoviedb.org/${kind}/${encodeURIComponent(ids.tmdb)}`} target="_blank" rel="noreferrer" className="underline">TMDB</a>. {notice}
+    </p>
   );
 }
 
@@ -455,6 +567,7 @@ export function MediaTitlePage() {
             </p>
             {title.wanted && <p className="mt-1"><span className="rounded bg-honey-100 px-1.5 text-xs text-honey-700">wanted</span></p>}
             {title.summary && <p className="mt-2 text-sm text-gray-700 dark:text-life-100">{title.summary}</p>}
+            {title.ids?.tmdb && title.ids?.tmdb_kind && <TmdbNotice ids={title.ids} />}
             {title.note && <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700 dark:text-life-100">{title.note}</p>}
           </div>
           <button type="button" onClick={() => setModal({ edit: true })} className={quietButtonClass}>Edit</button>
