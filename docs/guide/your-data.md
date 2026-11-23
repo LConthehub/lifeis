@@ -25,6 +25,7 @@ Life Is works without the internet. A few things reach outside, and each one is 
 | Email | Only between Life Is and your own mail provider |
 | Reminders | What you choose, the ways you choose. See [Upkeep](upkeep.html#how-you-are-told) |
 | An AI assistant | Only when you ask it a question. A model you run yourself, or a cloud one with a plain warning |
+| Reading your bank | Only on a Life Is you run, and only when you press Read now. Your setup token once, then a read-only request for the accounts you chose. Nothing of yours is sent. See [Reading your bank](bank-reading.html) |
 
 All of them are listed in one place: **Settings › Connections**.
 

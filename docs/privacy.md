@@ -41,8 +41,11 @@ The app reaches outside your device only when you use a feature that needs to, a
 | Scan a grocery's barcode | Open Food Facts | The number under the barcode |
 | Import a recipe from a website | The website whose address you paste | A request for that one page, as a browser would make |
 | Connect to a Life Is you host | Your own computer | Your sign-in, and what you do in the app |
+| Turn on bank reading through SimpleFIN (only on a Life Is you host) | The SimpleFIN server your setup token names | Your setup token, once, to claim a private access address. After that, only when you press "Read now": a request for the accounts you chose and their transactions for the dates you picked, signed in with that access address. Nothing from Life Is is sent. |
 
 Each of those services has its own privacy policy, and sees the internet address the request comes from, as any website does.
+
+Reading bank accounts through SimpleFIN is off until you turn it on, and it is read only. It is offered only on a Life Is you host, never in the app while it keeps everything on your phone. The access address SimpleFIN gives you is kept sealed on your own server. It is never shown to a page, written to a log, or put in a download. You can disconnect at any time, which forgets it. SimpleFIN has its own privacy policy and sees the internet address the request comes from.
 
 If you run Life Is on your own computer, it offers further optional connections there, such as your own mail account, calendars you follow, or a media or photo library you run. Each is off until you turn it on, each says what it sends, and each connects your computer directly to the service you name.
 
