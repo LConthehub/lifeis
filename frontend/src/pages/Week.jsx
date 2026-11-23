@@ -103,19 +103,23 @@ export default function Week() {
               {todays.length === 0 ? <p className="text-xs text-gray-400">Nothing planned.</p> : (
                 <ul className="space-y-2">
                   {todays.map((m) => (
-                    <li key={m.id} className="flex flex-wrap items-start gap-2">
-                      <span className="w-16 shrink-0 pt-0.5 text-xs text-gray-500 dark:text-life-300">{cap(m.meal)}</span>
-                      <span className="flex-1 text-sm">
-                        {m.recipe_id ? <Link to={`/recipes/${m.recipe_id}`} className="font-medium text-life-800 hover:underline dark:text-life-50">{m.recipe_title}</Link> : <span className="text-gray-800 dark:text-life-50">{m.title}</span>}
-                        {m.servings && <span className="text-xs text-gray-500 dark:text-life-300"> · {m.servings} servings</span>}
-                        {m.cooked_on && <span className="ml-1 text-xs text-life-600 dark:text-life-300">· cooked ✓</span>}
-                      </span>
-                      {!m.cooked_on && <button type="button" onClick={() => setPrepFor(m)} className="min-h-[44px] px-1 text-xs text-life-600 hover:underline dark:text-life-200" title="When you eat it, and things to do ahead">Prep</button>}
-                      {m.recipe_id && !m.cooked_on && <button type="button" onClick={() => cooked(m)} className="text-xs text-life-600 hover:underline dark:text-life-200" title="Take what it used out of the pantry">Cooked</button>}
-                      <button type="button" onClick={() => remove(m)} className="text-xs text-gray-400 hover:text-red-600" aria-label="Remove">✕</button>
+                    <li key={m.id} className="border-b border-life-100 pb-1 last:border-b-0 dark:border-life-700">
+                      <div className="flex items-start gap-2">
+                        <span className="w-16 shrink-0 pt-0.5 text-xs text-gray-500 dark:text-life-300">{cap(m.meal)}</span>
+                        <span className="flex-1 text-sm">
+                          {m.recipe_id ? <Link to={`/recipes/${m.recipe_id}`} className="font-medium text-life-800 hover:underline dark:text-life-50">{m.recipe_title}</Link> : <span className="text-gray-800 dark:text-life-50">{m.title}</span>}
+                          {m.servings && <span className="text-xs text-gray-500 dark:text-life-300"> · {m.servings} servings</span>}
+                          {m.cooked_on && <span className="ml-1 text-xs text-life-600 dark:text-life-300">· cooked ✓</span>}
+                        </span>
+                      </div>
                       {prepList.filter((p) => p.meal_id === m.id).map((p) => (
-                        <span key={p.key} data-prep-line className="basis-full pl-[4.5rem] text-xs text-gray-600 dark:text-life-200">{p.words}: {p.label}</span>
+                        <p key={p.key} data-prep-line className="pl-[4.5rem] text-xs text-gray-600 dark:text-life-200">{p.words}: {p.label}</p>
                       ))}
+                      <div className="flex flex-wrap items-center gap-1 pl-[4.5rem]">
+                        {!m.cooked_on && <button type="button" onClick={() => setPrepFor(m)} className="min-h-[44px] min-w-[44px] rounded-lg px-3 text-sm text-life-600 hover:underline dark:text-life-200" title="When you eat it, and things to do ahead">Prep</button>}
+                        {m.recipe_id && !m.cooked_on && <button type="button" onClick={() => cooked(m)} className="min-h-[44px] min-w-[44px] rounded-lg px-3 text-sm text-life-600 hover:underline dark:text-life-200" title="Take what it used out of the pantry">Cooked</button>}
+                        <button type="button" onClick={() => remove(m)} className="min-h-[44px] min-w-[44px] rounded-lg px-3 text-sm text-gray-500 hover:text-red-600 dark:text-life-300" aria-label="Remove">Remove</button>
+                      </div>
                     </li>
                   ))}
                 </ul>

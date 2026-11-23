@@ -67,9 +67,21 @@ await dialog.getByRole('button', { name: 'Save' }).click(); await wait(1000);
 t = await text();
 say('a time to eat of 7 pm moves the hours-before step to 5 pm', /Take it out of the fridge: .*5 pm/.test(t));
 say('and the meal\'s own prep shows too', /Start the stock: .*9 am/.test(t));
-const weekSmall = await tooSmall([page.getByRole('button', { name: 'Prep' })]);
+const weekSmall = await tooSmall([page.getByRole('button', { name: /^(Prep|Cooked|Remove)$/ })]);
 say('the Prep buttons are 44px tall and the week fits 375px' + (weekSmall.length ? ` (too small: ${weekSmall})` : ''), weekSmall.length === 0 && await noSideways());
 await page.screenshot({ path: shots + '/prep-week-375.png', fullPage: true });
+await page.emulateMedia({ colorScheme: 'dark' }); await wait(300);
+say('dark at 375px: no sideways scroll', await noSideways());
+await page.screenshot({ path: shots + '/prep-week-375-dark.png', fullPage: true });
+await page.emulateMedia({ colorScheme: 'light' });
+await page.setViewportSize({ width: 1280, height: 900 }); await wait(500);
+say('at 1280px: no sideways scroll', await noSideways());
+await page.screenshot({ path: shots + '/prep-week-1280.png', fullPage: true });
+await page.emulateMedia({ colorScheme: 'dark' }); await wait(300);
+say('dark at 1280px: no sideways scroll', await noSideways());
+await page.screenshot({ path: shots + '/prep-week-1280-dark.png', fullPage: true });
+await page.emulateMedia({ colorScheme: 'light' });
+await page.setViewportSize({ width: 375, height: 812 });
 
 // ---------- tomorrow morning on Home ----------
 await send('PUT', `/api/prep/meals/${soon.id}`, { steps: [{ words: 'Set the slow cooker going', rule: 'morning_of', at: '06:30' }] });
