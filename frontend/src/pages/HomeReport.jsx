@@ -136,7 +136,7 @@ export default function HomeReport() {
             <div className="grid gap-x-4 sm:grid-cols-2">
               <label className="block space-y-1 text-xs font-medium text-gray-600 dark:text-life-200">Only things worth at least (dollars)
                 <input inputMode="decimal" value={minText} onChange={(e) => setMinText(e.target.value)} placeholder="No minimum" aria-invalid={minBad}
-                  className="min-h-11 w-full rounded-lg border border-life-200 bg-white px-3 py-2 text-sm text-gray-800 dark:border-life-700 dark:bg-life-800 dark:text-life-50" />
+                  className="min-h-11 w-full rounded-lg border border-life-200 bg-card px-3 py-2 text-sm text-gray-800 dark:border-life-700 dark:bg-life-800 dark:text-life-50" />
                 {minBad && <span className="block text-red-600" role="alert">An amount is a number, like 250 or 79.99</span>}
               </label>
               <div>
@@ -157,7 +157,7 @@ export default function HomeReport() {
       </div>
 
       {/* The sheet itself: black on white whatever the page's colours. */}
-      <div className={`report-sheet space-y-5 rounded-xl bg-white p-4 text-black sm:p-6 ${perPage ? 'one-room-per-page' : ''}`} aria-label="The inventory">
+      <div className={`report-sheet space-y-5 rounded-xl bg-card print:bg-white p-4 text-black sm:p-6 ${perPage ? 'one-room-per-page' : ''}`} aria-label="The inventory">
         <header>
           <h2 className="text-lg font-bold">Home inventory</h2>
           <p className="text-sm text-gray-700">Made on {dayText(report.day)}</p>

@@ -23,7 +23,7 @@ export default function Activities() {
     if (chosen) axios.get('/api/things/activity', { params: { name: chosen } }).then(({ data }) => setOne(data)).catch(() => setOne(false));
   }, [chosen]);
   if (!all) return null;
-  const chip = (active) => `rounded-full px-3 py-1 text-sm ${active ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
+  const chip = (active) => `rounded-full px-3 py-1 text-sm ${active ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
 
   return (
     <div className="space-y-4">

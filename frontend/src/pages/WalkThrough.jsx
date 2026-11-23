@@ -5,7 +5,7 @@ import Picture from '../components/Picture';
 import { shrink } from '../components/shrink';
 import { buttonClass, cardClass, errorMessage, quietButtonClass } from '../components/ui';
 
-const FIELD = 'min-h-11 w-full rounded-lg border border-life-200 bg-white px-3 py-2 text-base text-gray-800 focus:border-life-500 focus:outline-none focus:ring-2 focus:ring-life-200 dark:border-life-700 dark:bg-life-800 dark:text-life-50';
+const FIELD = 'min-h-11 w-full rounded-lg border border-life-200 bg-card px-3 py-2 text-base text-gray-800 focus:border-life-500 focus:outline-none focus:ring-2 focus:ring-life-200 dark:border-life-700 dark:bg-life-800 dark:text-life-50';
 const dollars = (cents) => (cents == null ? '' : (cents / 100).toFixed(2));
 /** Dollars as typed ("1,200", "$50.5") to whole cents; null when empty, NaN when it is not an amount. */
 const centsOf = (text) => {

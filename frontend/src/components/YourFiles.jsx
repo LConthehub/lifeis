@@ -243,7 +243,7 @@ export function BringInFromDownload() {
       {!looked && !report && (
         <div className="mt-3">
           <Field label="A download from Life Is (a .zip file)">
-            <input type="file" accept=".zip,application/zip" onChange={choose} disabled={busy} className={`block w-full ${touch} text-sm file:mr-3 file:min-h-[44px] file:rounded-lg file:border file:border-life-200 file:bg-white file:px-3 file:text-sm file:text-life-700`} />
+            <input type="file" accept=".zip,application/zip" onChange={choose} disabled={busy} className={`block w-full ${touch} text-sm file:mr-3 file:min-h-[44px] file:rounded-lg file:border file:border-life-200 file:bg-card file:px-3 file:text-sm file:text-life-700`} />
           </Field>
           {busy && <p className="mt-2 text-sm text-gray-600 dark:text-life-100" role="status">Reading it…</p>}
         </div>

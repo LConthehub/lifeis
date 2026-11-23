@@ -11,7 +11,7 @@ import { LifeAreasPicker } from './LifeAreas';
 
 const primary = 'min-h-[44px] rounded-full bg-gradient-to-br from-life-500 to-life-700 px-5 py-2 text-sm font-medium text-white shadow-sm hover:from-life-600 hover:to-life-800 disabled:opacity-50';
 const quiet = 'min-h-[44px] rounded-lg border border-life-200 px-3 py-2 text-sm text-life-700 hover:bg-life-50 disabled:opacity-50 dark:border-life-700 dark:text-life-100 dark:hover:bg-life-800';
-const field = 'min-h-[44px] w-full rounded-lg border border-life-200 bg-white px-3 py-2 text-base text-gray-800 focus:border-life-500 focus:outline-none focus:ring-2 focus:ring-life-200 dark:border-life-700 dark:bg-life-800 dark:text-life-50';
+const field = 'min-h-[44px] w-full rounded-lg border border-life-200 bg-card px-3 py-2 text-base text-gray-800 focus:border-life-500 focus:outline-none focus:ring-2 focus:ring-life-200 dark:border-life-700 dark:bg-life-800 dark:text-life-50';
 const row = 'flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-sm';
 const picked = (on) => `${row} ${on ? 'border-life-300 bg-life-50 dark:border-life-500 dark:bg-life-700' : 'border-gray-200 dark:border-life-700'}`;
 const tick = 'mt-0.5 h-5 w-5 shrink-0 accent-life-600';
@@ -29,7 +29,7 @@ function Shell({ title, onClose, children }) {
   return createPortal(
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 sm:items-center sm:p-4">
       <div role="dialog" aria-modal="true" aria-label={title}
-        className="max-h-[92vh] max-h-[92dvh] w-full overflow-y-auto overscroll-contain rounded-t-2xl bg-white p-4 shadow-xl dark:bg-life-800 sm:max-w-lg sm:rounded-2xl sm:p-6">
+        className="max-h-[92vh] max-h-[92dvh] w-full overflow-y-auto overscroll-contain rounded-t-2xl bg-card p-4 shadow-xl dark:bg-life-800 sm:max-w-lg sm:rounded-2xl sm:p-6">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-life-800 dark:text-life-50">{title}</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full text-2xl leading-none text-gray-400 hover:text-gray-600">×</button>
@@ -282,7 +282,7 @@ export function StartDialog({ onDone, onClose, fresh = false }) {
 
       {error && <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-      <div className="sticky -bottom-4 -mx-4 -mb-4 mt-4 space-y-2 border-t border-life-100 bg-white px-4 pb-4 pt-3 dark:border-life-700 dark:bg-life-800 sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6 sm:pb-6">
+      <div className="sticky -bottom-4 -mx-4 -mb-4 mt-4 space-y-2 border-t border-life-100 bg-card px-4 pb-4 pt-3 dark:border-life-700 dark:bg-life-800 sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6 sm:pb-6">
         <div className="flex justify-between gap-2">
           <button type="button" onClick={back} disabled={busy || step === 1} className={quiet}>Back</button>
           <button type="button" onClick={next} disabled={busy} className={primary}>{busy ? 'Saving…' : step === 4 ? 'Finish' : 'Next'}</button>

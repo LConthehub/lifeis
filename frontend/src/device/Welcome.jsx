@@ -26,7 +26,7 @@ export default function Welcome({ onChosen }) {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-8">
-      <div className="w-full max-w-md space-y-4 rounded-2xl bg-white/95 p-6 shadow-xl ring-1 ring-white/40 backdrop-blur dark:bg-life-900/90 dark:ring-life-700">
+      <div className="w-full max-w-md space-y-4 rounded-2xl bg-card/95 p-6 shadow-xl ring-1 ring-white/40 backdrop-blur dark:bg-life-900/90 dark:ring-life-700">
         <div className="flex items-center gap-3">
           <img src="/icon-192.png" alt="" className="h-11 w-11 rounded-full" />
           <div>

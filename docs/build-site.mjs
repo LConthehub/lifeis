@@ -12,7 +12,7 @@ mkdirSync(out, { recursive: true });
 
 // The look, shared by every page: the colours of a 1970s kitchen (cream, harvest gold, burnt orange, a tomato cap, chocolate
 // brown), light or dark following the device, and the display face Fraunces (SIL Open Font License), served from this site.
-const LIGHT = '--ink: #33291f; --soft: #5a4e40; --paper: #f1e5c8; --card: #faf3e3; --line: #dfcb9f; --deep: #422a17; --teal: #734825; --btn: #734825; --btn-ink: #ffffff;';
+const LIGHT = '--ink: #33291f; --soft: #5a4e40; --paper: #f1e5c8; --card: #f6ead0; --line: #dfcb9f; --deep: #422a17; --teal: #734825; --btn: #734825; --btn-ink: #ffffff;';
 const DARK = '--ink: #fbf4e4; --soft: #d2b184; --paper: #2a190d; --card: #422a17; --line: #5a3a20; --deep: #f2ce47; --teal: #eead3e; --btn: #eead3e; --btn-ink: #2a190d;';
 const fontFace = (url) => `@font-face { font-family: "Fraunces Variable"; font-style: normal; font-display: swap; font-weight: 100 900; src: url(${url}) format("woff2-variations"); }`;
 const DISPLAY = 'font-family: "Fraunces Variable", Georgia, Cambria, serif; font-variation-settings: "SOFT" 100;';
@@ -178,7 +178,7 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
   .pill { background: rgba(255,255,255,.2); padding: .3rem .9rem; }
   .hero h1 { font-size: clamp(1.9rem, 5vw, 3rem); line-height: 1.15; margin: 3rem 0 1rem; max-width: 22ch; }
   .hero p { font-size: 1.15rem; max-width: 46ch; margin: 0 0 1.6rem; opacity: .95; }
-  .button { background: #fbf4e4; color: #422a17; padding: .7rem 1.4rem; margin: 0 .5rem .5rem 0; }
+  .button { background: #f6ead0; color: #422a17; padding: .7rem 1.4rem; margin: 0 .5rem .5rem 0; }
   .button.quiet { background: rgba(255,255,255,.18); color: #fff; }
   .wrap { padding: 0 1.1rem; }
   .shot { margin: -2.2rem auto 0; display: block; width: 100%; height: auto; border-radius: 1rem; box-shadow: 0 12px 40px rgba(0,0,0,.25); border: 1px solid var(--line); }

@@ -152,7 +152,7 @@ export function StickersPage() {
         <Link to="/things/places" className="text-sm text-life-600 hover:underline dark:text-life-200">← Places</Link>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Stickers for your places</h1>
-          <select aria-label="Sticker size" value={size} onChange={(e) => setSize(e.target.value)} className="rounded-lg border border-life-200 bg-white px-3 py-1.5 text-sm text-gray-800 dark:border-life-700 dark:bg-life-800 dark:text-life-50">
+          <select aria-label="Sticker size" value={size} onChange={(e) => setSize(e.target.value)} className="rounded-lg border border-life-200 bg-card px-3 py-1.5 text-sm text-gray-800 dark:border-life-700 dark:bg-life-800 dark:text-life-50">
             {Object.entries(SIZES).map(([key, [label]]) => <option key={key} value={key}>{label}</option>)}
           </select>
           <button type="button" disabled={printing.length === 0} onClick={() => window.print()} className={buttonClass}>Print {printing.length || ''}</button>
@@ -176,7 +176,7 @@ export function StickersPage() {
         )}
       </div>
       {/* The sheet itself: black on white whatever the page's colours, and the only thing that prints. */}
-      <ul className={`sticker-sheet grid gap-3 rounded-xl bg-white p-3 text-black ${SIZES[size][1]}`} aria-label="The stickers that will print">
+      <ul className={`sticker-sheet grid gap-3 rounded-xl bg-card print:bg-white p-3 text-black ${SIZES[size][1]}`} aria-label="The stickers that will print">
         {printing.map((s) => (
           <li key={s.id} className="flex break-inside-avoid flex-col items-center rounded-lg border border-dashed border-gray-400 p-2 text-center">
             {pictures[s.id] ? <img src={pictures[s.id]} alt={`Sticker for ${s.path}`} data-code={s.code} className="w-full" /> : <span className="aspect-square w-full" />}

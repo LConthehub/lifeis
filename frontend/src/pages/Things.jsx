@@ -92,7 +92,7 @@ export default function Things() {
   const matches = (item) => !word || [item.name, item.note, item.place, ...Object.values(item.values)].some((v) => String(v ?? '').toLowerCase().includes(word));
   const shownItems = items.filter((i) => (chosenKind === null || i.kind_id === chosenKind) && inGroup.some((k) => k.id === i.kind_id) && matches(i));
   const low = items.filter((i) => i.low).map((i) => i.name);
-  const chip = (on) => `min-h-[44px] rounded-full px-4 py-2 text-sm ${on ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
+  const chip = (on) => `min-h-[44px] rounded-full px-4 py-2 text-sm ${on ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
   const kindChips = (list, label, all) => (
     <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>
       {[{ id: null, name: all, items: list.reduce((n, k) => n + k.items, 0) }, ...list].map((k) => (

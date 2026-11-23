@@ -146,7 +146,7 @@ export function AskCard() {
     setBusy(false);
   };
   return (
-    <section className="rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-life-100 dark:bg-life-900/70 dark:ring-life-700" data-ask>
+    <section className="rounded-2xl bg-card/90 p-4 shadow-sm ring-1 ring-life-100 dark:bg-life-900/70 dark:ring-life-700" data-ask>
       <form onSubmit={ask} className="flex gap-2">
         <input value={question} onChange={(e) => setQuestion(e.target.value)} aria-label="Ask about your household" placeholder="Ask about your household…" className={`${inputClass} flex-1`} />
         <button type="submit" disabled={busy || !question.trim()} className={buttonClass}>{busy ? 'Thinking…' : 'Ask'}</button>

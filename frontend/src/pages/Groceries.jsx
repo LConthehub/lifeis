@@ -135,7 +135,7 @@ export default function Groceries() {
           <span className="text-xs text-gray-500 dark:text-life-300">Laid out</span>
           {[['aisle', 'by aisle'], ['shop', 'by store']].map(([how, label]) => (
             <button key={how} type="button" onClick={() => layOut(how)} aria-pressed={by === how}
-              className={`rounded-full px-3 py-1 ${by === how ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`}>{label}</button>
+              className={`rounded-full px-3 py-1 ${by === how ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`}>{label}</button>
           ))}
           {canNarrow && (
             <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-xs text-gray-600 dark:text-life-200">
@@ -248,7 +248,7 @@ export default function Groceries() {
 
       {anyMoney && (
         <label className="flex items-center gap-2 text-xs text-gray-500 dark:text-life-300">Prices are shown in
-          <select value={sign} onChange={async (e) => setShop((await axios.put('/api/shopping/settings', { currency: e.target.value })).data)} aria-label="Money sign" className="rounded border border-life-200 bg-white px-1 py-0.5 text-gray-800 dark:border-life-700 dark:bg-life-800 dark:text-life-50">
+          <select value={sign} onChange={async (e) => setShop((await axios.put('/api/shopping/settings', { currency: e.target.value })).data)} aria-label="Money sign" className="rounded border border-life-200 bg-card px-1 py-0.5 text-gray-800 dark:border-life-700 dark:bg-life-800 dark:text-life-50">
             {[...new Set([sign, '$', '£', '€', 'kr', '¥', '₹', 'R'])].map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>

@@ -310,7 +310,7 @@ function SessionForm({ projectId, kind, onDone }) {
         <div className="space-y-1">
           <Field label="Watched or listened to meanwhile, from your collection"><input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Type a title" className={inputClass} /></Field>
           {offered.map((m) => (
-            <button key={m.id} type="button" onClick={() => { setChosen([...chosen, m.id]); setFind(''); }} className="mr-1 rounded-full bg-white px-3 py-1 text-sm text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700">+ {m.title}{m.year ? ` (${m.year})` : ''}</button>
+            <button key={m.id} type="button" onClick={() => { setChosen([...chosen, m.id]); setFind(''); }} className="mr-1 rounded-full bg-card px-3 py-1 text-sm text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700">+ {m.title}{m.year ? ` (${m.year})` : ''}</button>
           ))}
           {chosen.map((id) => {
             const m = titles.find((t) => t.id === id);

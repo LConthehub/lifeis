@@ -89,7 +89,7 @@ export default function ChoreChart() {
   const choose = (value) => { setStartOn(value); saveStart(value); };
   const toggle = (g) => setOff(off.includes(keyOf(g)) ? off.filter((k) => k !== keyOf(g)) : [...off, keyOf(g)]);
   const nothing = chart.groups.every((g) => g.chores.length === 0);
-  const pill = (active) => `min-h-[44px] rounded-full px-4 py-2 text-sm ${active ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
+  const pill = (active) => `min-h-[44px] rounded-full px-4 py-2 text-sm ${active ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
 
   return (
     <div className="space-y-4">
@@ -107,7 +107,7 @@ export default function ChoreChart() {
           <button type="button" onClick={() => setWeek('this')} aria-pressed={week === 'this'} className={pill(week === 'this')}>This week</button>
           <button type="button" onClick={() => setWeek('next')} aria-pressed={week === 'next'} className={pill(week === 'next')}>Next week</button>
           <label className="ml-auto flex items-center gap-2 text-sm text-gray-700 dark:text-life-100">Week starts on
-            <select value={startOn} onChange={(e) => choose(e.target.value)} className="min-h-[44px] rounded-lg border border-life-200 bg-white px-3 text-sm text-gray-800 dark:border-life-700 dark:bg-life-800 dark:text-life-50">
+            <select value={startOn} onChange={(e) => choose(e.target.value)} className="min-h-[44px] rounded-lg border border-life-200 bg-card px-3 text-sm text-gray-800 dark:border-life-700 dark:bg-life-800 dark:text-life-50">
               <option value="sunday">Sunday</option><option value="monday">Monday</option>
             </select>
           </label>
@@ -140,7 +140,7 @@ export default function ChoreChart() {
       </div>
 
       {sheets.map((groups, i) => (
-        <section key={groups.map(keyOf).join('|')} className="chart-sheet break-after-page rounded-xl bg-white p-3 text-black last:break-after-auto sm:p-6 print:break-after-page print:last:break-after-auto" aria-label={`${title(groups)}, ${range}`} data-sheet={i}>
+        <section key={groups.map(keyOf).join('|')} className="chart-sheet break-after-page rounded-xl bg-card print:bg-white p-3 text-black last:break-after-auto sm:p-6 print:break-after-page print:last:break-after-auto" aria-label={`${title(groups)}, ${range}`} data-sheet={i}>
           <div className="mb-2">
             <h2 className="text-lg font-bold print:text-xl">{title(groups)}</h2>
             <p className="text-sm">{range}</p>

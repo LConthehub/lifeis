@@ -152,7 +152,7 @@ export default function UpkeepPage() {
   const shown = jobs.filter((j) => !kind || j.kind === kind);
   const offered = starters.filter((s) => !have.has(s.name.toLowerCase()) && (!kind || (s.kind ?? 'job') === kind));
   const perMonth = monthly(jobs);
-  const chip = (active) => `rounded-full px-3 py-1 text-sm ${active ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
+  const chip = (active) => `rounded-full px-3 py-1 text-sm ${active ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
 
   return (
     <div className="space-y-4">

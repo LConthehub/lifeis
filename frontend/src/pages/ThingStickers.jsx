@@ -47,7 +47,7 @@ export function ThingStickersPage() {
         <Link to="/things" className="text-sm text-life-600 hover:underline dark:text-life-200">← Things</Link>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">{blank ? 'Blank stickers for things' : 'Stickers for your things'}</h1>
-          <select aria-label="Sticker size" value={size} onChange={(e) => setSize(e.target.value)} className="rounded-lg border border-life-200 bg-white px-3 py-1.5 text-sm text-gray-800 dark:border-life-700 dark:bg-life-800 dark:text-life-50">
+          <select aria-label="Sticker size" value={size} onChange={(e) => setSize(e.target.value)} className="rounded-lg border border-life-200 bg-card px-3 py-1.5 text-sm text-gray-800 dark:border-life-700 dark:bg-life-800 dark:text-life-50">
             {Object.entries(SIZES).map(([key, [label]]) => <option key={key} value={key}>{label}</option>)}
           </select>
           <button type="button" disabled={!stickers.length} onClick={() => window.print()} className={buttonClass}>Print {stickers.length || ''}</button>
@@ -59,7 +59,7 @@ export function ThingStickersPage() {
         </p>
         {!stickers.length && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>No things to make stickers for.</div>}
       </div>
-      <ul className={`sticker-sheet grid gap-2 rounded-xl bg-white p-3 text-black ${SIZES[size][1]}`} aria-label="The stickers that will print">
+      <ul className={`sticker-sheet grid gap-2 rounded-xl bg-card print:bg-white p-3 text-black ${SIZES[size][1]}`} aria-label="The stickers that will print">
         {stickers.map((s) => (
           <li key={s.code} className="flex break-inside-avoid flex-col items-center rounded-lg border border-dashed border-gray-400 p-1.5 text-center">
             {pictures[s.code] ? <img src={pictures[s.code]} alt={s.name ? `Sticker for ${s.name}` : 'A blank sticker'} data-code={s.code} className="w-full" /> : <span className="aspect-square w-full" />}

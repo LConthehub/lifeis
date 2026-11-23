@@ -21,6 +21,7 @@ export default {
         // The mushroom-cap orange.
         coral: '#e7602b',
         cream: '#faf3e3',
+        card: '#fbf3e0',
         // The page behind the sheet: light, and the dark chocolate night.
         paper: '#f1e5c8',
         night: '#2a190d',

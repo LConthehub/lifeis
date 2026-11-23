@@ -1,5 +1,5 @@
 @font-face { font-family: "Fraunces Variable"; font-style: normal; font-display: swap; font-weight: 100 900; src: url(../fraunces-soft.woff2) format("woff2-variations"); }
-:root { --ink: #33291f; --soft: #5a4e40; --paper: #f1e5c8; --card: #faf3e3; --line: #dfcb9f; --deep: #422a17; --teal: #734825; --btn: #734825; --btn-ink: #ffffff; }
+:root { --ink: #33291f; --soft: #5a4e40; --paper: #f1e5c8; --card: #f6ead0; --line: #dfcb9f; --deep: #422a17; --teal: #734825; --btn: #734825; --btn-ink: #ffffff; }
 @media (prefers-color-scheme: dark) { :root { --ink: #fbf4e4; --soft: #d2b184; --paper: #2a190d; --card: #422a17; --line: #5a3a20; --deep: #f2ce47; --teal: #eead3e; --btn: #eead3e; --btn-ink: #2a190d; } }
 h1, h2, .brand { font-family: "Fraunces Variable", Georgia, Cambria, serif; font-variation-settings: "SOFT" 100; }
 .bands { height: .6rem; background: linear-gradient(180deg, #60304f 0 20%, #3a742f 20% 40%, #f2ce47 40% 60%, #e7602c 60% 80%, #f5e8cd 80% 100%); }

@@ -139,9 +139,9 @@ function Shell({ user, demo = false, onLogout }) {
       </header>
       <main className="mx-auto max-w-5xl px-3 py-4 sm:px-4 xl:max-w-6xl">
         {/* The page is a sheet of frosted glass over the cream (or coffee), so everything on it reads clearly. */}
-        <div className="rounded-3xl bg-white/70 p-4 shadow-xl shadow-life-800/10 ring-1 ring-life-200/70 backdrop-blur-md dark:bg-life-900/75 dark:shadow-black/30 dark:ring-life-700 sm:p-6">
+        <div className="rounded-3xl bg-card/70 p-4 shadow-xl shadow-life-800/10 ring-1 ring-life-200/70 backdrop-blur-md dark:bg-life-900/75 dark:shadow-black/30 dark:ring-life-700 sm:p-6">
         {demo && (
-          <p className="mb-4 rounded-xl bg-white/90 px-4 py-2.5 text-sm text-gray-700 shadow print:hidden dark:bg-life-800 dark:text-life-100" role="note" data-demo-banner>
+          <p className="mb-4 rounded-xl bg-card/90 px-4 py-2.5 text-sm text-gray-700 shadow print:hidden dark:bg-life-800 dark:text-life-100" role="note" data-demo-banner>
             <strong className="text-life-700 dark:text-life-100">Demo.</strong> This household is made up, and everything is reset to the sample data each night. Try anything.
             Things that reach outside (email, look-ups, sharing links) are turned off here. <a href="https://lifeis.living" className="underline">About Life Is</a>
           </p>
@@ -200,7 +200,7 @@ function Shell({ user, demo = false, onLogout }) {
       <LifeFirstRun open={!!life && life.areas === null} onDone={(data) => (data ? setLife(data) : loadLife())} />
       {/* On a phone the section's pages sit at the bottom, under your thumb. */}
       {tabs.length > 1 && (
-        <nav className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t border-life-100 bg-white/95 safe-bottom backdrop-blur dark:border-life-800 dark:bg-life-900/95 sm:hidden" aria-label={`Life is ${section.shown ?? section.word}`}>
+        <nav className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t border-life-100 bg-card/95 safe-bottom backdrop-blur dark:border-life-800 dark:bg-life-900/95 sm:hidden" aria-label={`Life is ${section.shown ?? section.word}`}>
           {tabs.map(([to, label, icon]) => (
             <NavLink key={to} to={to} end={exact(to)} className={({ isActive }) => `flex flex-col items-center py-2 text-xs ${isActive ? 'text-life-600 font-semibold dark:text-life-200' : 'text-gray-500 dark:text-life-300'}`}>
               <span aria-hidden="true" className="text-lg">{icon}</span>{label}

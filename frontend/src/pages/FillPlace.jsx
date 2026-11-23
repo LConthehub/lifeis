@@ -263,7 +263,7 @@ function Row({ entry, onChange, addThing, addTitle, bookFormat }) {
       {entry.ask && (
         <form onSubmit={give} className="flex flex-wrap gap-2">
           {!entry.ask.code && (
-            <select value={as} onChange={(e) => setAs(e.target.value)} aria-label="What it is" className="rounded-lg border border-life-200 bg-white px-2 py-1.5 text-sm dark:border-life-700 dark:bg-life-800 dark:text-life-50">
+            <select value={as} onChange={(e) => setAs(e.target.value)} aria-label="What it is" className="rounded-lg border border-life-200 bg-card px-2 py-1.5 text-sm dark:border-life-700 dark:bg-life-800 dark:text-life-50">
               <option value="thing">A thing</option><option value="book">A book</option><option value="film">A film</option><option value="music">Music</option><option value="game">A game</option>
             </select>
           )}

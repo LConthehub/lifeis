@@ -98,7 +98,7 @@ function BringIn({ onDraft, onDone }) {
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Where the recipe is">
         {WAYS.map(([key, label]) => (
           <button key={key} type="button" onClick={() => setWay(key)} aria-pressed={way === key}
-            className={`rounded-full px-3 py-1 text-sm ${way === key ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`}>{label}</button>
+            className={`rounded-full px-3 py-1 text-sm ${way === key ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`}>{label}</button>
         ))}
       </div>
       {way === 'web' && <FromWeb onDraft={onDraft} />}

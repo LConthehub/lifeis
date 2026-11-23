@@ -102,7 +102,7 @@ function TwoStep({ status, reload, onCodes }) {
         <form onSubmit={confirm} className="space-y-3">
           <p className="text-sm text-gray-700 dark:text-life-100">In your authenticator app, add an account and scan this code.</p>
           {picture
-            ? <img src={picture} alt="QR code for your authenticator app" width="240" height="240" className="h-60 w-60 max-w-full rounded-lg border border-life-200 bg-white" />
+            ? <img src={picture} alt="QR code for your authenticator app" width="240" height="240" className="h-60 w-60 max-w-full rounded-lg border border-life-200 bg-card" />
             : <p className="text-sm text-gray-500 dark:text-life-200">Drawing the code…</p>}
           <p className="text-sm text-gray-700 dark:text-life-100">Can't scan it? Type this key into the app (it is shown only now):</p>
           <CopyLine text={setup.secret} what="the key for your authenticator app" />

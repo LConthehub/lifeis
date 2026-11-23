@@ -117,7 +117,7 @@ export default function MediaPage({ library = null }) {
   // The print page reads the tab, the filters and the sort back from the address.
   const printAddress = `/media/print?${new URLSearchParams(Object.entries({ lib: library ?? '', type: lib ? '' : type, show, q: q.trim(), genre, from, to, sort }).filter(([, v]) => v !== '' && v != null))}`;
   const count = (id) => titles.filter((m) => m.type === id).length;
-  const chip = (active) => `rounded-full px-3 py-1 text-sm ${active ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
+  const chip = (active) => `rounded-full px-3 py-1 text-sm ${active ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -474,8 +474,8 @@ function TitleForm({ title, withCopy = false, known = [], onDone }) {
             <div key={d.id} className="space-y-1">
               <p>You already have {d.title} ({d.formats.length ? d.formats.join(', ') : 'wanted, no copy yet'}){d.year ? `, from ${d.year}` : ''}.</p>
               <div className="flex flex-wrap gap-2">
-                <Link to={`/media/${d.id}`} className="inline-flex min-h-[44px] items-center rounded-lg border border-honey-700/40 px-3 text-honey-700 hover:bg-white/50">Open it</Link>
-                {withCopy && !form.wanted && <button type="button" onClick={() => addCopyTo(d)} className="min-h-[44px] rounded-lg border border-honey-700/40 px-3 hover:bg-white/50">Add as a new copy of it</button>}
+                <Link to={`/media/${d.id}`} className="inline-flex min-h-[44px] items-center rounded-lg border border-honey-700/40 px-3 text-honey-700 hover:bg-card/50">Open it</Link>
+                {withCopy && !form.wanted && <button type="button" onClick={() => addCopyTo(d)} className="min-h-[44px] rounded-lg border border-honey-700/40 px-3 hover:bg-card/50">Add as a new copy of it</button>}
               </div>
             </div>
           ))}

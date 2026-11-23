@@ -77,7 +77,7 @@ export default function Login({ setupRequired, local = true, offline, demo = nul
     setBusy(true); setError('');
     try { await axios.post('/api/auth/login', demo); onDone(); } catch (err) { setError(errorMessage(err, "The demo couldn't be opened")); } finally { setBusy(false); }
   };
-  const wrapper = 'w-full max-w-sm space-y-4 overflow-hidden rounded-3xl bg-white/90 p-6 shadow-xl shadow-life-800/15 ring-1 ring-life-200 backdrop-blur dark:bg-life-900/90 dark:ring-life-700';
+  const wrapper = 'w-full max-w-sm space-y-4 overflow-hidden rounded-3xl bg-card/90 p-6 shadow-xl shadow-life-800/15 ring-1 ring-life-200 backdrop-blur dark:bg-life-900/90 dark:ring-life-700';
   const heading = (words) => (
     <div>
       <Stripe className="-mx-6 -mt-6 mb-3" />

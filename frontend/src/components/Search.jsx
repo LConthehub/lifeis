@@ -69,7 +69,7 @@ function SearchWindow({ onClose }) {
   return createPortal(
     <div className="safe-sides fixed inset-0 z-50 flex items-start justify-center px-3 pt-16 sm:px-4 sm:pt-24" role="dialog" aria-modal="true" aria-label="Search">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-life-800">
+      <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl bg-card shadow-xl dark:bg-life-800">
         <div className="flex items-center gap-3 border-b border-life-100 p-3 dark:border-life-700">
           <input autoFocus type="text" enterKeyHint="search" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={keys} aria-label="Search everything"
             placeholder="A recipe, a thing, a place, a book, a job…" className="flex-1 bg-transparent px-2 py-2 text-gray-800 placeholder-gray-400 outline-none dark:text-life-50" />
