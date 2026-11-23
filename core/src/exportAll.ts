@@ -26,7 +26,7 @@ import { Problem } from './problem.ts';
 import { recipeKey } from './recipeFiles.ts';
 import { cut, linesAsText, splitLines } from './recipeText.ts';
 import { clean, dayNumber, labelKey, pictureType, stamp, todayOf, type Clock } from './small.ts';
-import { exportRows, setByPaths, tagsOnto } from './tags.ts';
+import { ensurePath, exportRows, setByPaths, tagKindOfLabel, tagsOnto, targetsByTitle, type TagKind } from './tags.ts';
 import * as units from './units.ts';
 import { dueOf } from './upkeep.ts';
 
@@ -72,11 +72,14 @@ export const KINDS: KindInfo[] = [
   { key: 'collection', label: 'The collection: titles, copies and what was watched or read', file: 'collection.csv', importable: true, matched: 'by title and type' },
   { key: 'events', label: 'Calendar events', file: 'events.csv', importable: true, matched: 'by title and day' },
   { key: 'money', label: 'Spending: categories and entries', file: 'money-entries.csv', importable: true, matched: 'by day, amount, label and category' },
-  { key: 'budget', label: 'Income and savings goals', file: 'money-income.csv', importable: false, matched: '' },
-  { key: 'prices', label: 'Prices paid', file: 'prices.csv', importable: false, matched: '' },
-  { key: 'coupons', label: 'Coupons', file: 'coupons.csv', importable: false, matched: '' },
-  { key: 'projects', label: 'Projects, with their lines, time and costs', file: 'projects.csv', importable: false, matched: '' },
-  { key: 'plans', label: 'Plans and their photos', file: 'plans.csv', importable: false, matched: '' },
+  { key: 'budget', label: 'Income and savings goals, with the money put toward each', file: 'money-income.csv', importable: true, matched: 'income by name, amount and how often; goals by name' },
+  { key: 'stores', label: 'Your stores', file: 'stores.csv', importable: true, matched: 'by name' },
+  { key: 'barcodes', label: 'Barcodes taught for groceries', file: 'barcodes.csv', importable: true, matched: 'by barcode' },
+  { key: 'prices', label: 'Prices paid', file: 'prices.csv', importable: true, matched: 'by day, price, what and store' },
+  { key: 'coupons', label: 'Coupons', file: 'coupons.csv', importable: true, matched: 'by name, store and code' },
+  { key: 'projects', label: 'Projects, with their lines, time and costs', file: 'projects.csv', importable: true, matched: 'by name' },
+  { key: 'plans', label: 'Plans, with their things to do and photos', file: 'plans.csv', importable: true, matched: 'by name and first day' },
+  { key: 'tags', label: 'Tags, and what carries them', file: 'tags.csv', importable: true, matched: 'by path; a tag on something by that thing’s name' },
   { key: 'connections', label: 'Servers and accounts you connected (names and addresses only)', file: 'connections.csv', importable: false, matched: '' },
   { key: 'settings', label: 'Preferences', file: 'settings.csv', importable: false, matched: '' },
 ];
@@ -87,6 +90,7 @@ export const LEFT_OUT: { what: string; why: string }[] = [
   { what: 'Two-step sign-in, passkeys and recovery codes', why: 'They are the keys to your account, so they stay where they were made. Set them up again on the new Life Is.' },
   { what: 'Who is signed in where', why: 'Sign-ins belong to the place they were made.' },
   { what: 'The key of a media server, a book server or the photo library, an email password, and the assistant’s key', why: 'They are kept locked with a key that stays on this Life Is, so they could not be read anywhere else, and they should not travel in a file. Only the name and address of each is listed.' },
+  { what: 'The access address of a bank connection (SimpleFIN)', why: 'It is a key to read your bank accounts, kept locked on this Life Is. Spending entries you brought in from the bank are in money-entries.csv like any other.' },
   { what: 'The link of a calendar you follow, your phone-calendar link, and the link of the shared house manual', why: 'Each link is a key: anyone holding it can use it.' },
   { what: 'Browsers set up for reminders, and the reminder settings (the topic, the addresses reminders are sent to)', why: 'They name where reminders are sent, and belong to this Life Is.' },
   { what: 'Stickers’ codes', why: 'Each printed sticker’s code can belong to one place or thing in one Life Is only. The things themselves are all here.' },
@@ -352,6 +356,11 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('coupons.csv', ['Coupon', 'What it is for', 'Dollars off', 'Percent off', 'Shop', 'Code', 'Runs out on', 'Used on', 'Notes'],
     (await all('SELECT c.label, i.name AS what, c.cents_off, c.percent_off, c.store, c.code, c.expires_on, c.used_on, c.note FROM coupons c LEFT JOIN ingredients i ON i.id = c.ingredient_id WHERE c.owner_id = ? ORDER BY c.id'))
       .map((c) => [str(c.label), str(c.what), dollars(c.cents_off), str(c.percent_off), str(c.store), str(c.code), str(c.expires_on), str(c.used_on), str(c.note)]));
+  out.csv('stores.csv', ['Store', 'Notes'],
+    (await all('SELECT name, note FROM stores WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id')).map((s) => [str(s.name), str(s.note)]));
+  out.csv('barcodes.csv', ['Barcode', 'What it is', 'Product name', 'Size amount', 'Size unit'],
+    (await all('SELECT b.barcode, i.name, b.label, b.size_quantity, b.size_unit FROM ingredient_barcodes b JOIN ingredients i ON i.id = b.ingredient_id WHERE b.owner_id = ? ORDER BY b.barcode'))
+      .map((b) => [str(b.barcode), str(b.name), str(b.label), str(b.size_quantity), str(b.size_unit)]));
 
   // ---------- things ----------
   const kinds = await all('SELECT id, name, icon, unit, activity FROM kinds WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id');
@@ -610,6 +619,8 @@ const FILE_ABOUT: [string, string][] = [
   ['pantry.csv', 'What you have in the pantry, fridge and freezer.'],
   ['prices.csv', 'Prices you paid.'],
   ['coupons.csv', 'Coupons.'],
+  ['stores.csv', 'The stores you use, to choose from.'],
+  ['barcodes.csv', 'The barcodes you taught Life Is for groceries: which ingredient each is, its product name and its size.'],
   ['places.csv', 'Every place (a room, a shelf, a box) as its full path, such as Sewing room › Shelf 2.'],
   ['kinds.csv', 'The kinds of thing you made (Fabric, Seeds) and the fields each has.'],
   ['things.csv', 'Everything you keep: where it is, how many, what it cost and is worth, model and serial number, warranty, and a column for each field of its kind.'],
@@ -697,6 +708,10 @@ const cellOf = (row: Record<string, string>, heading: string): string => (row[he
 const numberOf = (text: string): number | null => { const n = Number(text.replace(/[$,\s]/g, '')); return text.trim() !== '' && Number.isFinite(n) ? n : null; };
 const wholeOf = (text: string): number | null => { const n = numberOf(text); return n !== null && Number.isInteger(n) ? n : null; };
 const centsOf = (text: string): number | null => { const n = numberOf(text); return n !== null && n >= 0 && n < 1e10 ? Math.round(n * 100) : null; };
+/** Dollars that may be below zero (money taken back out of a goal), as whole cents. */
+const signedCentsOf = (text: string): number | null => { const n = numberOf(text); return n !== null && Math.abs(n) < 1e10 ? Math.round(n * 100) : null; };
+/** A barcode as it is kept: letters and digits only, upper case; null when it is not one. */
+const barcodeOf = (text: string): string | null => { const code = text.replace(/[^0-9A-Za-z]/g, '').toUpperCase(); return /^[0-9A-Z]{4,40}$/.test(code) ? code : null; };
 const dayOf = (text: string): string | null => { if (!text.trim()) return null; try { dayNumber(text.trim()); return text.trim(); } catch { return null; } };
 const yesOf = (text: string): boolean => /^(yes|y|true|1)$/i.test(text.trim());
 const listOf = (text: string): string[] => text.split(/[;\n]/).map((s) => s.trim()).filter(Boolean);
@@ -726,7 +741,7 @@ export type KindReport = {
   /** Anything else worth saying in a sentence. */
   note?: string;
 };
-export type Pending = { file: string; as: 'thing-photo' | 'thing-paper' | 'pet-photo' | 'cover'; id: number; kind?: string; name?: string };
+export type Pending = { file: string; as: 'thing-photo' | 'thing-paper' | 'pet-photo' | 'cover' | 'plan-photo'; id: number; kind?: string; name?: string };
 export type Brought = { kinds: KindReport[]; pending: Pending[] };
 
 type Ctx = { tx: Queries; owner: number; today: string; at: string; files: Files };
@@ -1345,8 +1360,296 @@ const importers: Record<string, Importer> = {
     if (madeCategories) d.note = `${madeCategories} categor${madeCategories === 1 ? 'y' : 'ies'} made`;
     return d;
   },
+
+  async stores(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'stores.csv');
+    if (!t) return d;
+    const have = new Set((await c.tx.all<{ name: string }>('SELECT name FROM stores WHERE owner_id = ?', [c.owner])).map((s) => labelKey(s.name)));
+    for (const [at, row] of t.rows.entries()) {
+      const name = clean(cellOf(row, 'Store'), 100);
+      if (!name) { skip(d, at, 'it has no name'); continue; }
+      d.found += 1;
+      if (have.has(labelKey(name))) { d.already += 1; continue; }
+      await c.tx.run('INSERT OR IGNORE INTO stores (owner_id, name, note, created_at) VALUES (?, ?, ?, ?)', [c.owner, name, clean(row.notes, 300), c.at]);
+      have.add(labelKey(name));
+      d.fresh += 1;
+    }
+    return d;
+  },
+
+  async barcodes(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'barcodes.csv');
+    if (!t) return d;
+    const have = new Set((await c.tx.all<{ barcode: string }>('SELECT barcode FROM ingredient_barcodes WHERE owner_id = ?', [c.owner])).map((b) => b.barcode));
+    for (const [at, row] of t.rows.entries()) {
+      const code = barcodeOf(cellOf(row, 'Barcode'));
+      const what = clean(cellOf(row, 'What it is'), 120);
+      if (!code) { skip(d, at, 'it is not a barcode'); continue; }
+      if (!what) { skip(d, at, 'it does not say what it is'); continue; }
+      d.found += 1;
+      if (have.has(code)) { d.already += 1; continue; }
+      const ingredient = await ingredientFor(c.tx, c.owner, what);
+      if (ingredient === null) { d.found -= 1; skip(d, at, 'it does not say what it is'); continue; }
+      const size = numberOf(cellOf(row, 'Size amount'));
+      const sized = size !== null && size > 0;
+      await c.tx.run('INSERT INTO ingredient_barcodes (owner_id, barcode, ingredient_id, label, size_quantity, size_unit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, code, ingredient, clean(cellOf(row, 'Product name'), 200), sized ? size : null, sized ? units.canonical(clean(cellOf(row, 'Size unit'), 20)) : null, c.at]);
+      have.add(code);
+      d.fresh += 1;
+    }
+    return d;
+  },
+
+  async prices(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'prices.csv');
+    if (!t) return d;
+    const kept = await c.tx.all<{ label: string; cents: number; store: string | null; day: string }>('SELECT label, cents, store, day FROM prices WHERE owner_id = ?', [c.owner]);
+    const seen = new Seen(kept.map((p) => `${p.day}\n${p.cents}\n${labelKey(p.label)}\n${labelKey(p.store ?? '')}`));
+    let storesMade = 0;
+    for (const [at, row] of t.rows.entries()) {
+      const label = clean(cellOf(row, 'What'), 200);
+      const cents = centsOf(cellOf(row, 'Price'));
+      const day = dayOf(cellOf(row, 'Day'));
+      if (!label || cents === null || !day) { skip(d, at, !label ? 'it says nothing' : cents === null ? 'its price is not an amount of money' : 'its day is not a day'); continue; }
+      d.found += 1;
+      const store = clean(cellOf(row, 'Shop'), 100);
+      if (seen.take(`${day}\n${cents}\n${labelKey(label)}\n${labelKey(store ?? '')}`)) { d.already += 1; continue; }
+      if (store) storesMade += (await c.tx.run('INSERT OR IGNORE INTO stores (owner_id, name, created_at) VALUES (?, ?, ?)', [c.owner, store, c.at])).changes;
+      const quantity = numberOf(cellOf(row, 'Amount'));
+      await c.tx.run('INSERT INTO prices (owner_id, ingredient_id, grocery_id, label, cents, quantity, unit, store, day, assumed, barcode, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, await ingredientFor(c.tx, c.owner, label), label, cents, quantity !== null && quantity > 0 ? quantity : null, units.canonical(clean(cellOf(row, 'Unit'), 20)), store, day,
+          yesOf(cellOf(row, 'A guess, not a receipt')) ? 1 : 0, barcodeOf(cellOf(row, 'Barcode')), c.at]);
+      d.fresh += 1;
+    }
+    if (storesMade) d.note = `${storesMade} store${storesMade === 1 ? '' : 's'} added to your list from the prices`;
+    return d;
+  },
+
+  async coupons(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'coupons.csv');
+    if (!t) return d;
+    const kept = await c.tx.all<{ label: string; store: string | null; code: string | null }>('SELECT label, store, code FROM coupons WHERE owner_id = ?', [c.owner]);
+    const seen = new Seen(kept.map((k) => `${labelKey(k.label)}\n${labelKey(k.store ?? '')}\n${labelKey(k.code ?? '')}`));
+    let storesMade = 0;
+    for (const [at, row] of t.rows.entries()) {
+      const label = clean(cellOf(row, 'Coupon'), 200);
+      if (!label) { skip(d, at, 'it has no name'); continue; }
+      const off = centsOf(cellOf(row, 'Dollars off'));
+      const percent = numberOf(cellOf(row, 'Percent off'));
+      const money = off !== null && off > 0 ? off : null;
+      // A coupon is money off or a percentage off, never both.
+      const part = money === null && percent !== null && percent > 0 && percent <= 100 ? percent : null;
+      if (money === null && part === null) { skip(d, at, 'it takes nothing off'); continue; }
+      d.found += 1;
+      const store = clean(cellOf(row, 'Shop'), 100);
+      const code = clean(cellOf(row, 'Code'), 100);
+      if (seen.take(`${labelKey(label)}\n${labelKey(store ?? '')}\n${labelKey(code ?? '')}`)) { d.already += 1; continue; }
+      if (store) storesMade += (await c.tx.run('INSERT OR IGNORE INTO stores (owner_id, name, created_at) VALUES (?, ?, ?)', [c.owner, store, c.at])).changes;
+      const what = clean(cellOf(row, 'What it is for'), 120);
+      await c.tx.run('INSERT INTO coupons (owner_id, label, ingredient_id, cents_off, percent_off, store, code, expires_on, used_on, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, label, what ? await ingredientFor(c.tx, c.owner, what) : null, money, part, store, code, dayOf(cellOf(row, 'Runs out on')), dayOf(cellOf(row, 'Used on')), clean(row.notes, 500), c.at]);
+      d.fresh += 1;
+    }
+    if (storesMade) d.note = `${storesMade} store${storesMade === 1 ? '' : 's'} added to your list from the coupons`;
+    return d;
+  },
+
+  async projects(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'projects.csv');
+    if (!t) return d;
+    const things = new Map<string, number>();
+    for (const i of await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM items WHERE owner_id = ? ORDER BY id DESC', [c.owner])) things.set(labelKey(i.name), i.id);
+    const seen = new Seen((await c.tx.all<{ name: string }>('SELECT name FROM projects WHERE owner_id = ?', [c.owner])).map((p) => labelKey(p.name)));
+    const lines = tableOf(c.files, 'project-lines.csv')?.rows ?? [];
+    const time = tableOf(c.files, 'project-time.csv')?.rows ?? [];
+    const costs = tableOf(c.files, 'project-costs.csv')?.rows ?? [];
+    // A project's lines, time and costs are told apart by its name: of two with one name, only the first is given them.
+    const filled = new Set<string>();
+    for (const [at, row] of t.rows.entries()) {
+      const name = clean(cellOf(row, 'Project'), 200);
+      if (!name) { skip(d, at, 'it has no name'); continue; }
+      d.found += 1;
+      const key = labelKey(name);
+      if (seen.take(key)) { d.already += 1; continue; }
+      const status = cellOf(row, 'Status').toLowerCase();
+      const made = await c.tx.run('INSERT INTO projects (owner_id, name, activity, status, notes, due_on, started_on, finished_on, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, name, clean(cellOf(row, 'Activity'), 80), ['idea', 'planned', 'active', 'paused', 'done', 'dropped'].includes(status) ? status : 'idea', clean(row.notes, 5000),
+          dayOf(cellOf(row, 'Due on')), dayOf(cellOf(row, 'Started on')), dayOf(cellOf(row, 'Finished on')), c.at, c.at]);
+      d.fresh += 1;
+      if (filled.has(key)) continue;
+      filled.add(key);
+      const mine = (r: Record<string, string>) => labelKey(cellOf(r, 'Project')) === key;
+      let order = 0;
+      for (const l of lines.filter(mine)) {
+        const label = clean(cellOf(l, 'What it uses'), 200);
+        if (!label) continue;
+        const quantity = numberOf(cellOf(l, 'Amount'));
+        const sized = quantity !== null && quantity > 0;
+        await c.tx.run('INSERT INTO project_items (project_id, item_id, label, quantity, unit, used_on, note, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [made.lastId, things.get(labelKey(label)) ?? null, label, sized ? quantity : null, sized ? units.canonical(clean(cellOf(l, 'Unit'), 20)) : null, dayOf(cellOf(l, 'Used on')), clean(l.notes, 1000), order]);
+        order += 1;
+      }
+      for (const s of time.filter(mine)) {
+        const day = dayOf(cellOf(s, 'Day'));
+        if (!day) continue;
+        const minutes = wholeOf(cellOf(s, 'Minutes'));
+        await c.tx.run('INSERT INTO project_sessions (project_id, day, minutes, note, created_at) VALUES (?, ?, ?, ?, ?)', [made.lastId, day, minutes !== null && minutes >= 0 ? minutes : null, clean(s.notes, 1000), c.at]);
+      }
+      order = 0;
+      for (const m of costs.filter(mine)) {
+        const label = clean(cellOf(m, 'What'), 200);
+        if (!label) continue;
+        await c.tx.run('INSERT INTO project_costs (project_id, label, planned_cents, actual_cents, paid_on, note, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [made.lastId, label, centsOf(cellOf(m, 'Planned')), centsOf(cellOf(m, 'Spent')), dayOf(cellOf(m, 'Paid on')), clean(m.notes, 1000), order]);
+        order += 1;
+      }
+    }
+    return d;
+  },
+
+  async plans(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'plans.csv');
+    if (!t) return d;
+    // What a plan's thing to do points at, found again by its name.
+    const byName = async (sql: string) => { const m = new Map<string, number>(); for (const r of await c.tx.all<{ id: number; name: string }>(sql, [c.owner])) m.set(labelKey(r.name), r.id); return m; };
+    const pointed: Record<string, Map<string, number>> = {
+      recipe: await byName('SELECT id, title AS name FROM recipes WHERE owner_id = ? ORDER BY id DESC'),
+      thing: await byName('SELECT id, name FROM items WHERE owner_id = ? ORDER BY id DESC'),
+      media: await byName('SELECT id, title AS name FROM media WHERE owner_id = ? ORDER BY id DESC'),
+      project: await byName('SELECT id, name FROM projects WHERE owner_id = ? ORDER BY id DESC'),
+    };
+    const seen = new Seen((await c.tx.all<{ name: string; start_day: string }>('SELECT name, start_day FROM plans WHERE owner_id = ?', [c.owner])).map((p) => `${labelKey(p.name)}\n${p.start_day}`));
+    const items = tableOf(c.files, 'plan-items.csv')?.rows ?? [];
+    const photos = tableOf(c.files, 'plan-photos.csv')?.rows ?? [];
+    const filled = new Set<string>();
+    let library = 0;
+    for (const [at, row] of t.rows.entries()) {
+      const name = clean(cellOf(row, 'Plan'), 200);
+      const start = dayOf(cellOf(row, 'Starts'));
+      if (!name || !start) { skip(d, at, name ? 'its first day is not a day' : 'it has no name'); continue; }
+      d.found += 1;
+      const key = labelKey(name);
+      if (seen.take(`${key}\n${start}`)) { d.already += 1; continue; }
+      const end = dayOf(cellOf(row, 'Ends'));
+      const made = await c.tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, name, start, end && end >= start ? end : start, clean(row.notes, 5000),clean(cellOf(row, 'The story'), 20000), c.at, c.at]);
+      d.fresh += 1;
+      if (filled.has(key)) continue;
+      filled.add(key);
+      const mine = (r: Record<string, string>) => labelKey(cellOf(r, 'Plan')) === key;
+      let lost = false;
+      let order = 1;
+      for (const i of items.filter(mine)) {
+        const kind = cellOf(i, 'Kind').toLowerCase();
+        const label = clean(cellOf(i, 'What'), 200);
+        if (!label || !['task', 'recipe', 'thing', 'media', 'project'].includes(kind)) continue;
+        const ref = kind === 'task' ? null : pointed[kind]!.get(labelKey(label)) ?? null;
+        if (kind !== 'task' && ref === null) lost = true;
+        const quantity = numberOf(cellOf(i, 'Amount'));
+        await c.tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)',
+          [made.lastId, kind, ref, label, quantity !== null && quantity > 0 ? quantity : null, clean(i.notes, 1000), yesOf(cellOf(i, 'Done')) ? 1 : 0, order]);
+        order += 1;
+      }
+      for (const p of photos.filter(mine)) {
+        const file = cellOf(p, 'File');
+        if (file) d.pending.push({ file, as: 'plan-photo', id: made.lastId, name: cellOf(p, 'Caption') });
+        else library += 1;
+      }
+      if (lost) d.unlinked += 1;
+    }
+    if (library) d.note = `${library} photo${library === 1 ? ' that is' : 's that are'} in your photo library, not in the download, ${library === 1 ? 'was' : 'were'} left out`;
+    return d;
+  },
+
+  async budget(c) {
+    const d = blank();
+    const income = tableOf(c.files, 'money-income.csv');
+    const goals = tableOf(c.files, 'money-goals.csv');
+    if (!income && !goals) return d;
+    const every = ['weekly', 'biweekly', 'twice_monthly', 'monthly', 'yearly', 'once'];
+    const incomeSeen = new Seen((await c.tx.all<{ name: string; cents: number; every: string; start_day: string | null }>('SELECT name, cents, every, start_day FROM money_income WHERE owner_id = ?', [c.owner]))
+      .map((i) => `${labelKey(i.name)}\n${i.cents}\n${i.every}\n${i.start_day ?? ''}`));
+    for (const [at, row] of (income?.rows ?? []).entries()) {
+      const name = clean(cellOf(row, 'What'), 120);
+      const cents = centsOf(cellOf(row, 'Amount'));
+      const how = cellOf(row, 'How often').toLowerCase().replace(/\s+/g, '_');
+      if (!name || cents === null || !every.includes(how)) { skip(d, at, !name ? 'it says nothing' : cents === null ? 'its amount is not an amount of money' : 'it does not say how often'); continue; }
+      d.found += 1;
+      const start = dayOf(cellOf(row, 'First day'));
+      if (incomeSeen.take(`${labelKey(name)}\n${cents}\n${how}\n${start ?? ''}`)) { d.already += 1; continue; }
+      const end = dayOf(cellOf(row, 'Last day'));
+      await c.tx.run('INSERT INTO money_income (owner_id, name, cents, every, start_day, end_day, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [c.owner, name, cents, how, start, start && end && end < start ? null : end, c.at]);
+      d.fresh += 1;
+    }
+    const goalSeen = new Seen((await c.tx.all<{ name: string }>('SELECT name FROM money_goals WHERE owner_id = ?', [c.owner])).map((g) => labelKey(g.name)));
+    const saved = tableOf(c.files, 'money-goal-saved.csv')?.rows ?? [];
+    const filled = new Set<string>();
+    for (const [at, row] of (goals?.rows ?? []).entries()) {
+      const name = clean(cellOf(row, 'Goal'), 120);
+      const target = centsOf(cellOf(row, 'Target'));
+      if (!name || target === null || target <= 0) { skip(d, at, !name ? 'it has no name' : 'its target is not an amount of money'); continue; }
+      d.found += 1;
+      const key = labelKey(name);
+      if (goalSeen.take(key)) { d.already += 1; continue; }
+      const made = await c.tx.run('INSERT INTO money_goals (owner_id, name, target_cents, by_day, created_at) VALUES (?, ?, ?, ?, ?)', [c.owner, name, target, dayOf(cellOf(row, 'Reach it by')), c.at]);
+      d.fresh += 1;
+      // Each put-toward is told apart by the goal's name: of two goals with one name, only the first is given them.
+      if (filled.has(key)) continue;
+      filled.add(key);
+      for (const s of saved.filter((r) => labelKey(cellOf(r, 'Goal')) === key)) {
+        const day = dayOf(cellOf(s, 'Day'));
+        const cents = signedCentsOf(cellOf(s, 'Amount (below zero is taken out)'));
+        if (!day || cents === null || cents === 0) continue;
+        await c.tx.run('INSERT INTO money_goal_saved (goal_id, day, cents, created_at) VALUES (?, ?, ?, ?)', [made.lastId, day, cents, c.at]);
+      }
+    }
+    return d;
+  },
+
+  async tags(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'tags.csv');
+    if (!t) return d;
+    const targets = new Map<TagKind, Map<string, number[]>>();
+    const used = new Map<string, number>();
+    const countTags = async () => (await c.tx.get<{ n: number }>('SELECT COUNT(*) AS n FROM tags WHERE owner_id = ?', [c.owner]))?.n ?? 0;
+    for (const [at, row] of t.rows.entries()) {
+      const path = cellOf(row, 'Tag');
+      if (!path) { skip(d, at, 'it has no tag'); continue; }
+      const before = await countTags();
+      const tag = await ensurePath(c.tx, c.owner, path, c.at);
+      if (tag === null) { skip(d, at, 'it has no tag'); continue; }
+      d.found += 1;
+      let fresh = (await countTags()) > before;
+      const label = cellOf(row, 'Used on');
+      const title = cellOf(row, 'Name');
+      if (label || title) {
+        const kind = tagKindOfLabel(label);
+        let id: number | undefined;
+        if (kind && title) {
+          if (!targets.has(kind)) targets.set(kind, await targetsByTitle(c.tx, c.owner, kind));
+          // Of several with one name, the nth row for a tag goes to the nth of them, so twins are not all tagged.
+          const same = `${tag}\n${kind}\n${labelKey(title)}`;
+          const nth = used.get(same) ?? 0;
+          used.set(same, nth + 1);
+          id = targets.get(kind)!.get(labelKey(title))?.[nth];
+        }
+        if (id === undefined) d.unlinked += 1;
+        else if ((await c.tx.run('INSERT OR IGNORE INTO tag_links (tag_id, kind, target_id) VALUES (?, ?, ?)', [tag, kind!, id])).changes > 0) fresh = true;
+      }
+      if (fresh) d.fresh += 1;
+      else d.already += 1;
+    }
+    return d;
+  },
 };
-const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'manual', 'licenses', 'collection', 'events', 'money'];
+const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'manual', 'licenses', 'collection', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'budget', 'tags'];
 
 function rowsIn(files: Files, info: KindInfo): number {
   return tableOf(files, info.file)?.rows.length ?? 0;
@@ -1446,6 +1749,12 @@ export async function bringInPictures(db: Db, owner: number, pictures: PictureIn
         const ok = await tx.get('SELECT id FROM pets WHERE id = ? AND owner_id = ? AND photo IS NULL', [p.id, owner]);
         if (!ok || type === 'application/pdf' || p.bytes.length > 8_000_000) { left += 1; continue; }
         await tx.run('UPDATE pets SET photo_type = ?, photo = ? WHERE id = ?', [type, p.bytes, p.id]);
+      } else if (p.as === 'plan-photo') {
+        const ok = await tx.get<{ last: number | null }>(
+          'SELECT (SELECT MAX(x.sort_order) FROM plan_photos x WHERE x.plan_id = l.id) AS last FROM plans l WHERE l.id = ? AND l.owner_id = ? AND (SELECT COUNT(*) FROM plan_photos x WHERE x.plan_id = l.id) < 80 AND NOT EXISTS (SELECT 1 FROM plan_photos x WHERE x.plan_id = l.id AND x.bytes = ?)',
+          [p.id, owner, p.bytes]);
+        if (!ok || type === 'application/pdf' || p.bytes.length > 3_000_000) { left += 1; continue; }
+        await tx.run('INSERT INTO plan_photos (plan_id, source, type, bytes, caption, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [p.id, 'kept', type, p.bytes, clean(p.name, 300), (ok.last ?? 0) + 1, at]);
       } else if (p.as === 'cover') {
         const ok = await tx.get('SELECT m.id FROM media m WHERE m.id = ? AND m.owner_id = ? AND NOT EXISTS (SELECT 1 FROM media_covers x WHERE x.media_id = m.id)', [p.id, owner]);
         if (!ok || type === 'application/pdf' || p.bytes.length > 8_000_000) { left += 1; continue; }

@@ -14,6 +14,7 @@ import { money } from '../src/money.ts';
 import { pets } from '../src/pets.ts';
 import { plans } from '../src/plans.ts';
 import { projects } from '../src/projects.ts';
+import { tags as tagsOf } from '../src/tags.ts';
 import { upkeep } from '../src/upkeep.ts';
 import { memoryDb } from './memoryDb.ts';
 
@@ -93,7 +94,22 @@ async function fill(owner: number, tag = '') {
   await plans(db, owner, clock).addItem(plan.id, { kind: 'task', label: 'Book the car' });
   await db.run("INSERT INTO plan_photos (plan_id, source, type, bytes, caption, sort_order, created_at) VALUES (?, 'kept', 'image/png', ?, 'Us', 0, 'now')", [plan.id, PNG]);
   await db.run("INSERT INTO prices (owner_id, label, cents, store, day, created_at) VALUES (?, ?, 349, 'Corner shop', '2046-03-02', 'now')", [owner, `Eggs${tag}`]);
+  const flour = (await db.get<{ id: number }>("SELECT id FROM ingredients WHERE owner_id = ? AND name LIKE 'Flour%'", [owner]))!;
+  await db.run("INSERT INTO prices (owner_id, ingredient_id, label, cents, quantity, unit, store, day, assumed, barcode, created_at) VALUES (?, ?, ?, 479, 5, 'lb', 'Bakery', '2046-03-03', 1, '0123456789012', 'now')", [owner, flour.id, `Flour${tag}`]);
   await db.run("INSERT INTO coupons (owner_id, label, cents_off, store, code, created_at) VALUES (?, ?, 100, 'Corner shop', 'SAVE1', 'now')", [owner, `One dollar off${tag}`]);
+  await db.run("INSERT INTO coupons (owner_id, label, ingredient_id, percent_off, expires_on, note, created_at) VALUES (?, ?, ?, 20, '2046-12-01', 'Members only', 'now')", [owner, `Flour sale${tag}`, flour.id]);
+  await db.run("INSERT INTO stores (owner_id, name, note, created_at) VALUES (?, 'Corner shop', 'Open late', 'now')", [owner]);
+  await db.run("INSERT INTO stores (owner_id, name, created_at) VALUES (?, 'Bakery', 'now')", [owner]);
+  await db.run("INSERT INTO ingredient_barcodes (owner_id, barcode, ingredient_id, label, size_quantity, size_unit, created_at) VALUES (?, '0123456789012', ?, 'Mill flour', 5, 'lb', 'now')", [owner, flour.id]);
+  await db.run("UPDATE project_costs SET actual_cents = 450, paid_on = '2046-03-02' WHERE project_id = ?", [project.id]);
+  await db.run("UPDATE project_items SET used_on = '2046-03-01' WHERE project_id = ?", [project.id]);
+  await plans(db, owner, clock).addItem(plan.id, { kind: 'thing', ref_id: thing.id, quantity: 2 });
+  await plans(db, owner, clock).addItem(plan.id, { kind: 'recipe', ref_id: soup.id });
+  const tagged = await tagsOf(db, owner, clock).create('Kitchen > Appliances');
+  await tagsOf(db, owner, clock).set('thing', thing.id, [tagged.id]);
+  await tagsOf(db, owner, clock).set('project', project.id, [tagged.id]);
+  await tagsOf(db, owner, clock).set('plan', plan.id, [tagged.id]);
+  await tagsOf(db, owner, clock).create('Unused');
   await db.run("INSERT INTO media_sources (owner_id, kind, name, url, secret, every_hours, created_at) VALUES (?, 'jellyfin', 'Basement server', 'http://user:hunter2@10.0.0.5:8096/?api_key=KEYINURL', 'SEALED-SERVER-KEY-777', 6, 'now')", [owner]);
   await db.run("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'shopping_currency', '$')", [owner]);
   return { soup, thing, dog, shelf, room };
@@ -144,13 +160,13 @@ it('holds every kind of record for a person with some of each, in plain headings
   const present = names(zip);
   for (const file of ['README.txt', 'recipes.csv', 'meal-plan.csv', 'grocery-list.csv', 'pantry.csv', 'prices.csv', 'coupons.csv', 'places.csv', 'kinds.csv', 'things.csv', 'thing-papers.csv', 'thing-history.csv',
     'upkeep.csv', 'upkeep-history.csv', 'household.csv', 'pets.csv', 'pet-weights.csv', 'house-manual.csv', 'licenses.csv', 'collection.csv', 'copies.csv', 'collection-log.csv', 'events.csv',
-    'projects.csv', 'project-lines.csv', 'project-time.csv', 'project-costs.csv', 'plans.csv', 'plan-items.csv', 'plan-photos.csv', 'money-categories.csv', 'money-entries.csv', 'money-income.csv', 'money-goals.csv', 'money-goal-saved.csv', 'connections.csv', 'settings.csv']) {
+    'projects.csv', 'project-lines.csv', 'project-time.csv', 'project-costs.csv', 'plans.csv', 'plan-items.csv', 'plan-photos.csv', 'money-categories.csv', 'money-entries.csv', 'money-income.csv', 'money-goals.csv', 'money-goal-saved.csv', 'connections.csv', 'settings.csv', 'stores.csv', 'barcodes.csv', 'tags.csv']) {
     expect(present, file).toContain(file);
   }
   // Every spreadsheet has a row for what was made.
   for (const file of ['recipes.csv', 'meal-plan.csv', 'grocery-list.csv', 'pantry.csv', 'prices.csv', 'coupons.csv', 'places.csv', 'kinds.csv', 'things.csv', 'thing-papers.csv', 'thing-history.csv', 'upkeep.csv', 'upkeep-history.csv',
     'household.csv', 'pets.csv', 'pet-weights.csv', 'house-manual.csv', 'licenses.csv', 'collection.csv', 'copies.csv', 'collection-log.csv', 'events.csv', 'projects.csv', 'project-lines.csv', 'project-time.csv',
-    'project-costs.csv', 'plans.csv', 'plan-items.csv', 'plan-photos.csv', 'money-categories.csv', 'money-entries.csv', 'money-income.csv', 'money-goals.csv', 'money-goal-saved.csv', 'connections.csv', 'settings.csv']) {
+    'project-costs.csv', 'plans.csv', 'plan-items.csv', 'plan-photos.csv', 'money-categories.csv', 'money-entries.csv', 'money-income.csv', 'money-goals.csv', 'money-goal-saved.csv', 'connections.csv', 'settings.csv', 'stores.csv', 'barcodes.csv', 'tags.csv']) {
     expect(rowsOf(zip, file).length, file).toBeGreaterThan(1);
   }
   expect(made.counts['things.csv']).toBe(2);
@@ -227,9 +243,10 @@ it('holds no secret: no two-step key, passkey, recovery code, session, or sealed
   await db.run("INSERT INTO calendar_feeds (owner_id, token, kinds, created_at) VALUES (?, 'FEED-TOKEN-1111', 'a', 'now')", [ana]);
   await db.run("INSERT INTO manual_shares (owner_id, token, created_at) VALUES (?, 'MANUAL-TOKEN-2222', 'now')", [ana]);
   await db.run("INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at) VALUES (?, 'https://push.example/ENDPOINT-3333', 'P256-4444', 'AUTH-5555', 'now')", [ana]);
+  await db.run("INSERT INTO simplefin_connections (owner_id, access, host, connected_at) VALUES (?, 'https://SFUSER:SIMPLEFIN-ACCESS-SECRET@bridge.example/simplefin', 'bridge.example', 'now')", [ana]);
   const zip = await splitDownload((await exportEverything(db, ana, clock)).bytes);
   const text = allText(zip) + [...zip.pictures.keys()].join('\n');
-  for (const secret of ['TOTP-SEED-KEY-1234', 'HANDLE-5678', 'RECOVERY-HASH-ABCD', 'CREDENTIAL-ID-EFGH', 'PUBLIC-KEY-IJKL', 'SESSION-TOKEN-MNOP', '203.0.113.7', 'SEALED-SERVER-KEY-777', 'hunter2', 'KEYINURL',
+  for (const secret of ['SIMPLEFIN-ACCESS-SECRET', 'SFUSER', 'TOTP-SEED-KEY-1234', 'HANDLE-5678', 'RECOVERY-HASH-ABCD', 'CREDENTIAL-ID-EFGH', 'PUBLIC-KEY-IJKL', 'SESSION-TOKEN-MNOP', '203.0.113.7', 'SEALED-SERVER-KEY-777', 'hunter2', 'KEYINURL',
     'SEALED-ASSISTANT-KEY-QRST', 'TOPIC-UVWX', 'SEALED-MAIL-PASSWORD-YZ', 'ana-login', 'KEY-IN-CALENDAR-LINK', 'FEED-TOKEN-1111', 'MANUAL-TOKEN-2222', 'ENDPOINT-3333', 'P256-4444', 'AUTH-5555', 'NOTICE-TEXT']) {
     expect(text, secret).not.toContain(secret);
   }
@@ -291,6 +308,24 @@ async function shape(owner: number) {
     events: await s('SELECT title, day, end_day, time, note, yearly FROM events WHERE owner_id = ?'),
     categories: await s('SELECT name, monthly_cents FROM money_categories WHERE owner_id = ?'),
     entries: await s('SELECT e.label, e.cents, e.day, e.note, c.name FROM money_entries e LEFT JOIN money_categories c ON c.id = e.category_id WHERE e.owner_id = ?'),
+    stores: await s('SELECT name, note FROM stores WHERE owner_id = ?'),
+    barcodes: await s('SELECT b.barcode, i.name, b.label, b.size_quantity, b.size_unit FROM ingredient_barcodes b JOIN ingredients i ON i.id = b.ingredient_id WHERE b.owner_id = ?'),
+    prices: await s('SELECT p.label, p.cents, p.quantity, p.unit, p.store, p.day, p.assumed, p.barcode FROM prices p WHERE p.owner_id = ?'),
+    coupons: await s('SELECT c.label, i.name, c.cents_off, c.percent_off, c.store, c.code, c.expires_on, c.used_on, c.note FROM coupons c LEFT JOIN ingredients i ON i.id = c.ingredient_id WHERE c.owner_id = ?'),
+    projects: await s('SELECT name, activity, status, due_on, notes FROM projects WHERE owner_id = ?'),
+    projectLines: await s('SELECT p.name, l.label, l.quantity, l.unit, l.used_on, l.sort_order, i.name FROM project_items l JOIN projects p ON p.id = l.project_id LEFT JOIN items i ON i.id = l.item_id WHERE p.owner_id = ?'),
+    projectTime: await s('SELECT p.name, t.day, t.minutes, t.note FROM project_sessions t JOIN projects p ON p.id = t.project_id WHERE p.owner_id = ?'),
+    projectCosts: await s('SELECT p.name, c.label, c.planned_cents, c.actual_cents, c.paid_on FROM project_costs c JOIN projects p ON p.id = c.project_id WHERE p.owner_id = ?'),
+    plans: await s('SELECT name, start_day, end_day, note, story FROM plans WHERE owner_id = ?'),
+    planItems: await s('SELECT p.name, i.kind, i.label, i.quantity, i.done, i.sort_order, i.ref_id IS NOT NULL FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ?'),
+    planPhotos: await s('SELECT p.name, f.source, f.type, LENGTH(f.bytes), f.caption FROM plan_photos f JOIN plans p ON p.id = f.plan_id WHERE p.owner_id = ?'),
+    income: await s('SELECT name, cents, every, start_day, end_day FROM money_income WHERE owner_id = ?'),
+    goals: await s('SELECT name, target_cents, by_day FROM money_goals WHERE owner_id = ?'),
+    goalSaved: await s('SELECT g.name, s.day, s.cents FROM money_goal_saved s JOIN money_goals g ON g.id = s.goal_id WHERE g.owner_id = ?'),
+    tags: await s('SELECT t.name, pt.name AS parent FROM tags t LEFT JOIN tags pt ON pt.id = t.parent_id WHERE t.owner_id = ?'),
+    tagLinks: await s(`SELECT t.name, l.kind, COALESCE(i.name, r.title, pr.name, pl.name) FROM tag_links l JOIN tags t ON t.id = l.tag_id
+      LEFT JOIN items i ON l.kind = 'thing' AND i.id = l.target_id LEFT JOIN recipes r ON l.kind = 'recipe' AND r.id = l.target_id
+      LEFT JOIN projects pr ON l.kind = 'project' AND pr.id = l.target_id LEFT JOIN plans pl ON l.kind = 'plan' AND pl.id = l.target_id WHERE t.owner_id = ?`),
   };
 }
 
@@ -314,7 +349,12 @@ it('brings what went out into a fresh person, kind by kind, and a second time ad
   expect(byKey.things).toMatchObject({ found: 2, fresh: 2, already: 0, pictures: 2 });
   expect(byKey.upkeep).toMatchObject({ found: 4, fresh: 4 });
   expect(byKey.meals).toMatchObject({ found: 2, fresh: 2, unlinked: 0 });
-  expect(first.kept).toEqual({ kept: 4, left: 0 });
+  expect(first.kept).toEqual({ kept: 5, left: 0 });
+  expect(byKey).toMatchObject({
+    budget: { found: 2, fresh: 2 }, stores: { found: 2, fresh: 2 }, barcodes: { found: 1, fresh: 1 }, prices: { found: 2, fresh: 2 }, coupons: { found: 2, fresh: 2 },
+    projects: { found: 1, fresh: 1 }, plans: { found: 1, fresh: 1, unlinked: 0, pictures: 1 },
+  });
+  expect(byKey.tags!.found).toBeGreaterThan(3);
 
   const out = await shape(ana);
   const into = await shape(bob);
@@ -327,6 +367,12 @@ it('brings what went out into a fresh person, kind by kind, and a second time ad
   expect((await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM upkeep_jobs WHERE owner_id = ? AND pet_id IS NOT NULL', [bob]))!.n).toBe(1);
   // The place's path was rebuilt for the thing.
   expect((await inventory(db, bob, clock).listItems()).find((i) => i.name === 'Blue linen')!.place).toBe('Sewing room › Shelf 2');
+  // The newer parts' links: a price's ingredient, a project's gear from things, a plan's recipe and thing, a tag on a thing.
+  expect((await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM prices WHERE owner_id = ? AND ingredient_id IS NOT NULL", [bob]))!.n).toBe(2);
+  expect((await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM project_items l JOIN projects p ON p.id = l.project_id WHERE p.owner_id = ? AND l.item_id IS NOT NULL', [bob]))!.n).toBe(1);
+  expect((await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ? AND i.ref_id IS NOT NULL', [bob]))!.n).toBe(2);
+  expect(into.tagLinks).toEqual(expect.arrayContaining([JSON.stringify(['Appliances', 'thing', 'Blue linen']), JSON.stringify(['Appliances', 'project', 'Curtains']), JSON.stringify(['Appliances', 'plan', 'Beach week'])]));
+  expect(into.tags).toEqual(expect.arrayContaining([JSON.stringify(['Appliances', 'Kitchen']), JSON.stringify(['Unused', null])]));
   // The renewal of a license is not recreated; nobody else's data moved.
   expect((await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM upkeep_jobs WHERE owner_id = ? AND kind = ?', [bob, 'renewal']))!.n).toBe(0);
   expect(await shape(ana)).toEqual(out);
@@ -347,7 +393,8 @@ it('shows what a download holds before anything is brought in, and keeps nothing
   const kinds = Object.fromEntries(looked.kinds.map((k) => [k.key, k]));
   expect(kinds.recipes).toMatchObject({ found: 1, fresh: 1, already: 0, importable: true });
   expect(kinds.things).toMatchObject({ found: 2, fresh: 2 });
-  expect(kinds.projects).toMatchObject({ found: 1, importable: false, fresh: 0 });
+  expect(kinds.projects).toMatchObject({ found: 1, importable: true, fresh: 1 });
+  expect(kinds.connections).toMatchObject({ importable: false });
   expect(await shape(bob)).toEqual(before);
   expect(await db.get('SELECT 1 AS n FROM recipes WHERE owner_id = ?', [bob])).toBeUndefined();
   // Once Bob has the recipes, a look says so.
@@ -410,6 +457,48 @@ it('pictures only go to a record of the person that has none, and never replace 
   const stranger = await bringInPictures(db, bob, [{ as: 'thing-photo', id: thing.id, bytes: PNG }, { as: 'pet-photo', id: 1, bytes: PNG }, { as: 'thing-photo', id: thing.id, bytes: Uint8Array.from([1, 2, 3, 4, 5]) }], clock);
   expect(stranger).toEqual({ kept: 0, left: 3 });
   expect((await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM item_photos'))!.n).toBe(1);
+});
+
+it('an older download without the newer files still comes in, those parts simply skipped', async () => {
+  await fill(ana);
+  const { files } = await splitDownload((await exportEverything(db, ana, clock)).bytes);
+  for (const name of ['stores.csv', 'barcodes.csv', 'tags.csv', 'plan-photos.csv', 'plan-items.csv', 'project-lines.csv', 'money-goal-saved.csv']) delete files[name];
+  const done = await bringInDownload(db, bob, files, KINDS.filter((k) => k.importable).map((k) => k.key), clock);
+  for (const kind of done.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  const byKey = Object.fromEntries(done.kinds.map((k) => [k.key, k]));
+  expect(byKey.stores).toMatchObject({ found: 0, fresh: 0 });
+  expect(byKey.tags).toMatchObject({ found: 0, fresh: 0 });
+  expect(byKey.projects).toMatchObject({ found: 1, fresh: 1 });
+  expect(byKey.plans).toMatchObject({ found: 1, fresh: 1, pictures: 0 });
+  // The shops named on the prices still make the start of the stores list.
+  expect((await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM stores WHERE owner_id = ?', [bob]))!.n).toBe(2);
+  expect((await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM project_items l JOIN projects p ON p.id = l.project_id WHERE p.owner_id = ?', [bob]))!.n).toBe(0);
+});
+
+it('twins that cannot be told apart are tagged one for one, and a tag on something that is not here comes in as the tag alone', async () => {
+  const spend = money(db, ana, clock);
+  const one = await spend.addEntry({ label: 'Coffee', cents: 300, day: '2046-03-01' });
+  await spend.addEntry({ label: 'Coffee', cents: 300, day: '2046-03-02' });
+  const tag = await tagsOf(db, ana, clock).create('Treats');
+  await tagsOf(db, ana, clock).set('spending', (one as { id: number }).id, [tag.id]);
+  const { files } = await splitDownload((await exportEverything(db, ana, clock)).bytes);
+  const done = await bringInDownload(db, bob, files, ['money', 'tags'], clock);
+  expect(done.kinds.find((k) => k.key === 'tags')).toMatchObject({ ok: true, found: 1, fresh: 1, unlinked: 0 });
+  expect((await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM tag_links l JOIN tags t ON t.id = l.tag_id WHERE t.owner_id = ? AND l.kind = 'spending'", [bob]))!.n).toBe(1);
+  // Without the spending, the tag still comes in, and the link is counted as one that could not be rebuilt.
+  const carol = await person('carol');
+  const alone = await bringInDownload(db, carol, files, ['tags'], clock);
+  expect(alone.kinds.find((k) => k.key === 'tags')).toMatchObject({ ok: true, found: 1, fresh: 1, unlinked: 1 });
+  expect(await db.get('SELECT 1 AS n FROM tags WHERE owner_id = ? AND name = ?', [carol, 'Treats'])).toBeDefined();
+});
+
+it('a plan photo goes only to a plan of the person, once, and never twice the same picture', async () => {
+  const plan = await plans(db, ana, clock).create({ name: 'Trip', start_day: '2046-08-01', end_day: '2046-08-02' });
+  const other = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9, 9, 9]);
+  const sent: PictureIn[] = [{ as: 'plan-photo', id: plan.id, name: 'Day one', bytes: PNG }, { as: 'plan-photo', id: plan.id, name: 'Day one again', bytes: PNG }, { as: 'plan-photo', id: plan.id, name: 'Day two', bytes: other }];
+  expect(await bringInPictures(db, bob, sent, clock)).toEqual({ kept: 0, left: 3 });
+  expect(await bringInPictures(db, ana, sent, clock)).toEqual({ kept: 2, left: 1 });
+  expect((await db.all<{ caption: string; sort_order: number }>('SELECT caption, sort_order FROM plan_photos WHERE plan_id = ? ORDER BY sort_order', [plan.id])).map((p) => `${p.caption}:${p.sort_order}`)).toEqual(['Day one:1', 'Day two:2']);
 });
 
 it('after the trial, everything can still be downloaded and looked over, but not brought in', async () => {

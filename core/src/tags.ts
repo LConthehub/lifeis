@@ -245,6 +245,23 @@ export async function exportRows(q: Queries, owner: number): Promise<string[][]>
   return rows.sort((a, b) => a[0]!.localeCompare(b[0]!, undefined, { sensitivity: 'base' }) || a[1]!.localeCompare(b[1]!) || a[2]!.localeCompare(b[2]!, undefined, { sensitivity: 'base' }));
 }
 
+/** The kind of thing a tags.csv row names by its heading ("Things", "Recipes", ...), or null. */
+export function tagKindOfLabel(label: string): TagKind | null {
+  const want = label.trim().toLowerCase();
+  return TAG_KINDS.find((kind) => KINDS[kind].label.toLowerCase() === want) ?? null;
+}
+
+/** This person's things of one kind, by title (lowercased as labelKey does), each title's ids in order. For bringing tags back in. */
+export async function targetsByTitle(q: Queries, owner: number, kind: TagKind): Promise<Map<string, number[]>> {
+  const k = KINDS[kind];
+  const out = new Map<string, number[]>();
+  for (const r of await q.all<{ id: number; title: string }>(`SELECT id, title FROM (${k.rows}) ORDER BY id`, k.args(owner))) {
+    const key = labelKey(r.title);
+    out.set(key, [...(out.get(key) ?? []), r.id]);
+  }
+  return out;
+}
+
 /**
  * Finds or makes the tag at the end of a path ("Kitchen > Appliances"), making each step that is missing. Used
  * where tags arrive as text (an export being brought back in).
