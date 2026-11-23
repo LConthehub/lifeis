@@ -49,6 +49,9 @@ export function isPaidPath(path: string): boolean {
   // Bringing a download back in writes into every part at once, so it counts as a change to the paid parts.
   // Downloading everything, and looking a file over, stay free: your data is always yours to take.
   if (/^\/api\/export\/(bring-in|pictures)$/.test(path)) return true;
+  // Tags reach into every part. Tagging a recipe, and making a tag name for it, stay free with the kitchen;
+  // tagging anything else, tagging many at once, and renaming, nesting, merging or deleting tags are covered.
+  if (part === 'tags') return !/^\/api\/tags(\/on\/recipe\/[0-9]+)?$/.test(path);
   return (PAID_PARTS as readonly string[]).includes(part ?? '');
 }
 

@@ -25,6 +25,15 @@ it('keeps the kitchen and backups free, whatever the trial says', () => {
   expect(decide(ended, 'POST', '/api/device/backup')).toBe('go');
 });
 
+it('keeps tagging recipes free, and covers tagging the rest', () => {
+  for (const free of ['/api/tags', '/api/tags/on/recipe/12']) expect(isPaidPath(free)).toBe(false);
+  for (const paid of ['/api/tags/on/thing/3', '/api/tags/on/spending/9', '/api/tags/bulk', '/api/tags/4', '/api/tags/4/merge']) expect(isPaidPath(paid)).toBe(true);
+  const ended = accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-06-01T00:00:00Z'));
+  expect(decide(ended, 'PUT', '/api/tags/on/recipe/12')).toBe('go');
+  expect(decide(ended, 'GET', '/api/tags/4')).toBe('go');
+  expect(decide(ended, 'PUT', '/api/tags/on/thing/3')).toBe('read_only');
+});
+
 it('begins the trial at the first thing written, and afterwards only stops changes, never reading', () => {
   const fresh = accessNow({ trial_started: null, unlocked: false }, at(BEGAN));
   expect(decide(fresh, 'GET', '/api/things/items')).toBe('go'); // looking doesn't start the clock
