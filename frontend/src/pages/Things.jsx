@@ -4,6 +4,7 @@ import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { ScanSticker } from './Places';
 import PlacePicker from '../components/PlacePicker';
+import { kindChoices } from '../projectKinds';
 // The headings kinds sit under, in the order shown. Which heading a kind belongs to comes with the kind (its `group`).
 const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garage', 'Garden', 'Outdoors', 'Electronics', 'Music', 'Around the house', 'Clothes and linens'];
 
@@ -272,7 +273,7 @@ export function ItemForm({ item, kinds, places, onPlaces, onDone }) {
         </div>
       )}
       <div className="grid grid-cols-2 gap-3">
-        <Field label="What it's for (with commas between)"><input value={form.activities} onChange={set('activities')} placeholder="Sewing, Camping" className={inputClass} /></Field>
+        <Field label="What it's for (with commas between)"><input value={form.activities} onChange={set('activities')} placeholder={!item.id && kind.activity ? `${kind.activity}, from its kind` : 'Sewing, Camping'} className={inputClass} /></Field>
         <Field label="Barcode on it or its box"><input inputMode="numeric" value={form.barcode} onChange={set('barcode')} className={inputClass} /></Field>
       </div>
       <Field label="Notes"><textarea rows={2} value={form.note} onChange={set('note')} className={inputClass} /></Field>
@@ -320,7 +321,7 @@ export function KindsPage() {
           <section key={k.id} className={cardClass}>
             <div className="flex items-center gap-2">
               <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">{k.icon ? `${k.icon} ` : ''}{k.name}
-                <span className="ml-2 text-xs font-normal text-gray-500 dark:text-life-300">{k.items} {k.items === 1 ? 'thing' : 'things'}{k.unit ? ` · counted in ${k.unit}` : ''}</span></h2>
+                <span className="ml-2 text-xs font-normal text-gray-500 dark:text-life-300">{k.items} {k.items === 1 ? 'thing' : 'things'}{k.unit ? ` · counted in ${k.unit}` : ''}{k.activity ? ` · for ${k.activity}` : ''}</span></h2>
               <button type="button" onClick={() => setModal({ kind: k })} className="text-xs text-life-600 hover:underline dark:text-life-200">Edit</button>
               {k.items === 0 && <button type="button" onClick={() => removeKind(k)} className="text-xs text-gray-400 hover:text-red-600">Remove</button>}
             </div>
@@ -339,19 +340,40 @@ export function KindsPage() {
       </div>
       <h2 className="pt-2 font-semibold text-life-800 dark:text-life-50">Ready-made sets</h2>
       <Starters onAdded={load} />
-      {modal?.kind && <Modal title={modal.kind.id ? modal.kind.name : 'A new kind of thing'} onClose={() => setModal(null)}><KindForm kind={modal.kind} onDone={done} /></Modal>}
+      {modal?.kind && <Modal title={modal.kind.id ? modal.kind.name : 'A new kind of thing'} onClose={() => setModal(null)}><KindForm kind={modal.kind} onDone={done} onKinds={setKinds} /></Modal>}
       {modal?.field && <Modal title={modal.field.id ? modal.field.name : 'A new field'} onClose={() => setModal(null)}><FieldForm field={modal.field} onDone={done} /></Modal>}
     </div>
   );
 }
 
-function KindForm({ kind, onDone }) {
-  const [form, setForm] = useState({ name: kind.name || '', icon: kind.icon || '', unit: kind.unit || '' });
+function KindForm({ kind, onDone, onKinds }) {
+  const [form, setForm] = useState({ name: kind.name || '', icon: kind.icon || '', unit: kind.unit || '', activity: kind.activity || '' });
   const [error, setError] = useState('');
+  const [mine, setMine] = useState([]);        // the activities already in use
+  const [lacking, setLacking] = useState(0);   // how many of this kind's things don't have the kind's activity yet
+  const [applied, setApplied] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const countLacking = useCallback(() => {
+    if (!kind.id || !kind.activity) { setLacking(0); return; }
+    const want = kind.activity.trim().toLowerCase();
+    axios.get('/api/things/items').then(({ data }) => setLacking(data.filter((i) => i.kind_id === kind.id && !(i.activities || []).some((a) => a.toLowerCase() === want)).length)).catch(() => setLacking(0));
+  }, [kind.id, kind.activity]);
+  useEffect(() => {
+    axios.get('/api/things/activities').then(({ data }) => setMine(data.map((a) => a.name))).catch(() => {});
+    countLacking();
+  }, [countLacking]);
+  const addToThings = async () => {
+    try {
+      const { data } = await axios.post(`/api/things/kinds/${kind.id}/activity`);
+      setApplied(`Added ${kind.activity} to ${data.added} ${data.added === 1 ? 'thing' : 'things'}.`);
+      setLacking(0);
+      setError('');
+      onKinds((await axios.get('/api/things/kinds')).data);
+    } catch (err) { setError(errorMessage(err, "Couldn't add it")); }
+  };
   const submit = async (e) => {
     e.preventDefault();
-    const body = { name: form.name, icon: form.icon || null, unit: form.unit || null };
+    const body = { name: form.name, icon: form.icon || null, unit: form.unit || null, activity: form.activity.trim() || null };
     try { onDone((kind.id ? await axios.put(`/api/things/kinds/${kind.id}`, body) : await axios.post('/api/things/kinds', body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   return (
@@ -361,6 +383,13 @@ function KindForm({ kind, onDone }) {
         <Field label="A picture (an emoji)"><input value={form.icon} onChange={set('icon')} placeholder="🎲" className={inputClass} /></Field>
         <Field label="Usually counted in"><input value={form.unit} onChange={set('unit')} placeholder="yd, skein, box… or nothing" className={inputClass} /></Field>
       </div>
+      <Field label="What its things are usually for"><input list="kind-activities" value={form.activity} onChange={set('activity')} placeholder="Sewing, Woodworking, Home repair… or nothing" className={inputClass} /></Field>
+      <datalist id="kind-activities">{kindChoices(mine).map((a) => <option key={a} value={a} />)}</datalist>
+      <p className="text-xs text-gray-500 dark:text-life-300">A new thing of this kind starts out for it, so it shows up as gear on a project of that kind.</p>
+      {kind.id && kind.activity && lacking > 0 && (
+        <button type="button" onClick={addToThings} className={`${quietButtonClass} min-h-[44px]`}>Add this to the {lacking} {lacking === 1 ? 'thing' : 'things'} of this kind that {lacking === 1 ? "doesn't" : "don't"} have it</button>
+      )}
+      {applied && <p className="text-sm text-life-700 dark:text-life-100" role="status">{applied}</p>}
       {!kind.id && <p className="text-xs text-gray-500 dark:text-life-300">Add its fields after saving.</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="text-right"><button type="submit" className={buttonClass}>Save</button></div>

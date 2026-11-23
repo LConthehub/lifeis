@@ -15,9 +15,14 @@ const firstRun = async (patience = 6000) => {
   const dialog = page.getByRole('dialog');
   await dialog.waitFor({ timeout: patience }).catch(() => {});
   if (await dialog.isVisible().catch(() => false)) {
+    // A brand-new person is met by the two-minute start; the full checklist is one step in.
+    if (await dialog.getByRole('button', { name: 'Choose everything myself' }).isVisible().catch(() => false) === false && await dialog.getByRole('button', { name: 'Next', exact: true }).isVisible().catch(() => false)) {
+      await dialog.getByRole('button', { name: 'Next', exact: true }).click(); await wait(800);
+    }
+    if (await dialog.getByRole('button', { name: 'Choose everything myself' }).isVisible().catch(() => false)) { await dialog.getByRole('button', { name: 'Choose everything myself' }).click(); await wait(800); }
     await dialog.getByText('Cooking and groceries', { exact: true }).first().click();
     await dialog.getByText('Projects', { exact: true }).first().click();
-    await dialog.getByRole('button', { name: 'Set up Life Is' }).click(); await wait(2000);
+    await dialog.getByRole('button', { name: 'Set up Life Is', exact: true }).click(); await wait(2000);
   }
 };
 

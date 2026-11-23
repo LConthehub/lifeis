@@ -25,6 +25,7 @@ import Search from './components/Search';
 import HomeReport from './pages/HomeReport';
 import WalkThrough from './pages/WalkThrough';
 import PetsPage, { PetPage } from './pages/Pets';
+import LicensesPage from './pages/Licenses';
 import ManualPage from './pages/Manual';
 import PackingPage from './pages/Packing';
 import UpkeepPage, { JobPage } from './pages/Upkeep';
@@ -51,7 +52,7 @@ const SECTIONS = [
   { word: 'eating', shown: 'delicious', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
     tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫'], ['/prices', 'Prices', '💲']] },
   { word: 'keeping', shown: 'organized', home: '/things', owns: (path) => path.startsWith('/things') || path.startsWith('/manual'),
-    tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/upkeep', 'Upkeep', '🔧'], ['/things/pets', 'Pets', '🐾'], ['/manual', 'House manual', '📒'], ['/things/activities', 'Activities', '🛠']] },
+    tabs: [['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/upkeep', 'Upkeep', '🔧'], ['/things/licenses', 'Licenses', '🪪'], ['/things/pets', 'Pets', '🐾'], ['/manual', 'House manual', '📒'], ['/things/activities', 'Activities', '🛠']] },
   { word: 'spending', shown: 'budgeted', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month', '💵']] },
   { word: 'planning', shown: 'planned', home: '/calendar', owns: (path) => path.startsWith('/calendar') || path.startsWith('/plans') || path.startsWith('/mail'), tabs: [['/calendar', 'Calendar', '📅'], ['/plans', 'Plans', '✨'], ['/mail', 'Mail', '✉️']] },
   { word: 'making', shown: 'projects', home: '/projects', owns: (path) => path.startsWith('/projects'),
@@ -167,6 +168,7 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/things/report" element={<HomeReport />} />
           <Route path="/things/packing" element={<PackingPage />} />
           <Route path="/manual" element={<ManualPage />} />
+          <Route path="/things/licenses" element={<LicensesPage />} />
           <Route path="/things/pets" element={<PetsPage />} />
           <Route path="/things/pets/:id" element={<PetPage />} />
           <Route path="/things/:id" element={<Thing />} />

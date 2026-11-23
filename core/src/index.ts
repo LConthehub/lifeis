@@ -67,6 +67,8 @@ export { JOB_KINDS } from './upkeep.ts';
 export type { JobKind } from './upkeep.ts';
 export { pets, careName, PET_CARE, WEIGHT_UNITS, MAX_PET_PHOTO } from './pets.ts';
 export type { Pet, PetInput, PetSummary, PetWeight, Pets } from './pets.ts';
+export { licenses, expiring, defaultLead, renewalName, LICENSE_CATEGORIES, LICENSE_STARTERS, SOON_DAYS } from './licenses.ts';
+export type { License, LicenseFull, LicenseInput, LicenseReminder, LicenseStarter, Licenses, RemindInput, Lead } from './licenses.ts';
 export { manual, manualFor, manualHtml, MANUAL_SECTIONS } from './manual.ts';
 export type { Manual, ManualEntry, SharedManual } from './manual.ts';
 export { packing, BOX_STATES } from './packing.ts';
@@ -80,3 +82,5 @@ export { readStatement, lookOverStatement, importStatement } from './bankStateme
 export type { Statement, StatementRow, StatementChoices, StatementResult, LookedOver } from './bankStatement.ts';
 export { recalls, recallsDue, vehiclesOf, recallAddress, reportedDay, RECALL_SERVICE, NHTSA_API, NOT_LISTED } from './recalls.ts';
 export type { Recall, Recalls, RecallStatus, Vehicle, NeedsDetails, CheckedVehicle, VehicleRecalls, CheckReport } from './recalls.ts';
+export { start, WANTS, PET_KINDS } from './start.ts';
+export type { Start, StartState, Suggestion, Cleared } from './start.ts';

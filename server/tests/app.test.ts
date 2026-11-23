@@ -636,6 +636,60 @@ it('what Life Is looks after is asked once, and sets up what fits', async () => 
   expect((await (await member(admin, 'partner')).get('/api/life')).json.areas).toBeNull(); // each person answers for themselves
 });
 
+it('the two-minute start is for a new household, saves each step, and clears only its own examples', async () => {
+  const admin = await owner();
+  const first = (await admin.get('/api/start')).json;
+  expect([first.first_run, first.status, first.step, first.card]).toEqual(['guide', 'new', 1, null]);
+  expect(first.options.sets.map((s: { slug: string }) => s.slug)).toEqual(['house', 'car', 'papers', 'health', 'yard']);
+
+  const people = (await admin.put('/api/start/people', { adults: ['Sam'], children: ['Mia', 'Leo'], pets: [{ kind: 'dog', name: 'Biscuit' }] })).json;
+  expect(people.step).toBe(2);
+  expect((await admin.get('/api/things/upkeep/members')).json.map((m: { name: string }) => m.name)).toEqual(['Leo', 'Mia']);
+  expect((await admin.get('/api/things/pets')).json.map((p: { name: string }) => p.name)).toEqual(['Biscuit']);
+  await admin.put('/api/start/people', { adults: ['Sam'], children: ['Mia', 'Leo'], pets: [{ kind: 'dog', name: 'Biscuit' }] });
+  expect((await admin.get('/api/things/pets')).json).toHaveLength(1); // twice adds nothing twice
+
+  expect((await admin.put('/api/start/interests', { wants: ['meals', 'house'] })).json.step).toBe(3);
+  expect((await admin.get('/api/life')).json).toMatchObject({ areas: ['eating', 'keeping'], sections: ['eating', 'keeping'] });
+  expect((await admin.put('/api/start/interests', { wants: ['meals', 'alchemy'] })).status).toBe(400);
+  expect((await admin.put('/api/start/interests', {})).status).toBe(200);
+  await admin.put('/api/start/interests', { wants: ['meals', 'house'] });
+  expect((await admin.put('/api/start/upkeep', { sets: ['house'], has_car: false })).json.step).toBe(4);
+  expect((await admin.get('/api/things/upkeep')).json.length).toBe(14);
+  expect((await admin.put('/api/start/upkeep', { sets: ['moon'] })).status).toBe(404);
+  expect((await admin.put('/api/start/examples', {})).status).toBe(422);
+  await admin.put('/api/start/examples', { on: true });
+  expect((await admin.get('/api/kitchen/recipes')).json).toHaveLength(3);
+
+  const closed = (await admin.post('/api/start/close', { step: 4 })).json;
+  expect([closed.first_run, closed.card]).toEqual(['quiet', { kind: 'finish', step: 4 }]);
+  const done = (await admin.post('/api/start/finish', {})).json;
+  expect(done.card).toMatchObject({ kind: 'started', examples: { recipes: 3, meals: 3, groceries: 6 } });
+  expect(done.landing).toEqual({ to: '/recipes', label: 'Open your recipes' });
+  expect((await admin.put('/api/start/people', { children: ['Zed'] })).status).toBe(409); // finished
+
+  // One example the person changes is kept.
+  const recipes = (await admin.get('/api/kitchen/recipes')).json as { id: number; title: string }[];
+  const chili = recipes.find((r) => r.title === 'Slow-cooker beef chili')!;
+  const whole = (await admin.get(`/api/kitchen/recipes/${chili.id}`)).json;
+  await admin.put(`/api/kitchen/recipes/${chili.id}`, { title: whole.title, ingredients_text: `${whole.ingredients_text}\n1 tsp oregano`, steps_text: whole.steps_text });
+  const cleared = (await admin.post('/api/start/examples/clear', {})).json;
+  expect(cleared.removed).toEqual({ recipes: 2, meals: 3, groceries: 6 });
+  expect(cleared.kept).toEqual([{ title: 'Slow-cooker beef chili', why: 'you have changed it' }]);
+  expect((await admin.get('/api/kitchen/recipes')).json.map((r: { title: string }) => r.title)).toEqual(['Slow-cooker beef chili']);
+  expect(cleared.state.card).toMatchObject({ kind: 'started', examples: null }); // the examples are gone; the tips stay
+
+  // Another person is asked on their own, and a household that has begun gets the long checklist instead.
+  const partner = await member(admin, 'partner');
+  expect((await partner.get('/api/start')).json).toMatchObject({ first_run: 'guide', status: 'new' });
+  expect((await partner.get('/api/things/pets')).json).toEqual([]);
+  expect((await partner.post('/api/start/skip', {})).json).toMatchObject({ status: 'skipped', card: null });
+  const neighbor = await member(admin, 'neighbor');
+  await neighbor.post('/api/kitchen/recipes', { title: 'Toast' });
+  expect((await neighbor.get('/api/start')).json.first_run).toBe('checklist');
+  expect((await neighbor.put('/api/start/people', { children: ['Kid'] })).status).toBe(409);
+});
+
 it('the collection and the calendar answer over the web', async () => {
   const admin = await owner();
   const room = (await admin.post('/api/things/places', { name: 'Living room' })).json[0].id;
@@ -715,6 +769,49 @@ it('days are the person\'s own, not the server\'s', async () => {
   }
 });
 
+it('a copy keeps how many discs it is over the web, and a bad number is refused', async () => {
+  const admin = await owner();
+  const made = await admin.post('/api/media', { type: 'book', title: 'Dune', copy: { format: 'Book on CD', pieces: 12 } });
+  expect(made.status).toBeLessThan(300);
+  const book = made.json;
+  expect(book.copies[0].pieces).toBe(12);
+  expect((await admin.get(`/api/media/${book.id}`)).json.copies[0].pieces).toBe(12);
+  expect((await admin.get('/api/media?type=book')).json[0].pieces).toEqual({ 'Book on CD': 12 });
+  // Left out: unchanged. Sent as null: cleared.
+  expect((await admin.put(`/api/media/copies/${book.copies[0].id}`, { format: 'Book on CD', note: 'in the car' })).json.copies[0].pieces).toBe(12);
+  expect((await admin.put(`/api/media/copies/${book.copies[0].id}`, { format: 'Book on CD', note: 'in the car', pieces: 14 })).json.copies[0].pieces).toBe(14);
+  // A bad number is refused, and nothing else in the request is kept.
+  for (const bad of [0, 1000, -3, 2.5, 'twelve']) {
+    expect((await admin.post(`/api/media/${book.id}/copies`, { format: 'Cassette', pieces: bad })).status, String(bad)).toBeGreaterThanOrEqual(400);
+    expect((await admin.put(`/api/media/copies/${book.copies[0].id}`, { format: 'Book on CD', note: 'changed', pieces: bad })).status, String(bad)).toBeGreaterThanOrEqual(400);
+  }
+  const after = (await admin.get(`/api/media/${book.id}`)).json;
+  expect(after.copies).toHaveLength(1);
+  expect(after.copies[0]).toMatchObject({ pieces: 14, note: 'in the car' });
+  expect((await admin.put(`/api/media/copies/${book.copies[0].id}`, { format: 'Book on CD', note: 'in the car', pieces: null })).json.copies[0].pieces).toBeNull();
+});
+
+it('a kind carries the activity its things are for, and one button adds it to the things already there', async () => {
+  const admin = await owner();
+  let kinds = (await admin.post('/api/things/kinds', { name: 'Odds and ends', activity: 'Sewing' })).json;
+  const notions = kinds.find((k: { name: string }) => k.name === 'Odds and ends');
+  expect(notions.activity).toBe('Sewing');
+  expect(notions.group).toBeNull();
+  expect(Object.keys(notions).sort()).toEqual(['activity', 'fields', 'group', 'icon', 'id', 'items', 'name', 'unit']);
+  expect((await admin.post('/api/things/items', { kind_id: notions.id, name: 'Thread', activities: [] })).json.activities).toEqual(['Sewing']);
+  const hatchet = (await admin.post('/api/things/items', { kind_id: notions.id, name: 'Hatchet', activities: ['Camping'] })).json;
+  expect(hatchet.activities).toEqual(['Camping']);
+  kinds = (await admin.put(`/api/things/kinds/${notions.id}`, { activity: 'Woodworking' })).json;
+  expect(kinds.find((k: { name: string }) => k.name === 'Odds and ends').activity).toBe('Woodworking');
+  expect((await admin.get(`/api/things/items/${hatchet.id}`)).json.activities).toEqual(['Camping']);
+  expect((await admin.post(`/api/things/kinds/${notions.id}/activity`, {})).json).toEqual({ added: 2 });
+  expect((await admin.get(`/api/things/items/${hatchet.id}`)).json.activities.sort()).toEqual(['Camping', 'Woodworking']);
+  expect((await admin.post(`/api/things/kinds/${notions.id}/activity`, {})).json).toEqual({ added: 0 });
+  kinds = (await admin.put(`/api/things/kinds/${notions.id}`, { activity: null })).json;
+  expect(kinds.find((k: { name: string }) => k.name === 'Odds and ends').activity).toBeNull();
+  expect((await admin.post(`/api/things/kinds/${notions.id}/activity`, {})).status).toBe(400);
+});
+
 it('a recipe says what it is cooked in, and the week flags a meal that needs more than you own', async () => {
   const admin = await owner();
   const kinds = (await admin.post('/api/things/starters', { slug: 'cookware' })).json;
@@ -763,7 +860,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['licenses', 'recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.
@@ -903,4 +1000,50 @@ it('a bank statement is looked over, then brought in once, privately, over the w
   expect((await other.get('/api/money?month=2046-03')).json.entries).toEqual([]);
   expect((await other.post('/api/money/statement', { text, categories: { 0: house } })).status).toBe(404);
   expect((await other.post('/api/money/statement/read', { text })).json.already).toBe(0);
+});
+
+it('licenses are kept over the web, with a renewal that follows them, and the number only where asked for', async () => {
+  const admin = await owner();
+  const other = await member(admin, 'ben');
+  const dayIn = (days: number) => { const d = new Date(); d.setDate(d.getDate() + days); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const ready = (await admin.get('/api/things/licenses/ready')).json;
+  expect([ready.categories.length, ready.soon_days, ready.leads.Travel.n, ready.leads.Travel.unit, ready.starters.find((s: { name: string }) => s.name === 'Passport').term_years]).toEqual([7, 60, 6, 'month', 10]);
+
+  const made = await admin.post('/api/things/licenses', { name: "Driver's license", category: 'Driving', holder: 'Dana', number: 'D123-4567', issuer: 'State DMV', expires_on: dayIn(20) });
+  expect(made.status).toBe(201);
+  expect((await admin.post('/api/things/licenses', { name: '' })).status).toBe(400);
+  expect((await admin.post('/api/things/licenses', {})).status).toBe(422);
+  // The list says there is a number and never shows it; asking for the one license does.
+  const list = await admin.get('/api/things/licenses');
+  expect(list.json).toHaveLength(1);
+  expect(JSON.stringify(list.json)).not.toContain('D123-4567');
+  expect(list.json[0]).toMatchObject({ has_number: true, state: 'soon', days_left: 20 });
+  expect((await admin.get(`/api/things/licenses/${made.json.id}`)).json.number).toBe('D123-4567');
+  expect((await admin.get('/api/things/licenses/expiring?days=60')).json.map((l: { name: string }) => l.name)).toEqual(["Driver's license"]);
+
+  // "Remind me to renew": a renewal in upkeep, first due 30 days before, which follows the expiry day.
+  expect((await admin.post(`/api/things/licenses/${made.json.id}/reminder`, { lead_n: 5, lead_unit: 'fortnight' })).status).toBe(400);
+  const set = (await admin.post(`/api/things/licenses/${made.json.id}/reminder`, { term_years: 4 })).json;
+  expect(set.reminder).toMatchObject({ lead: { n: 30, unit: 'day' }, term_years: 4, due_on: dayIn(-10), renewed: false });
+  const job = (await admin.get(`/api/things/upkeep/${set.reminder.job_id}`)).json;
+  expect([job.name, job.kind, job.first_due]).toEqual(["Renew Dana's driver's license", 'renewal', dayIn(-10)]);
+  expect(JSON.stringify(job)).not.toContain('D123-4567');
+  const moved = (await admin.put(`/api/things/licenses/${made.json.id}`, { name: "Driver's license", category: 'Driving', holder: 'Dana', number: 'D123-4567', issuer: 'State DMV', expires_on: dayIn(90) })).json;
+  expect(moved.reminder.due_on).toBe(dayIn(60));
+  expect((await admin.get('/api/search?q=driver')).json.map((r: { kind: string; link: string }) => [r.kind, r.link]).filter(([k]: string[]) => k === 'license')).toEqual([['license', '/things/licenses']]);
+  expect(JSON.stringify((await admin.get('/api/search?q=D123')).json)).toBe('[]');
+
+  // Nobody else sees or changes it.
+  expect((await other.get('/api/things/licenses')).json).toEqual([]);
+  expect([(await other.get(`/api/things/licenses/${made.json.id}`)).status, (await other.delete(`/api/things/licenses/${made.json.id}`)).status,
+    (await other.post(`/api/things/licenses/${made.json.id}/reminder`, {})).status]).toEqual([404, 404, 404]);
+
+  // Removed with its reminder, or without it.
+  expect((await admin.delete(`/api/things/licenses/${made.json.id}?reminder=1`)).status).toBe(204);
+  expect((await admin.get(`/api/things/upkeep/${set.reminder.job_id}`)).status).toBe(404);
+  const again = (await admin.post('/api/things/licenses', { name: 'Passport', holder: 'Dana', category: 'Travel', expires_on: dayIn(400) })).json;
+  const kept = (await admin.post(`/api/things/licenses/${again.id}/reminder`, {})).json;
+  expect((await admin.delete(`/api/things/licenses/${again.id}`)).status).toBe(204);
+  expect((await admin.get(`/api/things/upkeep/${kept.reminder.job_id}`)).status).toBe(200);
+  expect((await visitor().get('/api/things/licenses')).status).toBe(401);
 });

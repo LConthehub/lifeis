@@ -8,6 +8,7 @@ import { chooseAgain, inApp, linkedServer, onDevice, serverOrigin } from '../whe
 import { AssistantService } from '../components/Assistant';
 import { RemindersSettings } from '../components/Reminders';
 import { RecallAlertsService } from '../components/Recalls';
+import { PeopleSignIn, SignInSecurity } from '../components/Security';
 
 const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 120: '2 hours', 480: '8 hours', 0: 'Stay signed in' };
 
@@ -58,7 +59,8 @@ const GROUPS = [
       { id: 'linked', title: 'Connected to your Life Is', words: 'server disconnect host', when: () => Boolean(linkedServer()), render: () => <Linked /> },
       { id: 'idle', title: 'Signing out by itself', words: 'idle timeout log out automatic', when: server, render: () => <SignedOut /> },
       { id: 'password', title: 'Password', words: 'change password', when: server, render: () => <PasswordForm /> },
-      { id: 'people', title: 'People in this Life Is', words: 'user account add family person', when: (user) => server() && user.is_admin, render: () => <AddPerson /> },
+      { id: 'security', title: 'Sign-in security', words: 'two-step 2fa authenticator totp passkey recovery codes fingerprint face webauthn lock', when: server, render: () => <SignInSecurity /> },
+      { id: 'people', title: 'People in this Life Is', words: 'user account add family person locked out two-step passkey', when: (user) => server() && user.is_admin, render: () => <div className="space-y-4"><AddPerson /><PeopleSignIn /></div> },
       { id: 'sign-out', title: 'Sign out', words: 'log out leave', when: server, render: ({ user, onLogout }) => <Titled title="Sign out" hint={`Signed in as ${user.username}.`}><button type="button" onClick={onLogout} className={quietButtonClass}>Sign out</button></Titled> },
     ],
   },

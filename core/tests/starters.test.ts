@@ -85,3 +85,51 @@ it('no page reaches into core: what a page needs from core comes through the API
   walk(pages);
   expect(reaching).toEqual([]);
 });
+
+// The names of the kinds of project (frontend/src/projectKinds.js). Core cannot import from the frontend, so this is a copy:
+// change both together. "Your gear for <kind of project>" finds things whose activity is one of these, whatever its capitals.
+const PROJECT_KIND_NAMES = ['Sewing', 'Knitting & crochet', 'Woodworking', 'Gardening', 'Home repair', 'Car & mechanics',
+  'Cooking & baking', 'Art & crafts', 'Electronics & computers', 'Music', 'Writing & study', 'Outdoors'];
+
+it('every ready-made kind that is for an activity names one of the kinds of project, and clothes and linens name none', () => {
+  const known = PROJECT_KIND_NAMES.map((n) => n.toLowerCase());
+  for (const starter of STARTERS) {
+    for (const kind of starter.kinds) {
+      if (kind.activity) expect(known, `${starter.slug}: ${kind.name}`).toContain(kind.activity.toLowerCase());
+      else expect(starter.slug, `${kind.name} has no activity`).toBe('clothing');
+    }
+  }
+  const of = (slug: string) => [...new Set(STARTERS.find((s) => s.slug === slug)!.kinds.map((k) => k.activity))];
+  expect(of('clothing')).toEqual([undefined]);
+  expect(of('sewing')).toEqual(['Sewing']);
+  expect(of('knitting')).toEqual(['Knitting & crochet']);
+  expect(of('woodworking')).toEqual(['Woodworking']);
+  expect(of('gardening')).toEqual(['Gardening']);
+  expect(of('car')).toEqual(['Car & mechanics']);
+  expect(of('art')).toEqual(['Art & crafts']);
+  expect(of('electronics')).toEqual(['Electronics & computers']);
+  expect(of('music')).toEqual(['Music']);
+  expect(of('outdoors')).toEqual(['Outdoors']);
+  expect(of('cookware')).toEqual(['Cooking & baking']);
+  expect(of('home')).toEqual(['Home repair']);
+});
+
+it('adding a set gives its new kinds their activity, and a kind the person already had is left as it is', async () => {
+  const db = memoryDb();
+  await migrate(db);
+  const owner = (await db.run("INSERT INTO users (username, password_hash, created_at) VALUES ('owner', 'x', 'now')")).lastId;
+  const things = inventory(db, owner);
+  await things.createKind({ name: 'fabric', icon: 'x', activity: 'Quilting' });
+  await things.createKind({ name: 'Notions' }); // theirs, with no activity
+  const kinds = await things.addStarter('sewing');
+  const activityOf = (name: string) => kinds.find((k) => k.name.toLowerCase() === name.toLowerCase())!.activity;
+  expect(activityOf('Fabric')).toBe('Quilting');
+  expect(activityOf('Notions')).toBeNull();
+  expect(activityOf('Sewing patterns')).toBe('Sewing');
+  // A thing of a new one starts out for it.
+  const patterns = kinds.find((k) => k.name === 'Sewing patterns')!;
+  expect((await things.createItem({ kind_id: patterns.id, name: 'Dress' })).activities).toEqual(['Sewing']);
+  // A set with no activity adds kinds with none.
+  const clothes = (await things.addStarter('clothing')).find((k) => k.name === 'Clothes')!;
+  expect(clothes.activity).toBeNull();
+});

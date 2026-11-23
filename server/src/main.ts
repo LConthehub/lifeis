@@ -34,6 +34,8 @@ const mail = { postbox: realPostbox, sealer: vault(keyDir, 'mail_account') };
 const push = browserPush(keyDir);
 const server = createServer(createApp({
   db: database.db,
+  // Locks each person's authenticator-app secret, with the same key folder as everything else kept locked.
+  sealer: vault(keyDir, 'second_step'),
   ...(demo ? { demo } : {
     reach,
     photos: { fetcher: webFetcher, sealer: vault(keyDir, 'photo_library') },

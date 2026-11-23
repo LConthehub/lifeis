@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- What long-pressing the Life Is icon offers, and what Google's assistant can open by name. Each opens one of
-     Life Is's short requests (core/src/actions.ts) at a link the app handles; anything that adds waits for a tap. -->
+     Life Is's short requests (core/src/actions.ts) at a link the app handles; anything that adds waits for a tap.
+     Android shows at most four static shortcuts. targetPackage and targetClass keep the link inside this app. -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
         android:shortcutId="add_to_groceries"
@@ -8,7 +9,8 @@
         android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_groceries_short"
         android:shortcutLongLabel="@string/shortcut_groceries_long">
-        <intent android:action="android.intent.action.VIEW" android:data="space.emailmy.lifeis://do/add-to-groceries" />
+        <intent android:action="android.intent.action.VIEW" android:data="space.emailmy.lifeis://do/add-to-groceries"
+            android:targetPackage="space.emailmy.lifeis" android:targetClass="space.emailmy.lifeis.MainActivity" />
     </shortcut>
     <shortcut
         android:shortcutId="record_spending"
@@ -16,7 +18,8 @@
         android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_spent_short"
         android:shortcutLongLabel="@string/shortcut_spent_long">
-        <intent android:action="android.intent.action.VIEW" android:data="space.emailmy.lifeis://do/record-spending" />
+        <intent android:action="android.intent.action.VIEW" android:data="space.emailmy.lifeis://do/record-spending"
+            android:targetPackage="space.emailmy.lifeis" android:targetClass="space.emailmy.lifeis.MainActivity" />
     </shortcut>
     <shortcut
         android:shortcutId="whats_for_dinner"
@@ -24,6 +27,16 @@
         android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_dinner_short"
         android:shortcutLongLabel="@string/shortcut_dinner_long">
-        <intent android:action="android.intent.action.VIEW" android:data="space.emailmy.lifeis://do/whats-for-dinner" />
+        <intent android:action="android.intent.action.VIEW" android:data="space.emailmy.lifeis://do/whats-for-dinner"
+            android:targetPackage="space.emailmy.lifeis" android:targetClass="space.emailmy.lifeis.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="where_is"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_where_short"
+        android:shortcutLongLabel="@string/shortcut_where_long">
+        <intent android:action="android.intent.action.VIEW" android:data="space.emailmy.lifeis://do/where-is"
+            android:targetPackage="space.emailmy.lifeis" android:targetClass="space.emailmy.lifeis.MainActivity" />
     </shortcut>
 </shortcuts>

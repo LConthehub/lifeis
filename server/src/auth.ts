@@ -194,3 +194,21 @@ export class LoginThrottle {
 export const pairThrottle = new LoginThrottle('pair');
 export const ipThrottle = new LoginThrottle('ip', 20);
 export const userThrottle = new LoginThrottle('user', 30);
+
+/** The three counts one try is held against. A wrong password, a wrong code and a refused passkey all use them. */
+export type Counted = [LoginThrottle, string][];
+export const countedFor = (username: string, ip: string): Counted =>
+  [[pairThrottle, `${username}|${ip}`], [ipThrottle, ip], [userThrottle, username]];
+
+/** How many seconds the person must still wait (0 if not locked). */
+export async function secondsToWait(db: Db, counted: Counted, clock: Clock): Promise<number> {
+  let wait = 0;
+  for (const [throttle, key] of counted) wait = Math.max(wait, await throttle.secondsLocked(db, key, clock));
+  return wait;
+}
+export async function countFailure(db: Db, counted: Counted, clock: Clock): Promise<void> {
+  for (const [throttle, key] of counted) await throttle.failure(db, key, clock);
+}
+export async function forgetFailures(db: Db, counted: Counted): Promise<void> {
+  for (const [throttle, key] of counted) await throttle.success(db, key);
+}

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { onDevice } from '../where';
 import { AskCard } from '../components/Assistant';
+import { StartCard } from '../components/Start';
 import { whoText, whenText } from './Mail';
 import Modal, { buttonClass, quietButtonClass, cardClass, fromDateInput, minutesText } from '../components/ui';
 
@@ -72,6 +73,8 @@ export default function Home({ user }) {
         </div>
         <button type="button" onClick={() => setChoosing(true)} className={quietButtonClass}>Choose what shows</button>
       </div>
+
+      <StartCard onChanged={load} />
 
       <AskCard />
 

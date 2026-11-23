@@ -1001,6 +1001,57 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_licenses_owner ON licenses(owner_id, expires_on)`,
     ],
   },
+  {
+    // A second step at sign-in. Two-step sign-in with an authenticator app: the app's secret is kept locked
+    // (never in the clear), with the last 30-second step accepted so a code works once. Recovery codes are kept
+    // only as hashes. Passkeys keep each one's public key, never anything that could sign. A challenge is a
+    // short-lived, single-use random value (a sign-in waiting for its code, or a passkey waiting for the device).
+    number: 34,
+    name: 'two-step sign-in, recovery codes and passkeys',
+    statements: [
+      `CREATE TABLE user_security (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        totp_secret TEXT,
+        totp_last_step INTEGER NOT NULL DEFAULT 0,
+        webauthn_handle TEXT,
+        notice TEXT,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE TABLE recovery_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        code_hash TEXT NOT NULL,
+        used_at TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_recovery_codes_user ON recovery_codes(user_id)`,
+      `CREATE TABLE passkeys (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        credential_id TEXT NOT NULL UNIQUE,
+        public_key TEXT NOT NULL,
+        counter INTEGER NOT NULL DEFAULT 0,
+        transports TEXT,
+        backed_up INTEGER NOT NULL DEFAULT 0,
+        multi_device INTEGER NOT NULL DEFAULT 0,
+        rp_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT,
+        flagged_at TEXT
+      )`,
+      `CREATE INDEX idx_passkeys_user ON passkeys(user_id)`,
+      `CREATE TABLE auth_challenges (
+        token_hash TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        data TEXT,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      )`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

@@ -25,6 +25,8 @@ import { actionRoutes } from './actionRoutes.ts';
 import { planRoutes } from './planRoutes.ts';
 import { shoppingRoutes } from './shoppingRoutes.ts';
 import { recallRoutes } from './recallRoutes.ts';
+import { startRoutes } from './startRoutes.ts';
+import { licenseRoutes } from './licenseRoutes.ts';
 
 export type Outside = {
   /** How the weather and the barcode lookups are asked. Left out: they can't be turned on. */
@@ -267,5 +269,7 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ...planRoutes(db, options.photos),
     ...shoppingRoutes(db),
     ...recallRoutes(db, outside),
+    ...startRoutes(db),
+    ...licenseRoutes(db),
   ];
 }

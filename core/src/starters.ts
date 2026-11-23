@@ -5,7 +5,11 @@
 import type { FieldInput } from './inventory.ts';
 import { labelKey } from './small.ts';
 
-export type StarterKind = { name: string; icon: string; unit?: string; fields: FieldInput[] };
+export type StarterKind = {
+  name: string; icon: string; unit?: string; fields: FieldInput[];
+  /** What the things of this kind are for: the name of a kind of project ("Car & mechanics"), so they show up as gear on one. */
+  activity?: string;
+};
 /** `group` is the plain heading the Things page files this set's kinds under. */
 export type Starter = { slug: string; name: string; about: string; group: string; kinds: StarterKind[] };
 
@@ -16,7 +20,17 @@ const yesNo = (name: string): FieldInput => ({ name, type: 'yesno' });
 const date = (name: string): FieldInput => ({ name, type: 'date' });
 const link = (name: string): FieldInput => ({ name, type: 'link' });
 
-export const STARTERS: Starter[] = [
+/**
+ * What each set's things are for, as the names of the kinds of project (frontend/src/projectKinds.js), so "Your
+ * gear for Car & mechanics" finds them. Clothes and linens are for nothing in particular.
+ */
+const ACTIVITY_OF_SET: Record<string, string | undefined> = {
+  sewing: 'Sewing', cookware: 'Cooking & baking', knitting: 'Knitting & crochet', woodworking: 'Woodworking', gardening: 'Gardening',
+  clothing: undefined, home: 'Home repair', car: 'Car & mechanics', art: 'Art & crafts', electronics: 'Electronics & computers',
+  music: 'Music', outdoors: 'Outdoors',
+};
+
+const SETS: Starter[] = [
   {
     slug: 'sewing',
     name: 'Sewing',
@@ -189,6 +203,11 @@ export const STARTERS: Starter[] = [
     ],
   },
 ];
+
+export const STARTERS: Starter[] = SETS.map((set) => ({
+  ...set,
+  kinds: set.kinds.map((kind) => (ACTIVITY_OF_SET[set.slug] ? { ...kind, activity: ACTIVITY_OF_SET[set.slug] } : kind)),
+}));
 
 /** The headings the Things page uses, in the order it shows them. Kinds that fit no set go under "Other", last. */
 export const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garage', 'Garden', 'Outdoors', 'Electronics', 'Music', 'Around the house', 'Clothes and linens'] as const;

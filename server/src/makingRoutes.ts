@@ -119,6 +119,7 @@ export function makingRoutes(db: Db): Route[] {
       status: 201,
       json: await things(c).createKind({
         name: read.text(c.body, 'name'), icon: read.maybeText(c.body, 'icon'), unit: read.maybeText(c.body, 'unit'),
+        activity: read.maybeText(c.body, 'activity'),
         fields: read.records(c.body, 'fields').map(fieldFrom),
       }),
     })],
@@ -127,8 +128,10 @@ export function makingRoutes(db: Db): Route[] {
         name: read.maybeText(c.body, 'name'),
         ...(sent(c.body, 'icon') ? { icon: read.maybeText(c.body, 'icon') } : {}),
         ...(sent(c.body, 'unit') ? { unit: read.maybeText(c.body, 'unit') } : {}),
+        ...(sent(c.body, 'activity') ? { activity: read.maybeText(c.body, 'activity') } : {}),
       }),
     })],
+    ['POST', at('things/kinds/:id/activity'), async (c) => ({ json: await things(c).applyKindActivity(c.id) })],
     ['DELETE', at('things/kinds/:id'), async (c) => ({ json: await things(c).deleteKind(c.id) })],
     ['POST', at('things/kinds/:id/fields'), async (c) => ({ status: 201, json: await things(c).addField(c.id, fieldFrom(c.body)) })],
     ['PUT', at('things/fields/:id'), async (c) => ({

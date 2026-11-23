@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Modal, { buttonClass, quietButtonClass, errorMessage } from './ui';
+import { StartDialog } from './Start';
 
 const GROUPS = [['home', 'Around the home'], ['doing', 'Things you make and do']];
 
@@ -59,9 +60,20 @@ export function LifeAreasPicker({ onSaved, onSkip, saveLabel = 'Save' }) {
   );
 }
 
-/** Asked once, after the first sign-in, until the person answers or skips. */
+/**
+ * Asked once, after the first sign-in, until the person answers or skips. A household that is just beginning gets
+ * the short guided start (Start.jsx); anyone else gets the long checklist, as before. Closing the guided start
+ * part way is remembered, so it is not shown again on its own: the front page offers to finish it.
+ */
 export function LifeFirstRun({ open, onDone }) {
-  if (!open) return null;
+  const [mode, setMode] = useState(null);
+  const [closed, setClosed] = useState(false);
+  useEffect(() => {
+    if (!open) { setMode(null); return; }
+    axios.get('/api/start').then(({ data }) => setMode(data.first_run)).catch(() => setMode('checklist'));
+  }, [open]);
+  if (!open || closed || !mode || mode === 'quiet') return null;
+  if (mode === 'guide') return <StartDialog onDone={(data) => onDone(data)} onClose={() => { setClosed(true); onDone(); }} />;
   return (
     <Modal title="What does life need looking after?" onClose={onDone}>
       <p className="mb-3 text-sm text-gray-600 dark:text-life-100">Check everything that applies. Life Is sets itself up to match, and you can change it any time in Settings.</p>

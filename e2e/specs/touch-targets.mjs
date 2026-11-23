@@ -62,5 +62,58 @@ say('and the coupon about to run out: ' + flat(t).match(/Coffee.{0,40}/)?.[0], /
 await page.screenshot({ path: shots + '/front-cards.png', fullPage: true });
 await page.getByRole('button', { name: 'Choose what shows' }).click(); await wait(400);
 say('both can be put out of sight like any card', /Plans coming up/.test(await dialog.innerText()) && /Coupons about to run out/.test(await dialog.innerText()));
+// Sharing the list as text: the sheet, its choices, Copy, and Share where the browser has one.
+await page.addInitScript(() => {
+  window.__copied = []; window.__shared = [];
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (t) => { window.__copied.push(t); } } });
+  let none = false; try { none = window.sessionStorage.getItem('no-share') === '1'; } catch { /* shared */ }
+  // Some browsers (Windows Chrome) have a real one; stand in for it, or take it away.
+  Object.defineProperty(navigator, 'share', { configurable: true, value: none ? undefined : async (d) => { window.__shared.push(d); } });
+});
+await page.setViewportSize({ width: 375, height: 812 });
+await page.goto(base + '/groceries'); await wait(1000);
+await addLine('2 lb chicken thighs'); await addLine('onions'); await usual('onions', 'Aldi');
+await page.getByRole('button', { name: 'Share the list' }).click(); await wait(500);
+const preview = () => dialog.locator('[data-share-preview]').innerText();
+let shared = await preview();
+say('the sheet shows the list as it will be sent: ' + flat(shared).slice(0, 90), /^Groceries \(4 things\)\n/.test(shared) && /Aldi\n- onions/.test(shared) && /- 2 lb chicken thighs/.test(shared) && !/leeks|potatoes/.test(shared));
+say('it says plainly that Life Is sends nothing on its own', /Life Is sends nothing on its own/.test(await dialog.innerText()));
+await dialog.getByLabel('Grouped by aisle').check(); await wait(300);
+const byAisle = await preview();
+say('grouped by aisle changes it: ' + flat(byAisle).slice(0, 90), byAisle !== shared && !/^Costco$/m.test(byAisle) && /- coffee/.test(byAisle));
+await dialog.getByLabel('One plain list').check(); await wait(300);
+const plain = await preview();
+say('one plain list has no headings', plain.split('\n').slice(2).every((l) => l.startsWith('- ')) && plain.split('\n').length === 6);
+await dialog.getByLabel('Grouped by store').check(); await wait(300);
+await dialog.getByLabel('Just Aldi').check(); await wait(300);
+const narrowed = await preview();
+say('"Just Aldi" leaves Aldi and what can be got anywhere: ' + flat(narrowed).slice(0, 90), /^Groceries for Aldi \(3 things\)/.test(narrowed) && !/coffee/.test(narrowed) && /- soap/.test(narrowed));
+await dialog.getByLabel('Everything still to get').check(); await wait(300);
+await dialog.getByLabel('Include what is already in the buggy').check(); await wait(300);
+const withBought = await preview();
+say('the buggy can be included, set apart from what is still to get', /In the buggy\n- leeks\n- potatoes/.test(withBought) && /^Groceries \(4 things, 2 in the buggy\)/.test(withBought));
+await dialog.getByLabel('Include what is already in the buggy').uncheck();
+await dialog.getByLabel('With check boxes').check(); await wait(300);
+const boxed = await preview();
+say('check boxes put "[ ] " before each line', /\[ \] onions/.test(boxed) && !/^- /m.test(boxed));
+await page.screenshot({ path: shots + '/share-list-phone.png', fullPage: true });
+const box = async (loc) => (await loc.boundingBox()).height;
+const small = [];
+for (const el of await dialog.locator('label').all()) { if ((await box(el)) < 43.5) small.push(await el.innerText()); }
+for (const name of ['Share…', 'Copy the list']) { if ((await box(dialog.getByRole('button', { name }))) < 43.5) small.push(name); }
+say('at 375px every choice and both buttons are at least 44px tall' + (small.length ? ` (too small: ${small.join(', ')})` : ''), small.length === 0);
+say('and nothing scrolls sideways', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+await dialog.getByRole('button', { name: 'Copy the list' }).click(); await wait(400);
+const copied = await page.evaluate(() => window.__copied);
+say('Copy writes exactly the preview to the clipboard', copied.length === 1 && copied[0] === boxed);
+await dialog.getByRole('button', { name: 'Share…' }).click(); await wait(400);
+const sharedWith = await page.evaluate(() => window.__shared);
+say('Share hands the browser a title and the same text', sharedWith.length === 1 && sharedWith[0].title === 'Groceries' && sharedWith[0].text === boxed && Object.keys(sharedWith[0]).sort().join() === 'text,title');
+await page.evaluate(() => window.sessionStorage.setItem('no-share', '1'));
+await page.reload(); await wait(1000);
+await page.getByRole('button', { name: 'Share the list' }).click(); await wait(500);
+say('where the browser cannot share, only Copy shows', (await dialog.getByRole('button', { name: 'Share…' }).count()) === 0 && (await dialog.getByRole('button', { name: 'Copy the list' }).count()) === 1);
+await page.evaluate(() => window.sessionStorage.removeItem('no-share'));
+
 console.log(bad.length ? 'PROBLEMS SEEN:\n' + bad.join('\n') : 'no failed requests, no page errors');
 await browser.close();

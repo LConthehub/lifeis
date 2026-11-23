@@ -63,6 +63,7 @@ const OWN = new Map<string, string>([
   ['package', 'package'], ['packages', 'package'], ['pkg', 'package'], ['packet', 'packet'], ['packets', 'packet'],
   ['bag', 'bag'], ['bags', 'bag'], ['box', 'box'], ['boxes', 'box'], ['handful', 'handful'], ['handfuls', 'handful'],
   ['piece', 'piece'], ['pieces', 'piece'], ['stalk', 'stalk'], ['stalks', 'stalk'], ['leaf', 'leaf'], ['leaves', 'leaf'],
+  ['dozen', 'dozen'], ['dozens', 'dozen'], ['doz', 'dozen'],
 ]);
 
 const FRACTIONS = new Map<string, number>([

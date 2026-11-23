@@ -58,7 +58,29 @@ export type CopyInput = {
   note?: string | null;
   /** An address that opens it where it lives: Kindle, Apple Books, a server of your own. Left out: unchanged. */
   link?: string | null;
+  /** How many discs or tapes it is (1 to 999), or null for not said. Left out: unchanged. */
+  pieces?: number | null;
 };
+
+/**
+ * The word for the pieces a copy comes in, chosen by its format: discs for CD, DVD, Blu-ray, 4K, LaserDisc and a
+ * game disc; tapes for tape, cassette, VHS, Betamax and 8-track; records for vinyl, LP and record; otherwise
+ * "piece". `known` is false for that last one: the copy form only shows the number for those when asked.
+ * (frontend/src/pages/Media.jsx has the same function, since pages cannot import from here: keep them alike.)
+ */
+export function piecesWord(format: string | null | undefined): { one: string; many: string; known: boolean } {
+  const f = (format ?? '').toLowerCase();
+  if (/\b(cds?|dvds?|blu.?ray|4k|uhd|laser.?disc|discs?|disks?)\b/.test(f)) return { one: 'disc', many: 'discs', known: true };
+  if (/tape|cassette|\bvhs\b|beta.?max|8.?track/.test(f)) return { one: 'tape', many: 'tapes', known: true };
+  if (/vinyl|\blps?\b|\brecords?\b/.test(f)) return { one: 'record', many: 'records', known: true };
+  return { one: 'piece', many: 'pieces', known: false };
+}
+
+/** "12 discs", or null when there is nothing to say: no number, or just the one piece. */
+export function piecesText(format: string | null | undefined, pieces: number | null | undefined): string | null {
+  if (pieces == null || pieces < 2) return null;
+  return `${pieces} ${piecesWord(format).many}`;
+}
 
 /**
  * A link as it's kept: a web address, or one of the few app addresses reading apps answer to. Anything else
@@ -88,6 +110,8 @@ export type Copy = {
   source: string | null;
   /** An address that opens it where it lives. */
   link: string | null;
+  /** How many discs or tapes it is, or null when not said (and for every copy brought in). */
+  pieces: number | null;
 };
 export type LogEntry = { id: number; media_id: number; day: string; note: string | null; session_id: number | null; project_id: number | null; project: string | null };
 export type MediaSummary = {
@@ -102,6 +126,8 @@ export type MediaSummary = {
   wanted: boolean;
   /** The formats you have it on, each once: ["VHS", "Blu-ray"]. */
   formats: string[];
+  /** How many discs or tapes, for each format in `formats` that has a copy saying so (the most, if two do): { "Book on CD": 12 }. */
+  pieces: Record<string, number>;
   /** Who has a copy on loan, if anyone. */
   lent_to: string[];
   /** How many times it's been watched, read, heard or played, and the last day. */
@@ -118,7 +144,7 @@ export type Media = MediaSummary & {
   updated_at: string;
 };
 
-type MediaRow = Omit<Media, 'genres' | 'wanted' | 'formats' | 'lent_to' | 'times' | 'last_on' | 'ids' | 'copies' | 'log'> & { genres: string | null; wanted: number; ids: string | null };
+type MediaRow = Omit<Media, 'genres' | 'wanted' | 'formats' | 'pieces' | 'lent_to' | 'times' | 'last_on' | 'ids' | 'copies' | 'log'> & { genres: string | null; wanted: number; ids: string | null };
 
 const list = (text: string | null) => (text ?? '').split(',').filter(Boolean);
 
@@ -155,7 +181,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
   async function copiesOf(q: Queries, where: string, args: Value[]): Promise<Copy[]> {
     const paths = placePaths(await q.all('SELECT id, parent_id, name, note FROM places WHERE owner_id = ?', [owner]));
     const rows = await q.all<Omit<Copy, 'place'>>(
-      `SELECT c.id, c.media_id, c.format, c.place_id, c.barcode, c.lent_to, c.lent_on, c.note, c.source, c.link
+      `SELECT c.id, c.media_id, c.format, c.place_id, c.barcode, c.lent_to, c.lent_on, c.note, c.source, c.link, c.pieces
        FROM media_copies c JOIN media m ON m.id = c.media_id WHERE m.owner_id = ? ${where} ORDER BY c.id`, [owner, ...args]);
     return rows.map((row) => ({ ...row, place: row.place_id !== null ? (paths.get(row.place_id) ?? null) : null }));
   }
@@ -169,9 +195,14 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
   function summary(row: MediaRow, copies: Copy[], log: LogEntry[]): MediaSummary {
     const formats: string[] = [];
     for (const copy of copies) if (!formats.some((f) => labelKey(f) === labelKey(copy.format))) formats.push(copy.format);
+    const pieces: Record<string, number> = {};
+    for (const copy of copies) {
+      const shown = formats.find((f) => labelKey(f) === labelKey(copy.format))!;
+      if (copy.pieces !== null && copy.pieces > (pieces[shown] ?? 0)) pieces[shown] = copy.pieces;
+    }
     return {
       id: row.id, type: row.type, title: row.title, creator: row.creator, year: row.year, genres: list(row.genres), minutes: row.minutes,
-      cover: row.cover, wanted: Boolean(row.wanted), formats,
+      cover: row.cover, wanted: Boolean(row.wanted), formats, pieces,
       lent_to: copies.filter((copy) => copy.lent_to).map((copy) => copy.lent_to!),
       times: log.length, last_on: log[0]?.day ?? null,
     };
@@ -219,6 +250,13 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
     return [format, input.place_id ?? null, clean(input.barcode, 40), lentTo, lentOn, clean(input.note, 1000)];
   }
 
+  /** How many pieces, checked: a whole number from 1 to 999, or nothing. */
+  function checkedPieces(pieces: number | null): number | null {
+    if (pieces == null) return null;
+    if (!Number.isInteger(pieces) || pieces < 1 || pieces > 999) throw new Problem(400, 'How many discs or tapes is a whole number from 1 to 999');
+    return pieces;
+  }
+
   async function ownedCopy(q: Queries, id: number): Promise<{ id: number; media_id: number }> {
     const row = await q.get<{ id: number; media_id: number }>(
       'SELECT c.id, c.media_id FROM media_copies c JOIN media m ON m.id = c.media_id WHERE c.id = ? AND m.owner_id = ?', [id, owner]);
@@ -227,8 +265,10 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
   }
 
   async function addCopyIn(q: Queries, mediaId: number, input: CopyInput): Promise<void> {
+    const pieces = checkedPieces(input.pieces ?? null);
     const made = await q.run('INSERT INTO media_copies (media_id, format, place_id, barcode, lent_to, lent_on, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [mediaId, ...(await copyValues(q, input)), now()]);
+    if (pieces !== null) await q.run('UPDATE media_copies SET pieces = ? WHERE id = ?', [pieces, made.lastId]);
     if (input.link !== undefined) await q.run('UPDATE media_copies SET link = ? WHERE id = ?', [openLink(input.link), made.lastId]);
     await noteHistory(q, owner, { copy_id: made.lastId }, { what: 'added', to_place: await placePath(q, owner, input.place_id), day: todayOf(clock), at: now() });
     // Having a copy answers the wanting.
@@ -338,7 +378,9 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
     async updateCopy(id: number, input: CopyInput): Promise<Media> {
       return atomic(db, async (tx) => {
         const copy = await ownedCopy(tx, id);
+        const pieces = input.pieces === undefined ? undefined : checkedPieces(input.pieces);
         const was = (await tx.get<{ place_id: number | null }>('SELECT place_id FROM media_copies WHERE id = ?', [id]))!.place_id;
+        if (pieces !== undefined) await tx.run('UPDATE media_copies SET pieces = ? WHERE id = ?', [pieces, id]);
         await tx.run('UPDATE media_copies SET format = ?, place_id = ?, barcode = ?, lent_to = ?, lent_on = ?, note = ? WHERE id = ?', [...(await copyValues(tx, input)), id]);
         if (input.link !== undefined) await tx.run('UPDATE media_copies SET link = ? WHERE id = ?', [openLink(input.link), id]);
         await noteMove(tx, owner, { copy_id: id }, was, input.place_id ?? null, { day: todayOf(clock), at: now() });

@@ -20,6 +20,31 @@ describe('reading an ingredient line', () => {
   });
 });
 
+// Not in the golden file: backend/units.py (the Python twin) has no "dozen" yet, so these are checked here alone.
+describe('a dozen', () => {
+  it.each([
+    ['1 dozen eggs', 1, 'dozen', 'eggs', null],
+    ['2 dozen tortillas', 2, 'dozen', 'tortillas', null],
+    ['2 dozens eggs', 2, 'dozen', 'eggs', null],
+    ['1/2 doz. eggs', 0.5, 'dozen', 'eggs', null],
+    ['1 doz eggs, large', 1, 'dozen', 'eggs', 'large'],
+    ['1 Dozen Eggs', 1, 'dozen', 'Eggs', null],
+    ['3 dozeneggs', 3, null, 'dozeneggs', null],
+    ['a dozen eggs', null, null, 'a dozen eggs', null], // "a" is not read as one anywhere, so neither here
+  ])('%s', (line, quantity, unit, name, note) => {
+    expect(parseLine(line)).toEqual({ quantity, unit, name, note });
+  });
+
+  it('adds up only with dozens, and reads back as "2 dozen"', () => {
+    expect(canonical('dozens')).toBe('dozen');
+    expect(kindOf('doz')).toBe('own:dozen');
+    expect(convert(2, 'dozen', 'doz')).toBe(2);
+    expect(convert(2, 'dozen', 'can')).toBeNull();
+    expect(amount(2, 'dozen')).toBe('2 dozen');
+    expect(amount(1, 'dozen')).toBe('1 dozen');
+  });
+});
+
 it('units convert only within their kind', () => {
   expect(convert(1, 'lb', 'g')).toBeCloseTo(453.592);
   expect(convert(3, 'tsp', 'tbsp')).toBeCloseTo(1, 3);

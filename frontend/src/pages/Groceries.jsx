@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import PasteList from '../components/PasteList';
 import Scanner from '../components/Scanner';
+import ShareList from '../components/ShareList';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, fromDateInput } from '../components/ui';
 
 /** Cents as money: 349 is $3.49. */
@@ -93,6 +94,7 @@ export default function Groceries() {
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Groceries</h1>
         <button type="button" onClick={() => setModal({ scan: true })} className={quietButtonClass}>📷 Scan</button>
         <button type="button" onClick={low} className={quietButtonClass}>Add what's running low</button>
+        {items.length > 0 && <button type="button" onClick={() => setModal({ share: true })} className={`${quietButtonClass} min-h-[44px]`}>Share the list</button>}
       </div>
       {message && <p className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-800 dark:text-life-100">{message}</p>}
 
@@ -249,6 +251,11 @@ export default function Groceries() {
       {modal?.scan && (
         <Modal title="Scan a grocery" onClose={() => { setModal(null); load(); }}>
           <ScanGrocery open={open} sign={sign} putAway={putAway} onChanged={load} />
+        </Modal>
+      )}
+      {modal?.share && (
+        <Modal title="Share the list" onClose={() => setModal(null)}>
+          <ShareList items={items} lines={shop.lines} store={shop.store} startGrouping={by === 'shop' ? 'store' : 'aisle'} />
         </Modal>
       )}
       {modal?.paste && (

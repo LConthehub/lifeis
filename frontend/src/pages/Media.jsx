@@ -33,6 +33,22 @@ const sourceName = (source) => SOURCES[source] ?? bookServerName(source);
 const commaList = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
 // A book you listen to: an audiobook by name, or a book on CD, tape, cassette, MP3 or a record.
 const isAudio = (format) => /audio|audible|\b(cd|cds|mp3|tape|tapes|cassette|cassettes|vinyl|record|records|lp|playaway)\b/i.test(format);
+/**
+ * The word for the pieces a copy comes in, by its format. The same function is in core/src/media.ts (pages cannot
+ * import from there), and is tested there: keep them alike. `known` is false for the plain word "piece", which
+ * the copy form only offers when asked.
+ */
+export function piecesWord(format) {
+  const f = (format || '').toLowerCase();
+  if (/\b(cds?|dvds?|blu.?ray|4k|uhd|laser.?disc|discs?|disks?)\b/.test(f)) return { one: 'disc', many: 'discs', known: true };
+  if (/tape|cassette|\bvhs\b|beta.?max|8.?track/.test(f)) return { one: 'tape', many: 'tapes', known: true };
+  if (/vinyl|\blps?\b|\brecords?\b/.test(f)) return { one: 'record', many: 'records', known: true };
+  return { one: 'piece', many: 'pieces', known: false };
+}
+/** "12 discs", or nothing when there is no number or just the one piece. */
+const piecesText = (format, pieces) => (pieces >= 2 ? `${pieces} ${piecesWord(format).many}` : null);
+// A product that says it's an audiobook is a book you listen to, whatever disc it comes on.
+const AUDIOBOOK_WORDS = /audio ?book|unabridged|book on (cd|tape)/i;
 const isEbook = (format) => /e-?book|kindle|kobo|epub|nook/i.test(format);
 
 /**
@@ -114,7 +130,7 @@ export default function MediaPage({ library = null }) {
                       <span className="block font-medium text-life-800 dark:text-life-50">{m.title}{m.year ? <span className="font-normal text-gray-500 dark:text-life-300"> ({m.year})</span> : null}</span>
                       {m.creator && <span className="block truncate text-xs text-gray-500 dark:text-life-300">{m.creator}</span>}
                       <span className="mt-1 flex flex-wrap gap-1">
-                        {m.formats.map((f) => <span key={f} className="rounded bg-life-50 px-1.5 text-[11px] text-life-700 dark:bg-life-700 dark:text-life-100">{f}</span>)}
+                        {m.formats.map((f) => <span key={f} className="rounded bg-life-50 px-1.5 text-[11px] text-life-700 dark:bg-life-700 dark:text-life-100">{[f, piecesText(f, m.pieces?.[f])].filter(Boolean).join(' · ')}</span>)}
                         {m.wanted && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">wanted</span>}
                         {m.lent_to.map((who) => <span key={who} className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">with {who}</span>)}
                       </span>
@@ -170,9 +186,13 @@ async function lookUp(code) {
     }
     const { data: { title } } = await axios.get('/api/lookups/title', { params: { code } });
     if (!title) return { hint: "Neither MusicBrainz nor UPCitemdb knows this barcode. Add it and type the title in." };
+    // The lookup files every disc as a film, music or a game. One that says it's an audiobook is a book.
+    const heard = AUDIOBOOK_WORDS.test(`${title.title} ${title.format || ''}`);
+    const format = !heard ? (title.format || '') : /tape|cassette/i.test(`${title.title} ${title.format}`) ? 'Book on tape' : /\bcds?\b/i.test(`${title.title} ${title.format}`) ? 'Book on CD' : 'Audiobook';
+    const type = heard ? 'book' : title.type;
     return {
-      from: title.from, start: { type: title.type, title: title.title, creator: title.creator || '', year: title.year ?? '', format: title.format || '', barcode: code },
-      detail: [title.creator, title.year, title.format],
+      from: title.from, start: { type, title: title.title, creator: title.creator || '', year: title.year ?? '', format, barcode: code },
+      detail: [title.creator, title.year, format],
     };
   } catch (err) { return { hint: errorMessage(err, "It couldn't be looked up just now.") }; }
 }
@@ -359,7 +379,7 @@ export function MediaTitlePage() {
                 <li key={copy.id} className="flex items-start gap-2">
                   <button type="button" onClick={() => setModal({ copy })} className="flex min-w-0 flex-1 items-start gap-2 py-2 text-left">
                     <span className="flex-1">
-                      <span className="block text-sm text-gray-800 dark:text-life-50">{copy.format}</span>
+                      <span className="block text-sm text-gray-800 dark:text-life-50">{[copy.format, piecesText(copy.format, copy.pieces)].filter(Boolean).join(' · ')}</span>
                       <span className="block text-xs text-gray-500 dark:text-life-300">
                         {[copy.place && `📍 ${copy.place}`, copy.source && `from ${sourceName(copy.source)}`, copy.barcode && `barcode ${copy.barcode}`, copy.note].filter(Boolean).join(' · ') || 'no place'}
                       </span>
@@ -415,18 +435,21 @@ function CopyHistory({ copy }) {
 
 function CopyForm({ title, copy, onDone }) {
   const [scanning, setScanning] = useState(false);
-  const [form, setForm] = useState({ format: copy.format || '', place_id: copy.place_id ?? '', barcode: copy.barcode || '', lent_to: copy.lent_to || '', lent_on: copy.lent_on || '', note: copy.note || '', link: copy.link || '' });
+  const [form, setForm] = useState({ format: copy.format || '', place_id: copy.place_id ?? '', barcode: copy.barcode || '', lent_to: copy.lent_to || '', lent_on: copy.lent_on || '', note: copy.note || '', link: copy.link || '', pieces: copy.pieces ?? '' });
+  const [askPieces, setAskPieces] = useState(false);
   const [formats, setFormats] = useState([]);
   const [places, setPlaces] = useState([]);
   const [error, setError] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const word = piecesWord(form.format);
+  const showPieces = word.known || form.pieces !== '' || askPieces;
   useEffect(() => {
     axios.get('/api/media/formats', { params: { type: title.type } }).then(({ data }) => setFormats(data)).catch(() => {});
     axios.get('/api/things/places').then(({ data }) => setPlaces(data)).catch(() => {});
   }, [title.type]);
   const submit = async (e) => {
     e.preventDefault();
-    const body = { format: form.format, place_id: form.place_id === '' ? null : Number(form.place_id), barcode: form.barcode || null, lent_to: form.lent_to || null, lent_on: form.lent_on || null, note: form.note || null, link: form.link.trim() || null };
+    const body = { format: form.format, place_id: form.place_id === '' ? null : Number(form.place_id), barcode: form.barcode || null, lent_to: form.lent_to || null, lent_on: form.lent_on || null, note: form.note || null, link: form.link.trim() || null, pieces: form.pieces === '' ? null : Number(form.pieces) };
     try { onDone((copy.id ? await axios.put(`/api/media/copies/${copy.id}`, body) : await axios.post(`/api/media/${title.id}/copies`, body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   const remove = async () => { try { onDone((await axios.delete(`/api/media/copies/${copy.id}`)).data); } catch (err) { setError(errorMessage(err, "Couldn't remove it")); } };
@@ -439,6 +462,13 @@ function CopyForm({ title, copy, onDone }) {
         </Field>
       </div>
       <datalist id="copy-formats">{formats.map((f) => <option key={f} value={f} />)}</datalist>
+      {showPieces ? (
+        <Field label={`How many ${word.many}`}>
+          <input type="number" inputMode="numeric" min="1" max="999" step="1" value={form.pieces} onChange={set('pieces')} placeholder="1" className={`${inputClass} min-h-[44px] max-w-[8rem]`} />
+        </Field>
+      ) : (
+        <button type="button" onClick={() => setAskPieces(true)} className="min-h-[44px] text-left text-sm text-life-600 hover:underline dark:text-life-200">It comes in several pieces</button>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Lent to (empty: it's at home)"><input value={form.lent_to} onChange={set('lent_to')} className={inputClass} /></Field>
         <Field label="Lent on"><input type="date" value={form.lent_on} onChange={set('lent_on')} className={inputClass} /></Field>

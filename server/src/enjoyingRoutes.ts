@@ -31,6 +31,7 @@ const copyFrom = (body: Body) => ({
   format: read.text(body, 'format'), place_id: read.maybeWhole(body, 'place_id'), barcode: read.maybeText(body, 'barcode'),
   lent_to: read.maybeText(body, 'lent_to'), lent_on: read.maybeText(body, 'lent_on'), note: read.maybeText(body, 'note'),
   ...(Object.hasOwn(body, 'link') ? { link: read.maybeText(body, 'link') } : {}),
+  ...(Object.hasOwn(body, 'pieces') ? { pieces: read.maybeWhole(body, 'pieces') } : {}),
 });
 
 export type FollowTools = { fetcher: Fetcher; sealer: Sealer };

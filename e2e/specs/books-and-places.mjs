@@ -95,5 +95,35 @@ check('Manage kinds opens the kinds page, still in the organized section', /\/th
 await page.getByRole('link', { name: '← Things' }).click(); await page.waitForTimeout(800);
 check('and there is a way back to Things', /\/things$/.test(page.url()));
 
+// A kind's things are for an activity: set on the kind, a new thing starts out with it, and one button gives it to the things already there.
+const api = (method, url, body) => page.evaluate(([m, u, b]) => fetch(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }).then((r) => r.json()), [method, url, body ?? null]);
+await page.goto(base + '/things/kinds'); await page.waitForTimeout(800);
+await page.locator('section').filter({ has: page.getByRole('heading', { name: /Toys/ }) }).getByRole('button', { name: 'Edit' }).click(); await page.waitForTimeout(500);
+const kindForm = page.getByRole('dialog');
+check('the kind form has no button before it is for anything', await kindForm.getByRole('button', { name: /Add this to the/ }).count() === 0);
+await kindForm.getByLabel('What its things are usually for').fill('woodworking');
+const offered = await kindForm.locator('#kind-activities option').evaluateAll((os) => os.map((o) => o.value));
+check('the known kinds of project are offered as suggestions', offered.includes('Woodworking') && offered.includes('Car & mechanics') && offered.length >= 12, offered.join(', '));
+await kindForm.getByRole('button', { name: 'Save' }).click(); await page.waitForTimeout(800);
+check('the kind shows what it is for', /for woodworking/.test(await page.locator('main').innerText()));
+const toys = (await api('GET', '/api/things/kinds')).find((k) => k.name === 'Toys');
+const chest = await api('POST', '/api/things/items', { kind_id: toys.id, name: 'Toy chest', activities: [] });
+check('a new thing of that kind starts out for it', JSON.stringify(chest.activities) === '["woodworking"]', JSON.stringify(chest.activities));
+const lacking = (await api('GET', '/api/things/items')).filter((i) => i.kind_id === toys.id && !i.activities.some((a) => a.toLowerCase() === 'woodworking')).length;
+await page.locator('section').filter({ has: page.getByRole('heading', { name: /Toys/ }) }).getByRole('button', { name: 'Edit' }).click(); await page.waitForTimeout(700);
+const give = page.getByRole('dialog').getByRole('button', { name: /Add this to the \d+ things? of this kind/ });
+check(`one button offers to add it to the ${lacking} things without it`, lacking >= 1 && await give.isVisible() && (await give.innerText()).includes(`the ${lacking} thing`), await give.innerText().catch(() => 'no button'));
+check('the button is tall enough to tap', (await give.boundingBox()).height >= 44);
+await page.screenshot({ path: `${shots}/kind-activity-phone.png` });
+await give.click(); await page.waitForTimeout(900);
+check('it says how many it was added to, and the button goes', await page.getByRole('dialog').getByText(`Added woodworking to ${lacking}`).isVisible() && await page.getByRole('dialog').getByRole('button', { name: /Add this to the/ }).count() === 0);
+const train = (await api('GET', '/api/things/items')).find((i) => i.name === 'Wooden train');
+check('things already there gained it', JSON.stringify(train.activities) === '["woodworking"]', JSON.stringify(train.activities));
+await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+const proj = await api('POST', '/api/projects', { name: 'Toy shelf', activity: 'Woodworking', status: 'active' });
+await page.goto(base + `/projects/${proj.id}`); await page.waitForTimeout(1000);
+const gear = await page.getByRole('region', { name: 'Gear for Woodworking' }).innerText().catch(() => '');
+check('a Woodworking project lists the kind\'s things under "Your gear for"', /Your gear for Woodworking/.test(gear) && /Toy chest/.test(gear) && /Wooden train/.test(gear), gear.replace(/\s+/g, ' ').slice(0, 120));
+
 console.log(results.join('\n'));
 await browser.close();

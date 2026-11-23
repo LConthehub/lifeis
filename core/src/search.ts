@@ -10,7 +10,7 @@ import type { Db, Value } from './db.ts';
 import { placePaths } from './inventory.ts';
 import { Problem } from './problem.ts';
 
-export const SEARCH_KINDS = ['recipe', 'pantry', 'thing', 'place', 'title', 'project', 'job', 'pet', 'plan', 'event'] as const;
+export const SEARCH_KINDS = ['recipe', 'pantry', 'thing', 'place', 'title', 'project', 'job', 'pet', 'license', 'plan', 'event'] as const;
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 export type SearchResult = { kind: SearchKind; id: number; icon: string; title: string; detail: string | null; link: string };
 
@@ -99,6 +99,14 @@ export async function search(db: Db, owner: number, query: string, only?: Search
     for (const p of await db.all<{ id: number; name: string; species: string | null; breed: string | null }>(
       `SELECT id, name, species, breed FROM pets WHERE owner_id = ? AND ${w.sql} ORDER BY name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
       out.push({ kind: 'pet', id: p.id, icon: '🐾', title: p.name, detail: join('Pet', p.breed ?? p.species), link: `/things/pets/${p.id}` });
+    }
+  }
+  if (wants('license')) {
+    // The name, who it is for and who issued it. Never the number, which is not even read here.
+    const w = every(['name', 'holder', 'issuer']);
+    for (const l of await db.all<{ id: number; name: string; holder: string | null; issuer: string | null }>(
+      `SELECT id, name, holder, issuer FROM licenses WHERE owner_id = ? AND ${w.sql} ORDER BY name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
+      out.push({ kind: 'license', id: l.id, icon: '🪪', title: l.name, detail: join('License', l.holder, l.issuer), link: '/things/licenses' });
     }
   }
   if (wants('plan')) {

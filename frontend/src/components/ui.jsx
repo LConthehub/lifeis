@@ -36,7 +36,7 @@ export default function Modal({ title, onClose, children, wide = false }) {
         className={`max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl dark:bg-life-800 sm:rounded-2xl sm:p-6 ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'}`}>
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-life-800 dark:text-life-50">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-full px-2 text-xl leading-none text-gray-400 hover:text-gray-600">×</button>
+          <button type="button" onClick={onClose} aria-label="Close" className="-mr-2 flex h-11 w-11 flex-none items-center justify-center rounded-full text-xl leading-none text-gray-400 hover:bg-life-50 hover:text-gray-600 dark:hover:bg-life-700">×</button>
         </div>
         {children}
       </div>

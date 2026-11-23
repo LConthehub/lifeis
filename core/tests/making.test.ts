@@ -368,3 +368,64 @@ it('renames the British spellings in ready-made kinds, and only those', async ()
   for (const statement of upgrade.statements) await db.run(statement);
   expect(await names(both)).toEqual(['Colour', 'Color']);
 });
+
+// ---------- what a kind's things are for ----------
+
+it('a kind can be for an activity, and a new thing of it starts out for that unless it was told otherwise', async () => {
+  let kinds = await things.createKind({ name: 'Notions', activity: '  Sewing ' });
+  const notions = kindNamed(kinds, 'Notions');
+  expect(notions.activity).toBe('Sewing');
+  expect(kindNamed(await things.createKind({ name: 'Rocks' }), 'Rocks').activity).toBeNull();
+
+  const plain = await things.createItem({ kind_id: notions.id, name: 'Thread' });
+  expect(plain.activities).toEqual(['Sewing']);
+  expect((await things.createItem({ kind_id: notions.id, name: 'Zipper', activities: [] })).activities).toEqual(['Sewing']);
+  expect((await things.createItem({ kind_id: notions.id, name: 'Blank', activities: ['  '] })).activities).toEqual(['Sewing']);
+  // Said something: that is what it is for.
+  expect((await things.createItem({ kind_id: notions.id, name: 'Rope', activities: ['Camping'] })).activities).toEqual(['Camping']);
+  // A kind with no activity gives none.
+  const rocks = kindNamed(await things.listKinds(), 'Rocks');
+  expect((await things.createItem({ kind_id: rocks.id, name: 'Quartz' })).activities).toEqual([]);
+
+  // Changing it, clearing it, and leaving it out.
+  kinds = await things.updateKind(notions.id, { activity: 'Knitting & crochet' });
+  expect(kindNamed(kinds, 'Notions').activity).toBe('Knitting & crochet');
+  kinds = await things.updateKind(notions.id, { name: 'Notions and trims' });
+  expect(kindNamed(kinds, 'Notions and trims').activity).toBe('Knitting & crochet');
+  kinds = await things.updateKind(notions.id, { activity: null });
+  expect(kindNamed(kinds, 'Notions and trims').activity).toBeNull();
+  expect((await things.createItem({ kind_id: notions.id, name: 'Pins' })).activities).toEqual([]);
+  // Things already there were never changed along the way.
+  expect((await things.getItem(plain.id)).activities).toEqual(['Sewing']);
+});
+
+it('adding the kind activity to its things adds without removing, skips what has it, and does nothing twice', async () => {
+  const tools = kindNamed(await things.createKind({ name: 'Tools' }), 'Tools');
+  const bare = await things.createItem({ kind_id: tools.id, name: 'Hammer' });
+  const camping = await things.createItem({ kind_id: tools.id, name: 'Hatchet', activities: ['Camping'] });
+  const has = await things.createItem({ kind_id: tools.id, name: 'Saw', activities: ['woodworking', 'Camping'] });
+  const other = kindNamed(await things.createKind({ name: 'Paint' }), 'Paint');
+  const paint = await things.createItem({ kind_id: other.id, name: 'Blue' });
+
+  await expect(things.applyKindActivity(tools.id)).rejects.toEqual(problem(400)); // no activity yet
+  await things.updateKind(tools.id, { activity: 'Woodworking' });
+  // Setting it changed nothing by itself.
+  expect((await things.getItem(bare.id)).activities).toEqual([]);
+
+  expect(await things.applyKindActivity(tools.id)).toEqual({ added: 2 });
+  expect((await things.getItem(bare.id)).activities).toEqual(['Woodworking']);
+  expect((await things.getItem(camping.id)).activities.sort()).toEqual(['Camping', 'Woodworking']);
+  expect((await things.getItem(has.id)).activities.sort()).toEqual(['Camping', 'woodworking']); // already had it, in its own spelling
+  expect((await things.getItem(paint.id)).activities).toEqual([]);
+
+  expect(await things.applyKindActivity(tools.id)).toEqual({ added: 0 });
+  expect((await things.getItem(camping.id)).activities.sort()).toEqual(['Camping', 'Woodworking']);
+  await expect(things.applyKindActivity(99999)).rejects.toEqual(problem(404));
+});
+
+it('one person cannot set or apply the activity of another person kind', async () => {
+  const other = inventory(db, await person('other'), clock);
+  const mine = kindNamed(await things.createKind({ name: 'Yarn', activity: 'Knitting & crochet' }), 'Yarn');
+  await expect(other.applyKindActivity(mine.id)).rejects.toEqual(problem(404));
+  await expect(other.updateKind(mine.id, { activity: 'Gardening' })).rejects.toEqual(problem(404));
+});

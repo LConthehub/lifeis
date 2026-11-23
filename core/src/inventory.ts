@@ -33,8 +33,10 @@ export type Kind = {
   id: number; name: string; icon: string | null; unit: string | null; fields: Field[]; items: number;
   /** The heading it sits under on the things page ("Cooking", "Crafts"), worked out from its name; null for one of the person's own. */
   group: string | null;
+  /** The activity its things are usually for ("Sewing"): a new thing of this kind starts out with it. Null when none. */
+  activity: string | null;
 };
-export type KindInput = { name: string; icon?: string | null; unit?: string | null; fields?: FieldInput[] };
+export type KindInput = { name: string; icon?: string | null; unit?: string | null; activity?: string | null; fields?: FieldInput[] };
 
 export type Place = { id: number; parent_id: number | null; name: string; note: string | null; path: string; items: number };
 export type PlaceInput = { name: string; parent_id?: number | null; note?: string | null };
@@ -107,7 +109,7 @@ export type Item = {
   updated_at: string;
 };
 
-type KindRow = { id: number; name: string; icon: string | null; unit: string | null };
+type KindRow = { id: number; name: string; icon: string | null; unit: string | null; activity: string | null };
 type FieldRow = Omit<Field, 'choices'> & { choices: string | null };
 type PlaceRow = { id: number; parent_id: number | null; name: string; note: string | null };
 /** A place and what its sticker carries. */
@@ -269,7 +271,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
   // ==================== KINDS AND THEIR FIELDS ====================
 
   async function kindRow(q: Queries, id: number): Promise<KindRow> {
-    const row = await q.get<KindRow>('SELECT id, name, icon, unit FROM kinds WHERE id = ? AND owner_id = ?', [id, owner]);
+    const row = await q.get<KindRow>('SELECT id, name, icon, unit, activity FROM kinds WHERE id = ? AND owner_id = ?', [id, owner]);
     if (!row) throw new Problem(404, 'Not found');
     return row;
   }
@@ -280,7 +282,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
 
   async function kinds(q: Queries): Promise<Kind[]> {
     const rows = await q.all<KindRow & { items: number }>(
-      `SELECT k.id, k.name, k.icon, k.unit, (SELECT COUNT(*) FROM items i WHERE i.kind_id = k.id) AS items
+      `SELECT k.id, k.name, k.icon, k.unit, k.activity, (SELECT COUNT(*) FROM items i WHERE i.kind_id = k.id) AS items
        FROM kinds k WHERE k.owner_id = ? ORDER BY k.name COLLATE NOCASE`, [owner]);
     const out: Kind[] = [];
     for (const row of rows) out.push({ ...row, group: groupOfKind(row.name), fields: await fieldsOf(q, row.id) });
@@ -324,8 +326,8 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     if (await q.get('SELECT id FROM kinds WHERE owner_id = ? AND key = ?', [owner, labelKey(name)])) {
       throw new Problem(409, `You already have a kind called "${name}"`);
     }
-    const made = await q.run('INSERT INTO kinds (owner_id, name, key, icon, unit, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [owner, name, labelKey(name), clean(input.icon, 16), units.canonical(clean(input.unit, 20)), now()]);
+    const made = await q.run('INSERT INTO kinds (owner_id, name, key, icon, unit, activity, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [owner, name, labelKey(name), clean(input.icon, 16), units.canonical(clean(input.unit, 20)), clean(input.activity, 60), now()]);
     for (const field of input.fields ?? []) await addFieldIn(q, made.lastId, field);
     return made.lastId;
   }
@@ -600,17 +602,37 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     },
 
     /** Rename a kind, or change its picture or the unit new things of it start with. */
-    updateKind(id: number, input: { name?: string | null; icon?: string | null; unit?: string | null }): Promise<Kind[]> {
+    updateKind(id: number, input: { name?: string | null; icon?: string | null; unit?: string | null; activity?: string | null }): Promise<Kind[]> {
       return atomic(db, async (tx) => {
         const row = await kindRow(tx, id);
         const name = clean(input.name, 80) ?? row.name;
         if (await tx.get('SELECT id FROM kinds WHERE owner_id = ? AND key = ? AND id != ?', [owner, labelKey(name), id])) {
           throw new Problem(409, `You already have a kind called "${name}"`);
         }
-        await tx.run('UPDATE kinds SET name = ?, key = ?, icon = ?, unit = ? WHERE id = ?', [
+        await tx.run('UPDATE kinds SET name = ?, key = ?, icon = ?, unit = ?, activity = ? WHERE id = ?', [
           name, labelKey(name), input.icon !== undefined ? clean(input.icon, 16) : row.icon,
-          input.unit !== undefined ? units.canonical(clean(input.unit, 20)) : row.unit, id]);
+          input.unit !== undefined ? units.canonical(clean(input.unit, 20)) : row.unit,
+          input.activity !== undefined ? clean(input.activity, 60) : row.activity, id]);
         return kinds(tx);
+      });
+    },
+
+    /**
+     * Add the kind's activity to the things of this kind that don't have it. Things already doing other
+     * activities keep them; one that has it is left alone, so doing it twice changes nothing. Returns how many
+     * things gained it.
+     */
+    applyKindActivity(id: number): Promise<{ added: number }> {
+      return atomic(db, async (tx) => {
+        const row = await kindRow(tx, id);
+        const name = clean(row.activity, 60);
+        if (!name) throw new Problem(400, "This kind of thing isn't set to be for an activity yet");
+        const lacking = await tx.all<{ id: number }>(
+          `SELECT i.id FROM items i WHERE i.kind_id = ? AND i.owner_id = ?
+           AND NOT EXISTS (SELECT 1 FROM item_activities a WHERE a.item_id = i.id AND a.key = ?)
+           AND (SELECT COUNT(*) FROM item_activities a WHERE a.item_id = i.id) < 20`, [id, owner, labelKey(name)]);
+        for (const one of lacking) await tx.run('INSERT INTO item_activities (item_id, activity, key) VALUES (?, ?, ?)', [one.id, name, labelKey(name)]);
+        return { added: lacking.length };
       });
     },
 
@@ -789,7 +811,8 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
           'INSERT INTO items (owner_id, kind_id, name, quantity, unit, place_id, low_at, note, code, barcode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           [owner, kind.id, ...(await itemValues(tx, input, kind)), code, plainBarcode(input.barcode), now(), now()]);
         await saveValues(tx, made.lastId, kind.id, input.values);
-        await saveActivities(tx, made.lastId, input.activities);
+        // Nothing said it's for: it's for what its kind is for.
+        await saveActivities(tx, made.lastId, input.activities?.some((a) => clean(String(a), 60)) ? input.activities : kind.activity ? [kind.activity] : input.activities);
         await saveRecords(tx, made.lastId, input.records);
         await noteHistory(tx, owner, { item_id: made.lastId }, { what: 'added', to_place: await placePath(tx, owner, input.place_id), ...when() });
         return item(tx, made.lastId);

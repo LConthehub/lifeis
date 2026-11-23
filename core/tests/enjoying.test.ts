@@ -4,7 +4,7 @@ import { calendar, type Calendar } from '../src/calendar.ts';
 import type { Db } from '../src/db.ts';
 import { inventory, type Inventory } from '../src/inventory.ts';
 import { kitchen } from '../src/kitchen.ts';
-import { media, type MediaCollection } from '../src/media.ts';
+import { media, piecesText, piecesWord, type MediaCollection } from '../src/media.ts';
 import { migrate } from '../src/migrations.ts';
 import { projects, type Projects } from '../src/projects.ts';
 import { memoryDb } from './memoryDb.ts';
@@ -203,4 +203,65 @@ it('a scanned barcode finds the copy it is on, whichever form the scanner report
   expect(await shelf.findBarcode('4006381333931')).toEqual([]);
   await expect(shelf.findBarcode('  ')).rejects.toEqual(problem(400));
   expect(await media(db, await person('other'), clock).findBarcode('9780441172719')).toEqual([]); // someone else's shelf
+});
+
+// ---------- how many discs or tapes ----------
+
+it('a copy says how many discs it is, and the number is kept, changed and cleared', async () => {
+  const book = await shelf.create({ type: 'book', title: 'Dune', creator: 'Frank Herbert' }, { format: 'Book on CD', pieces: 12 });
+  expect(book.copies[0]!.pieces).toBe(12);
+  expect(book.pieces).toEqual({ 'Book on CD': 12 });
+  // Left out: unchanged. Sent as empty: cleared.
+  let after = await shelf.updateCopy(book.copies[0]!.id, { format: 'Book on CD', note: 'in the car' });
+  expect(after.copies[0]!.pieces).toBe(12);
+  after = await shelf.updateCopy(book.copies[0]!.id, { format: 'Book on CD', pieces: 13 });
+  expect(after.copies[0]!.pieces).toBe(13);
+  after = await shelf.updateCopy(book.copies[0]!.id, { format: 'Book on CD', pieces: null });
+  expect(after.copies[0]!.pieces).toBeNull();
+  expect(after.pieces).toEqual({});
+  // A copy added with no number has none; the list shows the most when two copies are one format.
+  after = await shelf.addCopy(book.id, { format: 'Book on CD' });
+  expect(after.copies[1]!.pieces).toBeNull();
+  await shelf.updateCopy(after.copies[0]!.id, { format: 'book on cd', pieces: 8 });
+  await shelf.updateCopy(after.copies[1]!.id, { format: 'Book on CD', pieces: 10 });
+  expect((await shelf.list({ type: 'book' }))[0]!.pieces).toEqual({ 'book on cd': 10 }); // under the spelling the formats list shows
+});
+
+it('a number of pieces is a whole number from 1 to 999, and a bad one saves nothing', async () => {
+  const film = await shelf.create({ type: 'film', title: 'Alien' }, { format: 'DVD', pieces: 2 });
+  for (const bad of [0, -1, 1000, 2.5, Number.NaN]) {
+    await expect(shelf.addCopy(film.id, { format: 'Blu-ray', pieces: bad })).rejects.toEqual(problem(400));
+    await expect(shelf.updateCopy(film.copies[0]!.id, { format: 'DVD', note: 'changed', pieces: bad })).rejects.toEqual(problem(400));
+  }
+  const after = await shelf.get(film.id);
+  expect(after.copies).toHaveLength(1);
+  expect(after.copies[0]!.note).toBeNull();
+  expect(after.copies[0]!.pieces).toBe(2);
+  expect((await shelf.addCopy(film.id, { format: 'Blu-ray', pieces: 999 })).copies[1]!.pieces).toBe(999);
+});
+
+it('copies that were there before, and copies brought in, have no number and keep working', async () => {
+  const film = await shelf.create({ type: 'film', title: 'Heat' }, { format: 'VHS' });
+  await db.run("UPDATE media_copies SET pieces = NULL");
+  const got = await shelf.get(film.id);
+  expect(got.copies[0]!.pieces).toBeNull();
+  expect(got.pieces).toEqual({});
+  const moved = await shelf.updateCopy(got.copies[0]!.id, { format: 'VHS', note: 'taped off TV' });
+  expect(moved.copies[0]!.pieces).toBeNull();
+});
+
+it('the word for the pieces comes from the format, and one piece is not shown', () => {
+  const words = (format: string) => piecesWord(format).many;
+  for (const f of ['CD', 'cd', 'Book on CD', 'DVD', 'Blu-ray', 'Bluray', '4K UHD', 'LaserDisc', 'Disc', 'Audio CD']) expect(words(f), f).toBe('discs');
+  for (const f of ['Tape', 'Book on tape', 'Cassette', 'VHS', 'Betamax', '8-track', '8 track']) expect(words(f), f).toBe('tapes');
+  for (const f of ['Vinyl', 'LP', 'Record', '12" vinyl']) expect(words(f), f).toBe('records');
+  for (const f of ['Hardcover', 'Digital', 'Cartridge', 'MiniDisc', '', 'Cdrom drive']) expect(piecesWord(f), f).toMatchObject({ many: 'pieces', known: false });
+  expect(piecesWord('CD').known).toBe(true);
+  expect(piecesWord('Book on tape').one).toBe('tape');
+  expect(piecesWord(null).many).toBe('pieces');
+  expect(piecesText('Book on CD', 12)).toBe('12 discs');
+  expect(piecesText('Vinyl', 2)).toBe('2 records');
+  expect(piecesText('Hardcover', 3)).toBe('3 pieces');
+  expect(piecesText('CD', 1)).toBeNull();
+  expect(piecesText('CD', null)).toBeNull();
 });

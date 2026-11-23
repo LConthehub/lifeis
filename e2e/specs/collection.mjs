@@ -66,6 +66,28 @@ say('the music chip shows only music', /Rumours/.test(await text()) && !/Alien/.
 await page.getByRole('button', { name: /Everything/ }).click(); await wait(300);
 await page.screenshot({ path: shots + '/media.png' });
 
+// A book on CD that is twelve discs: the copy form asks for discs, and "12 discs" shows on the page and in Audiobooks.
+await page.getByRole('button', { name: '+ Add' }).click();
+await field('What it is').selectOption('book'); await field('Title').fill('Dune on CD'); await field('Author').fill('Frank Herbert');
+await page.getByRole('button', { name: 'Save' }).click(); await page.waitForURL(/media\/[0-9]+/, { timeout: 15000 }).catch(() => {}); await wait(600);
+const cdCopies = page.locator('section').filter({ hasText: 'Your copies' });
+await cdCopies.getByRole('button', { name: '+ Add' }).click();
+say('a format with no pieces word offers a small link, not a number', await page.getByRole('button', { name: 'It comes in several pieces' }).isVisible() && !(await field('How many').isVisible().catch(() => false)));
+await page.getByPlaceholder(/Hardcover/).fill('Book on CD');
+say('Book on CD asks how many discs, and the field is tall enough to tap', /How many discs/.test(await page.getByRole('dialog').innerText()) && (await field('How many discs').boundingBox()).height >= 44);
+await field('How many discs').fill('12');
+await page.getByRole('button', { name: 'Save' }).click(); await wait(900);
+say('the copy says "Book on CD · 12 discs": ' + flat(await cdCopies.innerText()).slice(0, 80), /Book on CD · 12 discs/.test(await cdCopies.innerText()));
+await page.goto(base + '/media/audiobooks'); await wait(900);
+say('and so does the Audiobooks tab: ' + flat(await text()).slice(0, 120), /Dune on CD/.test(await text()) && /Book on CD · 12 discs/.test(await text()));
+await page.goto(base + '/media'); await wait(700);
+await page.getByRole('link', { name: /Dune on CD/ }).click(); await wait(800);
+await cdCopies.getByRole('button', { name: /Book on CD/ }).click();
+await field('How many discs').fill('1');
+await page.getByRole('button', { name: 'Save' }).click(); await wait(900);
+say('one disc is not shown: ' + flat(await cdCopies.innerText()).slice(0, 60), !/disc/.test(await cdCopies.innerText().then((s) => s.replace(/Add a copy|Your copies/g, ''))));
+await page.goto(base + '/media'); await wait(700);
+
 // Watched while sewing.
 await page.getByRole('link', { name: 'projects' }).click(); await wait();
 await page.getByRole('button', { name: '+ New project' }).click();

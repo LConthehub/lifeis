@@ -9,8 +9,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BlockList, isIP } from 'node:net';
 import { manualFor, manualHtml } from '../../core/src/index.ts';
 import type { PushSender } from '../../core/src/index.ts';
-import { atomic, feedFor, kitchen, Problem, type Db } from '../../core/src/index.ts';
+import { atomic, feedFor, kitchen, Problem, type Db, type Sealer } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
+import { sealerFromEnvironment, secondStepOn } from './secondStep.ts';
+import { securityRoutes } from './securityRoutes.ts';
 import type { MailTools } from './mailRoutes.ts';
 import { notUnderstood, read, readBody, MAX_PAPER_BODY_BYTES, Refusal, type Context, type Reply, type Route } from './http.ts';
 import type { Reach } from './connectionRoutes.ts';
@@ -18,7 +20,11 @@ import { everydayRoutes } from './everydayRoutes.ts';
 import { pages } from './pages.ts';
 import { zip } from './zip.ts';
 
-const PUBLIC_PATHS = new Set(['/api/health', '/api/auth/status', '/api/auth/setup', '/api/auth/login', '/api/auth/logout']);
+const PUBLIC_PATHS = new Set(['/api/health', '/api/auth/status', '/api/auth/setup', '/api/auth/login', '/api/auth/logout',
+  // The second step of signing in, and signing in with a passkey: asked before anybody is signed in.
+  '/api/auth/second-step', '/api/auth/second-step/passkey/begin', '/api/auth/second-step/passkey/finish',
+  '/api/auth/passkey/begin', '/api/auth/passkey/finish']);
+const PASSKEY_PATHS = /^\/api\/(auth\/(passkey|second-step\/passkey)\/(begin|finish)|security\/passkeys\/(begin|finish))$/;
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store',
@@ -45,6 +51,8 @@ export type Options = {
   push?: { publicKey: string; send: PushSender };
   /** A demo for anyone to try: its sign-in is offered on the sign-in page, and a few things are refused. See demo.ts. */
   demo?: { username: string; password: string };
+  /** Locks the secret of a person's authenticator app. Left out: the vault in the same key folder main.ts uses. */
+  sealer?: Sealer;
   /** Told about anything that went wrong inside Life Is itself (never about a person's mistake). */
   onError?: (problem: unknown) => void;
 };
@@ -104,10 +112,13 @@ export function createApp(options: Options) {
   const sessionCookie = (c: Context, token: string) =>
     `${auth.SESSION_COOKIE}=${token}; Max-Age=${auth.SESSION_DAYS * 86400}; Path=/; HttpOnly; SameSite=Lax${c.https ? '; Secure' : ''}`;
 
-  async function signIn(c: Context, userId: number): Promise<Record<string, string>> {
-    const token = await auth.createSession(db, userId, { method: 'password', ip: c.ip, userAgent: c.userAgent }, clock);
+  async function signIn(c: Context, userId: number, method = 'password'): Promise<Record<string, string>> {
+    const token = await auth.createSession(db, userId, { method, ip: c.ip, userAgent: c.userAgent }, clock);
     return { 'Set-Cookie': sessionCookie(c, token) };
   }
+
+  // Two-step sign-in and passkeys (securityRoutes.ts).
+  const security = securityRoutes(db, { clock, sealer: () => options.sealer ?? sealerFromEnvironment(), demo: Boolean(options.demo), signIn });
 
   const account = async (c: Context): Promise<Reply> =>
     ({ json: { idle_minutes: await auth.idleMinutesFor(db, c.user.id, idleDefault), idle_choices: auth.IDLE_CHOICES } });
@@ -155,8 +166,13 @@ export function createApp(options: Options) {
         for (const [throttle, key] of counted) await throttle.failure(db, key, clock);
         throw new Refusal(401, 'Wrong username or password');
       }
+      // With two-step on, the password is only the first step: no session yet, and the failures stay counted
+      // until the second step is right (otherwise a stranger who knows the password could clear them by
+      // signing in again, and guess codes without limit).
+      if (await secondStepOn(db, user.id)) return security.askForSecondStep(user.id);
       for (const [throttle, key] of counted) await throttle.success(db, key);
-      return { json: user, headers: await signIn(c, user.id) };
+      // Told something an admin did (their two-step was turned off), when there is something to tell.
+      return security.signedIn(c, user.id, 'password');
     }],
 
     ['POST', /^\/api\/auth\/logout$/, async (c) => {
@@ -188,6 +204,8 @@ export function createApp(options: Options) {
       });
       return { status: 201, json: { id, username, is_admin: false } };
     }],
+
+    ...security.routes,
 
     ['GET', /^\/api\/account$/, account],
     ['PUT', /^\/api\/account$/, async (c) => {
@@ -235,6 +253,14 @@ export function createApp(options: Options) {
       if (path === '/api/auth/change-password') throw new Refusal(403, "The demo's password can't be changed: everyone shares it");
       if (path === '/api/auth/setup' || path === '/api/users') throw new Refusal(403, "People can't be added to the demo");
       if (path === '/api/manual/share') throw new Refusal(403, "The demo's manual can't be shared by a link. In your own Life Is it can.");
+      // Two-step sign-in and passkeys would let one visitor lock the others out of the shared account.
+      if (path.startsWith('/api/security/')) throw new Refusal(403, "Sign-in security can't be changed in the demo: everyone shares its account");
+    }
+    // A passkey is tied to the address it was made at. A browser says where it is calling from; if that isn't
+    // the address this request was sent to, it is refused (the check on the passkey itself is stricter still).
+    if (PASSKEY_PATHS.test(path) && req.headers.origin !== undefined
+      && req.headers.origin !== (req.headers.host ? `${isHttps(req) ? 'https' : 'http'}://${String(req.headers.host).slice(0, 200)}` : null)) {
+      throw new Refusal(403, "Request blocked: it didn't come from this address");
     }
     const token = cookie(req, auth.SESSION_COOKIE);
     let user: auth.User | null = null;
