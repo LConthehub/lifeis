@@ -154,7 +154,10 @@ export default function Things() {
       {grouped ? (
         <>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Part of the house or hobby">
-            {[{ name: 'Everything', id: null, count: items.length }, ...groupNames.map((g) => ({ name: g, id: g, count: groupItems(g) }))].map((g) => (
+            {/* A heading with nothing in it yet stays out of the row (unless it is the one picked), so a long list of
+                interests does not fill the row with zeros. Its kinds are still in the Add form. */}
+            {[{ name: 'Everything', id: null, count: items.length },
+              ...groupNames.map((g) => ({ name: g, id: g, count: groupItems(g) })).filter((g) => g.count > 0 || g.id === chosenGroup)].map((g) => (
               <button key={g.name} type="button" onClick={() => pickGroup(g.id)} aria-pressed={chosenGroup === g.id} className={chip(chosenGroup === g.id)}>
                 {g.name} <span className="opacity-80">{g.count}</span>
               </button>
