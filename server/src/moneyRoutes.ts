@@ -57,7 +57,7 @@ export function moneyRoutes(db: Db, bank?: Reach & { allowLocal?: boolean }): Ro
     ['POST', at('money/simplefin/refresh'), async (c) => ({ json: await bankReading(c).refresh() })],
     ['PUT', at('money/simplefin/accounts'), async (c) => ({ json: await bankReading(c).choose(read.records(c.body, 'accounts').map((a) => ({
       id: read.maybeWhole(a, 'id') ?? (() => { throw notUnderstood('id'); })(), chosen: read.yesNo(a, 'chosen'), category_id: read.maybeWhole(a, 'category_id') }))) })],
-    ['POST', at('money/simplefin/read'), async (c) => ({ json: await bankReading(c).read({ from_day: read.maybeText(c.body, 'from_day') }) })],
+    ['POST', at('money/simplefin/read'), async (c) => ({ json: await bankReading(c).read({ from_day: read.maybeText(c.body, 'from_day'), minutes_behind_utc: read.maybeWhole(c.body, 'minutes_behind_utc') }) })],
     ['DELETE', at('money/simplefin'), async (c) => ({ json: await bankReading(c).disconnect() })],
     ['POST', at('money/statement/read'), async (c) => ({ json: await lookOverStatement(db, c.user.id, c.clock, statementFrom(c.body)) })],
     ['POST', at('money/statement'), async (c) => ({ status: 201, json: await importStatement(db, c.user.id, c.clock, statementFrom(c.body).rows, choicesFrom(c.body)) })],

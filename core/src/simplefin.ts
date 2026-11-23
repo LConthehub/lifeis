@@ -21,7 +21,7 @@ import type { Fetcher, Sealer } from './connections.ts';
 import { atomic, type Db } from './db.ts';
 import { money, type StatementItem } from './money.ts';
 import { Problem } from './problem.ts';
-import { clean, stamp, todayOf, type Clock } from './small.ts';
+import { clean, localDay, stamp, todayOf, type Clock } from './small.ts';
 
 export const SIMPLEFIN_SERVICE = {
   name: 'SimpleFIN',
@@ -138,10 +138,13 @@ type Txn = { id: string; day: string | null; cents: number | null; label: string
 type Reading = { errors: string[]; accounts: Seen[] };
 
 const words = (value: unknown, most: number) => (typeof value === 'string' ? clean(value.replace(/\s+/g, ' '), most) : null);
-const dayOfUnix = (seconds: number) => new Date(seconds * 1000).toISOString().slice(0, 10);
+// The day the person saw it happen, in their own time zone (a purchase at 8 pm is not tomorrow). `behind` is how many
+// minutes their clock is behind UTC, as a browser's getTimezoneOffset() gives it; without it, this computer's zone.
+const dayOfUnix = (seconds: number, behind: number | null) => (behind === null ? localDay(new Date(seconds * 1000))
+  : new Date(seconds * 1000 - behind * 60_000).toISOString().slice(0, 10));
 
 /** What SimpleFIN answered, read carefully: anything of the wrong shape is passed over, never trusted. */
-export function readAnswer(body: unknown): Reading {
+export function readAnswer(body: unknown, behind: number | null = null): Reading {
   const top = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
   const errors: string[] = [];
   for (const list of [top.errors, top.errlist]) {
@@ -168,7 +171,7 @@ export function readAnswer(body: unknown): Reading {
       const posted = typeof x.posted === 'number' && Number.isFinite(x.posted) && x.posted > 0 ? x.posted : null;
       transactions.push({
         id: tid,
-        day: posted !== null && posted < 8_640_000_000_000 ? dayOfUnix(posted) : null,
+        day: posted !== null && posted < 8_640_000_000_000 ? dayOfUnix(posted, behind) : null,
         cents: centsOf(x.amount),
         label: words(x.payee, 200) ?? words(x.description, 200) ?? words(x.memo, 200) ?? '(no description)',
         pending: x.pending === true || posted === null,
@@ -220,7 +223,7 @@ export function simplefin(db: Db, owner: number, clock: Clock = () => new Date()
   };
 
   /** Asks the bank server for accounts, signed in as the access address says. Plain words for anything that goes wrong. */
-  const ask = async (params: Record<string, string>): Promise<{ connection: number; reading: Reading }> => {
+  const ask = async (params: Record<string, string>, behind: number | null = null): Promise<{ connection: number; reading: Reading }> => {
     const a = await access();
     const query = new URLSearchParams(params);
     let answer;
@@ -233,7 +236,7 @@ export function simplefin(db: Db, owner: number, clock: Clock = () => new Date()
     if (answer.status === 401 || answer.status === 403) throw new Problem(400, 'SimpleFIN no longer accepts this connection. It may have been turned off at SimpleFIN. Disconnect, and connect again with a new setup token.');
     if (answer.status === 429) throw new Problem(400, 'SimpleFIN asks for fewer readings. Try again later: a bank connection can only be read so many times a day.');
     if (answer.status !== 200) throw new Problem(400, `SimpleFIN answered with an error (${answer.status}).`);
-    try { return { connection: a.connection, reading: readAnswer(await answer.json()) }; } catch { throw new Problem(400, "SimpleFIN's answer couldn't be read."); }
+    try { return { connection: a.connection, reading: readAnswer(await answer.json(), behind) }; } catch { throw new Problem(400, "SimpleFIN's answer couldn't be read."); }
   };
 
   /** Keeps what SimpleFIN says about each account (a new one is not chosen), leaving what the person chose alone. */
@@ -321,7 +324,8 @@ export function simplefin(db: Db, owner: number, clock: Clock = () => new Date()
      * Read the chosen accounts from `from_day` (the last 30 days when left out; never more than 90 back) and bring in
      * what was spent. One change to the entries: all of it or none.
      */
-    async read(input: { from_day?: string | null } = {}): Promise<SimplefinRead> {
+    async read(input: { from_day?: string | null; minutes_behind_utc?: number | null } = {}): Promise<SimplefinRead> {
+      const behind = typeof input.minutes_behind_utc === 'number' && Number.isInteger(input.minutes_behind_utc) && Math.abs(input.minutes_behind_utc) <= 14 * 60 ? input.minutes_behind_utc : null;
       await mustBeOn();
       const today = todayOf(clock);
       const earliest = new Date(Date.parse(`${today}T00:00:00Z`) - SIMPLEFIN_MAX_DAYS * DAY).toISOString().slice(0, 10);
@@ -335,7 +339,7 @@ export function simplefin(db: Db, owner: number, clock: Clock = () => new Date()
 
       const start = Math.floor(Date.parse(`${from}T00:00:00Z`) / 1000);
       const end = Math.floor(clock().getTime() / 1000) + 86_400;
-      const got = await ask({ 'start-date': String(start), 'end-date': String(end), pending: '1' });
+      const got = await ask({ 'start-date': String(start), 'end-date': String(end), pending: '1' }, behind);
       await remember(got.connection, got.reading.accounts);
 
       // A category that is no longer one the person can use is dropped, not allowed to refuse the whole reading.

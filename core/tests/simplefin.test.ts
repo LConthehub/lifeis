@@ -350,6 +350,13 @@ describe('reading', () => {
     expect(readAnswer({ accounts: [null, 5, { name: 'no id' }, { id: 'A', transactions: [null, { amount: '1' }, { id: 'T', posted: 'soon', amount: '-2' }] }] }))
       .toMatchObject({ accounts: [{ account_id: 'A', name: 'Account', transactions: [{ id: 'T', day: null, pending: true, cents: -200 }] }] });
   });
+  it('puts a purchase on the day it was where the person is, not the day in UTC', () => {
+    const at = Date.UTC(2046, 2, 11, 3, 0) / 1000; // 8 pm on March 10 in California is 3 am on March 11 in UTC
+    const one = (behind: number | null) => readAnswer({ accounts: [{ id: 'A', transactions: [{ id: 'T', posted: at, amount: '-5' }] }] }, behind).accounts[0]!.transactions[0]!.day;
+    expect(one(420)).toBe('2046-03-10');
+    expect(one(0)).toBe('2046-03-11');
+    expect(one(-600)).toBe('2046-03-11'); // Sydney, already the next morning
+  });
   it('does nothing to anything else: the one account list stays as chosen across readings', async () => {
     const b = await ready();
     await b.read();

@@ -68,7 +68,7 @@ export function BankReadingService() {
   });
   const readNow = () => run(async () => {
     await axios.put('/api/money/simplefin/accounts', { accounts: s.accounts.map((a) => ({ id: a.id, chosen: a.chosen, category_id: a.category_id })) });
-    const { data } = await axios.post('/api/money/simplefin/read', { from_day: from });
+    const { data } = await axios.post('/api/money/simplefin/read', { from_day: from, minutes_behind_utc: new Date().getTimezoneOffset() });
     setS(data.state); setResult(data);
   }, { keepResult: true });
   const disconnect = () => {
