@@ -31,6 +31,9 @@ if [ "${1:-}" = "--check" ]; then
   (cd frontend && npx vite build) >/dev/null || fail "the pages did not build"
   { node docs/build-site.mjs >/dev/null && node e2e/site.mjs; } || fail "the website check failed"
   node e2e/run.mjs || fail "a browser walk-through failed"
+  # The walk-throughs take the website's pictures of the app again; keep the committed ones, so the merge below can switch branches.
+  git checkout -- docs/site/img
+  [ -z "$(git status --porcelain)" ] || fail "the checks left files changed: $(git status --porcelain | head -5 | tr '\n' ' ')"
 fi
 
 say "Building the image (Life Is keeps running meanwhile)"
@@ -59,8 +62,11 @@ fi
 docker logs lifeis-lifeis-1 2>&1 | grep -i "upgrad" | tail -1 || true
 
 say "Merging and pushing"
-if [ "$branch" != "main" ]; then git checkout -q main && git merge --ff-only "$branch"; fi
-git push origin main
+if [ "$branch" != "main" ]; then
+  git checkout -q main || fail "the new version is running, but main could not be checked out to merge $branch; merge it by hand"
+  git merge --ff-only "$branch" || fail "the new version is running, but $branch could not be merged into main; merge it by hand"
+fi
+git push origin main || fail "the new version is running and main is merged here, but the push to GitHub failed; push it by hand"
 
 say "The demo"
 docker compose -f docker-compose.demo.yml --env-file .env.demo up -d
