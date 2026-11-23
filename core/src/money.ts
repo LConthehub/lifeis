@@ -62,7 +62,11 @@ export type CategoryInput = { name?: string | null; monthly_cents?: number | nul
 export type EntryInput = { label?: string | null; cents?: number | null; day?: string | null; note?: string | null; category_id?: number | null };
 
 /** One line of a bank's statement on its way in. `category_id` left out means "the one an earlier entry with this label used". */
-export type StatementItem = { label: string; cents: number; day: string; keep: boolean; category_id?: number | null };
+export type StatementItem = {
+  label: string; cents: number; day: string; keep: boolean; category_id?: number | null;
+  /** Set when a bank's own service (SimpleFIN) sent it: its account and transaction, kept on the entry so it is never brought in twice. */
+  bank?: { account: string; txn: string };
+};
 export type StatementMark = { already: boolean; suggested: number | null };
 export type StatementBrought = { added: number; already: number; left_out: number; months: { month: string; added: number }[] };
 
@@ -120,13 +124,14 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
    * person can see are looked at. Two identical lines in one statement are two purchases, so each existing
    * entry accounts for one line, the first in the file, and no more.
    */
-  async function marked(q: Queries, items: { label: string; cents: number; day: string }[]): Promise<StatementMark[]> {
+  async function marked(q: Queries, items: { label: string; cents: number; day: string }[], fromBank = false): Promise<StatementMark[]> {
     if (items.length === 0) return [];
     const days = items.map((i) => i.day).sort();
     const key = (label: string, cents: number, day: string) => `${day}|${cents}|${labelKey(label)}`;
     const have = new Map<string, number>();
     for (const e of await q.all<{ label: string; cents: number; day: string }>(
-      `SELECT e.label, e.cents, e.day FROM money_entries e WHERE e.day BETWEEN ? AND ? AND (e.owner_id = ? OR e.category_id IN (${SEEN}))`,
+      // What came from the bank's own service has its own id to be told apart by, so two like purchases from it stay two.
+      `SELECT e.label, e.cents, e.day FROM money_entries e WHERE e.day BETWEEN ? AND ? AND (e.owner_id = ? OR e.category_id IN (${SEEN}))${fromBank ? ' AND e.bank_txn IS NULL' : ''}`,
       [days[0]!, days[days.length - 1]!, owner, ...seen])) have.set(key(e.label, e.cents, e.day), (have.get(key(e.label, e.cents, e.day)) ?? 0) + 1);
     const earlier = new Map<string, number>();
     for (const e of await q.all<{ label: string; category_id: number }>(
@@ -155,15 +160,17 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
      */
     async bringIn(items: StatementItem[]): Promise<StatementBrought> {
       return atomic(db, async (tx) => {
-        const marks = await marked(tx, items);
+        const fromBank = items.some((i) => i.bank);
+        const marks = await marked(tx, items, fromBank);
         const result: StatementBrought = { added: 0, already: 0, left_out: 0, months: [] };
         const months = new Map<string, number>();
         for (const [i, item] of items.entries()) {
+          if (item.bank && await tx.get('SELECT 1 AS x FROM money_entries WHERE owner_id = ? AND bank_account = ? AND bank_txn = ?', [owner, item.bank.account, item.bank.txn])) { result.already += 1; continue; }
           if (marks[i]!.already) { result.already += 1; continue; }
           if (!item.keep) { result.left_out += 1; continue; }
           const e = await checkedEntry(tx, { label: item.label, cents: item.cents, day: item.day, category_id: item.category_id === undefined ? marks[i]!.suggested : item.category_id });
-          await tx.run('INSERT INTO money_entries (owner_id, category_id, label, cents, day, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [owner, e.category, e.label, e.cents, e.day, e.note, now()]);
+          await tx.run('INSERT INTO money_entries (owner_id, category_id, label, cents, day, note, created_at, bank_account, bank_txn) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [owner, e.category, e.label, e.cents, e.day, e.note, now(), item.bank?.account ?? null, item.bank?.txn ?? null]);
           result.added += 1;
           months.set(e.day.slice(0, 7), (months.get(e.day.slice(0, 7)) ?? 0) + 1);
         }

@@ -1186,6 +1186,39 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_money_goal_saved ON money_goal_saved(goal_id, day)`,
     ],
   },
+  {
+    // Reading bank accounts through SimpleFIN, read-only. One connection per person, with its access address kept
+    // sealed (never readable by a page). The accounts it lists are kept so the person can choose which to bring
+    // in, and into which category. An entry brought in remembers its SimpleFIN account and transaction, so the
+    // same transaction is never brought in twice.
+    number: 41,
+    name: 'reading bank accounts through SimpleFIN',
+    statements: [
+      `CREATE TABLE simplefin_connections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        access TEXT NOT NULL,
+        host TEXT NOT NULL,
+        connected_at TEXT NOT NULL,
+        last_read_at TEXT
+      )`,
+      `CREATE TABLE simplefin_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        connection_id INTEGER NOT NULL REFERENCES simplefin_connections(id) ON DELETE CASCADE,
+        account_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        org TEXT,
+        currency TEXT,
+        balance_cents INTEGER,
+        chosen INTEGER NOT NULL DEFAULT 0 CHECK(chosen IN (0, 1)),
+        category_id INTEGER REFERENCES money_categories(id) ON DELETE SET NULL,
+        UNIQUE(connection_id, account_id)
+      )`,
+      `ALTER TABLE money_entries ADD COLUMN bank_account TEXT`,
+      `ALTER TABLE money_entries ADD COLUMN bank_txn TEXT`,
+      `CREATE UNIQUE INDEX idx_money_entries_bank ON money_entries(owner_id, bank_account, bank_txn)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

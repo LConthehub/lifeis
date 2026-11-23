@@ -29,7 +29,7 @@ export type Answer = {
   header?(name: string): string | null;
 };
 /** Asks a web address for its answer. Almost always a plain question; `send` is for the few that must be posted. */
-export type Fetcher = (url: string, headers: Record<string, string>, send?: { method: 'POST'; body: string }) => Promise<Answer>;
+export type Fetcher = (url: string, headers: Record<string, string>, send?: { method: 'POST'; body: string; /** Don't follow a redirect: the answer is the redirect itself. */ noRedirect?: boolean } | { method: 'GET'; body: ''; noRedirect?: boolean }) => Promise<Answer>;
 export type Sealer = { seal(plain: string): string; unseal(sealed: string): string | null };
 
 /** One thing on a server, as the collection needs it. */

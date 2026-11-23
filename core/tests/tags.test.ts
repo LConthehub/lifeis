@@ -57,6 +57,9 @@ it('carries the old recipe tags over: one top-level tag for each word, each owne
   const other = await person('other');
   // Put the database back to how version 38 left it, with recipes that have a comma list of tags.
   for (const table of ['money_goal_saved', 'money_goals', 'money_income']) await db.run(`DROP TABLE ${table}`); // version 40 comes after
+  for (const table of ['simplefin_accounts', 'simplefin_connections']) await db.run(`DROP TABLE ${table}`); // and 41
+  await db.run('DROP INDEX idx_money_entries_bank');
+  for (const column of ['bank_account', 'bank_txn']) await db.run(`ALTER TABLE money_entries DROP COLUMN ${column}`);
   await db.run('DROP TABLE tag_links');
   await db.run('DROP TABLE tags');
   await db.run('PRAGMA user_version = 38');

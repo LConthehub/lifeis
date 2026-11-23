@@ -9,7 +9,7 @@ import { CapacitorHttp } from '@capacitor/core';
 const unpacked = (base64) => Uint8Array.from(atob(base64 ?? ''), (c) => c.charCodeAt(0));
 
 export const phoneFetcher = async (url, headers, send) => {
-  const got = await CapacitorHttp.request({ url, method: send ? 'POST' : 'GET', headers, data: send?.body, responseType: 'arraybuffer', connectTimeout: 10000, readTimeout: 30000 });
+  const got = await CapacitorHttp.request({ url, method: send?.method ?? 'GET', headers, data: send?.body, responseType: 'arraybuffer', connectTimeout: 10000, readTimeout: 30000 });
   const bytes = typeof got.data === 'string' ? unpacked(got.data) : new Uint8Array();
   let type = null;
   for (const name of Object.keys(got.headers ?? {})) if (name.toLowerCase() === 'content-type') type = got.headers[name];
