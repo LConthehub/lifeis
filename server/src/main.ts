@@ -40,6 +40,8 @@ const server = createServer(createApp({
     reach,
     photos: { fetcher: webFetcher, sealer: vault(keyDir, 'photo_library') },
     calendars,
+    // Reading bank accounts through SimpleFIN. A walk-through sets SIMPLEFIN_ALLOW_LOCAL=1 to point it at a stand-in on this computer; nothing else does.
+    bank: { fetcher: webFetcher, sealer: vault(keyDir, 'simplefin_access'), allowLocal: process.env.SIMPLEFIN_ALLOW_LOCAL === '1' },
     assistant: { fetcher: patientFetcher, sealer: vault(keyDir, 'assistant') },
     mail,
     push,

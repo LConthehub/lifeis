@@ -2,7 +2,8 @@
  * The addresses for Life is spending (/api/money). What they do is core/'s money.ts; this only reads what
  * was sent and passes it on.
  */
-import { budget, importStatement, lookOverStatement, money, readStatement, type Db } from '../../core/src/index.ts';
+import { budget, importStatement, lookOverStatement, money, readStatement, simplefin, type Db } from '../../core/src/index.ts';
+import type { Reach } from './connectionRoutes.ts';
 import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -43,11 +44,21 @@ const choicesFrom = (body: Body) => {
   return { keep: Array.isArray(body.keep) ? read.wholes(body, 'keep') : undefined, categories, suggest: read.yesNo(body, 'suggest', true) };
 };
 
-export function moneyRoutes(db: Db): Route[] {
+export function moneyRoutes(db: Db, bank?: Reach & { allowLocal?: boolean }): Route[] {
   const spending = (c: Context) => money(db, c.user.id, c.clock);
+  // Reading bank accounts through SimpleFIN (core/'s simplefin.ts). Its access address is opened only inside core and is never in an answer.
+  const bankReading = (c: Context) => simplefin(db, c.user.id, c.clock, bank?.fetcher, { sealer: bank?.sealer, allowLocal: bank?.allowLocal });
   const planning = (c: Context) => budget(db, c.user.id, c.clock);
   return [
     // A statement downloaded from a bank or card, looked over and then brought in. Read here, sent nowhere. See bankStatement.ts.
+    ['GET', at('money/simplefin'), async (c) => ({ json: await bankReading(c).state() })],
+    ['PUT', at('money/simplefin'), async (c) => ({ json: await bankReading(c).turn(read.yesNo(c.body, 'on')) })],
+    ['POST', at('money/simplefin/connect'), async (c) => ({ status: 201, json: await bankReading(c).connect(read.text(c.body, 'token')) })],
+    ['POST', at('money/simplefin/refresh'), async (c) => ({ json: await bankReading(c).refresh() })],
+    ['PUT', at('money/simplefin/accounts'), async (c) => ({ json: await bankReading(c).choose(read.records(c.body, 'accounts').map((a) => ({
+      id: read.maybeWhole(a, 'id') ?? (() => { throw notUnderstood('id'); })(), chosen: read.yesNo(a, 'chosen'), category_id: read.maybeWhole(a, 'category_id') }))) })],
+    ['POST', at('money/simplefin/read'), async (c) => ({ json: await bankReading(c).read({ from_day: read.maybeText(c.body, 'from_day') }) })],
+    ['DELETE', at('money/simplefin'), async (c) => ({ json: await bankReading(c).disconnect() })],
     ['POST', at('money/statement/read'), async (c) => ({ json: await lookOverStatement(db, c.user.id, c.clock, statementFrom(c.body)) })],
     ['POST', at('money/statement'), async (c) => ({ status: 201, json: await importStatement(db, c.user.id, c.clock, statementFrom(c.body).rows, choicesFrom(c.body)) })],
     // The budget: income, bills (read from upkeep), savings goals, a month's and a year's figures. See budget.ts.

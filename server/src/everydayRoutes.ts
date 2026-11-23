@@ -39,6 +39,7 @@ export type Outside = {
   mail?: MailTools;
   photos?: Reach;
   calendars?: Reach;
+  bank?: Reach & { allowLocal?: boolean };
   /** How the assistant reaches a model (and locks its key), or the phone's own model. Left out: it can't be turned on. */
   assistant?: AssistantTools;
   /** How a browser is sent a reminder, and the key it checks them by. Left out: browsers can't be sent any. */
@@ -336,7 +337,7 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ['DELETE', /^\/api\/kitchen\/grocery\/(\d{1,15})$/, async (c) => (await c.kitchen.deleteGrocery(c.id), { status: 204 })],
 
     ...makingRoutes(db),
-    ...moneyRoutes(db),
+    ...moneyRoutes(db, options.bank),
     ...assistantRoutes(db, options.assistant),
     ...actionRoutes(db),
     ...(options.reach ? connectionRoutes(db, options.reach) : []),

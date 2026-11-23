@@ -45,6 +45,8 @@ export type Options = {
   photos?: Reach;
   /** How Life Is reads another calendar's link and locks it. Left out: none can be followed. */
   calendars?: Reach;
+  /** How Life Is reads bank accounts through SimpleFIN and locks the access address. Left out: it can't be turned on. */
+  bank?: Reach & { allowLocal?: boolean };
   /** How the assistant reaches a model and locks its key. Left out: it can't be turned on. */
   assistant?: Reach;
   /** How a browser is sent a reminder. Left out: browsers can't be sent any. */
@@ -224,7 +226,7 @@ export function createApp(options: Options) {
       headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="lifeis-recipes.zip"' },
     })],
 
-    ...everydayRoutes(db, { fetcher: outside, reach: options.reach, mail: options.mail, photos: options.photos, calendars: options.calendars, assistant: options.assistant, push: options.push }),
+    ...everydayRoutes(db, { fetcher: outside, reach: options.reach, mail: options.mail, photos: options.photos, calendars: options.calendars, bank: options.bank, assistant: options.assistant, push: options.push }),
   ];
 
   /**

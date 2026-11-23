@@ -29,7 +29,7 @@ async function reach(url: string, init: RequestInit, wait: number): Promise<Resp
 
 /** Asks a web address for its answer, giving up after half a minute and never taking in more than 20 MB. */
 export const webFetcher: Fetcher = async (url, headers, send) => {
-  const response = await reach(url, { headers, ...(send ? { method: send.method, body: send.body } : {}) }, 30_000);
+  const response = await reach(url, { headers, ...(send ? { method: send.method, ...(send.method === 'POST' ? { body: send.body } : {}), ...(send.noRedirect ? { redirect: 'manual' as const } : {}) } : {}) }, 30_000);
   const body = async () => {
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.length > 20_000_000) throw new Error('That answer is too large');
@@ -46,7 +46,7 @@ export const webFetcher: Fetcher = async (url, headers, send) => {
 
 /** The same way out, for a model that may take a minute or two to think. */
 export const patientFetcher: Fetcher = async (url, headers, send) => {
-  const response = await reach(url, { headers, ...(send ? { method: send.method, body: send.body } : {}) }, 180_000);
+  const response = await reach(url, { headers, ...(send ? { method: send.method, ...(send.method === 'POST' ? { body: send.body } : {}), ...(send.noRedirect ? { redirect: 'manual' as const } : {}) } : {}) }, 180_000);
   const body = async () => {
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.length > 5_000_000) throw new Error('That answer is too large');
