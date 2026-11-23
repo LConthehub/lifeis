@@ -97,7 +97,7 @@ export default function Things() {
     <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>
       {[{ id: null, name: all, items: list.reduce((n, k) => n + k.items, 0) }, ...list].map((k) => (
         <button key={k.id ?? 'all'} type="button" onClick={() => setKind(k.id)} aria-pressed={chosenKind === k.id} className={chip(chosenKind === k.id)}>
-          {k.icon ? `${k.icon} ` : ''}{k.name} <span className="opacity-70">{k.items}</span>
+          {k.icon ? `${k.icon} ` : ''}{k.name} <span className="opacity-80">{k.items}</span>
         </button>
       ))}
     </div>
@@ -156,7 +156,7 @@ export default function Things() {
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Part of the house or hobby">
             {[{ name: 'Everything', id: null, count: items.length }, ...groupNames.map((g) => ({ name: g, id: g, count: groupItems(g) }))].map((g) => (
               <button key={g.name} type="button" onClick={() => pickGroup(g.id)} aria-pressed={chosenGroup === g.id} className={chip(chosenGroup === g.id)}>
-                {g.name} <span className="opacity-70">{g.count}</span>
+                {g.name} <span className="opacity-80">{g.count}</span>
               </button>
             ))}
           </div>

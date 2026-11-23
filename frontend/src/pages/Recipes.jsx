@@ -434,7 +434,7 @@ export function RecipePage() {
       {r.notes && <section className={cardClass}><h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Notes</h2><p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-life-100">{r.notes}</p></section>}
       <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-life-300">
         {r.original_text && <button type="button" onClick={() => setShowOriginal(!showOriginal)} className="underline">{showOriginal ? 'Hide' : 'Show'} the original as it came in</button>}
-        <button type="button" onClick={remove} className="ml-auto text-red-600 hover:underline">Delete recipe</button>
+        <button type="button" onClick={remove} className="ml-auto text-red-700 hover:underline dark:text-red-300">Delete recipe</button>
       </div>
       {showOriginal && <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-xl bg-life-50 p-3 text-xs text-gray-700 dark:bg-life-800 dark:text-life-100">{r.original_text}</pre>}
       {modal === 'edit' && (

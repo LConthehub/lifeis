@@ -36,7 +36,7 @@ export default function Activities() {
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Activities">
           {all.map((a) => (
             <button key={a.name} type="button" aria-pressed={chosen?.toLowerCase() === a.name.toLowerCase()} onClick={() => setParams({ name: a.name })} className={chip(chosen?.toLowerCase() === a.name.toLowerCase())}>
-              {a.name} <span className="opacity-70">{a.things + a.projects + a.jobs}</span>
+              {a.name} <span className="opacity-80">{a.things + a.projects + a.jobs}</span>
             </button>
           ))}
         </div>

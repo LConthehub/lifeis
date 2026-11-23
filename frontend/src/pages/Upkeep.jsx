@@ -161,9 +161,9 @@ export default function UpkeepPage() {
         <button type="button" onClick={() => setModal({ job: { kind: kind || 'job' } })} className={buttonClass}>+ New</button>
       </div>
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="What to show">
-        <button type="button" onClick={() => setKind('')} aria-pressed={!kind} className={chip(!kind)}>Everything <span className="opacity-70">{jobs.length || ''}</span></button>
+        <button type="button" onClick={() => setKind('')} aria-pressed={!kind} className={chip(!kind)}>Everything <span className="opacity-80">{jobs.length || ''}</span></button>
         {Object.entries(KINDS).map(([k, [label, icon]]) => (
-          <button key={k} type="button" onClick={() => setKind(k)} aria-pressed={kind === k} className={chip(kind === k)}>{icon} {label} <span className="opacity-70">{jobs.filter((j) => j.kind === k).length || ''}</span></button>
+          <button key={k} type="button" onClick={() => setKind(k)} aria-pressed={kind === k} className={chip(kind === k)}>{icon} {label} <span className="opacity-80">{jobs.filter((j) => j.kind === k).length || ''}</span></button>
         ))}
       </div>
       {(!kind || kind === 'bill' || kind === 'renewal') && perMonth > 0 && (

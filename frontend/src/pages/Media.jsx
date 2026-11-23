@@ -139,9 +139,9 @@ export default function MediaPage({ library = null }) {
       ) : (
         <>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="What to show">
-            {!lib && <button type="button" onClick={() => setType('')} aria-pressed={!type} className={chip(!type)}>Everything <span className="opacity-70">{titles.length}</span></button>}
+            {!lib && <button type="button" onClick={() => setType('')} aria-pressed={!type} className={chip(!type)}>Everything <span className="opacity-80">{titles.length}</span></button>}
             {TYPES.filter(([id]) => !lib && count(id) > 0).map(([id, label, icon]) => (
-              <button key={id} type="button" onClick={() => setType(id)} aria-pressed={type === id} className={chip(type === id)}>{icon} {label} <span className="opacity-70">{count(id)}</span></button>
+              <button key={id} type="button" onClick={() => setType(id)} aria-pressed={type === id} className={chip(type === id)}>{icon} {label} <span className="opacity-80">{count(id)}</span></button>
             ))}
             {mine.some((m) => m.wanted) && <button type="button" onClick={() => setShow(show === 'wanted' ? '' : 'wanted')} aria-pressed={show === 'wanted'} className={chip(show === 'wanted')}>Wanted</button>}
             {mine.some((m) => m.lent_to.length) && <button type="button" onClick={() => setShow(show === 'lent' ? '' : 'lent')} aria-pressed={show === 'lent'} className={chip(show === 'lent')}>Lent out</button>}
@@ -179,7 +179,7 @@ export default function MediaPage({ library = null }) {
                 <legend className="mb-1 text-xs font-medium text-gray-600 dark:text-life-200">Years, from and to</legend>
                 <span className="flex items-center gap-2">
                   <input type="number" inputMode="numeric" min="0" max="9999" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="From" aria-label="Year from" className={`${inputClass} ${control} sm:w-24`} />
-                  <span aria-hidden="true" className="text-gray-400">to</span>
+                  <span aria-hidden="true" className="text-gray-500 dark:text-life-300">to</span>
                   <input type="number" inputMode="numeric" min="0" max="9999" value={to} onChange={(e) => setTo(e.target.value)} placeholder="To" aria-label="Year to" className={`${inputClass} ${control} sm:w-24`} />
                 </span>
               </fieldset>
