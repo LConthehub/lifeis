@@ -54,6 +54,22 @@ check(`${seen.size} pages, none wider than a phone`, wide.length === 0, wide.joi
 check('every link between pages leads somewhere', broken.length === 0, broken.join('; '));
 check('the site loads nothing from anywhere else', outside.size === 0, [...outside].join(', '));
 
+// The front page: the Android testers part is there, its buttons are 44px tall at phone width, and a placeholder link is never published.
+await page.setViewportSize({ width: 375, height: 800 });
+await page.goto(at('index.html')); await page.waitForTimeout(200);
+const tester = page.locator('#android-testers');
+const testerLinks = await page.locator('#android-testers ~ .grid a.button').evaluateAll((l) => l.map((a) => ({ href: a.getAttribute('href'), h: a.getBoundingClientRect().height })));
+const homeHtml = await page.content();
+check('the front page has the Become an Android tester part, with its group button 44px tall', (await tester.count()) === 1 && /Become an Android tester/.test(await tester.innerText()) && testerLinks.length >= 1 && testerLinks.every((b) => b.h >= 43.5), JSON.stringify(testerLinks));
+check('no placeholder link is published on the front page', !/TESTER_GROUP_URL|PLAY_OPTIN_URL/.test(homeHtml) && testerLinks.every((b) => b.href === '#android-testers' || /^https:\/\//.test(b.href)), JSON.stringify(testerLinks));
+check('the front page has the sections it always had', (await page.locator('#what, #yours, #price').count()) === 3 && (await page.locator('.hero h1').count()) === 1);
+await page.screenshot({ path: path.join(shots, 'site-home-375.png'), fullPage: true });
+await page.locator('#android-testers').evaluate((h) => { const box = document.createElement('div'); box.id = 'shot-box'; const lede = h.nextElementSibling; const cards = lede.nextElementSibling; h.before(box); box.append(h, lede, cards); });
+await page.locator('#shot-box').screenshot({ path: path.join(shots, 'site-tester-375.png') });
+await page.setViewportSize({ width: 1280, height: 900 });
+await page.goto(at('index.html')); await page.waitForTimeout(200);
+await page.screenshot({ path: path.join(shots, 'site-home-1280.png'), fullPage: true });
+
 // The setup builder.
 await page.setViewportSize({ width: 1100, height: 900 });
 await page.goto(at('docs/install.html')); await page.waitForTimeout(400);
