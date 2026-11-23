@@ -4,6 +4,7 @@ import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { money, toCents } from '../components/Budget';
 import Statement from '../components/Statement';
+import { MonthBudget } from './Budgeting';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -64,6 +65,8 @@ export default function Money() {
         <div><dt className="text-xs text-gray-500 dark:text-life-300">Spent</dt><dd className="font-semibold tabular-nums text-gray-800 dark:text-life-50">{money(data.total.spent, sign)}</dd></div>
         <div><dt className="text-xs text-gray-500 dark:text-life-300">{data.total.left < 0 ? 'Over by' : 'Left'}</dt><dd className={`font-semibold tabular-nums ${data.total.left < 0 ? 'text-red-600' : 'text-gray-800 dark:text-life-50'}`}>{money(Math.abs(data.total.left), sign)}</dd></div>
       </dl>
+
+      <MonthBudget month={month} key={`${month}-${data.entries.length}-${data.total.spent}`} />
 
       <section className={cardClass}>
         <div className="mb-1 flex items-center gap-2">

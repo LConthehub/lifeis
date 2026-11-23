@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { useTags } from '../components/tags';
+import { money } from '../components/Budget';
 
 const insideOf = (tags, tag) => tags.filter((t) => t.path.startsWith(`${tag.path} > `));
 
@@ -148,6 +149,17 @@ export function TagPage() {
           Inside it:
           {page.inside.map((t) => <Link key={t.id} to={`/tags/${t.id}`} className="inline-flex min-h-[44px] items-center rounded-full bg-life-50 px-3 text-life-700 hover:bg-life-100 dark:bg-life-700 dark:text-life-100">{t.path.slice(page.tag.path.length + 3)}</Link>)}
         </p>
+      )}
+      {page.spending.count > 0 && (
+        <section className={cardClass} aria-label="Spending with this tag" data-tag-spending>
+          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Spent with this tag</h2>
+          <dl className="grid grid-cols-3 gap-2 text-center">
+            <div><dt className="text-xs text-gray-500 dark:text-life-300">This month</dt><dd className="font-semibold tabular-nums text-gray-800 dark:text-life-50">{money(page.spending.month, page.spending.currency)}</dd></div>
+            <div><dt className="text-xs text-gray-500 dark:text-life-300">This year</dt><dd className="font-semibold tabular-nums text-gray-800 dark:text-life-50">{money(page.spending.year, page.spending.currency)}</dd></div>
+            <div><dt className="text-xs text-gray-500 dark:text-life-300">All time</dt><dd className="font-semibold tabular-nums text-gray-800 dark:text-life-50">{money(page.spending.all, page.spending.currency)}</dd></div>
+          </dl>
+          <p className="mt-1 text-xs text-gray-500 dark:text-life-300">Counts spending with this tag or a tag inside it, each once.</p>
+        </section>
       )}
       {page.total === 0 ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing has this tag yet. Add it from the Tags box when you add or change something, or choose several in a list and tag them together.</div>

@@ -44,6 +44,7 @@ const SUITE = [
   { specs: ['records'] },
   { specs: ['reminders'], fixtures: [['ntfy', 8098]] },
   { specs: ['spending'] },
+  { specs: ['budget'], account: TRIAL },
   { specs: ['export'] },
   { specs: ['backup'], phone: true },
   { specs: ['settings'] },
