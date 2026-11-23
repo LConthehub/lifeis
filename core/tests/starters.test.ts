@@ -41,6 +41,7 @@ it('the car, art, electronics, music and outdoors sets each add their kinds, wit
     electronics: [['Devices', 'Warranty until'], ['Cables and adapters', 'Length'], ['Components', 'Value'], ['Batteries and chargers', 'Type']],
     music: [['Instruments', 'Serial number'], ['Strings, reeds and supplies', 'Fits'], ['Sheet music and books', 'Composer'], ['Audio gear', 'Model']],
     outdoors: [['Camping gear', 'Type'], ['Fishing tackle', 'Type'], ['Sports gear', 'Whose'], ['Bikes', 'Frame size']],
+    writing: [['Books and journals', 'Kind'], ['Study materials', 'Course or class'], ['Writing supplies', 'Type']],
   };
   for (const [slug, kinds] of Object.entries(expected)) {
     const db = memoryDb();
@@ -110,6 +111,7 @@ it('every ready-made kind that is for an activity names one of the kinds of proj
   expect(of('electronics')).toEqual(['Electronics & computers']);
   expect(of('music')).toEqual(['Music']);
   expect(of('outdoors')).toEqual(['Outdoors']);
+  expect(of('writing')).toEqual(['Writing & study']);
   expect(of('cookware')).toEqual(['Cooking & baking']);
   expect(of('home')).toEqual(['Home repair']);
 });

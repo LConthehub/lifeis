@@ -27,7 +27,7 @@ const link = (name: string): FieldInput => ({ name, type: 'link' });
 const ACTIVITY_OF_SET: Record<string, string | undefined> = {
   sewing: 'Sewing', cookware: 'Cooking & baking', knitting: 'Yarn crafts', woodworking: 'Woodworking', gardening: 'Gardening',
   clothing: undefined, home: 'Home repair', car: 'Car & mechanics', art: 'Art & crafts', electronics: 'Electronics & computers',
-  music: 'Music', outdoors: 'Outdoors',
+  music: 'Music', outdoors: 'Outdoors', writing: 'Writing & study',
 };
 
 const SETS: Starter[] = [
@@ -189,6 +189,21 @@ const SETS: Starter[] = [
     ],
   },
   {
+    slug: 'writing',
+    name: 'Writing & study',
+    about: 'Books and journals, study materials for a class or course, and pens, paper and other writing supplies.',
+    group: 'Writing and study',
+    kinds: [
+      { name: 'Books and journals', icon: '📚', fields: [
+        text('Title'), text('Author'), choice('Kind', 'Notebook', 'Journal', 'Reference', 'Textbook'), number('Pages'),
+        yesNo('Filled or finished'), date('Started on') ] },
+      { name: 'Study materials', icon: '🎓', fields: [
+        text('Subject'), text('Course or class'), choice('Format', 'Flash cards', 'Workbook', 'Printout', 'Digital'), text('Used by'), date('Due on') ] },
+      { name: 'Writing supplies', icon: '✒️', unit: 'pc', fields: [
+        choice('Type', 'Pen', 'Pencil', 'Ink', 'Paper', 'Notebook', 'Other'), text('Color'), number('Quantity'), text('Brand') ] },
+    ],
+  },
+  {
     slug: 'outdoors',
     name: 'Outdoors',
     about: 'Camping gear, fishing tackle, sports gear, and bikes.',
@@ -210,7 +225,7 @@ export const STARTERS: Starter[] = SETS.map((set) => ({
 }));
 
 /** The headings the Things page uses, in the order it shows them. Kinds that fit no set go under "Other", last. */
-export const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garage', 'Garden', 'Outdoors', 'Electronics', 'Music', 'Around the house', 'Clothes and linens'] as const;
+export const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garage', 'Garden', 'Outdoors', 'Electronics', 'Music', 'Writing and study', 'Around the house', 'Clothes and linens'] as const;
 
 /** Which heading a kind belongs under, by its name (capitals and spacing don't matter), or null if no ready-made set has it. */
 export function groupOfKind(name: string): string | null {
