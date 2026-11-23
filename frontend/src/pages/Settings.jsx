@@ -25,6 +25,7 @@ const GROUPS = [
     id: 'home', label: 'Your home', icon: '🏠',
     sections: [
       { id: 'life', title: 'What Life Is looks after', words: 'sections areas sewing garden cookware clothing money spending show hide', render: ({ onLifeChanged }) => <Titled title="What Life Is looks after" hint="Decides which sections show. Nothing is removed by unchecking."><LifeAreasPicker onSaved={onLifeChanged} /></Titled> },
+      { id: 'tags', title: 'Tags', words: 'tags labels organize nest merge rename categories', render: () => <TagsSetting /> },
       { id: 'look', title: 'Look', words: 'theme dark mode light night day colour color appearance device system brown cream mushroom', render: () => <Look /> },
     ],
   },
@@ -264,6 +265,14 @@ function RecipesOut() {
   return (
     <Titled title="Your recipes, yours to take" hint="Download every recipe as Nextcloud Cookbook folders (each one a recipe.json, with the original text beside it). Unzip them into the Recipes folder in your Nextcloud and the Cookbook app shows them.">
       <a href="/api/kitchen/recipes-export.zip" className={quietButtonClass}>Download recipes</a>
+    </Titled>
+  );
+}
+
+function TagsSetting() {
+  return (
+    <Titled title="🏷 Tags" hint="One list of tags for your household, put on things, recipes, projects, plans, spending, titles, pets, upkeep and dates. Rename them, put one inside another, merge two, or delete one.">
+      <Link to="/tags" className="text-sm text-life-600 hover:underline dark:text-life-200">See and change your tags →</Link>
     </Titled>
   );
 }
