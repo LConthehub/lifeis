@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { CopyWeek, Templates, copiedMessage, mondayOf } from '../components/WeekTools';
+import { MealPrep } from '../components/PrepSteps';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, fromDateInput } from '../components/ui';
 
 const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -22,11 +23,15 @@ export default function Week() {
   const [message, setMessage] = useState('');
   // Meals whose recipes need more of a pan or dish than there is.
   const [short, setShort] = useState([]);
+  // Prep still to come for these meals ("Thaw the chicken: tonight 8 pm"), and the meal whose prep is being changed.
+  const [prepList, setPrepList] = useState([]);
+  const [prepFor, setPrepFor] = useState(null);
   const navigate = useNavigate();
   const startText = toDateInput(start);
   const load = useCallback(() => {
     axios.get('/api/kitchen/plan', { params: { start: startText, days: 7 } }).then(({ data }) => setMeals(data)).catch(() => setMeals([]));
     axios.get('/api/kitchen/equipment', { params: { start: startText, days: 7 } }).then(({ data }) => setShort(data)).catch(() => setShort([]));
+    axios.get('/api/prep/coming', { params: { meals_from: startText, days: 7 } }).then(({ data }) => setPrepList(data)).catch(() => setPrepList([]));
   }, [startText]);
   useEffect(() => { load(); }, [load]);
   const move = (days) => { const d = new Date(start); d.setDate(d.getDate() + days); setStart(d); };
@@ -104,7 +109,11 @@ export default function Week() {
                         {m.recipe_id ? <Link to={`/recipes/${m.recipe_id}`} className="font-medium text-life-800 hover:underline dark:text-life-50">{m.recipe_title}</Link> : <span className="text-gray-800 dark:text-life-50">{m.title}</span>}
                         {m.servings && <span className="text-xs text-gray-500 dark:text-life-300"> · {m.servings} servings</span>}
                         {m.cooked_on && <span className="ml-1 text-xs text-life-600 dark:text-life-300">· cooked ✓</span>}
+                        {prepList.filter((p) => p.meal_id === m.id).map((p) => (
+                          <span key={p.key} data-prep-line className="block text-xs text-gray-600 dark:text-life-200">{p.words}: {p.label}</span>
+                        ))}
                       </span>
+                      {!m.cooked_on && <button type="button" onClick={() => setPrepFor(m)} className="min-h-[44px] px-1 text-xs text-life-600 hover:underline dark:text-life-200" title="When you eat it, and things to do ahead">Prep</button>}
                       {m.recipe_id && !m.cooked_on && <button type="button" onClick={() => cooked(m)} className="text-xs text-life-600 hover:underline dark:text-life-200" title="Take what it used out of the pantry">Cooked</button>}
                       <button type="button" onClick={() => remove(m)} className="text-xs text-gray-400 hover:text-red-600" aria-label="Remove">✕</button>
                     </li>
@@ -117,6 +126,11 @@ export default function Week() {
       </div>
       {tool === 'copy' && <Modal title="Copy this week to…" onClose={() => setTool(null)}><CopyWeek start={start} onDone={copied} /></Modal>}
       {tool === 'templates' && <Modal title="Week templates" onClose={() => setTool(null)}><Templates start={start} onDone={copied} /></Modal>}
+      {prepFor && (
+        <Modal title={`Prep for ${prepFor.recipe_title || prepFor.title}`} onClose={() => setPrepFor(null)}>
+          <MealPrep meal={prepFor} onDone={() => { setPrepFor(null); load(); }} />
+        </Modal>
+      )}
       {adding && (
         <Modal title={fromDateInput(adding).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} onClose={() => setAdding(null)}>
           <AddMeal day={adding} onDone={() => { setAdding(null); load(); }} />

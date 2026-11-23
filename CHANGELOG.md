@@ -9,6 +9,8 @@ All notable changes to Life Is are listed here. The format follows [Keep a Chang
 - AGPL-3.0 license, contributor guide, and security policy.
 - A test workflow on GitHub that runs the type checks, tests, and build on every push and pull request.
 - Version 0.2.0.
+- Prep reminders on recipes and planned meals ("thaw the chicken the night before"): counted back from when the meal
+  is eaten, shown on the week and the front page, and sent at their time the ways reminders already go.
 - Tags across the app: one list per household that can nest (Kitchen > Appliances), on things, recipes, projects,
   plans, spending, collection titles, pets, upkeep jobs and calendar dates. A page per tag, a tag filter on each
   list, tagging many at once, rename and merge. Tags are in search and in downloads. Recipe tags carry over.

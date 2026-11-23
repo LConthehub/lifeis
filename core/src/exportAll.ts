@@ -23,6 +23,7 @@ import { noteHistory } from './history.ts';
 import { placePaths } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
 import { Problem } from './problem.ts';
+import { prepAsText, prepFromText, type PrepRule } from './prep.ts';
 import { recipeKey } from './recipeFiles.ts';
 import { cut, linesAsText, splitLines } from './recipeText.ts';
 import { clean, dayNumber, labelKey, pictureType, stamp, todayOf, type Clock } from './small.ts';
@@ -325,13 +326,19 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   const recipes = await all('SELECT id, title, description, servings, prep_minutes, cook_minutes, source_url, notes FROM recipes WHERE owner_id = ? ORDER BY title COLLATE NOCASE, id');
   const recipeTags = await tagsOnto(q, owner, 'recipe', recipes.map((r) => r.id as number));
   const recipeLines = await all('SELECT l.recipe_id, l.part, l.is_heading, l.text FROM recipe_lines l JOIN recipes r ON r.id = l.recipe_id WHERE r.owner_id = ? ORDER BY l.recipe_id, l.part, l.sort_order, l.id');
+  const prepOf = (column: 'recipe_id' | 'meal_plan_id') =>
+    all(`SELECT ${column} AS parent, words, rule, at_time, hours FROM prep_steps WHERE owner_id = ? AND ${column} IS NOT NULL ORDER BY ${column}, sort_order, id`);
+  const prepText = (rows: R[], parent: Value | undefined) => prepAsText(rows.filter((p) => p.parent === parent)
+    .map((p) => ({ words: str(p.words), rule: str(p.rule) as PrepRule, at: p.at_time === null || p.at_time === undefined ? null : str(p.at_time), hours: num(p.hours) || null })));
+  const recipePrep = await prepOf('recipe_id');
   const equipment = await all('SELECT e.recipe_id, e.label, e.quantity FROM recipe_equipment e JOIN recipes r ON r.id = e.recipe_id WHERE r.owner_id = ? ORDER BY e.recipe_id, e.sort_order, e.id');
   const linesOf = (id: Value | undefined) => recipeLines.filter((l) => l.recipe_id === id).map((l) => ({ part: l.part as 'ingredients' | 'steps', text: str(l.text), is_heading: Boolean(l.is_heading) }));
-  out.csv('recipes.csv', ['Title', 'Description', 'Servings', 'Prep minutes', 'Cook minutes', 'Tags', 'Ingredients', 'Steps', 'Source address', 'Notes', 'Cooked in'],
+  out.csv('recipes.csv', ['Title', 'Description', 'Servings', 'Prep minutes', 'Cook minutes', 'Tags', 'Ingredients', 'Steps', 'Source address', 'Notes', 'Cooked in', 'Prep reminders'],
     recipes.map((r) => [
       str(r.title), str(r.description), str(r.servings), str(r.prep_minutes), str(r.cook_minutes), (recipeTags.get(r.id as number) ?? []).map((t) => t.path).join(', '),
       linesAsText(linesOf(r.id), 'ingredients'), linesAsText(linesOf(r.id), 'steps'), str(r.source_url), str(r.notes),
       equipment.filter((e) => e.recipe_id === r.id).map((e) => (num(e.quantity) !== 1 ? `${str(e.label)} x${str(e.quantity)}` : str(e.label))).join('; '),
+      prepText(recipePrep, r.id),
     ]));
   if (await hasTable(q, 'tags')) out.csv('tags.csv', ['Tag', 'Used on', 'Name'], await exportRows(q, owner));
   if (await hasTable(q, 'recipe_photos')) {
@@ -341,9 +348,10 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     }
   }
 
-  out.csv('meal-plan.csv', ['Day', 'Meal', 'Recipe', 'Or something else', 'Servings', 'Cooked on'],
-    (await all('SELECT m.day, m.meal, r.title AS recipe, m.title, m.servings, m.cooked_on FROM meal_plan m LEFT JOIN recipes r ON r.id = m.recipe_id WHERE m.owner_id = ? ORDER BY m.day, m.id'))
-      .map((m) => [str(m.day), str(m.meal), str(m.recipe), str(m.title), str(m.servings), str(m.cooked_on)]));
+  const mealPrep = await prepOf('meal_plan_id');
+  out.csv('meal-plan.csv', ['Day', 'Meal', 'Recipe', 'Or something else', 'Servings', 'Cooked on', 'Eat at', 'Prep reminders'],
+    (await all(`SELECT m.id, m.day, m.meal, r.title AS recipe, m.title, m.servings, m.cooked_on, m.eat_time FROM meal_plan m LEFT JOIN recipes r ON r.id = m.recipe_id WHERE m.owner_id = ? ORDER BY m.day, m.id`))
+      .map((m) => [str(m.day), str(m.meal), str(m.recipe), str(m.title), str(m.servings), str(m.cooked_on), str(m.eat_time), prepText(mealPrep, m.id)]));
   out.csv('grocery-list.csv', ['What', 'Amount', 'Unit', 'Notes', 'From the week’s meals', 'Got it'],
     (await all('SELECT label, quantity, unit, note, from_plan, done FROM grocery WHERE owner_id = ? ORDER BY done, id'))
       .map((g) => [str(g.label), str(g.quantity), str(g.unit), str(g.note), yes(g.from_plan), yes(g.done)]));
@@ -1002,6 +1010,10 @@ const importers: Record<string, Importer> = {
         const count = m ? Number(m[2]) : 1;
         await c.tx.run('INSERT INTO recipe_equipment (recipe_id, item_id, label, quantity, note, sort_order) VALUES (?, NULL, ?, ?, NULL, ?)', [made.lastId, cut(m ? m[1]! : one, 200), count > 0 && count <= 1000 ? count : 1, i]);
       }
+      for (const [i, step] of prepFromText(cellOf(row, 'Prep reminders')).entries()) {
+        await c.tx.run('INSERT INTO prep_steps (owner_id, recipe_id, words, rule, at_time, hours, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [c.owner, made.lastId, step.words, step.rule, step.at ?? null, step.hours ?? null, i]);
+      }
       d.fresh += 1;
     }
     return d;
@@ -1029,8 +1041,14 @@ const importers: Record<string, Importer> = {
       const id = recipe ? recipes.get(labelKey(recipe)) ?? null : null;
       if (recipe && id === null) d.unlinked += 1;
       const servings = numberOf(cellOf(row, 'Servings'));
-      await c.tx.run('INSERT INTO meal_plan (owner_id, day, meal, recipe_id, title, servings, cooked_on, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [c.owner, day, meal, id, id === null ? clean(recipe || other, 200) : clean(other, 200), servings !== null && servings > 0 && servings <= 1000 ? servings : null, dayOf(cellOf(row, 'Cooked on')), c.at]);
+      const eatAt = cellOf(row, 'Eat at');
+      const made = await c.tx.run('INSERT INTO meal_plan (owner_id, day, meal, recipe_id, title, servings, cooked_on, eat_time, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, day, meal, id, id === null ? clean(recipe || other, 200) : clean(other, 200), servings !== null && servings > 0 && servings <= 1000 ? servings : null, dayOf(cellOf(row, 'Cooked on')),
+          /^([01]\d|2[0-3]):[0-5]\d$/.test(eatAt) ? eatAt : null, c.at]);
+      for (const [i, step] of prepFromText(cellOf(row, 'Prep reminders')).entries()) {
+        await c.tx.run('INSERT INTO prep_steps (owner_id, meal_plan_id, words, rule, at_time, hours, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [c.owner, made.lastId, step.words, step.rule, step.at ?? null, step.hours ?? null, i]);
+      }
       d.fresh += 1;
     }
     return d;

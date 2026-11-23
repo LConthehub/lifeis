@@ -17,7 +17,7 @@ const lineText = (l) => `${l.title}${l.detail ? ` — ${l.detail}` : ''}`;
 
 export async function scheduleReminders() {
   const { data } = await axios.get('/api/reminders');
-  await LocalNotifications.cancel({ notifications: [{ id: TODAY }, { id: TOMORROW }] }).catch(() => {});
+  await LocalNotifications.cancel({ notifications: [{ id: TODAY }, { id: TOMORROW }, ...PREP_IDS] }).catch(() => {});
   if (!data.settings.phone) return;
   let allowed = (await LocalNotifications.checkPermissions()).display;
   if (allowed !== 'granted') allowed = (await LocalNotifications.requestPermissions()).display;
@@ -36,6 +36,31 @@ export async function scheduleReminders() {
     waiting.push({
       id, title: `Life Is: ${digest.title}`, body: shown.join('\n'), largeBody: shown.join('\n'),
       schedule: { at, allowWhileIdle: true }, extra: { url: digest.lines.length === 1 ? digest.lines[0].link : '/' },
+    });
+  }
+  if (waiting.length) await LocalNotifications.schedule({ notifications: waiting });
+  await schedulePrep();
+}
+
+// Prep steps ("Thaw the chicken") are kept apart from the morning ones: each waits for its own time. A run of
+// ids is set aside for them, and every schedule replaces what was waiting, so a meal that moved or went off the
+// week takes its reminders with it. A step whose time has gone is never shown late (the server leaves it out).
+const PREP_FIRST = 2000;
+const PREP_MOST = 40;
+const PREP_IDS = Array.from({ length: PREP_MOST }, (_, i) => ({ id: PREP_FIRST + i }));
+
+async function schedulePrep() {
+  const { data: coming } = await axios.get('/api/prep/coming', { params: { days: 4 } });
+  const now = new Date();
+  const waiting = [];
+  for (const step of coming) {
+    const [y, m, d] = step.due_day.split('-').map(Number);
+    const [hour, minute] = step.due_time.split(':').map(Number);
+    const at = new Date(y, m - 1, d, hour, minute);
+    if (at <= now || waiting.length >= PREP_MOST) continue;
+    waiting.push({
+      id: PREP_FIRST + waiting.length, title: `Life Is: ${step.words}`, body: `For ${step.what} at ${step.eat_time}`,
+      schedule: { at, allowWhileIdle: true }, extra: { url: '/week' },
     });
   }
   if (waiting.length) await LocalNotifications.schedule({ notifications: waiting });

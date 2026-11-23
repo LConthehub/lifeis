@@ -986,11 +986,12 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.
   for (const column of ['usual_store', 'usual_size_quantity', 'usual_size_unit']) await database.db.run(`ALTER TABLE ingredients DROP COLUMN ${column}`);
+  await database.db.run('ALTER TABLE meal_plan DROP COLUMN eat_time');
   await database.db.run('PRAGMA user_version = 2');
   await stop();
 
@@ -1444,4 +1445,32 @@ it('a person can choose a name to be shown: trimmed, 40 at most, empty means the
   expect((await partner.get('/api/money')).json.people).toEqual([{ id: 1, username: 'owner', name: 'owner' }]);
   // The list of people for an admin shows both.
   expect((await admin.get('/api/security/people')).json.map((p: { username: string; name: string }) => [p.username, p.name])).toEqual([['owner', 'owner'], ['partner', 'Pat']]);
+});
+
+it('prep reminders are kept on a recipe and on a meal, and listed for the week and for the front page', async () => {
+  const admin = await owner();
+  const recipe = (await admin.post('/api/kitchen/recipes', { title: 'Roast chicken', ingredients_text: '1 chicken' })).json;
+  const kept = await admin.put(`/api/prep/recipes/${recipe.id}`, { steps: [{ words: 'Thaw the chicken', rule: 'night_before', at: '20:00' }, { words: 'Salt it', rule: 'hours_before', hours: 3 }] });
+  expect([kept.status, kept.json.map((s: { when: string }) => s.when)]).toEqual([200, ['the night before at 8 pm', '3 hours before']]);
+  expect((await admin.get(`/api/prep/recipes/${recipe.id}`)).json).toHaveLength(2);
+  expect((await admin.put(`/api/prep/recipes/${recipe.id}`, { steps: [{ words: 'Thaw', rule: 'whenever' }] })).status).toBe(400);
+  expect((await admin.put(`/api/prep/recipes/${recipe.id}`, { steps: [{ words: 'Thaw', rule: 'hours_before', hours: 99 }] })).status).toBe(400);
+  const meal = (await admin.post('/api/kitchen/plan', { day: '2046-03-06', meal: 'dinner', recipe_id: recipe.id })).json;
+  const set = await admin.put(`/api/prep/meals/${meal.id}`, { eat_time: '19:00', steps: [{ words: 'Make the stock', rule: 'morning_of', at: '09:00' }] });
+  expect([set.status, set.json.eat_time, set.json.default_eat_time, set.json.steps.length, set.json.recipe_steps.length]).toEqual([200, '19:00', '18:00', 1, 2]);
+  expect((await admin.put(`/api/prep/meals/${meal.id}`, { eat_time: 'seven' })).status).toBe(400);
+  // The week page asks by the day the meals are eaten; the front page and the phone by the day each step falls due.
+  const week = (await admin.get('/api/prep/coming?meals_from=2046-03-05&days=7')).json;
+  expect(week.map((c: { words: string; due_day: string; due_time: string }) => [c.words, c.due_day, c.due_time]))
+    .toEqual([['Thaw the chicken', '2046-03-05', '20:00'], ['Make the stock', '2046-03-06', '09:00'], ['Salt it', '2046-03-06', '16:00']]);
+  const due = (await admin.get('/api/prep/coming?from=2046-03-05&days=1')).json;
+  expect(due.map((c: { words: string }) => c.words)).toEqual(['Thaw the chicken']);
+  // Taking the meal off the week takes its reminders with it; the recipe keeps its own.
+  expect((await admin.delete(`/api/kitchen/plan/${meal.id}`)).status).toBe(204);
+  expect((await admin.get('/api/prep/coming?meals_from=2046-03-05&days=7')).json).toEqual([]);
+  expect((await admin.get(`/api/prep/recipes/${recipe.id}`)).json).toHaveLength(2);
+  // Nobody else can read or change them.
+  const other = await member(admin, 'partner');
+  expect((await other.put(`/api/prep/recipes/${recipe.id}`, { steps: [] })).status).toBe(404);
+  expect((await visitor().get('/api/prep/coming')).status).toBe(401);
 });

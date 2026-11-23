@@ -5,7 +5,7 @@ import { onDevice } from '../where';
 import { AskCard } from '../components/Assistant';
 import { StartCard } from '../components/Start';
 import { whoText, whenText } from './Mail';
-import Modal, { buttonClass, quietButtonClass, cardClass, fromDateInput, minutesText } from '../components/ui';
+import Modal, { buttonClass, quietButtonClass, cardClass, fromDateInput, minutesText, toDateInput } from '../components/ui';
 
 const ICONS = { plan: '✨', event: '📌', outside: '🗓', meal: '🍽', session: '🧵', due: '⏳', upkeep: '🔧', use_by: '🥫', media: '🎞' };
 const TYPE_ICONS = { film: '🎬', show: '📺', music: '🎵', book: '📚', game: '🎮', other: '🗃' };
@@ -57,6 +57,17 @@ export default function Home({ user }) {
   useEffect(() => { load(); }, [load]);
   // The email card's messages come from the mail provider, so they are asked for apart and never hold the page up.
   const [post, setPost] = useState(null);
+  // Prep falling due tonight and tomorrow morning ("Thaw the chicken: tonight 8 pm").
+  const [prepSoon, setPrepSoon] = useState([]);
+  useEffect(() => {
+    if (!s) return;
+    const next = fromDateInput(s.day);
+    next.setDate(next.getDate() + 1);
+    const tomorrow = toDateInput(next);
+    axios.get('/api/prep/coming', { params: { from: s.day, days: 2 } })
+      .then(({ data }) => setPrepSoon(data.filter((p) => p.due_day === s.day || (p.due_day === tomorrow && p.due_time < '12:00'))))
+      .catch(() => setPrepSoon([]));
+  }, [s]);
   const wantsMail = Boolean(s && s.cards.includes('mail'));
   useEffect(() => { if (wantsMail) axios.get('/api/mail/glance').then(({ data }) => setPost(data)).catch(() => setPost(false)); }, [wantsMail]);
   if (s === null) return null;
@@ -84,6 +95,16 @@ export default function Home({ user }) {
         {shows('days') && (
           <Card title="The next three days" to="/calendar" link="Calendar">
             <div className="space-y-3">
+              {prepSoon.length > 0 && (
+                <div data-section="prep-soon">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-life-600 dark:text-life-300">Prep</h3>
+                  <ul className="mt-1 space-y-1">
+                    {prepSoon.map((p) => (
+                      <li key={p.key}><Link to="/week" className="flex items-start gap-2 text-sm text-gray-800 hover:underline dark:text-life-50">{p.words}: {p.label}<span className="text-xs text-gray-500 dark:text-life-300">for {p.what}</span></Link></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {s.days.map((d) => (
                 <div key={d.day}>
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-life-600 dark:text-life-300">{dayName(d.day, today)}</h3>

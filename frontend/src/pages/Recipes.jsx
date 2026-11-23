@@ -7,6 +7,7 @@ import Picture from '../components/Picture';
 import RecipeFile from '../components/RecipeFile';
 import { shrink } from '../components/shrink';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
+import { RecipePrep } from '../components/PrepSteps';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, minutesText, toDateInput } from '../components/ui';
 
 /** Where a recipe's picture is asked for; the version makes a changed picture show at once instead of the one remembered. */
@@ -439,6 +440,7 @@ export function RecipePage() {
           </ol>
         </section>
       </div>
+      <RecipePrep recipeId={r.id} />
       {r.notes && <section className={cardClass}><h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Notes</h2><p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-life-100">{r.notes}</p></section>}
       <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-life-300">
         {r.original_text && <button type="button" onClick={() => setShowOriginal(!showOriginal)} className="underline">{showOriginal ? 'Hide' : 'Show'} the original as it came in</button>}

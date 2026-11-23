@@ -11,6 +11,7 @@
 import { addDays, todayOf } from '../../core/src/small.ts';
 import { search, type SearchKind } from '../../core/src/index.ts';
 import { manual } from '../../core/src/index.ts';
+import { prep, type PrepStepInput } from '../../core/src/index.ts';
 import { reminders, COVERS, EMAIL_SERVICE, NTFY_SERVICE, PUSH_SERVICE, type PushSender, type ReminderSettings } from '../../core/src/index.ts';
 import { displayName, home, life, lookups, MAX_THING_PHOTO, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
 import { FILM_SERVICE, fillFrom, TMDB_API, TMDB_IMAGES } from '../../core/src/lookups.ts';
@@ -68,6 +69,14 @@ function recipeFileFrom(body: Body) {
     }),
     unreadable: read.records(body, 'unreadable').map((one) => ({ name: read.maybeText(one, 'name') ?? 'A recipe', why: read.maybeText(one, 'why') ?? "It couldn't be opened" })),
   };
+}
+
+/** Prep steps a page sent: each with words, a rule (night_before, morning_of or hours_before), a time or a number of hours. */
+function stepsFrom(body: Body): PrepStepInput[] {
+  return read.records(body, 'steps').map((one) => ({
+    words: read.text(one, 'words'), rule: read.text(one, 'rule') as PrepStepInput['rule'],
+    at: read.maybeText(one, 'at'), hours: read.maybeWhole(one, 'hours'),
+  }));
 }
 
 function recipeFrom(body: Body) {
@@ -211,6 +220,24 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
       }
       await remind(c).save(input, c.origin);
       return { json: await reminderState(c) };
+    }],
+    // Prep reminders: "thaw the chicken the night before", kept on a recipe or on one planned meal. See core/'s prep.ts.
+    ['GET', /^\/api\/prep\/recipes\/(\d{1,15})$/, async (c) => ({ json: await prep(db, c.user.id, c.clock).recipeSteps(c.id) })],
+    ['PUT', /^\/api\/prep\/recipes\/(\d{1,15})$/, async (c) => ({ json: await prep(db, c.user.id, c.clock).setRecipeSteps(c.id, stepsFrom(c.body)) })],
+    ['GET', /^\/api\/prep\/meals\/(\d{1,15})$/, async (c) => ({ json: await prep(db, c.user.id, c.clock).meal(c.id) })],
+    ['PUT', /^\/api\/prep\/meals\/(\d{1,15})$/, async (c) => ({
+      json: await prep(db, c.user.id, c.clock).setMeal(c.id, {
+        ...(Object.hasOwn(c.body, 'eat_time') ? { eat_time: read.maybeText(c.body, 'eat_time') } : {}),
+        ...(Object.hasOwn(c.body, 'steps') ? { steps: stepsFrom(c.body) } : {}),
+      }),
+    })],
+    // What is coming: by the days the meals are eaten (the week page), or by the days the steps fall due (the front page, the phone).
+    ['GET', /^\/api\/prep\/coming$/, async (c) => {
+      const mine = prep(db, c.user.id, c.clock);
+      const mealsFrom = c.query.get('meals_from');
+      if (mealsFrom) return { json: await mine.forMeals(mealsFrom, addDays(mealsFrom, (queryNumber(c.query, 'days') ?? 7) - 1)) };
+      const from = c.query.get('from') ?? todayOf(c.clock);
+      return { json: await mine.due(from, addDays(from, (queryNumber(c.query, 'days') ?? 2) - 1)) };
     }],
     ['GET', /^\/api\/reminders\/digest$/, async (c) => {
       if (c.query.get('ahead') !== '1') return { json: await remind(c).digest() };

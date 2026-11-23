@@ -1219,6 +1219,36 @@ export const MIGRATIONS: Migration[] = [
       `CREATE UNIQUE INDEX idx_money_entries_bank ON money_entries(owner_id, bank_account, bank_txn)`,
     ],
   },
+  {
+    // Prep reminders: steps worked out from when a meal is eaten ("thaw the chicken the night before"). A step
+    // belongs to a recipe (so it applies every time the recipe is planned) or to one planned meal (a one-off).
+    // A meal may have its own time to eat. prep_sent remembers which reminders went, so each goes once.
+    number: 42,
+    name: 'prep reminders on recipes and planned meals',
+    statements: [
+      `ALTER TABLE meal_plan ADD COLUMN eat_time TEXT`,
+      `CREATE TABLE prep_steps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        recipe_id INTEGER REFERENCES recipes(id) ON DELETE CASCADE,
+        meal_plan_id INTEGER REFERENCES meal_plan(id) ON DELETE CASCADE,
+        words TEXT NOT NULL,
+        rule TEXT NOT NULL CHECK(rule IN ('night_before', 'morning_of', 'hours_before')),
+        at_time TEXT,
+        hours INTEGER CHECK(hours IS NULL OR (hours >= 1 AND hours <= 72)),
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        CHECK((recipe_id IS NULL) <> (meal_plan_id IS NULL))
+      )`,
+      `CREATE INDEX idx_prep_steps_recipe ON prep_steps(recipe_id)`,
+      `CREATE INDEX idx_prep_steps_meal ON prep_steps(meal_plan_id)`,
+      `CREATE TABLE prep_sent (
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        key TEXT NOT NULL,
+        sent_at TEXT NOT NULL,
+        PRIMARY KEY (owner_id, key)
+      )`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

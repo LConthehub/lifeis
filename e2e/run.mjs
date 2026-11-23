@@ -64,6 +64,7 @@ const SUITE = [
   { specs: ['book-servers'], account: TRIAL, fixtures: [['books', 8099]] },
   { specs: ['photo-library'], account: TRIAL, docker: true },
   { specs: ['kitchen-week'], account: TRIAL },
+  { specs: ['prep'], account: TRIAL },
   { specs: ['tags'], account: TRIAL },
   { specs: ['touch-targets'], account: TRIAL },
   { specs: ['trial'], phone: true },

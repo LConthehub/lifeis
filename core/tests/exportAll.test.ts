@@ -12,6 +12,7 @@ import { LATEST, migrate } from '../src/migrations.ts';
 import { budget } from '../src/budget.ts';
 import { money } from '../src/money.ts';
 import { pets } from '../src/pets.ts';
+import { prep } from '../src/prep.ts';
 import { plans } from '../src/plans.ts';
 import { projects } from '../src/projects.ts';
 import { tags as tagsOf } from '../src/tags.ts';
@@ -506,4 +507,21 @@ it('after the trial, everything can still be downloaded and looked over, but not
   expect([isPaidPath('/api/export/everything.zip'), isPaidPath('/api/export/look'), isPaidPath('/api/export/bring-in'), isPaidPath('/api/export/pictures')]).toEqual([false, false, true, true]);
   const ended = { state: 'ended' } as Parameters<typeof decide>[0];
   expect([decide(ended, 'GET', '/api/export/everything.zip'), decide(ended, 'POST', '/api/export/look'), decide(ended, 'POST', '/api/export/bring-in')]).toEqual(['go', 'go', 'read_only']);
+});
+
+it('takes prep reminders and a time to eat along with the recipe and the meal', async () => {
+  const k = kitchen(db, ana, clock);
+  const recipe = (await k.createRecipe({ title: 'Roast chicken', ingredients_text: '1 chicken' })).id;
+  await prep(db, ana, clock).setRecipeSteps(recipe, [{ words: 'Thaw the chicken', rule: 'night_before', at: '20:00' }, { words: 'Salt it', rule: 'hours_before', hours: 3 }]);
+  const meal = (await k.addPlan({ day: '2046-03-06', meal: 'dinner', recipe_id: recipe })).id;
+  await prep(db, ana, clock).setMeal(meal, { eat_time: '19:30', steps: [{ words: 'Make the stock', rule: 'morning_of', at: '09:00' }] });
+  const zip = (await exportEverything(db, ana, clock)).bytes;
+  const done = await bringIn(bob, zip, ['recipes', 'meals']);
+  for (const kind of done.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  const [r] = await k.listRecipes();
+  const theirs = (await kitchen(db, bob, clock).listRecipes()).find((x) => x.title === 'Roast chicken')!;
+  expect((await prep(db, bob, clock).recipeSteps(theirs.id)).map((s) => s.when)).toEqual((await prep(db, ana, clock).recipeSteps(r!.id)).map((s) => s.when));
+  const bobMeal = (await kitchen(db, bob, clock).listPlan('2046-03-06', 1))[0]!;
+  const bobPrep = await prep(db, bob, clock).meal(bobMeal.id);
+  expect([bobPrep.eat_time, bobPrep.steps.map((s) => s.words), bobPrep.recipe_steps.length]).toEqual(['19:30', ['Make the stock'], 2]);
 });
