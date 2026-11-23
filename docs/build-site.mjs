@@ -156,7 +156,8 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
 <meta name="referrer" content="no-referrer">
 <meta name="description" content="Life Is: a home organizer that keeps your household on your own device. Recipes, things, upkeep, pets, records and more. No account, no ads, no subscription.">
 <title>Life Is: Home Organizer</title>
-<link rel="icon" href="icon.png">
+<link rel="icon" href="icon.png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="icon-dark.png" media="(prefers-color-scheme: dark)">
 <style>
   ${fontFace('fraunces-soft.woff2')}
   :root { ${LIGHT} --sand: #eead3e; --coral: #e7602b; }
@@ -333,7 +334,8 @@ const docPage = (guide) => `<!doctype html>
 <meta name="referrer" content="no-referrer">
 <meta name="description" content="${safe(guide.blurb)}">
 <title>${safe(guide.title)} · Life Is</title>
-<link rel="icon" href="../icon.png">
+<link rel="icon" href="../icon.png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="../icon-dark.png" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="docs.css">
 </head>
 <body>

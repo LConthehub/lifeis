@@ -12,6 +12,9 @@
     var dark = c === 'dark' || (c === 'system' && !!query && query.matches);
     if (dark) root.classList.add('dark'); else root.classList.remove('dark');
     root.style.colorScheme = dark ? 'dark' : 'light';
+    // The owner's mushroom on cream, or on chocolate, in the browser tab, to match.
+    var icon = document.getElementById('tab-icon');
+    if (icon) icon.setAttribute('href', dark ? '/favicon-dark.png' : '/favicon-light.png');
   }
   apply();
   // Keeps up if the device switches while Life Is is open, or the choice is changed in another tab.

@@ -113,7 +113,7 @@ function Shell({ user, demo = false, onLogout }) {
       <header className="safe-top sticky top-0 z-30 bg-life-bar text-white shadow-sm print:hidden">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 xl:max-w-6xl">
           <Link to="/" className="flex items-center gap-2 font-semibold text-white">
-            <img src="/icon-192.png" alt="" className="h-7 w-7 rounded-lg" /> <span className="font-display text-lg font-bold">Life is</span> <Art slot="mark" className="-ml-0.5 h-6 w-6" />
+            <img src="/icon-192.png" alt="" className="h-8 w-8 rounded-full" /> <span className="font-display text-lg font-bold leading-none">Life is</span> <Art slot="mark" className="-ml-0.5 h-6 w-6" />
           </Link>
           {/* Six words don't fit across a phone. There, Settings stays up beside the name and the words take
               the row below, on one line that scrolls sideways with no visible scrollbar; the current word is

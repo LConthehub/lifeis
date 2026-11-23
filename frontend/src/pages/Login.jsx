@@ -83,7 +83,7 @@ export default function Login({ setupRequired, local = true, offline, demo = nul
       <Stripe className="-mx-6 -mt-6 mb-3" />
       <Art slot="signin" className="mx-auto mb-2 h-12 w-[7.5rem]" />
       <div className="flex items-center gap-3">
-        <img src="/icon-192.png" alt="" className="h-10 w-10 rounded-xl" />
+        <img src="/icon-192.png" alt="" className="h-11 w-11 rounded-full" />
         <div>
           <h1 className="text-2xl font-bold text-life-800 dark:text-life-50">Life Is</h1>
           <p className="text-xs text-gray-500 dark:text-life-200">{words}</p>
