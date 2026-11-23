@@ -11,7 +11,7 @@
  */
 import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { Problem } from './problem.ts';
-import { clean, labelKey, stamp, type Clock } from './small.ts';
+import { clean, labelKey, stamp, todayOf, type Clock } from './small.ts';
 
 export const TAG_KINDS = ['thing', 'recipe', 'project', 'plan', 'spending', 'title', 'pet', 'job', 'event'] as const;
 export type TagKind = (typeof TAG_KINDS)[number];
@@ -20,7 +20,9 @@ export type TagRef = { id: number; name: string; path: string };
 /** A tag in the tree. `own` counts what carries it; `total` counts what carries it or a tag inside it. */
 export type TagNode = TagRef & { parent_id: number | null; depth: number; own: number; total: number };
 export type Tagged = { kind: TagKind; id: number; icon: string; title: string; detail: string | null; link: string };
-export type TagPage = { tag: TagRef & { parent_id: number | null }; trail: TagRef[]; inside: TagNode[]; groups: { kind: TagKind; label: string; items: Tagged[] }[]; total: number };
+export type TagPage = { tag: TagRef & { parent_id: number | null }; trail: TagRef[]; inside: TagNode[]; groups: { kind: TagKind; label: string; items: Tagged[] }[]; total: number;
+  /** What the spending with this tag (or one inside it) came to: this month, this year, and all of it. */
+  spending: { currency: string; count: number; month: number; year: number; all: number } };
 
 export const MAX_TAG_NAME = 60;
 const MAX_TARGETS = 500;
@@ -130,6 +132,39 @@ export async function onlyTagged<T extends { id: number }>(q: Queries, owner: nu
   if (tag == null) return rows;
   const have = await idsWithTag(q, owner, kind, tag);
   return rows.filter((r) => have.has(r.id));
+}
+
+/** Inclusive first and last day of a month ("2046-03") or a year ("2046"). */
+export const span = (period: string): [string, string] => (period.length === 4 ? [`${period}-01-01`, `${period}-12-31`] : [`${period}-01`, `${period}-31`]);
+/** One tag's spending, in whole cents, counting what is tagged with it or with a tag inside it. */
+export type TagSpend = TagRef & { parent_id: number | null; depth: number; cents: number; count: number };
+
+/**
+ * What each tag's spending came to between two days (both included). A tag counts what carries it and what
+ * carries a tag inside it, each entry once even when it has several tags inside one. Only this person's own
+ * spending entries: tags are theirs alone. Tags with nothing in the period are left out.
+ */
+export async function spendingByTag(q: Queries, owner: number, from: string, to: string): Promise<TagSpend[]> {
+  const all = await allTags(q, owner);
+  const links = await q.all<{ tag_id: number; id: number; cents: number }>(
+    `SELECT l.tag_id, e.id, e.cents FROM tag_links l JOIN money_entries e ON e.id = l.target_id
+     WHERE l.kind = 'spending' AND e.owner_id = ? AND e.day BETWEEN ? AND ?`, [owner, from, to]);
+  const entries = new Map<number, Map<number, number>>();
+  for (const l of links) {
+    if (!all.has(l.tag_id)) continue;
+    // The tag, and every tag above it: the entry counts toward each, once.
+    for (let at: TagRow | undefined = all.get(l.tag_id), guard = 0; at && guard < 50; at = at.parent_id === null ? undefined : all.get(at.parent_id), guard += 1) {
+      const here = entries.get(at.id) ?? new Map<number, number>();
+      here.set(l.id, l.cents);
+      entries.set(at.id, here);
+    }
+  }
+  const out: TagSpend[] = [];
+  for (const [id, here] of entries) {
+    const path = pathOf(all, id);
+    out.push({ id, name: all.get(id)!.name, path, parent_id: all.get(id)!.parent_id, depth: path.split(' > ').length - 1, cents: [...here.values()].reduce((n, c) => n + c, 0), count: here.size });
+  }
+  return out.sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: 'base' }));
 }
 
 /** A thing was removed: its links go too. */
@@ -340,7 +375,15 @@ export function tags(db: Db, owner: number, clock: Clock = () => new Date()) {
         return { kind, label: KINDS[kind].label, items };
       }).filter((g) => g.items.length > 0);
       const nodes = (await this.list()).filter((n) => inside.has(n.id) && n.id !== id);
-      return { tag: { id, name: t.name, path: pathOf(all, id), parent_id: t.parent_id }, trail, inside: nodes, groups, total: groups.reduce((n, g) => n + g.items.length, 0) };
+      const today = todayOf(clock);
+      const spent = async (from: string, to: string) => (await spendingByTag(db, owner, from, to)).find((x) => x.id === id) ?? { cents: 0, count: 0 };
+      const [m1, m2] = span(today.slice(0, 7));
+      const [y1, y2] = span(today.slice(0, 4));
+      const [month, year, every] = [await spent(m1, m2), await spent(y1, y2), await spent('0000-01-01', '9999-12-31')];
+      return {
+        tag: { id, name: t.name, path: pathOf(all, id), parent_id: t.parent_id }, trail, inside: nodes, groups, total: groups.reduce((n, g) => n + g.items.length, 0),
+        spending: { currency: (await db.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'shopping_currency'", [owner]))?.value ?? '$', count: every.count, month: month.cents, year: year.cents, all: every.cents },
+      };
     },
 
     /**

@@ -72,6 +72,7 @@ export const KINDS: KindInfo[] = [
   { key: 'collection', label: 'The collection: titles, copies and what was watched or read', file: 'collection.csv', importable: true, matched: 'by title and type' },
   { key: 'events', label: 'Calendar events', file: 'events.csv', importable: true, matched: 'by title and day' },
   { key: 'money', label: 'Spending: categories and entries', file: 'money-entries.csv', importable: true, matched: 'by day, amount, label and category' },
+  { key: 'budget', label: 'Income and savings goals', file: 'money-income.csv', importable: false, matched: '' },
   { key: 'prices', label: 'Prices paid', file: 'prices.csv', importable: false, matched: '' },
   { key: 'coupons', label: 'Coupons', file: 'coupons.csv', importable: false, matched: '' },
   { key: 'projects', label: 'Projects, with their lines, time and costs', file: 'projects.csv', importable: false, matched: '' },
@@ -261,6 +262,7 @@ const num = (v: Value | undefined): number | null => (typeof v === 'number' ? v 
 const yes = (v: Value | undefined): string => (v ? 'yes' : 'no');
 const bytesOf = (v: Value | undefined): Uint8Array | null => (v instanceof Uint8Array ? v : null);
 const dollars = (v: Value | undefined): string => plainDollars(num(v));
+const signedDollars = (v: Value | undefined): string => ((num(v) ?? 0) < 0 ? '-' : '') + plainDollars(Math.abs(num(v) ?? 0));
 
 async function hasTable(q: Queries, table: string): Promise<boolean> {
   return Boolean(await q.get("SELECT 1 AS there FROM sqlite_master WHERE type = 'table' AND name = ?", [table]));
@@ -516,6 +518,19 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
       FROM money_entries e LEFT JOIN money_categories c ON c.id = e.category_id LEFT JOIN users cu ON cu.id = c.owner_id WHERE e.owner_id = ? ORDER BY e.day, e.id`))
       .map((e) => [str(e.label), dollars(e.cents), str(e.day), str(e.category), e.category !== null && e.category_owner !== owner ? str(e.category_by) : '', str(e.note)]));
 
+  // Income and savings goals (bills are upkeep jobs, in upkeep.csv).
+  if (await hasTable(q, 'money_income')) {
+    out.csv('money-income.csv', ['What', 'Amount', 'How often', 'First day', 'Last day'],
+      (await all('SELECT name, cents, every, start_day, end_day FROM money_income WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id'))
+        .map((i) => [str(i.name), dollars(i.cents), str(i.every).replace('_', ' '), str(i.start_day), str(i.end_day)]));
+    out.csv('money-goals.csv', ['Goal', 'Target', 'Reach it by', 'Saved so far'],
+      (await all(`SELECT g.name, g.target_cents, g.by_day, COALESCE((SELECT SUM(s.cents) FROM money_goal_saved s WHERE s.goal_id = g.id), 0) AS saved FROM money_goals g WHERE g.owner_id = ? ORDER BY g.id`))
+        .map((g) => [str(g.name), dollars(g.target_cents), str(g.by_day), signedDollars(g.saved)]));
+    out.csv('money-goal-saved.csv', ['Goal', 'Day', 'Amount (below zero is taken out)'],
+      (await all('SELECT g.name, s.day, s.cents FROM money_goal_saved s JOIN money_goals g ON g.id = s.goal_id WHERE g.owner_id = ? ORDER BY s.day, s.id'))
+        .map((s) => [str(s.name), str(s.day), signedDollars(s.cents)]));
+  }
+
   // ---------- servers and accounts: names and addresses only ----------
   const connections: Cell[][] = [];
   for (const s of await all('SELECT kind, name, url, every_hours, last_sync_at FROM media_sources WHERE owner_id = ? ORDER BY id')) connections.push([str(s.kind) === 'emby' ? 'Emby server' : 'Jellyfin server', str(s.name), plainAddress(str(s.url)), str(s.every_hours), str(s.last_sync_at)]);
@@ -614,6 +629,7 @@ const FILE_ABOUT: [string, string][] = [
   ['plans.csv', 'Plans, and plan-items.csv and plan-photos.csv for what belongs to each.'],
   ['money-categories.csv', 'Your spending categories and what each is for a month.'],
   ['money-entries.csv', 'What you wrote down as spent.'],
+  ['money-income.csv', 'What comes in, and how often; money-goals.csv and money-goal-saved.csv for savings goals and what was put toward each. Bills are in upkeep.csv.'],
   ['connections.csv', 'Servers and accounts you connected: names and addresses only, never a key or a password.'],
   ['settings.csv', 'Your plain preferences.'],
   ['pictures/ and papers/', 'Every photo, cover and paper, in a folder named for what it belongs to. The spreadsheets say which file is whose.'],

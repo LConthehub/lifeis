@@ -1150,6 +1150,42 @@ export const MIGRATIONS: Migration[] = [
         WHERE s.word <> ''`,
     ],
   },
+  {
+    // Life is budgeted: what comes in (with how often), savings goals, and the money put toward each. Bills are not
+    // here: they stay upkeep jobs of kind 'bill'. Each row is its owner's alone.
+    number: 40,
+    name: 'budget: income, savings goals and what was put toward them',
+    statements: [
+      `CREATE TABLE money_income (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        cents INTEGER NOT NULL CHECK(cents >= 0),
+        every TEXT NOT NULL CHECK(every IN ('weekly', 'biweekly', 'twice_monthly', 'monthly', 'yearly', 'once')),
+        start_day TEXT,
+        end_day TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_money_income ON money_income(owner_id)`,
+      `CREATE TABLE money_goals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        target_cents INTEGER NOT NULL CHECK(target_cents > 0),
+        by_day TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_money_goals ON money_goals(owner_id)`,
+      `CREATE TABLE money_goal_saved (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        goal_id INTEGER NOT NULL REFERENCES money_goals(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        cents INTEGER NOT NULL CHECK(cents <> 0),
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_money_goal_saved ON money_goal_saved(goal_id, day)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

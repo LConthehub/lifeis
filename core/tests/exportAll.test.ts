@@ -9,6 +9,7 @@ import { licenses } from '../src/licenses.ts';
 import { manual } from '../src/manual.ts';
 import { media } from '../src/media.ts';
 import { LATEST, migrate } from '../src/migrations.ts';
+import { budget } from '../src/budget.ts';
 import { money } from '../src/money.ts';
 import { pets } from '../src/pets.ts';
 import { plans } from '../src/plans.ts';
@@ -78,6 +79,10 @@ async function fill(owner: number, tag = '') {
   const groceries = await spend.addCategory({ name: `Groceries${tag}`, monthly_cents: 40000 });
   await spend.addEntry({ label: `Corner shop${tag}`, cents: 1234, day: '2046-03-02', category_id: groceries.id, note: 'Milk & eggs' });
   await spend.addEntry({ label: `Mystery${tag}`, cents: 500, day: '2046-03-03' });
+  await budget(db, owner, clock).addIncome({ name: `Paycheck${tag}`, cents: 150000, every: 'biweekly', start_day: '2046-03-02' });
+  const rainy = await budget(db, owner, clock).addGoal({ name: `Rainy day${tag}`, target_cents: 100000, by_day: '2046-12-31' });
+  await budget(db, owner, clock).putAside(rainy.id, { day: '2046-03-04', cents: 20000 });
+  await budget(db, owner, clock).putAside(rainy.id, { day: '2046-03-05', cents: -2550 });
 
   // The parts that are only written out: projects, plans, prices and coupons.
   const project = await projects(db, owner, clock).createProject({ name: `Curtains${tag}`, activity: 'Sewing', status: 'active' });
@@ -139,13 +144,13 @@ it('holds every kind of record for a person with some of each, in plain headings
   const present = names(zip);
   for (const file of ['README.txt', 'recipes.csv', 'meal-plan.csv', 'grocery-list.csv', 'pantry.csv', 'prices.csv', 'coupons.csv', 'places.csv', 'kinds.csv', 'things.csv', 'thing-papers.csv', 'thing-history.csv',
     'upkeep.csv', 'upkeep-history.csv', 'household.csv', 'pets.csv', 'pet-weights.csv', 'house-manual.csv', 'licenses.csv', 'collection.csv', 'copies.csv', 'collection-log.csv', 'events.csv',
-    'projects.csv', 'project-lines.csv', 'project-time.csv', 'project-costs.csv', 'plans.csv', 'plan-items.csv', 'plan-photos.csv', 'money-categories.csv', 'money-entries.csv', 'connections.csv', 'settings.csv']) {
+    'projects.csv', 'project-lines.csv', 'project-time.csv', 'project-costs.csv', 'plans.csv', 'plan-items.csv', 'plan-photos.csv', 'money-categories.csv', 'money-entries.csv', 'money-income.csv', 'money-goals.csv', 'money-goal-saved.csv', 'connections.csv', 'settings.csv']) {
     expect(present, file).toContain(file);
   }
   // Every spreadsheet has a row for what was made.
   for (const file of ['recipes.csv', 'meal-plan.csv', 'grocery-list.csv', 'pantry.csv', 'prices.csv', 'coupons.csv', 'places.csv', 'kinds.csv', 'things.csv', 'thing-papers.csv', 'thing-history.csv', 'upkeep.csv', 'upkeep-history.csv',
     'household.csv', 'pets.csv', 'pet-weights.csv', 'house-manual.csv', 'licenses.csv', 'collection.csv', 'copies.csv', 'collection-log.csv', 'events.csv', 'projects.csv', 'project-lines.csv', 'project-time.csv',
-    'project-costs.csv', 'plans.csv', 'plan-items.csv', 'plan-photos.csv', 'money-categories.csv', 'money-entries.csv', 'connections.csv', 'settings.csv']) {
+    'project-costs.csv', 'plans.csv', 'plan-items.csv', 'plan-photos.csv', 'money-categories.csv', 'money-entries.csv', 'money-income.csv', 'money-goals.csv', 'money-goal-saved.csv', 'connections.csv', 'settings.csv']) {
     expect(rowsOf(zip, file).length, file).toBeGreaterThan(1);
   }
   expect(made.counts['things.csv']).toBe(2);
@@ -176,6 +181,9 @@ it('holds every kind of record for a person with some of each, in plain headings
   expect(zip.files['house-manual.csv']).toContain('In an emergency,Water shut-off,Under the sink,,Sewing room,yes');
   expect(zip.files['licenses.csv']).toContain('D123-4567-0');
   expect(zip.files['money-entries.csv']).toContain('Corner shop,12.34,2046-03-02,Groceries');
+  expect(zip.files['money-income.csv']).toContain('Paycheck,1500.00,biweekly,2046-03-02');
+  expect(zip.files['money-goals.csv']).toContain('Rainy day,1000.00,2046-12-31,174.50');
+  expect(zip.files['money-goal-saved.csv']).toContain('Rainy day,2046-03-05,-25.50');
   expect(zip.files['copies.csv']).toContain('Blu-ray,Sewing room › Shelf 2,2,');
   expect(zip.files['connections.csv']).toContain('Jellyfin server,Basement server,http://10.0.0.5:8096');
   expect(zip.files['settings.csv']).toContain('Money sign,$');

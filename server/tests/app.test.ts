@@ -986,7 +986,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.
@@ -1126,6 +1126,61 @@ it('a bank statement is looked over, then brought in once, privately, over the w
   expect((await other.get('/api/money?month=2046-03')).json.entries).toEqual([]);
   expect((await other.post('/api/money/statement', { text, categories: { 0: house } })).status).toBe(404);
   expect((await other.post('/api/money/statement/read', { text })).json.already).toBe(0);
+});
+
+it('the budget answers over the web: income, bills from upkeep, goals, the month and the year, and tags', async () => {
+  const admin = await owner();
+  const other = await member(admin, 'ben');
+  const pay = await admin.post('/api/money/income', { name: 'Paycheck', cents: 150000, every: 'monthly', start_day: '2046-01-05' });
+  expect([pay.status, typeof pay.json.id]).toEqual([201, 'number']);
+  expect((await admin.post('/api/money/income', { name: 'Gift', cents: 5000, every: 'once' })).status).toBe(400);
+  expect((await admin.post('/api/money/income', { name: 'x', cents: 'lots', every: 'monthly' })).status).toBe(422);
+  expect((await admin.put(`/api/money/income/${pay.json.id}`, { name: 'Paycheck', cents: 160000, every: 'monthly', start_day: '2046-01-05' })).status).toBe(204);
+  expect((await admin.get('/api/money/income')).json).toMatchObject([{ name: 'Paycheck', cents: 160000, every: 'monthly', per_month: 160000 }]);
+
+  // A bill made from the budget is an upkeep job, so it shows in upkeep and is paid there.
+  const bill = await admin.post('/api/money/bills', { name: 'Rent', cents: 90000, every_n: 1, every_unit: 'month', first_due: '2046-03-01' });
+  expect(bill.status).toBe(201);
+  expect((await admin.get(`/api/things/upkeep/${bill.json.id}`)).json).toMatchObject({ kind: 'bill', amount_cents: 90000 });
+  expect((await admin.get('/api/money/bills')).json).toMatchObject([{ job_id: bill.json.id, name: 'Rent', per_month: 90000 }]);
+  expect((await admin.post('/api/money/bills', { name: 'Water', cents: 'x' })).status).toBe(422);
+
+  const goal = await admin.post('/api/money/goals', { name: 'Trip', target_cents: 100000, by_day: '2046-12-31' });
+  expect(goal.status).toBe(201);
+  expect((await admin.post(`/api/money/goals/${goal.json.id}/saved`, { day: '2046-03-03', cents: 20000 })).status).toBe(201);
+  expect((await admin.post(`/api/money/goals/${goal.json.id}/saved`, { day: '2046-03-04', cents: -500000 })).status).toBe(422);
+  expect((await admin.get(`/api/money/goals/${goal.json.id}`)).json).toMatchObject({ saved: 20000, left: 80000, puts: [{ day: '2046-03-03', cents: 20000 }] });
+  expect((await admin.put(`/api/money/goals/${goal.json.id}`, { name: 'Big trip', target_cents: 120000 })).status).toBe(204);
+
+  const house = (await admin.post('/api/money/categories', { name: 'House', monthly_cents: 30000 })).json.id;
+  const spent = (await admin.post('/api/money/entries', { label: 'Paint', cents: 4000, day: '2046-03-02', category_id: house })).json.id;
+  const tag = (await admin.post('/api/tags', { name: 'Home' })).json;
+  expect((await admin.put(`/api/tags/on/spending/${spent}`, { tag_ids: [tag.id] })).status).toBe(200);
+
+  const march = (await admin.get('/api/money/budget?month=2046-03')).json;
+  expect([march.income.total, march.bills.total, march.planned.total, march.saved.total, march.left_over]).toEqual([160000, 90000, 30000, 20000, 20000]);
+  expect(march.by_tag).toMatchObject([{ path: 'Home', cents: 4000, count: 1 }]);
+  const year = (await admin.get('/api/money/year?year=2046')).json;
+  expect(year.months).toHaveLength(12);
+  expect(year.months[2]).toMatchObject({ month: '2046-03', income: 160000, bills: 90000, saved: 20000 });
+  expect((await admin.get('/api/money/by-tag?period=2046')).json).toMatchObject([{ path: 'Home', cents: 4000 }]);
+  expect((await admin.get(`/api/tags/${tag.id}`)).json.spending).toMatchObject({ count: 1, all: 4000 });
+
+  // Another person sees none of it and cannot change it.
+  expect((await other.get('/api/money/income')).json).toEqual([]);
+  expect((await other.get('/api/money/goals')).json).toEqual([]);
+  expect((await other.get('/api/money/bills')).json).toEqual([]);
+  expect((await other.get('/api/money/budget?month=2046-03')).json.income.total).toBe(0);
+  expect((await other.put(`/api/money/income/${pay.json.id}`, { name: 'x', cents: 1, every: 'monthly' })).status).toBe(404);
+  expect((await other.delete(`/api/money/goals/${goal.json.id}`)).status).toBe(404);
+  expect((await other.post(`/api/money/goals/${goal.json.id}/saved`, { cents: 100 })).status).toBe(404);
+  expect((await visitor().get('/api/money/year')).status).toBe(401);
+
+  const put = (await admin.get(`/api/money/goals/${goal.json.id}`)).json.puts[0].id;
+  expect((await admin.delete(`/api/money/goals/saved/${put}`)).status).toBe(204);
+  expect((await admin.delete(`/api/money/goals/${goal.json.id}`)).status).toBe(204);
+  expect((await admin.delete(`/api/money/income/${pay.json.id}`)).status).toBe(204);
+  expect((await admin.get('/api/money/goals')).json).toEqual([]);
 });
 
 it('licenses are kept over the web, with a renewal that follows them, and the number only where asked for', async () => {
