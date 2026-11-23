@@ -12,7 +12,7 @@ import { addDays, todayOf } from '../../core/src/small.ts';
 import { search, type SearchKind } from '../../core/src/index.ts';
 import { manual } from '../../core/src/index.ts';
 import { reminders, COVERS, EMAIL_SERVICE, NTFY_SERVICE, PUSH_SERVICE, type PushSender, type ReminderSettings } from '../../core/src/index.ts';
-import { home, life, lookups, MAX_THING_PHOTO, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
+import { displayName, home, life, lookups, MAX_THING_PHOTO, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
 import { FILM_SERVICE, fillFrom, TMDB_API, TMDB_IMAGES } from '../../core/src/lookups.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
 import type { AssistantTools } from '../../core/src/index.ts';
@@ -129,6 +129,10 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
   };
 
   return [
+    // What Life Is calls the person (their sign-in name stays as it is).
+    ['GET', /^\/api\/account\/name$/, async (c) => ({ json: await displayName(db, c.user.id).get() })],
+    ['PUT', /^\/api\/account\/name$/, async (c) => ({ json: await displayName(db, c.user.id).set(c.body.display_name) })],
+
     // The front page: what today holds, gathered from every section the person uses.
     ['GET', /^\/api\/home$/, async (c) => ({ json: await home(db, c.user.id, c.clock, outside).summary() })],
     ['PUT', /^\/api\/home\/cards$/, async (c) => {

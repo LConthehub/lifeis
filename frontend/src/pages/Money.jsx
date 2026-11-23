@@ -86,7 +86,7 @@ export default function Money() {
               </div>
               <Used spent={c.spent} planned={c.monthly_cents} />
               <p className="mt-1 text-xs text-gray-500 dark:text-life-300">
-                {!c.mine ? `Shared with you by ${c.owner}` : c.shared_with.length ? `Shared with ${c.shared_with.map((p) => p.username).join(', ')}` : 'Only you see this'}
+                {!c.mine ? `Shared with you by ${c.owner}` : c.shared_with.length ? `Shared with ${c.shared_with.map((p) => p.name).join(', ')}` : 'Only you see this'}
               </p>
             </li>
           ))}
@@ -197,7 +197,7 @@ function CategoryForm({ category, people, onDone }) {
           <p className="mb-1 text-xs text-gray-500 dark:text-life-300">Only you, unless you check someone. They see this category and what's spent in it, and can add to it. They can't change its amount or see any other category.</p>
           {people.map((p) => (
             <label key={p.id} className="flex items-center gap-2 py-1 text-sm text-gray-800 dark:text-life-50">
-              <input type="checkbox" checked={shared.includes(p.id)} onChange={() => toggle(p.id)} /> {p.username}
+              <input type="checkbox" checked={shared.includes(p.id)} onChange={() => toggle(p.id)} /> {p.name}
             </label>
           ))}
         </fieldset>

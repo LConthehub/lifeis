@@ -74,6 +74,8 @@ export default function App() {
     }
   }, []);
   useEffect(() => { check(); }, [check]);
+  // A name saved in Settings shows at once, without signing out.
+  useEffect(() => { window.addEventListener('lifeis:name-changed', check); return () => window.removeEventListener('lifeis:name-changed', check); }, [check]);
   useEffect(() => {
     // Any "not logged in" answer (the session ran out) goes back to the login page.
     const id = axios.interceptors.response.use((r) => r, (err) => {

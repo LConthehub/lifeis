@@ -272,7 +272,7 @@ export function PeopleSignIn() {
     try {
       await axios.post(`/api/security/people/${person.id}/reset`);
       setAsking(null);
-      setMessage({ ok: `${person.username}'s two-step sign-in is off and their passkeys are removed. They are signed out, and will be told next time they sign in.` });
+      setMessage({ ok: `${person.name ?? person.username}'s two-step sign-in is off and their passkeys are removed. They are signed out, and will be told next time they sign in.` });
       load();
     } catch (err) { setMessage({ error: errorMessage(err, "That couldn't be done") }); }
   };
@@ -287,14 +287,15 @@ export function PeopleSignIn() {
           <li key={person.id} className="space-y-2 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className="min-w-0 flex-1">
-                <p className="break-words text-sm font-medium text-gray-800 dark:text-life-50">{person.username}</p>
+                <p className="break-words text-sm font-medium text-gray-800 dark:text-life-50">{person.name ?? person.username}</p>
+                {person.name && person.name !== person.username && <p className="break-words text-xs text-gray-500 dark:text-life-200">Signs in as {person.username}</p>}
                 <p className="text-xs text-gray-500 dark:text-life-200">{person.second_step ? 'Two-step sign-in is on' : 'Two-step sign-in is off'} · {person.passkeys === 0 ? 'no passkeys' : person.passkeys === 1 ? '1 passkey' : `${person.passkeys} passkeys`}</p>
               </div>
               <button type="button" disabled={!person.second_step && person.passkeys === 0} onClick={() => setAsking(person.id)} aria-label={`Turn off ${person.username}'s two-step sign-in and remove their passkeys`} className={`${danger} disabled:opacity-40`}>Turn off and remove</button>
             </div>
             {asking === person.id && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg bg-honey-100 p-3 text-sm text-gray-800">
-                <span className="min-w-0 flex-1">Turn off {person.username}'s two-step sign-in and remove their passkeys? Their password still works.</span>
+                <span className="min-w-0 flex-1">Turn off {person.name ?? person.username}'s two-step sign-in and remove their passkeys? Their password still works.</span>
                 <button type="button" onClick={() => reset(person)} className={danger}>Yes, turn it off</button>
                 <button type="button" onClick={() => setAsking(null)} className={quiet}>Keep it</button>
               </div>

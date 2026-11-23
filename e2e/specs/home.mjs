@@ -86,6 +86,28 @@ await page.reload(); await wait(1500);
 await page.screenshot({ path: shots + '/home2-phone.png', fullPage: true });
 await page.setViewportSize({ width: 1100, height: 900 });
 
+// A name of their own: set in Settings, shown on the front page at once, with the sign-in name unchanged.
+await page.setViewportSize({ width: 375, height: 800 });
+await page.goto(base + '/'); await wait(1200);
+say('the greeting uses the sign-in name at first', /Good (morning|afternoon|evening)|Up late/.test(await page.locator('main h1').innerText()) && /, trial$/.test(await page.locator('main h1').innerText()));
+await page.goto(base + '/settings/home'); await wait(1200);
+const nameBox = page.locator('#your-name');
+say('Settings has a "Your name" box with its hint, near the top', await nameBox.isVisible() && /What Life Is calls you\. Your sign-in name stays the same\./.test(await nameBox.innerText()));
+await nameBox.locator('input').fill('  Sam  ');
+await nameBox.getByRole('button', { name: 'Save' }).click(); await wait(900);
+say('saving says so: ' + flat(await nameBox.innerText()).match(/Saved\.[^.]*\./)?.[0], /Life Is calls you Sam/.test(await nameBox.innerText()));
+const settingsWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+say('Settings fits a 375px phone: ' + settingsWidth, settingsWidth <= 375);
+await nameBox.scrollIntoViewIfNeeded();
+await page.screenshot({ path: shots + '/display-name-settings-375.png' });
+
+await page.goto(base + '/'); await wait(1200);
+say('Home greets by the new name, without signing out: ' + await page.locator('main h1').innerText(), /, Sam$/.test(await page.locator('main h1').innerText()));
+const homeWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+say('Home fits a 375px phone: ' + homeWidth, homeWidth <= 375);
+await page.screenshot({ path: shots + '/display-name-home-375.png' });
+await page.setViewportSize({ width: 1100, height: 900 });
+
 await page.goto(base + '/settings/connections'); await wait(1000);
 await page.getByRole('button', { name: 'Turn off and forget the place' }).click(); await wait(1000);
 await page.goto(base + '/'); await wait(1200);

@@ -25,6 +25,7 @@ const GROUPS = [
   {
     id: 'home', label: 'Your home', icon: '🏠',
     sections: [
+      { id: 'your-name', title: 'Your name', words: 'name call display nickname greeting called', render: () => <YourName /> },
       { id: 'life', title: 'What Life Is looks after', words: 'sections areas sewing garden cookware clothing money spending show hide', render: ({ onLifeChanged }) => <Titled title="What Life Is looks after" hint="Decides which sections show. Nothing is removed by unchecking."><LifeAreasPicker onSaved={onLifeChanged} /></Titled> },
       { id: 'tags', title: 'Tags', words: 'tags labels organize nest merge rename categories', render: () => <TagsSetting /> },
       { id: 'look', title: 'Look', words: 'theme dark mode light night day colour color appearance device system brown cream mushroom', render: () => <Look /> },
@@ -395,6 +396,36 @@ function DeviceBackup() {
         </form>
       )}
     </section>
+  );
+}
+
+/** What Life Is calls the person. The sign-in name is not touched. Saved at once, and the front page shows it without signing out. */
+function YourName() {
+  const [saved, setSaved] = useState(null);
+  const [text, setText] = useState('');
+  const [message, setMessage] = useState('');
+  useEffect(() => { axios.get('/api/account/name').then(({ data }) => { setSaved(data); setText(data.display_name); }).catch(() => {}); }, []);
+  if (!saved) return null;
+  const save = async (e) => {
+    e.preventDefault();
+    setMessage('');
+    try {
+      const { data } = await axios.put('/api/account/name', { display_name: text });
+      setSaved(data); setText(data.display_name);
+      setMessage(data.display_name ? `Saved. Life Is calls you ${data.name}.` : 'Saved. Life Is uses your sign-in name.');
+      window.dispatchEvent(new Event('lifeis:name-changed'));
+    } catch (err) { setMessage(errorMessage(err, "Couldn't save that")); }
+  };
+  return (
+    <Titled title="Your name" hint="What Life Is calls you. Your sign-in name stays the same.">
+      <form onSubmit={save} className="flex flex-wrap items-end gap-2">
+        <div className="min-w-0 flex-1 basis-48">
+          <Field label="Name"><input maxLength={40} autoComplete="off" value={text} onChange={(e) => setText(e.target.value)} placeholder={saved.name === saved.display_name ? '' : saved.name} className={inputClass} /></Field>
+        </div>
+        <button type="submit" className={buttonClass}>Save</button>
+      </form>
+      {message && <p role="status" className="mt-2 text-sm text-life-700 dark:text-life-100">{message}</p>}
+    </Titled>
   );
 }
 

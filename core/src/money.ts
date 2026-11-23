@@ -14,11 +14,12 @@
  * Money is whole cents. Nothing here knows about income, bills or savings; this is spending against a plan.
  */
 import { atomic, type Db, type Queries } from './db.ts';
+import { shown } from './displayName.ts';
 import { Problem } from './problem.ts';
 import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
 import { clean, dayOrNull, labelKey, stamp, todayOf, type Clock } from './small.ts';
 
-export type Person = { id: number; username: string };
+export type Person = { id: number; username: string; name: string };
 export type Category = {
   id: number;
   name: string;
@@ -185,17 +186,17 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
       const within = [`${month}-01`, `${month}-31`];
       const sign = await db.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'shopping_currency'", [owner]);
       const rows = await db.all<{ id: number; name: string; monthly_cents: number; owner_id: number; owner: string; spent: number }>(
-        `SELECT c.id, c.name, c.monthly_cents, c.owner_id, u.username AS owner,
+        `SELECT c.id, c.name, c.monthly_cents, c.owner_id, ${shown('u')} AS owner,
                 COALESCE((SELECT SUM(e.cents) FROM money_entries e WHERE e.category_id = c.id AND e.day BETWEEN ? AND ?), 0) AS spent
          FROM money_categories c JOIN users u ON u.id = c.owner_id WHERE c.id IN (${SEEN}) ORDER BY c.sort_order, c.id`, [...within, ...seen]);
-      const shares = await db.all<{ category_id: number; id: number; username: string }>(
-        `SELECT s.category_id, u.id, u.username FROM money_shares s JOIN users u ON u.id = s.user_id WHERE s.category_id IN (${SEEN}) ORDER BY u.username`, seen);
+      const shares = await db.all<{ category_id: number; id: number; username: string; name: string }>(
+        `SELECT s.category_id, u.id, u.username, ${shown('u')} AS name FROM money_shares s JOIN users u ON u.id = s.user_id WHERE s.category_id IN (${SEEN}) ORDER BY u.username`, seen);
       const categories = rows.map((c): Category => ({
         id: c.id, name: c.name, monthly_cents: c.monthly_cents, spent: c.spent, left: c.monthly_cents - c.spent, mine: c.owner_id === owner, owner: c.owner,
-        shared_with: shares.filter((s) => s.category_id === c.id).map((s) => ({ id: s.id, username: s.username })),
+        shared_with: shares.filter((s) => s.category_id === c.id).map((s) => ({ id: s.id, username: s.username, name: s.name })),
       }));
       const entries = await db.all<Omit<Entry, 'mine' | 'tag_list'> & { owner_id: number }>(
-        `SELECT e.id, e.label, e.cents, e.day, e.note, e.category_id, c.name AS category, u.username AS by, e.owner_id
+        `SELECT e.id, e.label, e.cents, e.day, e.note, e.category_id, c.name AS category, ${shown('u')} AS by, e.owner_id
          FROM money_entries e LEFT JOIN money_categories c ON c.id = e.category_id JOIN users u ON u.id = e.owner_id
          WHERE e.day BETWEEN ? AND ? AND ((e.category_id IS NULL AND e.owner_id = ?) OR e.category_id IN (${SEEN}))
          ORDER BY e.day DESC, e.id DESC`, [...within, owner, ...seen]);
@@ -211,7 +212,7 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
         month, currency: sign?.value ?? '$', categories, uncategorised, projects: { spent: onProjects, lines },
         total: { planned, spent, left: planned - spent },
         entries: (await attachTags(db, owner, 'spending', await onlyTagged(db, owner, 'spending', entries, tag))).map(({ owner_id, ...e }) => ({ ...e, mine: owner_id === owner })),
-        people: await db.all<Person>('SELECT id, username FROM users WHERE id != ? ORDER BY username', [owner]),
+        people: await db.all<Person>(`SELECT u.id, u.username, ${shown('u')} AS name FROM users u WHERE u.id != ? ORDER BY u.username`, [owner]),
       };
     },
 

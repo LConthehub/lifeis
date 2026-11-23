@@ -12,7 +12,7 @@
  * Wrong codes count against the same limits as wrong passwords (the person's own, the address's, and the
  * pair), and five wrong tries end the pending sign-in.
  */
-import type { Db, Sealer } from '../../core/src/index.ts';
+import { shownName, type Db, type Sealer } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
 import { read, Refusal, type Context, type Reply, type Route } from './http.ts';
 import {
@@ -36,7 +36,7 @@ export type SecurityTools = {
   signIn: (c: Context, userId: number, method: string) => Promise<Record<string, string>>;
 };
 
-type UserLine = { id: number; username: string; is_admin: number };
+type UserLine = { id: number; username: string; name: string; is_admin: number };
 
 export function securityRoutes(db: Db, tools: SecurityTools) {
   const { clock } = tools;
@@ -44,9 +44,9 @@ export function securityRoutes(db: Db, tools: SecurityTools) {
 
   /** The signed-in person's answer, with what they should be told (an admin turned something off). */
   async function signedIn(c: Context, userId: number, method: string): Promise<Reply> {
-    const user = (await db.get<UserLine>('SELECT id, username, is_admin FROM users WHERE id = ?', [userId]))!;
+    const user = (await db.get<UserLine>(`SELECT u.id, u.username, ${shownName('u')} AS name, u.is_admin FROM users u WHERE u.id = ?`, [userId]))!;
     const notice = (await securityOf(db, userId))?.notice;
-    return { json: { id: user.id, username: user.username, is_admin: Boolean(user.is_admin), ...(notice ? { notice } : {}) }, headers: await tools.signIn(c, userId, method) };
+    return { json: { id: user.id, username: user.username, name: user.name, is_admin: Boolean(user.is_admin), ...(notice ? { notice } : {}) }, headers: await tools.signIn(c, userId, method) };
   }
 
   /** After a right password, for someone with two-step on: the token the next step needs, and no session. */
@@ -86,7 +86,7 @@ export function securityRoutes(db: Db, tools: SecurityTools) {
     const pending = read.text(c.body, 'pending');
     refuseWait(await auth.secondsToWait(db, [[auth.ipThrottle, c.ip]], clock));
     const found = await peekChallenge(db, pending, 'second_step', clock);
-    const who = found?.user_id ? await db.get<UserLine>('SELECT id, username, is_admin FROM users WHERE id = ?', [found.user_id]) : undefined;
+    const who = found?.user_id ? await db.get<UserLine>(`SELECT u.id, u.username, ${shownName('u')} AS name, u.is_admin FROM users u WHERE u.id = ?`, [found.user_id]) : undefined;
     if (!found || !who) {
       await auth.ipThrottle.failure(db, c.ip, clock);
       throw new Refusal(400, STALE);
@@ -255,12 +255,12 @@ export function securityRoutes(db: Db, tools: SecurityTools) {
 
     ['GET', /^\/api\/security\/people$/, async (c) => {
       if (!c.user.is_admin) throw new Refusal(403, 'Only the admin can see this');
-      const people = await db.all<{ id: number; username: string; is_admin: number; second_step: number; passkeys: number }>(
-        `SELECT u.id, u.username, u.is_admin,
+      const people = await db.all<{ id: number; username: string; name: string; is_admin: number; second_step: number; passkeys: number }>(
+        `SELECT u.id, u.username, ${shownName('u')} AS name, u.is_admin,
            (SELECT COUNT(*) FROM user_security s WHERE s.user_id = u.id AND s.totp_secret IS NOT NULL) AS second_step,
            (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkeys
          FROM users u ORDER BY u.username`);
-      return { json: people.map((p) => ({ id: p.id, username: p.username, is_admin: Boolean(p.is_admin), second_step: Boolean(p.second_step), passkeys: p.passkeys, you: p.id === c.user.id })) };
+      return { json: people.map((p) => ({ id: p.id, username: p.username, name: p.name, is_admin: Boolean(p.is_admin), second_step: Boolean(p.second_step), passkeys: p.passkeys, you: p.id === c.user.id })) };
     }],
 
     // Turns off someone's two-step sign-in and removes their passkeys. Their secret is never shown to anyone.
@@ -268,7 +268,7 @@ export function securityRoutes(db: Db, tools: SecurityTools) {
       notDemo();
       if (!c.user.is_admin) throw new Refusal(403, 'Only the admin can do this');
       if (c.id === c.user.id) throw new Refusal(400, 'Change your own sign-in security under Sign-in security.');
-      const them = await db.get<UserLine>('SELECT id, username, is_admin FROM users WHERE id = ?', [c.id]);
+      const them = await db.get<UserLine>(`SELECT u.id, u.username, ${shownName('u')} AS name, u.is_admin FROM users u WHERE u.id = ?`, [c.id]);
       if (!them) throw new Refusal(404, 'Not found');
       const twoStep = Boolean((await securityOf(db, c.id))?.totp_secret);
       const keys = await countPasskeys(db, c.id);

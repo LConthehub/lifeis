@@ -5,7 +5,7 @@ const PASS = 'trial-only-password-8031';
 const browser = await chromium.launch({ ...browserChoice, headless: true });
 const bad = [];
 const say = (what, ok) => console.log((ok ? 'ok   ' : 'FAIL ') + what);
-const EXPECTED = ['life', 'tags', 'look', 'reminders', 'calendar-link', 'other-calendars', 'assistant', 'weather', 'mail', 'bank', 'lookups', 'recalls', 'photos', 'media', 'recipe-web', 'idle', 'password', 'security', 'people', 'sign-out', 'last-copy', 'your-files', 'recipes-out'];
+const EXPECTED = ['your-name', 'life', 'tags', 'look', 'reminders', 'calendar-link', 'other-calendars', 'assistant', 'weather', 'mail', 'bank', 'lookups', 'recalls', 'photos', 'media', 'recipe-web', 'idle', 'password', 'security', 'people', 'sign-out', 'last-copy', 'your-files', 'recipes-out'];
 
 async function signedIn(width, height) {
   const context = await browser.newContext({ viewport: { width, height } });
@@ -27,7 +27,7 @@ await wide.goto(base + '/settings'); await wide.waitForTimeout(1500);
 const menu = wide.getByRole('navigation', { name: 'Settings' });
 const groups = await menu.getByRole('link').allInnerTexts();
 say('a menu of groups beside the settings: ' + groups.map((g) => g.trim()).join(' | '), groups.length === 6);
-say('the first group shows by itself, not the whole long page', (await wide.locator('[data-settings-group] > div[id]').count()) === 3);
+say('the first group shows by itself, not the whole long page', (await wide.locator('[data-settings-group] > div[id]').count()) === 4);
 const found = [];
 for (let i = 0; i < groups.length; i += 1) {
   await menu.getByRole('link').nth(i).click(); await wide.waitForTimeout(1200);
@@ -43,6 +43,21 @@ await hit.click(); await wide.waitForTimeout(1500);
 say('and goes to it: ' + new URL(wide.url()).pathname + new URL(wide.url()).hash, wide.url().endsWith('/settings/connections#assistant'));
 await wide.goto(base + '/settings#calendar-link'); await wide.waitForTimeout(1500);
 say('an old link to a section still finds it: ' + new URL(wide.url()).pathname, wide.url().includes('/settings/calendars#calendar-link') && await wide.locator('#calendar-link').isVisible());
+
+// A name of their own: kept, trimmed, limited to 40, and empty goes back to the sign-in name.
+await wide.goto(base + '/settings'); await wide.waitForTimeout(1200);
+const nameBox = wide.locator('#your-name');
+await nameBox.locator('input').fill('  ' + 'x'.repeat(60) + '  ');
+say('the name box stops at 40 characters', (await nameBox.locator('input').inputValue()).length === 40);
+await nameBox.locator('input').fill('  Sam  ');
+await nameBox.getByRole('button', { name: 'Save' }).click(); await wide.waitForTimeout(900);
+say('a saved name is trimmed and kept: ' + await nameBox.locator('input').inputValue(), (await nameBox.locator('input').inputValue()) === 'Sam');
+say('the sign-in name is still shown as it was', /Signed in as\s+ana/.test((await wide.locator('main').innerText()).replace(/\s+/g, ' ')));
+await wide.reload(); await wide.waitForTimeout(1200);
+say('it is still there after a reload', (await wide.locator('#your-name input').inputValue()) === 'Sam');
+await wide.locator('#your-name input').fill('   ');
+await wide.locator('#your-name').getByRole('button', { name: 'Save' }).click(); await wide.waitForTimeout(900);
+say('empty goes back to the sign-in name', /uses your sign-in name/.test(await wide.locator('#your-name').innerText()));
 
 // ---------- a phone ----------
 const phone = await signedIn(390, 844);

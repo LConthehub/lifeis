@@ -9,7 +9,7 @@
  * - Sessions that sit unused are signed out automatically.
  */
 import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
-import { atomic, type Db } from '../../core/src/index.ts';
+import { atomic, shownName, type Db } from '../../core/src/index.ts';
 
 export const SESSION_COOKIE = 'lifeis_session';
 export const SESSION_DAYS = 30;
@@ -21,7 +21,8 @@ const SCRYPT = { N: 2 ** 14, r: 8, p: 1 };
 /** The most work a stored hash may ask for, so a damaged or planted row can't stall the server. */
 const MAX_SCRYPT_MEMORY = 256 * 1024 * 1024;
 
-export type User = { id: number; username: string; is_admin: boolean };
+/** `username` signs in and finds the account. `name` is what people are shown: the one they chose, or the username. */
+export type User = { id: number; username: string; name: string; is_admin: boolean };
 export type Clock = (() => Date) & { today?: () => string };
 
 const stamp = (at: Date) => at.toISOString().slice(0, 19) + '+00:00';
@@ -61,16 +62,16 @@ export async function verifyPassword(password: string, stored: string): Promise<
 // whether a username is real.
 const dummyHash = hashPassword(randomBytes(8).toString('hex'));
 
-type UserRow = { id: number; username: string; password_hash: string; is_admin: number };
+type UserRow = { id: number; username: string; name: string; password_hash: string; is_admin: number };
 
 export async function checkLogin(db: Db, username: string, password: string): Promise<User | null> {
-  const row = await db.get<UserRow>('SELECT * FROM users WHERE username = ?', [username.trim().toLowerCase()]);
+  const row = await db.get<UserRow>(`SELECT u.*, ${shownName('u')} AS name FROM users u WHERE u.username = ?`, [username.trim().toLowerCase()]);
   if (!row) {
     await verifyPassword(password, await dummyHash);
     return null;
   }
   if (!(await verifyPassword(password, row.password_hash))) return null;
-  return { id: row.id, username: row.username, is_admin: Boolean(row.is_admin) };
+  return { id: row.id, username: row.username, name: row.name, is_admin: Boolean(row.is_admin) };
 }
 
 // ---------- sessions ----------
@@ -104,8 +105,8 @@ export async function idleMinutesFor(db: Db, userId: number, fallback: number): 
 export async function userForToken(db: Db, token: string | undefined, clock: Clock, idleFallback: number, touch = true): Promise<User | null> {
   if (!token) return null;
   const hash = tokenHash(token);
-  const row = await db.get<{ id: number; username: string; is_admin: number; expires_at: string; created_at: string; last_seen_at: string | null }>(
-    `SELECT u.id, u.username, u.is_admin, s.expires_at, s.created_at, s.last_seen_at
+  const row = await db.get<{ id: number; username: string; name: string; is_admin: number; expires_at: string; created_at: string; last_seen_at: string | null }>(
+    `SELECT u.id, u.username, ${shownName('u')} AS name, u.is_admin, s.expires_at, s.created_at, s.last_seen_at
      FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?`, [hash]);
   if (!row) return null;
   const now = clock().getTime();
@@ -119,7 +120,7 @@ export async function userForToken(db: Db, token: string | undefined, clock: Clo
   if (touch && (row.last_seen_at === null || now - lastSeen > 30_000)) {
     await db.run('UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?', [stamp(new Date(now)), hash]);
   }
-  return { id: row.id, username: row.username, is_admin: Boolean(row.is_admin) };
+  return { id: row.id, username: row.username, name: row.name, is_admin: Boolean(row.is_admin) };
 }
 
 export async function deleteSession(db: Db, token: string | undefined): Promise<void> {

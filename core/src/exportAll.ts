@@ -280,6 +280,7 @@ const PLAIN_SETTINGS: Record<string, string> = {
   chore_point_cents: 'What a chore point is worth, in cents',
   allowance_paid: 'Allowance paid up to',
   recalls_on: 'Car recall alerts',
+  display_name: 'The name Life Is calls you',
   idle_minutes: 'Sign out after being idle, in minutes',
   weather_place: 'Town for the weather',
 };

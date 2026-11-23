@@ -8,7 +8,7 @@
  * There is no sign-in, because there is nobody to tell apart: the device belongs to one person, and the
  * device's own lock is the front door. So the few addresses about accounts answer for that one person.
  */
-import { accessNow, decide, kitchen, makeBackup, restoreBackup, ENDED_MESSAGE, Problem } from '../../../core/src/index.ts';
+import { accessNow, decide, displayName, kitchen, makeBackup, restoreBackup, ENDED_MESSAGE, Problem } from '../../../core/src/index.ts';
 import { everydayRoutes } from '../../../server/src/everydayRoutes.ts';
 import { Refusal } from '../../../server/src/http.ts';
 
@@ -20,10 +20,10 @@ const notHere = async () => { throw new Refusal(400, "There are no accounts or p
 /** The one person this device belongs to. Made the first time the app opens. */
 async function owner(db) {
   const found = await db.get('SELECT id, username FROM users ORDER BY id LIMIT 1');
-  if (found) return { id: found.id, username: found.username, is_admin: true };
+  if (found) return { id: found.id, username: found.username, name: (await displayName(db, found.id).get()).name, is_admin: true };
   // No password is kept: 'none' can never match one.
   const made = await db.run("INSERT INTO users (username, password_hash, is_admin, created_at) VALUES ('me', 'none', 1, ?)", [new Date().toISOString().slice(0, 19) + '+00:00']);
-  return { id: made.lastId, username: 'me', is_admin: true };
+  return { id: made.lastId, username: 'me', name: 'me', is_admin: true };
 }
 
 /**
@@ -33,13 +33,15 @@ async function owner(db) {
  */
 export async function deviceAnswers(db, outside = {}, held = null) {
   const user = await owner(db);
+  // What the device calls its person changes while the app is open, so the sign-in answer is read fresh.
+  const shownUser = async () => ({ ...user, name: (await displayName(db, user.id).get()).name });
   let standing = held ? await held.read() : { trial_started: null, unlocked: true };
   const access = () => accessNow(standing, new Date());
   const account = async () => ({ json: { idle_minutes: 0, idle_choices: [0] } });
   const routes = [
     ['GET', /^\/api\/health$/, async () => ({ json: { status: 'ok' } })],
     ['GET', /^\/api\/access$/, async () => ({ json: access() })],
-    ['GET', /^\/api\/auth\/status$/, async () => ({ json: { setup_required: false, local: true, on_device: true, user } })],
+    ['GET', /^\/api\/auth\/status$/, async () => ({ json: { setup_required: false, local: true, on_device: true, user: await shownUser() } })],
     ['POST', /^\/api\/auth\/logout$/, async () => ({ status: 204 })],
     ['POST', /^\/api\/auth\/(setup|login|change-password)$/, notHere],
     ['POST', /^\/api\/users$/, notHere],

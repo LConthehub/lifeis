@@ -18,6 +18,7 @@ import { noteHistory, placePath } from './history.ts';
 import { inventory } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
 import { money } from './money.ts';
+import { shown } from './displayName.ts';
 import { Problem } from './problem.ts';
 import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
 import { addDays, clean, dayNumber, dayOrNull, labelKey, rounded, stamp, todayOf, type Clock } from './small.ts';
@@ -387,8 +388,8 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
 
   async function rows(q: Queries, where = '', args: Value[] = []): Promise<JobRow[]> {
     return q.all<JobRow>(
-      `SELECT j.id, j.owner_id, o.username AS owner, j.name, j.activity, j.item_id, j.every_n, j.every_unit, j.every_reading, j.reading_unit,
-              j.first_due, j.assigned_to, a.username AS assigned_name, j.steps, j.note, j.kind, j.amount_cents, j.points, j.autopay, j.pet_id, p.name AS pet_name, j.assigned_member, hm.name AS member_name
+      `SELECT j.id, j.owner_id, ${shown('o')} AS owner, j.name, j.activity, j.item_id, j.every_n, j.every_unit, j.every_reading, j.reading_unit,
+              j.first_due, j.assigned_to, ${shown('a')} AS assigned_name, j.steps, j.note, j.kind, j.amount_cents, j.points, j.autopay, j.pet_id, p.name AS pet_name, j.assigned_member, hm.name AS member_name
        FROM upkeep_jobs j JOIN users o ON o.id = j.owner_id LEFT JOIN users a ON a.id = j.assigned_to LEFT JOIN pets p ON p.id = j.pet_id
        LEFT JOIN household_members hm ON hm.id = j.assigned_member
        WHERE (j.owner_id = ? OR j.assigned_to = ?) ${where} ORDER BY j.name COLLATE NOCASE, j.id`, [viewer, viewer, ...args]);
@@ -449,7 +450,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
 
   async function doneList(q: Queries, jobId: number): Promise<DoneRecord[]> {
     return q.all<DoneRecord>(
-      `SELECT d.id, d.day, COALESCE(d.done_name, u.username) AS by, d.reading, d.minutes, d.cost_cents, d.points, d.money_entry_id, d.note
+      `SELECT d.id, d.day, COALESCE(d.done_name, ${shown('u')}) AS by, d.reading, d.minutes, d.cost_cents, d.points, d.money_entry_id, d.note
        FROM upkeep_done d LEFT JOIN users u ON u.id = d.done_by WHERE d.job_id = ? ORDER BY d.day DESC, d.id DESC`, [jobId]);
   }
 
@@ -576,7 +577,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
   return {
     /** Everyone else in this Life Is a job can be given to. */
     async people(): Promise<{ id: number; name: string }[]> {
-      return db.all<{ id: number; name: string }>('SELECT id, username AS name FROM users ORDER BY username COLLATE NOCASE');
+      return db.all<{ id: number; name: string }>(`SELECT u.id, ${shown('u')} AS name FROM users u ORDER BY ${shown('u')} COLLATE NOCASE`);
     },
 
     /** The ready-made sets, with the dates counted from today. */
@@ -755,7 +756,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
       const day = today();
       const start = addDays(day, -((dayNumber(day) + 3) % 7));
       const rows = await db.all<{ name: string | null; day: string; points: number | null }>(
-        `SELECT COALESCE(d.done_name, u.username) AS name, d.day, d.points FROM upkeep_done d JOIN upkeep_jobs j ON j.id = d.job_id LEFT JOIN users u ON u.id = d.done_by
+        `SELECT COALESCE(d.done_name, ${shown('u')}) AS name, d.day, d.points FROM upkeep_done d JOIN upkeep_jobs j ON j.id = d.job_id LEFT JOIN users u ON u.id = d.done_by
          WHERE j.kind = 'chore' AND (j.owner_id = ? OR j.assigned_to = ?) AND d.day >= ? AND d.done_by IS NOT NULL`, [viewer, viewer, addDays(start, -7)]);
       const people = new Map<string, { name: string; this_week: number; last_week: number; done: number }>();
       for (const r of rows) {

@@ -161,7 +161,7 @@ it('turning two-step on needs the password and a right code, and the secret is o
   expect((await admin.post('/api/security/second-step/confirm', { setup: started.json.setup, code: '000000' })).status).toBe(400);
   expect((await admin.post('/api/security/second-step/confirm', { setup: 'made-up', code: codeFor(started.json.secret) })).status).toBe(400);
   expect((await admin.get('/api/security')).json.second_step.on).toBe(false);
-  expect((await visitor().post('/api/auth/login', { username: 'owner', password: PASSWORD })).json).toEqual({ id: 1, username: 'owner', is_admin: true });
+  expect((await visitor().post('/api/auth/login', { username: 'owner', password: PASSWORD })).json).toEqual({ id: 1, username: 'owner', name: 'owner', is_admin: true });
 
   const done = await admin.post('/api/security/second-step/confirm', { setup: started.json.setup, code: codeFor(started.json.secret) });
   expect(done.status).toBe(200);
@@ -199,7 +199,7 @@ it('a person with two-step on gets no session from the password alone', async ()
   expect((await stranger.get('/api/kitchen/recipes')).status).toBe(401);
 
   const done = await stranger.post('/api/auth/second-step', { pending: asked.json.pending, code: next(secret) });
-  expect([done.status, done.json]).toEqual([200, { id: 1, username: 'owner', is_admin: true }]);
+  expect([done.status, done.json]).toEqual([200, { id: 1, username: 'owner', name: 'owner', is_admin: true }]);
   expect(done.cookie).toMatch(/^lifeis_session=/);
   expect((await stranger.get('/api/kitchen/recipes')).status).toBe(200);
   // A wrong password still looks just as it did.
@@ -328,7 +328,7 @@ it('turning two-step off needs the password and a code, and takes the secret and
   expect((await admin.get('/api/security')).json.second_step).toEqual({ on: false, recovery_left: 0 });
   expect((await database.db.get<{ totp_secret: string | null }>('SELECT totp_secret FROM user_security'))!.totp_secret).toBeNull();
   expect((await database.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM recovery_codes'))!.n).toBe(0);
-  expect((await visitor().post('/api/auth/login', { username: 'owner', password: PASSWORD })).json).toEqual({ id: 1, username: 'owner', is_admin: true });
+  expect((await visitor().post('/api/auth/login', { username: 'owner', password: PASSWORD })).json).toEqual({ id: 1, username: 'owner', name: 'owner', is_admin: true });
   expect((await admin.post('/api/security/second-step/off', { password: PASSWORD, code: '000000' })).status).toBe(409);
 });
 
@@ -389,8 +389,8 @@ it('an admin can turn off someone else\'s two-step and passkeys, and they are to
   const theirs = await turnOn(other);
   const listed = await admin.get('/api/security/people');
   expect(listed.json).toEqual([
-    { id: 1, username: 'owner', is_admin: true, second_step: false, passkeys: 0, you: true },
-    { id: 2, username: 'partner', is_admin: false, second_step: true, passkeys: 0, you: false },
+    { id: 1, username: 'owner', name: 'owner', is_admin: true, second_step: false, passkeys: 0, you: true },
+    { id: 2, username: 'partner', name: 'partner', is_admin: false, second_step: true, passkeys: 0, you: false },
   ]);
   expect(listed.text).not.toContain(theirs.secret.replace(/\s/g, ''));
   expect((await admin.post('/api/security/people/1/reset')).status).toBe(400); // not yourself
@@ -406,7 +406,7 @@ it('an admin can turn off someone else\'s two-step and passkeys, and they are to
   expect((await back.get('/api/security')).json.notice).toBe('An admin turned off two-step sign-in on March 5, 2046.');
   expect((await back.post('/api/security/notice/dismiss')).status).toBe(204);
   expect((await back.get('/api/security')).json.notice).toBeNull();
-  expect((await visitor().post('/api/auth/login', { username: 'partner', password: PASSWORD })).json).toEqual({ id: 2, username: 'partner', is_admin: false });
+  expect((await visitor().post('/api/auth/login', { username: 'partner', password: PASSWORD })).json).toEqual({ id: 2, username: 'partner', name: 'partner', is_admin: false });
 });
 
 it('the demo refuses every change to sign-in security', async () => {
@@ -581,7 +581,7 @@ it('a passkey signs in with no username and no password, and a removed one no lo
   const admin = await owner();
   const { phone, handle, id } = await addPasskey(admin);
   const { stranger, answered } = await signInWith(phone, handle);
-  expect([answered.status, answered.json]).toEqual([200, { id: 1, username: 'owner', is_admin: true }]);
+  expect([answered.status, answered.json]).toEqual([200, { id: 1, username: 'owner', name: 'owner', is_admin: true }]);
   expect(answered.cookie).toMatch(/^lifeis_session=/);
   expect((await stranger.get('/api/kitchen/recipes')).status).toBe(200);
   expect((await admin.get('/api/security')).json.passkeys[0].last_used_on).toBe('2046-03-05');

@@ -152,7 +152,7 @@ export function createApp(options: Options) {
         if ((await tx.get<{ n: number }>('SELECT COUNT(*) AS n FROM users'))!.n > 0) throw new Refusal(403, 'Setup has already been done');
         return (await tx.run('INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, 1, ?)', [username, hash, now()])).lastId;
       });
-      return { status: 201, json: { id, username, is_admin: true }, headers: await signIn(c, id) };
+      return { status: 201, json: { id, username, name: username, is_admin: true }, headers: await signIn(c, id) };
     }],
 
     ['POST', /^\/api\/auth\/login$/, async (c) => {
@@ -204,7 +204,7 @@ export function createApp(options: Options) {
         if (await tx.get('SELECT 1 AS taken FROM users WHERE username = ?', [username])) throw new Refusal(409, 'That username is taken');
         return (await tx.run('INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, 0, ?)', [username, hash, now()])).lastId;
       });
-      return { status: 201, json: { id, username, is_admin: false } };
+      return { status: 201, json: { id, username, name: username, is_admin: false } };
     }],
 
     ...security.routes,
@@ -254,6 +254,7 @@ export function createApp(options: Options) {
     if (options.demo && !SAFE_METHODS.has(method)) {
       if (path === '/api/auth/change-password') throw new Refusal(403, "The demo's password can't be changed: everyone shares it");
       if (path === '/api/auth/setup' || path === '/api/users') throw new Refusal(403, "People can't be added to the demo");
+      if (path === '/api/account/name') throw new Refusal(403, "The demo's name can't be changed: everyone shares it");
       if (path === '/api/manual/share') throw new Refusal(403, "The demo's manual can't be shared by a link. In your own Life Is it can.");
       // Two-step sign-in and passkeys would let one visitor lock the others out of the shared account.
       if (path.startsWith('/api/security/')) throw new Refusal(403, "Sign-in security can't be changed in the demo: everyone shares its account");
@@ -274,7 +275,7 @@ export function createApp(options: Options) {
     if (here.length === 0) throw new Refusal(404, 'Not found');
     const route = here.find(([m]) => m === method);
     if (!route) throw new Refusal(405, 'Method not allowed');
-    const signedIn = user ?? { id: 0, username: '', is_admin: false };
+    const signedIn = user ?? { id: 0, username: '', name: '', is_admin: false };
     const theirClock = clockFor(req);
     return route[2]({
       path, userAgent: String(req.headers['user-agent'] ?? '') || undefined, query: url.searchParams, id: Number(route[1].exec(path)![1] ?? 0), body: SAFE_METHODS.has(method) ? {} : await readBody(req, /^\/api\/things\/items\/\d+\/documents$/.test(path) ? MAX_PAPER_BODY_BYTES : undefined),

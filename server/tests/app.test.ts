@@ -100,9 +100,9 @@ it('the first account is the admin, and everything else needs signing in', async
 
   const admin = visitor();
   const made = await admin.post('/api/auth/setup', { username: ' Owner ', password: PASSWORD });
-  expect([made.status, made.json]).toEqual([201, { id: 1, username: 'owner', is_admin: true }]);
+  expect([made.status, made.json]).toEqual([201, { id: 1, username: 'owner', name: 'owner', is_admin: true }]);
   expect(made.cookie).toMatch(/^lifeis_session=[\w-]{43}; Max-Age=2592000; Path=\/; HttpOnly; SameSite=Lax$/);
-  expect((await admin.get('/api/auth/status')).json).toEqual({ setup_required: false, local: true, user: { id: 1, username: 'owner', is_admin: true } });
+  expect((await admin.get('/api/auth/status')).json).toEqual({ setup_required: false, local: true, user: { id: 1, username: 'owner', name: 'owner', is_admin: true } });
   expect((await stranger.post('/api/auth/setup', { username: 'second', password: PASSWORD })).status).toBe(403);
 
   const answer = await admin.get('/api/kitchen/recipes');
@@ -143,7 +143,7 @@ it('wrong passwords are refused, then slowed down, and the wait survives a resta
   expect((await visitor().post('/api/auth/login', { username: 'owner', password: PASSWORD })).status).toBe(429);
   time = new Date(time.getTime() + 5000);
   const back = await visitor().post('/api/auth/login', { username: 'OWNER', password: PASSWORD });
-  expect([back.status, back.json]).toEqual([200, { id: 1, username: 'owner', is_admin: true }]);
+  expect([back.status, back.json]).toEqual([200, { id: 1, username: 'owner', name: 'owner', is_admin: true }]);
 });
 
 it('a session left unused is signed out, after the time the person chose', async () => {
@@ -1405,4 +1405,43 @@ it('tags are made, nested, put on things and recipes, filtered, merged and remov
   expect((await admin.delete(`/api/tags/${small.id}`)).status).toBe(204);
   expect((await admin.get(`/api/things/items/${toaster.id}`)).json.tag_list).toEqual([]);
   expect((await admin.get('/api/tags')).json.map((t: { path: string }) => t.path)).toEqual(['Kitchen']);
+});
+
+it('a person can choose a name to be shown: trimmed, 40 at most, empty means the sign-in name, and sign-in is untouched', async () => {
+  const admin = await owner();
+  expect((await admin.get('/api/account/name')).json).toEqual({ display_name: '', name: 'owner' });
+  expect((await admin.put('/api/account/name', { display_name: '  Sam  ' })).json).toEqual({ display_name: 'Sam', name: 'Sam' });
+  expect((await admin.get('/api/auth/status')).json.user).toEqual({ id: 1, username: 'owner', name: 'Sam', is_admin: true });
+  expect((await admin.put('/api/account/name', { display_name: 'x'.repeat(41) })).status).toBe(400);
+  expect((await admin.put('/api/account/name', { display_name: 7 })).status).toBe(400);
+  expect((await admin.put('/api/account/name', { display_name: 'y'.repeat(40) })).json.name).toBe('y'.repeat(40));
+  expect((await admin.get('/api/account/name')).json.display_name).toBe('y'.repeat(40));
+
+  // Signing in still uses the sign-in name, and the display name does not work as one.
+  const again = visitor();
+  expect((await again.post('/api/auth/login', { username: 'Sam', password: PASSWORD })).status).toBe(401);
+  const login = await again.post('/api/auth/login', { username: 'owner', password: PASSWORD });
+  expect([login.status, login.json.username, login.json.name]).toEqual([200, 'owner', 'y'.repeat(40)]);
+
+  // Someone else sees the new name where they share something, and the sign-in name where nothing is chosen.
+  const partner = await member(admin, 'partner');
+  const partnerId = (await admin.get('/api/things/upkeep/people')).json.find((p: { name: string }) => p.name === 'partner').id;
+  await admin.put('/api/account/name', { display_name: 'Sam' });
+  const house = (await admin.post('/api/money/categories', { name: 'House', monthly_cents: 50000, shared_with: [partnerId] })).json.id;
+  const seen = (await partner.get('/api/money')).json;
+  expect(seen.categories.find((c: { id: number }) => c.id === house)).toMatchObject({ owner: 'Sam', mine: false });
+  expect(seen.people).toEqual([{ id: 1, username: 'owner', name: 'Sam' }]);
+  expect((await admin.get('/api/money')).json.categories[0].shared_with).toEqual([{ id: partnerId, username: 'partner', name: 'partner' }]);
+  expect((await partner.put('/api/account/name', { display_name: 'Pat' })).json.name).toBe('Pat');
+  expect((await admin.get('/api/money')).json.categories[0].shared_with[0]).toMatchObject({ username: 'partner', name: 'Pat' });
+  expect((await admin.get('/api/things/upkeep/people')).json.map((p: { name: string }) => p.name)).toEqual(['Pat', 'Sam']);
+  const job = (await admin.post('/api/things/upkeep', { name: 'Mow', every_n: 1, every_unit: 'week', assigned_to: partnerId })).json;
+  expect((await admin.get('/api/things/upkeep')).json.find((j: { id: number }) => j.id === job.id).assigned_to).toEqual({ id: partnerId, name: 'Pat' });
+  expect((await partner.get('/api/things/upkeep')).json.find((j: { id: number }) => j.id === job.id).owner).toBe('Sam');
+
+  // Empty goes back to the sign-in name.
+  expect((await admin.put('/api/account/name', { display_name: '   ' })).json).toEqual({ display_name: '', name: 'owner' });
+  expect((await partner.get('/api/money')).json.people).toEqual([{ id: 1, username: 'owner', name: 'owner' }]);
+  // The list of people for an admin shows both.
+  expect((await admin.get('/api/security/people')).json.map((p: { username: string; name: string }) => [p.username, p.name])).toEqual([['owner', 'owner'], ['partner', 'Pat']]);
 });
