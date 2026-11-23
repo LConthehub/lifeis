@@ -29,7 +29,7 @@ export default function Search() {
           <circle cx="8.5" cy="8.5" r="5.5" /><path d="M13 13l4 4" strokeLinecap="round" />
         </svg>
         <span className="hidden lg:inline">Search…</span>
-        <kbd className="hidden rounded bg-white/20 px-1.5 font-sans text-[11px] text-white/80 lg:inline">/</kbd>
+        <kbd className="hidden rounded bg-white/20 px-1.5 font-sans text-[11px] text-white lg:inline">/</kbd>
       </button>
       {open && <SearchWindow onClose={() => setOpen(false)} />}
     </>

@@ -6,6 +6,7 @@ import PlacePicker from '../components/PlacePicker';
 import BookList from '../components/BookList';
 import BulkScan from '../components/BulkScan';
 import CollectionSummary from '../components/CollectionSummary';
+import Art from '../components/Art';
 import { SORTS, centsFromDollars, decadeOf, dollarsField, dollarsText, labelKey, sameTitles, sortTitles } from '../components/collectionTools';
 import { bookServerName } from '../components/BookServers';
 import { onDevice } from '../where';
@@ -128,9 +129,10 @@ export default function MediaPage({ library = null }) {
         <button type="button" onClick={() => setAdding({ type: type || 'film', format: lib?.format || '' })} className={`${buttonClass} ${control}`}>+ Add</button>
       </div>
       {mine.length === 0 && lib ? (
-        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>{lib.empty}</div>
+        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}><Art slot="empty" className="mx-auto mb-2 block h-12 w-12" />{lib.empty}</div>
       ) : mine.length === 0 ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
+          <Art slot="empty" className="mx-auto mb-2 block h-12 w-12" />
           Nothing here yet. Add a film, an album or a book, and say what you have it on: VHS, Blu-ray, vinyl, paperback, anything.
           The same title on two formats is one title with two copies.
         </div>

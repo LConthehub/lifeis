@@ -76,7 +76,7 @@ async function fill(db: Db, me: number): Promise<void> {
   await things.addStarter('sewing');
   const kinds = await things.listKinds();
   const kind = (name: string) => (kinds.find((x) => x.name === name) ?? kinds[0]!).id;
-  const household = kinds.find((x) => /appliance|household|tool/i.test(x.name))?.id ?? (await things.createKind({ name: 'Household', icon: '🏠' })).find((x) => x.name === 'Household')!.id;
+  const household = (kinds.find((x) => x.name === 'Tools') ?? kinds.find((x) => x.name === 'Household'))?.id ?? (await things.createKind({ name: 'Household', icon: '🏠' })).find((x) => x.name === 'Household')!.id;
   const place = async (name: string, parent: number | null = null) => (await things.createPlace({ name, parent_id: parent })).filter((p) => p.name === name && p.parent_id === parent).at(-1)!.id;
   const garage = await place('Garage');
   const toolShelf = await place('Tool shelf', garage);

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import ScanToPantry from '../components/ScanToPantry';
 import UseItUp from '../components/UseItUp';
+import Art from '../components/Art';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 
 const LOCATIONS = [['fridge', 'Fridge'], ['freezer', 'Freezer'], ['pantry', 'Cabinet'], ['spices', 'Spices'], ['other', 'Elsewhere']];
@@ -35,7 +36,7 @@ export default function Pantry() {
       <UseItUp key={data.items.map((p) => `${p.id}${p.expires_on}`).join()} />
       {data.items.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find something" aria-label="Find in the pantry" className={`${inputClass} max-w-sm`} />}
       {data.items.length === 0 ? (
-        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing here yet. Add what you have, or check things off the grocery list and they land here.</div>
+        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}><Art slot="empty" className="mx-auto mb-2 block h-12 w-12" />Nothing here yet. Add what you have, or check things off the grocery list and they land here.</div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {LOCATIONS.map(([id, label]) => {

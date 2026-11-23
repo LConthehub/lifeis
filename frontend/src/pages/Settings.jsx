@@ -5,6 +5,7 @@ import axios from 'axios';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { LifeAreasPicker } from '../components/LifeAreas';
 import { chooseAgain, inApp, linkedServer, onDevice, serverOrigin } from '../where';
+import Art from '../components/Art';
 import { AssistantService } from '../components/Assistant';
 import { RemindersSettings } from '../components/Reminders';
 import { RecallAlertsService } from '../components/Recalls';
@@ -24,6 +25,7 @@ const GROUPS = [
     id: 'home', label: 'Your home', icon: '🏠',
     sections: [
       { id: 'life', title: 'What Life Is looks after', words: 'sections areas sewing garden cookware clothing money spending show hide', render: ({ onLifeChanged }) => <Titled title="What Life Is looks after" hint="Decides which sections show. Nothing is removed by unchecking."><LifeAreasPicker onSaved={onLifeChanged} /></Titled> },
+      { id: 'look', title: 'Look', words: 'theme dark mode light night day colour color appearance device system brown cream mushroom', render: () => <Look /> },
     ],
   },
   {
@@ -86,6 +88,45 @@ function Titled({ title, hint, children }) {
     </section>
   );
 }
+const THEME_KEY = 'lifeis.theme';
+const LOOKS = [
+  ['light', 'Light', 'Cream paper, plum-brown words.', 'bg-cream text-life-800 ring-life-200'],
+  ['dark', 'Dark', 'Deep plum night, cream words.', 'bg-night text-life-50 ring-life-700'],
+  ['system', 'Same as this device', 'Light by day, dark at night, whichever this device is using.', 'bg-gradient-to-r from-cream from-50% to-night to-50% text-life-600 ring-life-400'],
+];
+/** Light, dark, or whatever this device is set to. Kept in this browser (or this app), and applied at once by /theme.js. */
+function Look() {
+  const read = () => { try { const c = window.localStorage.getItem(THEME_KEY); return c === 'light' || c === 'dark' ? c : 'system'; } catch { return 'system'; } };
+  const [choice, setChoice] = useState(read);
+  const pick = (c) => {
+    setChoice(c);
+    try { window.localStorage.setItem(THEME_KEY, c); } catch { /* the choice lasts until this page closes */ }
+    if (window.lifeisApplyTheme) window.lifeisApplyTheme();
+    else document.documentElement.classList.toggle('dark', c === 'dark' || (c === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches));
+  };
+  return (
+    <Titled title="Look" hint="Cream paper by day, a deep plum night after dark. This is kept on this device only.">
+      <fieldset>
+        <legend className="sr-only">Look</legend>
+        <div className="grid gap-2 sm:grid-cols-3" data-look-choices>
+          {LOOKS.map(([key, label, about, swatch]) => (
+            <label key={key} className={`flex min-h-[44px] cursor-pointer flex-col gap-1 rounded-2xl border p-3 text-sm ${choice === key ? 'border-life-600 bg-life-50 ring-2 ring-life-600/30 dark:border-life-300 dark:bg-life-700 dark:ring-life-300/30' : 'border-life-200 hover:bg-life-50 dark:border-life-700 dark:hover:bg-life-700'}`}>
+              <span className="flex items-center gap-2 font-semibold text-life-800 dark:text-life-50">
+                <input type="radio" name="look" value={key} checked={choice === key} onChange={() => pick(key)} aria-label={label} className="accent-life-600" />
+                {label}
+              </span>
+              <span aria-hidden="true" className={`flex h-10 items-center justify-center gap-1 rounded-xl ring-1 ${swatch}`}>
+                <Art slot="mark" className="h-6 w-6" /><Art slot="mark" className="h-8 w-8" />
+              </span>
+              <span className="text-xs text-gray-600 dark:text-life-200">{about}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    </Titled>
+  );
+}
+
 /** A setting that already says what it is (the outside services each carry their own heading). */
 const Plain = ({ children }) => <div className={`${cardClass} space-y-6 [&>div]:py-0 [&_h3]:font-semibold [&_h3]:text-life-800 dark:[&_h3]:text-life-50`}>{children}</div>;
 

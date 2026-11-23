@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Field, inputClass, buttonClass, errorMessage } from '../components/ui';
 import { passkeyCancelled, passkeysUsable, secondStepWithPasskey, signInWithPasskey } from '../components/passkeys';
 import { chooseAgain, linkedServer } from '../where';
+import Art, { Stripe } from '../components/Art';
 
 const tall = 'min-h-[44px]';
 const input = `${inputClass} ${tall}`;
@@ -76,13 +77,17 @@ export default function Login({ setupRequired, local = true, offline, demo = nul
     setBusy(true); setError('');
     try { await axios.post('/api/auth/login', demo); onDone(); } catch (err) { setError(errorMessage(err, "The demo couldn't be opened")); } finally { setBusy(false); }
   };
-  const wrapper = 'w-full max-w-sm space-y-4 rounded-2xl bg-white/95 p-6 shadow-xl ring-1 ring-white/40 backdrop-blur dark:bg-life-900/90 dark:ring-life-700';
+  const wrapper = 'w-full max-w-sm space-y-4 overflow-hidden rounded-3xl bg-white/90 p-6 shadow-xl shadow-life-800/15 ring-1 ring-life-200 backdrop-blur dark:bg-life-900/90 dark:ring-life-700';
   const heading = (words) => (
-    <div className="flex items-center gap-3">
-      <img src="/icon-192.png" alt="" className="h-10 w-10 rounded-xl" />
-      <div>
-        <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">Life Is</h1>
-        <p className="text-xs text-gray-500 dark:text-life-200">{words}</p>
+    <div>
+      <Stripe className="-mx-6 -mt-6 mb-3" />
+      <Art slot="signin" className="mx-auto mb-2 h-12 w-[7.5rem]" />
+      <div className="flex items-center gap-3">
+        <img src="/icon-192.png" alt="" className="h-10 w-10 rounded-xl" />
+        <div>
+          <h1 className="text-2xl font-bold text-life-800 dark:text-life-50">Life Is</h1>
+          <p className="text-xs text-gray-500 dark:text-life-200">{words}</p>
+        </div>
       </div>
     </div>
   );

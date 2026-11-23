@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
-export const inputClass = 'w-full rounded-lg border border-life-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-life-500 focus:outline-none focus:ring-2 focus:ring-life-200 dark:border-life-700 dark:bg-life-800 dark:text-life-50';
-export const buttonClass = 'rounded-full bg-gradient-to-br from-life-500 to-life-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-life-600 hover:to-life-800 disabled:opacity-50';
-export const quietButtonClass = 'rounded-lg border border-life-200 px-3 py-1.5 text-sm text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100 dark:hover:bg-life-800';
+export const inputClass = 'w-full rounded-xl border border-life-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-life-500 focus:outline-none focus:ring-2 focus:ring-life-200 dark:border-life-700 dark:bg-life-800 dark:text-life-50';
+export const buttonClass = 'rounded-full bg-gradient-to-br from-life-500 to-life-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-life-800/25 hover:from-life-600 hover:to-life-800 disabled:opacity-50';
+export const quietButtonClass = 'rounded-xl border border-life-200 px-3 py-1.5 text-sm text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100 dark:hover:bg-life-800';
 export const cardClass = 'rounded-2xl bg-white p-4 shadow-sm ring-1 ring-life-100 dark:bg-life-800 dark:ring-life-700 sm:p-5';
 
 export function errorMessage(err, fallback) {

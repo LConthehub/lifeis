@@ -35,6 +35,7 @@ import { ThingStickersPage, ThingStickerLanding } from './pages/ThingStickers';
 import AccessNote from './components/AccessNote';
 import Money from './pages/Money';
 import DoAction from './pages/DoAction';
+import Art, { Stripe } from './components/Art';
 
 axios.defaults.withCredentials = true;
 // The server keeps time in UTC, so each request says what day it is here. Without it, something finished at
@@ -112,7 +113,7 @@ function Shell({ user, demo = false, onLogout }) {
       <header className="safe-top sticky top-0 z-30 bg-life-bar text-white shadow-sm print:hidden">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 xl:max-w-6xl">
           <Link to="/" className="flex items-center gap-2 font-semibold text-white">
-            <img src="/icon-192.png" alt="" className="h-7 w-7 rounded-lg" /> Life is
+            <img src="/icon-192.png" alt="" className="h-7 w-7 rounded-lg" /> <span className="font-display text-lg font-bold">Life is</span> <Art slot="mark" className="-ml-0.5 h-6 w-6" />
           </Link>
           {/* Six words don't fit across a phone. There, Settings stays up beside the name and the words take
               the row below, on one line that scrolls sideways with no visible scrollbar; the current word is
@@ -120,7 +121,7 @@ function Shell({ user, demo = false, onLogout }) {
           <nav ref={navRef} className="order-3 flex w-full min-w-0 flex-nowrap gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pr-8 [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] sm:order-2 sm:w-auto sm:flex-wrap sm:overflow-visible sm:pr-0 sm:[mask-image:none]" aria-label="Sections">
             {showing.map((s) => (
               <Link key={s.word} to={s.home} aria-current={s === section ? 'page' : undefined}
-                className={`shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-sm font-semibold sm:px-2.5 ${s === section ? 'bg-white text-life-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.shown ?? s.word}</Link>
+                className={`shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-sm font-semibold sm:px-2.5 ${s === section ? 'bg-avocado-100 text-avocado-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.shown ?? s.word}</Link>
             ))}
           </nav>
           <div className="order-2 ml-auto sm:order-3"><Search /></div>
@@ -133,12 +134,12 @@ function Shell({ user, demo = false, onLogout }) {
             </nav>
           )}
         </div>
-        {/* All five colours, as a stripe under the bar. */}
-        <div aria-hidden="true" className="h-1 bg-life-all" />
+        {/* The bands of a 1970s kitchen (gold, orange, rust, brown), as a stripe under the bar. */}
+        <Stripe />
       </header>
       <main className="mx-auto max-w-5xl px-3 py-4 sm:px-4 xl:max-w-6xl">
-        {/* The page is a sheet of frosted glass over the gradient, so everything on it reads clearly. */}
-        <div className="rounded-3xl bg-white/80 p-4 shadow-xl ring-1 ring-white/50 backdrop-blur-md dark:bg-life-900/75 dark:ring-white/10 sm:p-6">
+        {/* The page is a sheet of frosted glass over the cream (or coffee), so everything on it reads clearly. */}
+        <div className="rounded-3xl bg-white/70 p-4 shadow-xl shadow-life-800/10 ring-1 ring-life-200/70 backdrop-blur-md dark:bg-life-900/75 dark:shadow-black/30 dark:ring-life-700 sm:p-6">
         {demo && (
           <p className="mb-4 rounded-xl bg-white/90 px-4 py-2.5 text-sm text-gray-700 shadow print:hidden dark:bg-life-800 dark:text-life-100" role="note" data-demo-banner>
             <strong className="text-life-700 dark:text-life-100">Demo.</strong> This household is made up, and everything is reset to the sample data each night. Try anything.

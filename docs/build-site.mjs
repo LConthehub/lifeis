@@ -4,10 +4,24 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ART } from '../frontend/src/art.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const out = path.join(here, 'site');
 mkdirSync(out, { recursive: true });
+
+// The look, shared by every page: the colours of a 1970s kitchen (cream, harvest gold, burnt orange, a tomato cap, chocolate
+// brown), light or dark following the device, and the display face Fraunces (SIL Open Font License), served from this site.
+const LIGHT = '--ink: #33222c; --soft: #56434d; --paper: #f5e8cd; --card: #fbf3e1; --line: #dcc59b; --deep: #3d2034; --teal: #833e16; --btn: #833e16; --btn-ink: #ffffff;';
+const DARK = '--ink: #f9f0dd; --soft: #f0b887; --paper: #231120; --card: #3d2034; --line: #55304a; --deep: #f2ce47; --teal: #eead3e; --btn: #eead3e; --btn-ink: #231120;';
+const fontFace = (url) => `@font-face { font-family: "Fraunces Variable"; font-style: normal; font-display: swap; font-weight: 100 900; src: url(${url}) format("woff2-variations"); }`;
+const DISPLAY = 'font-family: "Fraunces Variable", Georgia, Cambria, serif; font-variation-settings: "SOFT" 100;';
+// The stripe: straight flat bands in the artwork's order until the owner's hand-made wave is added (frontend/src/art.js), then that picture, tiled.
+const bands = (up) => (ART.wave ? `.bands { height: 1rem; background: url(${up}art/${ART.wave}) repeat-x; background-size: auto 100%; }` : '.bands { height: .6rem; background: linear-gradient(180deg, #60304f 0 20%, #3a742f 20% 40%, #f2ce47 40% 60%, #e7602c 60% 80%, #f5e8cd 80% 100%); }');
+if (ART.wave) { mkdirSync(path.join(out, 'art'), { recursive: true }); copyFileSync(path.join(here, '..', 'frontend', 'public', 'art', ART.wave), path.join(out, 'art', ART.wave)); }
+const HEADER_BROWN = 'linear-gradient(100deg, #3d2034 0%, #5a2c3c 50%, #93441c 100%)';
+copyFileSync(path.join(here, 'site-src', 'fraunces-soft.woff2'), path.join(out, 'fraunces-soft.woff2'));
+copyFileSync(path.join(here, 'site-src', 'fraunces-OFL.txt'), path.join(out, 'fraunces-OFL.txt'));
 
 const safe = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 // A bit of code in a sentence gets a Copy button only when it is a whole command or address to type or paste on its own.
@@ -85,14 +99,17 @@ const page = (title, body) => `<!doctype html>
 <meta name="referrer" content="no-referrer">
 <title>${safe(title)}</title>
 <style>
-  :root { --ink: #1f2d33; --soft: #5b6b72; --paper: #fbfaf7; --line: #dfe5e3; --accent: #264653; }
-  @media (prefers-color-scheme: dark) { :root { --ink: #e9efee; --soft: #a3b3b5; --paper: #14201f; --line: #2b3b3c; --accent: #9ed0c8; } }
+  ${fontFace('fraunces-soft.woff2')}
+  :root { ${LIGHT} --accent: #3d2034; }
+  @media (prefers-color-scheme: dark) { :root { ${DARK} --accent: #f2ce47; } }
+  h1, h2 { ${DISPLAY} }
   body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
   main { max-width: 42rem; margin: 0 auto; padding: 2rem 1.1rem 4rem; }
   h1 { font-size: 1.7rem; line-height: 1.25; margin: 0 0 1rem; }
   h2 { font-size: 1.15rem; margin: 2rem 0 .4rem; color: var(--accent); }
   p, ul { margin: .6rem 0; } ul { padding-left: 1.2rem; }
   a { color: var(--accent); }
+  ${bands("")}
   .wide { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: .93rem; }
   th, td { text-align: left; vertical-align: top; padding: .5rem .6rem; border-bottom: 1px solid var(--line); }
@@ -100,6 +117,7 @@ const page = (title, body) => `<!doctype html>
 </style>
 </head>
 <body>
+<div class="bands" aria-hidden="true"></div>
 <main>
 ${body}
 </main>
@@ -140,12 +158,16 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
 <title>Life Is: Home Organizer</title>
 <link rel="icon" href="icon.png">
 <style>
-  :root { --ink: #1f2d33; --soft: #5b6b72; --paper: #fbfaf7; --card: #ffffff; --line: #dfe5e3; --deep: #264653; --teal: #2a9d8f; --sand: #e9c46a; --coral: #e76f51; }
-  @media (prefers-color-scheme: dark) { :root { --ink: #e9efee; --soft: #a3b3b5; --paper: #14201f; --card: #1b2b2b; --line: #2b3b3c; } }
+  ${fontFace('fraunces-soft.woff2')}
+  :root { ${LIGHT} --sand: #eead3e; --coral: #e7602b; }
+  @media (prefers-color-scheme: dark) { :root { ${DARK} } }
+  h1, h2, .bar strong { ${DISPLAY} }
+  ${bands("")}
+  .hero .bands { position: absolute; left: 0; right: 0; bottom: 0; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
   a { color: var(--teal); }
-  .hero { background: linear-gradient(135deg, var(--deep) 0%, var(--teal) 45%, var(--sand) 82%, var(--coral) 100%); color: #fff; padding: 1rem 1.1rem 3.5rem; }
+  .hero { position: relative; background: ${HEADER_BROWN}; color: #fff; padding: 1rem 1.1rem 3.5rem; }
   .bar, .wrap { max-width: 64rem; margin: 0 auto; }
   .bar { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
   .bar strong { font-size: 1.15rem; margin-right: auto; display: flex; align-items: center; gap: .5rem; }
@@ -155,14 +177,14 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
   .pill { background: rgba(255,255,255,.2); padding: .3rem .9rem; }
   .hero h1 { font-size: clamp(1.9rem, 5vw, 3rem); line-height: 1.15; margin: 3rem 0 1rem; max-width: 22ch; }
   .hero p { font-size: 1.15rem; max-width: 46ch; margin: 0 0 1.6rem; opacity: .95; }
-  .button { background: #fff; color: var(--deep); padding: .7rem 1.4rem; margin: 0 .5rem .5rem 0; }
+  .button { background: #f9f0dd; color: #3d2034; padding: .7rem 1.4rem; margin: 0 .5rem .5rem 0; }
   .button.quiet { background: rgba(255,255,255,.18); color: #fff; }
   .wrap { padding: 0 1.1rem; }
   .shot { margin: -2.2rem auto 0; display: block; width: 100%; height: auto; border-radius: 1rem; box-shadow: 0 12px 40px rgba(0,0,0,.25); border: 1px solid var(--line); }
   h2 { font-size: 1.5rem; margin: 3.5rem 0 .4rem; }
   .lede { color: var(--soft); margin: 0 0 1.4rem; max-width: 60ch; }
   .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 1rem; padding: 1.1rem 1.2rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 1.25rem; padding: 1.1rem 1.2rem; }
   .card h3 { margin: 0 0 .3rem; font-size: 1.05rem; } .card p { margin: 0; color: var(--soft); font-size: .95rem; }
   .card .icon { font-size: 1.5rem; } .card h3 .lifeis { font-weight: 400; color: var(--soft); }
   .shots { display: grid; gap: 1.2rem; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
@@ -171,7 +193,7 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
   .price b { font-size: 1.6rem; display: block; margin: .2rem 0; }
   ul.plain { padding-left: 1.1rem; margin: .4rem 0 0; color: var(--soft); font-size: .95rem; }
   .center { text-align: center; margin: 2.5rem 0; }
-  .center .button { background: var(--teal); color: #fff; }
+  .center .button { background: var(--btn); color: var(--btn-ink); }
   footer { border-top: 1px solid var(--line); margin-top: 4rem; padding: 1.5rem 1.1rem 3rem; font-size: .9rem; color: var(--soft); text-align: center; }
 </style>
 </head>
@@ -191,6 +213,7 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
     <a class="button" href="${DEMO}">Try the demo</a>
     <a class="button quiet" href="#what">See what it does</a>
   </div>
+  <div class="bands" aria-hidden="true"></div>
 </header>
 <div class="wrap">
 ${shots[0] ? `<img class="shot" src="img/${shots[0][0]}" alt="${safe(shots[0][1])}" width="1280" height="900">` : ''}
@@ -319,6 +342,7 @@ const docPage = (guide) => `<!doctype html>
   <a href="./">Guides</a>
   <a class="pill" href="https://demo.lifeis.living">Try the demo</a>
 </header>
+<div class="bands" aria-hidden="true"></div>
 <div class="layout">
 <nav class="menu" aria-label="Guides">
 ${guides.map((g) => `  <a href="${g.slug}.html"${g.slug === guide.slug ? ' aria-current="page"' : ''}>${safe(g.title)}</a>`).join('\n')}
@@ -361,37 +385,40 @@ for (const [old, [slug, section]] of Object.entries(MOVED)) {
 }
 copyFileSync(path.join(here, 'site-src', 'setup.js'),path.join(docsOut, 'setup.js'));
 copyFileSync(path.join(here, 'site-src', 'copy.js'), path.join(docsOut, 'copy.js'));
-writeFileSync(path.join(docsOut, 'docs.css'), `:root { --ink: #1f2d33; --soft: #5b6b72; --paper: #fbfaf7; --card: #ffffff; --line: #dfe5e3; --deep: #264653; --teal: #2a9d8f; }
-@media (prefers-color-scheme: dark) { :root { --ink: #e9efee; --soft: #a3b3b5; --paper: #14201f; --card: #1b2b2b; --line: #2b3b3c; --teal: #6cc5b8; } }
+// docs.css sits one folder down from the font, so it names the font from there.
+writeFileSync(path.join(docsOut, 'docs.css'), `${fontFace('../fraunces-soft.woff2')}
+:root { ${LIGHT} }
+@media (prefers-color-scheme: dark) { :root { ${DARK} } }
+h1, h2, .brand { ${DISPLAY} }
+${bands("../")}
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
 a { color: var(--teal); }
-.top { background: linear-gradient(120deg, var(--deep), #2a9d8f); color: #fff; padding: .7rem 1.1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.top { background: ${HEADER_BROWN}; color: #fff; padding: .7rem 1.1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .top a { color: #fff; text-decoration: none; opacity: .92; } .top .brand { font-weight: 700; font-size: 1.1rem; margin-right: auto; display: flex; align-items: center; gap: .5rem; opacity: 1; }
 .top img { width: 1.8rem; height: 1.8rem; border-radius: .45rem; } .pill { background: rgba(255,255,255,.2); border-radius: 999px; padding: .25rem .9rem; font-weight: 600; }
 .layout { max-width: 64rem; margin: 0 auto; padding: 1.5rem 1.1rem 3rem; display: grid; gap: 2rem; grid-template-columns: 14rem minmax(0, 1fr); }
 .menu { display: flex; flex-direction: column; gap: .15rem; align-self: start; position: sticky; top: 1rem; font-size: .95rem; }
 .menu a { padding: .3rem .7rem; border-radius: .5rem; text-decoration: none; color: var(--ink); }
-.menu a[aria-current] { background: var(--teal); color: #fff; font-weight: 600; } .menu a:hover { background: var(--line); } .menu a[aria-current]:hover { background: var(--teal); }
+.menu a[aria-current] { background: var(--btn); color: var(--btn-ink); font-weight: 600; } .menu a:hover { background: var(--line); } .menu a[aria-current]:hover { background: var(--btn); }
 @media (max-width: 46rem) { .layout { grid-template-columns: 1fr; gap: 1rem; } .menu { position: static; flex-direction: row; flex-wrap: wrap; } .menu a { background: var(--card); border: 1px solid var(--line); } }
 main { min-width: 0; }
 h1 { font-size: 1.8rem; line-height: 1.2; margin: 0 0 .8rem; } h2 { font-size: 1.25rem; margin: 2.2rem 0 .4rem; color: var(--deep); } h3 { font-size: 1.05rem; margin: 1.5rem 0 .3rem; }
-@media (prefers-color-scheme: dark) { h2 { color: var(--teal); } }
 p, ul, ol { margin: .6rem 0; } ul, ol { padding-left: 1.3rem; } li { margin: .25rem 0; }
 code { background: var(--line); border-radius: .3rem; padding: .05rem .35rem; font-size: .92em; }
 .wide { overflow-x: auto; } table { border-collapse: collapse; width: 100%; font-size: .94rem; }
 th, td { text-align: left; vertical-align: top; padding: .5rem .6rem; border-bottom: 1px solid var(--line); }
 .cards { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); margin-top: 1.2rem; }
-.cards a { background: var(--card); border: 1px solid var(--line); border-radius: .9rem; padding: .9rem 1rem; text-decoration: none; color: var(--ink); display: block; }
+.cards a { background: var(--card); border: 1px solid var(--line); border-radius: 1.1rem; padding: .9rem 1rem; text-decoration: none; color: var(--ink); display: block; }
 .cards a:hover { border-color: var(--teal); } .cards b { display: block; color: var(--teal); } .cards span { font-size: .92rem; color: var(--soft); }
-.note { background: #fbf0d3; color: #5b3a12; border-radius: .7rem; padding: .7rem .9rem; }
+.note { background: #fbe9bd; color: #3d2034; border-radius: .7rem; padding: .7rem .9rem; }
 .builder { background: var(--card); border: 1px solid var(--line); border-radius: .9rem; padding: .4rem 1rem 1rem; }
 .builder fieldset { border: 0; padding: 0; margin: 1rem 0 0; } .builder legend { font-weight: 700; padding: 0; }
 .builder label { display: block; margin: .35rem 0; } .builder .field { font-size: .92rem; color: var(--soft); }
 .builder input:not([type=radio]):not([type=checkbox]) { display: block; width: 100%; max-width: 30rem; margin-top: .2rem; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: .5rem; font: inherit; background: var(--paper); color: var(--ink); }
 .builder input[type=number] { max-width: 9rem; } .builder [data-when] { margin: .3rem 0 .3rem 1.6rem; }
 .file textarea { width: 100%; font: 13.5px/1.5 ui-monospace, Consolas, monospace; padding: .8rem; border: 1px solid var(--line); border-radius: .7rem; background: #14201f; color: #e9efee; white-space: pre; overflow-x: auto; resize: vertical; }
-button { font: inherit; font-weight: 600; background: var(--teal); color: #fff; border: 0; border-radius: 999px; padding: .5rem 1.1rem; min-height: 44px; cursor: pointer; margin-right: .4rem; }
+button { font: inherit; font-weight: 600; background: var(--btn); color: var(--btn-ink); border: 0; border-radius: 999px; padding: .5rem 1.1rem; min-height: 44px; cursor: pointer; margin-right: .4rem; }
 .copy { background: var(--card); color: var(--ink); border: 1px solid var(--soft); }
 .copy:hover { border-color: var(--teal); } .copy:focus-visible, .code pre:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
 .copy.inline { margin: .1rem 0 .1rem .4rem; padding: .3rem .9rem; }
