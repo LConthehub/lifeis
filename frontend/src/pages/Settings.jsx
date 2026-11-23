@@ -90,9 +90,9 @@ function Titled({ title, hint, children }) {
 }
 const THEME_KEY = 'lifeis.theme';
 const LOOKS = [
-  ['light', 'Light', 'Cream paper, plum-brown words.', 'bg-cream text-life-800 ring-life-200'],
-  ['dark', 'Dark', 'Deep plum night, cream words.', 'bg-night text-life-50 ring-life-700'],
-  ['system', 'Same as this device', 'Light by day, dark at night, whichever this device is using.', 'bg-gradient-to-r from-cream from-50% to-night to-50% text-life-600 ring-life-400'],
+  ['light', 'Light', 'Cream paper, chocolate words.', 'bg-paper text-life-800 ring-life-200'],
+  ['dark', 'Dark', 'Deep chocolate night, cream words.', 'bg-night text-life-50 ring-life-700'],
+  ['system', 'Same as this device', 'Light by day, dark at night, whichever this device is using.', 'bg-gradient-to-r from-paper from-50% to-night to-50% text-life-600 ring-life-400'],
 ];
 /** Light, dark, or whatever this device is set to. Kept in this browser (or this app), and applied at once by /theme.js. */
 function Look() {
@@ -105,7 +105,7 @@ function Look() {
     else document.documentElement.classList.toggle('dark', c === 'dark' || (c === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches));
   };
   return (
-    <Titled title="Look" hint="Cream paper by day, a deep plum night after dark. This is kept on this device only.">
+    <Titled title="Look" hint="Cream paper by day, a deep chocolate night after dark. This is kept on this device only.">
       <fieldset>
         <legend className="sr-only">Look</legend>
         <div className="grid gap-2 sm:grid-cols-3" data-look-choices>

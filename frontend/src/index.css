@@ -26,7 +26,7 @@ body { @apply text-gray-800 dark:text-life-50; }
    sheet of frosted glass over it (see App.jsx), and a thin band of gold, orange, rust and brown runs under the header. */
 body {
   min-height: 100vh;
-  background: theme('colors.cream');
+  background: theme('colors.paper');
 }
 :root { color-scheme: light; }
 .dark { color-scheme: dark; }
@@ -39,7 +39,7 @@ h1, h2, .font-display { font-family: theme('fontFamily.display'); font-variation
 /* Red words, and the grey hints, would be too dim on the dark sheet, so they are lightened there. A dark: class on the
    same element still wins over these. */
 :where(.dark) .text-red-600 { color: #f4a08a; }
-:where(.dark) .text-gray-400 { color: #e58f55; }
+:where(.dark) .text-gray-400 { color: #c29a68; }
 /* Ticks and dots take the gold in the dark, where the brown would vanish. */
 :where(.dark) .accent-life-600 { accent-color: #eead3e; }
 
@@ -51,3 +51,6 @@ h1, h2, .font-display { font-family: theme('fontFamily.display'); font-variation
   main > div { background: transparent !important; box-shadow: none !important; padding: 0 !important; backdrop-filter: none !important; --tw-ring-shadow: 0 0 #0000 !important; }
   .sticker-sheet, .report-sheet { padding: 0 !important; }
 }
+
+/* The one touch of the artwork's plum: the colour of selected words. */
+::selection { background: theme('colors.plum.500'); color: theme('colors.cream'); }

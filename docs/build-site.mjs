@@ -12,14 +12,14 @@ mkdirSync(out, { recursive: true });
 
 // The look, shared by every page: the colours of a 1970s kitchen (cream, harvest gold, burnt orange, a tomato cap, chocolate
 // brown), light or dark following the device, and the display face Fraunces (SIL Open Font License), served from this site.
-const LIGHT = '--ink: #33222c; --soft: #56434d; --paper: #f5e8cd; --card: #fbf3e1; --line: #dcc59b; --deep: #3d2034; --teal: #833e16; --btn: #833e16; --btn-ink: #ffffff;';
-const DARK = '--ink: #f9f0dd; --soft: #f0b887; --paper: #231120; --card: #3d2034; --line: #55304a; --deep: #f2ce47; --teal: #eead3e; --btn: #eead3e; --btn-ink: #231120;';
+const LIGHT = '--ink: #33291f; --soft: #5a4e40; --paper: #f1e5c8; --card: #faf3e3; --line: #dfcb9f; --deep: #422a17; --teal: #734825; --btn: #734825; --btn-ink: #ffffff;';
+const DARK = '--ink: #fbf4e4; --soft: #d2b184; --paper: #2a190d; --card: #422a17; --line: #5a3a20; --deep: #f2ce47; --teal: #eead3e; --btn: #eead3e; --btn-ink: #2a190d;';
 const fontFace = (url) => `@font-face { font-family: "Fraunces Variable"; font-style: normal; font-display: swap; font-weight: 100 900; src: url(${url}) format("woff2-variations"); }`;
 const DISPLAY = 'font-family: "Fraunces Variable", Georgia, Cambria, serif; font-variation-settings: "SOFT" 100;';
 // The stripe: straight flat bands in the artwork's order until the owner's hand-made wave is added (frontend/src/art.js), then that picture, tiled.
 const bands = (up) => (ART.wave ? `.bands { height: 1rem; background: url(${up}art/${ART.wave}) repeat-x; background-size: auto 100%; }` : '.bands { height: .6rem; background: linear-gradient(180deg, #60304f 0 20%, #3a742f 20% 40%, #f2ce47 40% 60%, #e7602c 60% 80%, #f5e8cd 80% 100%); }');
 if (ART.wave) { mkdirSync(path.join(out, 'art'), { recursive: true }); copyFileSync(path.join(here, '..', 'frontend', 'public', 'art', ART.wave), path.join(out, 'art', ART.wave)); }
-const HEADER_BROWN = 'linear-gradient(100deg, #3d2034 0%, #5a2c3c 50%, #93441c 100%)';
+const HEADER_BROWN = 'linear-gradient(100deg, #4a2f1a 0%, #5f361b 55%, #933f1d 100%)';
 copyFileSync(path.join(here, 'site-src', 'fraunces-soft.woff2'), path.join(out, 'fraunces-soft.woff2'));
 copyFileSync(path.join(here, 'site-src', 'fraunces-OFL.txt'), path.join(out, 'fraunces-OFL.txt'));
 
@@ -100,7 +100,7 @@ const page = (title, body) => `<!doctype html>
 <title>${safe(title)}</title>
 <style>
   ${fontFace('fraunces-soft.woff2')}
-  :root { ${LIGHT} --accent: #3d2034; }
+  :root { ${LIGHT} --accent: #422a17; }
   @media (prefers-color-scheme: dark) { :root { ${DARK} --accent: #f2ce47; } }
   h1, h2 { ${DISPLAY} }
   body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -177,7 +177,7 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
   .pill { background: rgba(255,255,255,.2); padding: .3rem .9rem; }
   .hero h1 { font-size: clamp(1.9rem, 5vw, 3rem); line-height: 1.15; margin: 3rem 0 1rem; max-width: 22ch; }
   .hero p { font-size: 1.15rem; max-width: 46ch; margin: 0 0 1.6rem; opacity: .95; }
-  .button { background: #f9f0dd; color: #3d2034; padding: .7rem 1.4rem; margin: 0 .5rem .5rem 0; }
+  .button { background: #fbf4e4; color: #422a17; padding: .7rem 1.4rem; margin: 0 .5rem .5rem 0; }
   .button.quiet { background: rgba(255,255,255,.18); color: #fff; }
   .wrap { padding: 0 1.1rem; }
   .shot { margin: -2.2rem auto 0; display: block; width: 100%; height: auto; border-radius: 1rem; box-shadow: 0 12px 40px rgba(0,0,0,.25); border: 1px solid var(--line); }
@@ -411,7 +411,7 @@ th, td { text-align: left; vertical-align: top; padding: .5rem .6rem; border-bot
 .cards { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); margin-top: 1.2rem; }
 .cards a { background: var(--card); border: 1px solid var(--line); border-radius: 1.1rem; padding: .9rem 1rem; text-decoration: none; color: var(--ink); display: block; }
 .cards a:hover { border-color: var(--teal); } .cards b { display: block; color: var(--teal); } .cards span { font-size: .92rem; color: var(--soft); }
-.note { background: #fbe9bd; color: #3d2034; border-radius: .7rem; padding: .7rem .9rem; }
+.note { background: #fbe9bd; color: #422a17; border-radius: .7rem; padding: .7rem .9rem; }
 .builder { background: var(--card); border: 1px solid var(--line); border-radius: .9rem; padding: .4rem 1rem 1rem; }
 .builder fieldset { border: 0; padding: 0; margin: 1rem 0 0; } .builder legend { font-weight: 700; padding: 0; }
 .builder label { display: block; margin: .35rem 0; } .builder .field { font-size: .92rem; color: var(--soft); }
