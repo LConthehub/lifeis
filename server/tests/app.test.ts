@@ -986,7 +986,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.
@@ -1290,4 +1290,64 @@ it('films and shows are looked up on TMDB with the persons own key, kept sealed,
 
   // Forgetting the key turns it off.
   expect((await admin.put('/api/lookups', { forget_films_key: true })).json).toMatchObject({ films: false, film_key: false });
+});
+
+it('tags are made, nested, put on things and recipes, filtered, merged and removed over the web, one list for each person', async () => {
+  const admin = await owner();
+  const home = (await admin.post('/api/tags', { name: 'Kitchen' })).json;
+  const small = (await admin.post('/api/tags', { name: 'Small', parent_id: home.id })).json;
+  expect([home.path, small.path]).toEqual(['Kitchen', 'Kitchen > Small']);
+  expect((await admin.post('/api/tags', {})).status).toBe(422);
+  expect((await admin.post('/api/tags', { name: 'x', parent_id: 99999 })).status).toBe(404);
+
+  const kinds = (await admin.post('/api/things/kinds', { name: 'Gadget', icon: '🔌', fields: [] })).json;
+  const kind = kinds.find((k: { name: string }) => k.name === 'Gadget');
+  const toaster = (await admin.post('/api/things/items', { kind_id: kind.id, name: 'Toaster' })).json;
+  const soup = (await admin.post('/api/kitchen/recipes', { title: 'Soup', ingredients_text: '1 leek', steps_text: 'Simmer.', tags: ['winter'] })).json;
+  expect(soup.tag_list.map((t: { path: string }) => t.path)).toEqual(['winter']);
+
+  expect((await admin.put(`/api/tags/on/thing/${toaster.id}`, { tag_ids: [small.id] })).json.map((t: { path: string }) => t.path)).toEqual(['Kitchen > Small']);
+  expect((await admin.get(`/api/tags/on/thing/${toaster.id}`)).json).toHaveLength(1);
+  expect((await admin.get('/api/tags/on/nonsense/1')).status).toBe(404);
+  expect((await admin.put(`/api/tags/on/thing/${toaster.id}`, {})).json).toEqual([]); // nothing given: none
+  await admin.put(`/api/tags/on/thing/${toaster.id}`, { tag_ids: [small.id] });
+  expect((await admin.post('/api/tags/bulk', { kind: 'recipe', ids: [soup.id], add: [home.id], remove: [] })).json).toEqual({ changed: 1 });
+  expect((await admin.post('/api/tags/bulk', { kind: 'bad', ids: [], add: [], remove: [] })).status).toBe(422);
+
+  // The filter on the lists: a parent includes what is inside it.
+  expect((await admin.get(`/api/things/items?tag=${home.id}`)).json.map((i: { name: string }) => i.name)).toEqual(['Toaster']);
+  expect((await admin.get(`/api/kitchen/recipes?tag=${home.id}`)).json.map((r: { title: string }) => r.title)).toEqual(['Soup']);
+  expect((await admin.get('/api/kitchen/recipes?tag=winter')).json.map((r: { title: string }) => r.title)).toEqual(['Soup']);
+  expect((await admin.get(`/api/projects?tag=${home.id}`)).json).toEqual([]);
+  expect((await admin.get(`/api/things/pets?tag=${home.id}`)).json).toEqual([]);
+  expect((await admin.get(`/api/things/upkeep?tag=${home.id}`)).json).toEqual([]);
+  expect((await admin.get(`/api/plans?tag=${home.id}`)).json).toEqual([]);
+  expect((await admin.get(`/api/media?tag=${home.id}`)).json).toEqual([]);
+  expect((await admin.get(`/api/money?tag=${home.id}`)).json.entries).toEqual([]);
+  expect((await admin.get(`/api/calendar?start=2046-03-01&tag=${home.id}`)).json).toEqual([]);
+  expect((await admin.get('/api/things/items?tag=abc')).status).toBe(422);
+
+  const page = (await admin.get(`/api/tags/${home.id}`)).json;
+  expect([page.total, page.groups.map((g: { kind: string }) => g.kind), page.inside.map((n: { path: string }) => n.path)]).toEqual([2, ['thing', 'recipe'], ['Kitchen > Small']]);
+  expect((await admin.get('/api/search?q=kitchen')).json.map((r: { kind: string }) => r.kind)).toEqual(['tag', 'tag', 'recipe', 'thing']);
+
+  // Another person has their own list and cannot see, use or change these.
+  const other = await member(admin, 'partner');
+  expect((await other.get('/api/tags')).json).toEqual([]);
+  expect((await other.get(`/api/tags/${home.id}`)).status).toBe(404);
+  expect((await other.put(`/api/tags/${home.id}`, { name: 'Mine' })).status).toBe(404);
+  expect((await other.delete(`/api/tags/${home.id}`)).status).toBe(404);
+  expect((await visitor().get('/api/tags')).status).toBe(401);
+
+  // Rename, move, merge, delete.
+  expect((await admin.put(`/api/tags/${small.id}`, { name: 'Gadgets' })).json.path).toBe('Kitchen > Gadgets');
+  expect((await admin.put(`/api/tags/${small.id}`, { parent_id: null })).json.path).toBe('Gadgets');
+  expect((await admin.put(`/api/tags/${home.id}`, { parent_id: home.id })).status).toBe(400);
+  const winter = (await admin.get('/api/tags')).json.find((t: { path: string }) => t.path === 'winter');
+  expect((await admin.post(`/api/tags/${winter.id}/merge`, { into: home.id })).json.path).toBe('Kitchen');
+  expect((await admin.post(`/api/tags/${winter.id}/merge`, { into: home.id })).status).toBe(404);
+  expect((await admin.post(`/api/tags/${home.id}/merge`, {})).status).toBe(422);
+  expect((await admin.delete(`/api/tags/${small.id}`)).status).toBe(204);
+  expect((await admin.get(`/api/things/items/${toaster.id}`)).json.tag_list).toEqual([]);
+  expect((await admin.get('/api/tags')).json.map((t: { path: string }) => t.path)).toEqual(['Kitchen']);
 });

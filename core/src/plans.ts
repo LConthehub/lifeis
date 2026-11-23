@@ -22,6 +22,7 @@ import { calendar, type Entry } from './calendar.ts';
 import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { inventory } from './inventory.ts';
 import { Problem } from './problem.ts';
+import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
 import { addDays, clean, dayNumber, dayOrNull, stamp, todayOf, type Clock } from './small.ts';
 import { pictureType } from './small.ts';
 export { pictureType };
@@ -72,7 +73,7 @@ export type PlanPhoto = { id: number; source: 'kept' | 'immich'; caption: string
 export type PlanWhen = 'ahead' | 'now' | 'past';
 export type PlanSummary = {
   id: number; name: string; start_day: string; end_day: string; when: PlanWhen; note: string | null;
-  items: number; tasks_left: number; photos: number; cover_photo: number | null;
+  items: number; tasks_left: number; photos: number; cover_photo: number | null; tag_list: TagRef[];
 };
 export type Plan = PlanSummary & { story: string | null; items_list: PlanItem[]; photos_list: PlanPhoto[]; /** What the calendar holds for its days, once they've come. */ happened: Entry[] };
 
@@ -196,7 +197,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
          (SELECT COUNT(*) FROM plan_photos f WHERE f.plan_id = p.id) AS photos,
          (SELECT f.id FROM plan_photos f WHERE f.plan_id = p.id ORDER BY f.sort_order, f.id LIMIT 1) AS cover_photo
        FROM plans p WHERE p.owner_id = ? ${where} ORDER BY p.start_day DESC, p.id DESC`, [owner, ...args]);
-    return rows.map(({ story: _story, ...r }) => ({ ...r, when: when(r) }));
+    return (await attachTags(db, owner, 'plan', rows)).map(({ story: _story, ...r }) => ({ ...r, when: when(r) }));
   }
 
   async function whole(id: number): Promise<Plan> {
@@ -230,7 +231,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
 
   return {
     /** Every plan, newest first: those ahead and under way, and the ones to look back on. */
-    list: () => summaries('', []),
+    list: async (find: { tag?: number | null } = {}) => onlyTagged(db, owner, 'plan', await summaries('', []), find.tag),
     get: whole,
 
     async create(input: PlanInput): Promise<Plan> {
@@ -261,6 +262,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
         if (!(await tx.get('SELECT id FROM plans WHERE id = ? AND owner_id = ?', [id, owner]))) return;
         for (const item of await tx.all<{ meal_plan_id: number | null }>('SELECT meal_plan_id FROM plan_items WHERE plan_id = ?', [id])) await offWeek(tx, item.meal_plan_id);
         await tx.run('DELETE FROM plans WHERE id = ? AND owner_id = ?', [id, owner]);
+        await unlink(tx, 'plan', id);
       });
     },
 

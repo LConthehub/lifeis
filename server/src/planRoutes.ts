@@ -3,7 +3,7 @@
  * was sent and passes it on.
  */
 import { photoLibrary, plans, shopping, MAX_PHOTO_BYTES, PHOTO_SERVICE, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
-import { notUnderstood, read, Refusal, type Body, type Context, type Route } from './http.ts';
+import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
 const at = (path: string) => new RegExp(`^/api/plans${path.replaceAll(':id', ID)}$`);
@@ -51,7 +51,7 @@ export function planRoutes(db: Db, tools?: PhotoTools): Route[] {
       return { status: 201, json: plan };
     }],
 
-    ['GET', at(''), async (c) => ({ json: await mine(c).list() })],
+    ['GET', at(''), async (c) => ({ json: await mine(c).list({ tag: queryNumber(c.query, 'tag') }) })],
     ['POST', at(''), async (c) => ({ status: 201, json: await mine(c).create(planFrom(c.body)) })],
     ['GET', at('/:id'), async (c) => ({ json: await mine(c).get(c.id) })],
     ['PUT', at('/:id'), async (c) => ({ json: await mine(c).update(c.id, planFrom(c.body)) })],

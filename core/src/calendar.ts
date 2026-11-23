@@ -12,6 +12,7 @@
  */
 import { upkeep } from './upkeep.ts';
 import type { Db, Value } from './db.ts';
+import { attachTags, idsWithTag, tagsOnto, unlink, type TagRef } from './tags.ts';
 import { Problem } from './problem.ts';
 import { addDays, clean, dayNumber, dayOrNull, inOrder, stamp, type Clock } from './small.ts';
 
@@ -27,7 +28,7 @@ export type EventInput = {
   /** A birthday or an anniversary: on this day every year from now on. */
   yearly?: boolean;
 };
-export type Event = { id: number; title: string; day: string; end_day: string | null; time: string | null; note: string | null; yearly: boolean };
+export type Event = { id: number; title: string; day: string; end_day: string | null; time: string | null; note: string | null; yearly: boolean; tag_list: TagRef[] };
 /** One coming round of a date that returns every year. */
 export type YearlyDate = { id: number; title: string; day: string; time: string | null; note: string | null; /** How many years since the first. */ years: number };
 
@@ -45,6 +46,8 @@ export type Entry = {
   link: string | null;
   /** The event's id, for an event. */
   id: number | null;
+  /** For an event: its tags. */
+  tag_list?: TagRef[];
 };
 
 const KIND_ORDER: EntryKind[] = ['plan', 'event', 'outside', 'due', 'upkeep', 'meal', 'session', 'media', 'use_by'];
@@ -72,9 +75,9 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
     return [title, input.day, end === input.day ? null : end, time, clean(input.note, 2000), yearly ? 1 : 0];
   }
 
-  type Kept = Omit<Event, 'yearly'> & { yearly: number };
+  type Kept = Omit<Event, 'yearly' | 'tag_list'> & { yearly: number };
   const COLUMNS = 'id, title, day, end_day, time, note, yearly';
-  const asEvent = (row: Kept): Event => ({ ...row, yearly: row.yearly === 1 });
+  const asEvent = (row: Kept): Event => ({ ...row, yearly: row.yearly === 1, tag_list: [] });
 
   /** Each time a yearly date comes round from `start` to `end`, soonest first. */
   async function yearlyIn(start: string, end: string): Promise<YearlyDate[]> {
@@ -92,12 +95,12 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
   const event = async (id: number): Promise<Event> => {
     const row = await db.get<Kept>(`SELECT ${COLUMNS} FROM events WHERE id = ? AND owner_id = ?`, [id, owner]);
     if (!row) throw new Problem(404, 'Not found');
-    return asEvent(row);
+    return (await attachTags(db, owner, 'event', [asEvent(row)]))[0]!;
   };
 
   return {
     /** Everything on each of `days` days from `start`, in the order the day goes. */
-    async between(start: string, days = 7): Promise<Entry[]> {
+    async between(start: string, days = 7, tag?: number | null): Promise<Entry[]> {
       if (!(Number.isInteger(days) && days >= 1 && days <= 62)) throw new Problem(400, '1 to 62 days');
       const end = addDays(start, days - 1);
       const entries: Entry[] = [];
@@ -169,11 +172,18 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
 
       const mealOrder = (e: Entry) => (e.kind === 'meal' ? (MEAL_TIME[e.detail ?? ''] ?? 9) : 0);
       // Sorting keeps the order things were read in when nothing else tells them apart.
-      return entries.sort((a, b) =>
+      const ordered = entries.sort((a, b) =>
         inOrder(a.day, b.day)
         || inOrder(a.time ?? '99', b.time ?? '99')
         || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)
         || mealOrder(a) - mealOrder(b));
+      // Dates carry tags. Asking for a tag leaves the dates that have it (or a tag inside it) and nothing else.
+      const dates = ordered.filter((e) => e.kind === 'event' && e.id !== null);
+      const on = await tagsOnto(db, owner, 'event', [...new Set(dates.map((e) => e.id!))]);
+      for (const e of dates) e.tag_list = on.get(e.id!) ?? [];
+      if (tag == null) return ordered;
+      const have = await idsWithTag(db, owner, 'event', tag);
+      return dates.filter((e) => have.has(e.id!));
     },
 
     getEvent: event,
@@ -199,6 +209,7 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
 
     async deleteEvent(id: number): Promise<void> {
       await db.run('DELETE FROM events WHERE id = ? AND owner_id = ?', [id, owner]);
+      await unlink(db, 'event', id);
     },
   };
 }

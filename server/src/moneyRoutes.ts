@@ -3,7 +3,7 @@
  * was sent and passes it on.
  */
 import { importStatement, lookOverStatement, money, readStatement, type Db } from '../../core/src/index.ts';
-import { notUnderstood, read, type Body, type Context, type Route } from './http.ts';
+import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
 const at = (path: string) => new RegExp(`^/api/${path.replaceAll(':id', ID)}$`);
@@ -40,7 +40,7 @@ export function moneyRoutes(db: Db): Route[] {
     // A statement downloaded from a bank or card, looked over and then brought in. Read here, sent nowhere. See bankStatement.ts.
     ['POST', at('money/statement/read'), async (c) => ({ json: await lookOverStatement(db, c.user.id, c.clock, statementFrom(c.body)) })],
     ['POST', at('money/statement'), async (c) => ({ status: 201, json: await importStatement(db, c.user.id, c.clock, statementFrom(c.body).rows, choicesFrom(c.body)) })],
-    ['GET', at('money'), async (c) => ({ json: await spending(c).month(c.query.get('month')) })],
+    ['GET', at('money'), async (c) => ({ json: await spending(c).month(c.query.get('month'), queryNumber(c.query, 'tag')) })],
     ['POST', at('money/categories'), async (c) => ({ status: 201, json: await spending(c).addCategory(categoryFrom(c.body)) })],
     ['PUT', at('money/categories/:id'), async (c) => (await spending(c).updateCategory(c.id, categoryFrom(c.body)), { status: 204 })],
     ['DELETE', at('money/categories/:id'), async (c) => (await spending(c).removeCategory(c.id), { status: 204 })],

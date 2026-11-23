@@ -9,8 +9,9 @@
 import type { Db, Value } from './db.ts';
 import { placePaths } from './inventory.ts';
 import { Problem } from './problem.ts';
+import { idsWithAny, tagsMatching, tagsOnto, type TagKind } from './tags.ts';
 
-export const SEARCH_KINDS = ['recipe', 'pantry', 'thing', 'place', 'title', 'project', 'job', 'pet', 'license', 'plan', 'event'] as const;
+export const SEARCH_KINDS = ['tag', 'recipe', 'pantry', 'thing', 'place', 'title', 'project', 'job', 'pet', 'license', 'plan', 'event'] as const;
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 export type SearchResult = { kind: SearchKind; id: number; icon: string; title: string; detail: string | null; link: string };
 
@@ -31,14 +32,25 @@ export async function search(db: Db, owner: number, query: string, only?: Search
     sql: words.map(() => `(${columns.map((c) => `LOWER(COALESCE(${c}, '')) LIKE ? ESCAPE '\\'`).join(' OR ')})`).join(' AND '),
     args: words.flatMap((w) => columns.map(() => like(w))),
   });
+  /** What carries a tag whose name (with where it sits) holds every word: found along with the tag itself. */
+  const named = await tagsMatching(db, owner, words);
+  const tagged = async (kind: TagKind, column: string): Promise<string> => {
+    const ids = await idsWithAny(db, owner, kind, named.inside);
+    return ids.length ? ` OR ${column} IN (${ids.join(',')})` : '';
+  };
   const out: SearchResult[] = [];
   const join = (...parts: (string | number | null | undefined | false)[]) => parts.filter(Boolean).join(' · ') || null;
 
+  if (wants('tag')) {
+    for (const t of named.matches.slice(0, PER_KIND)) out.push({ kind: 'tag', id: t.id, icon: '🏷', title: t.path, detail: 'Tag', link: `/tags/${t.id}` });
+  }
   if (wants('recipe')) {
-    const w = every(['title', 'description', 'tags', 'notes']);
-    for (const r of await db.all<{ id: number; title: string; tags: string | null }>(
-      `SELECT id, title, tags FROM recipes WHERE owner_id = ? AND ${w.sql} ORDER BY title COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
-      out.push({ kind: 'recipe', id: r.id, icon: '🍳', title: r.title, detail: join('Recipe', r.tags?.split(',').slice(0, 3).join(', ')), link: `/recipes/${r.id}` });
+    const w = every(['title', 'description', 'notes']);
+    const found = await db.all<{ id: number; title: string }>(
+      `SELECT id, title FROM recipes WHERE owner_id = ? AND (${w.sql}${await tagged('recipe', 'id')}) ORDER BY title COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args]);
+    const on = await tagsOnto(db, owner, 'recipe', found.map((r) => r.id));
+    for (const r of found) {
+      out.push({ kind: 'recipe', id: r.id, icon: '🍳', title: r.title, detail: join('Recipe', (on.get(r.id) ?? []).slice(0, 3).map((t) => t.name).join(', ')), link: `/recipes/${r.id}` });
     }
   }
   if (wants('pantry')) {
@@ -58,7 +70,7 @@ export async function search(db: Db, owner: number, query: string, only?: Search
       "(SELECT GROUP_CONCAT(v.value, ' ') FROM item_values v WHERE v.item_id = i.id)",
       "(SELECT GROUP_CONCAT(a.activity, ' ') FROM item_activities a WHERE a.item_id = i.id)"]);
     for (const t of await db.all<{ id: number; name: string; kind: string; icon: string | null; place_id: number | null }>(
-      `SELECT i.id, i.name, k.name AS kind, k.icon, i.place_id FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.owner_id = ? AND ${w.sql} ORDER BY i.name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
+      `SELECT i.id, i.name, k.name AS kind, k.icon, i.place_id FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.owner_id = ? AND (${w.sql}${await tagged('thing', 'i.id')}) ORDER BY i.name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
       out.push({ kind: 'thing', id: t.id, icon: t.icon || '📦', title: t.name, detail: join(t.kind, where(t.place_id) && `📍 ${where(t.place_id)}`), link: `/things/${t.id}` });
     }
   }
@@ -75,7 +87,7 @@ export async function search(db: Db, owner: number, query: string, only?: Search
       `SELECT m.id, m.title, m.type, m.creator, m.year,
               (SELECT c.place_id FROM media_copies c WHERE c.media_id = m.id AND c.place_id IS NOT NULL ORDER BY c.id LIMIT 1) AS place_id,
               (SELECT c.lent_to FROM media_copies c WHERE c.media_id = m.id AND c.lent_to IS NOT NULL ORDER BY c.id LIMIT 1) AS lent_to
-       FROM media m WHERE m.owner_id = ? AND ${w.sql} ORDER BY m.title COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
+       FROM media m WHERE m.owner_id = ? AND (${w.sql}${await tagged('title', 'm.id')}) ORDER BY m.title COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
       out.push({ kind: 'title', id: m.id, icon: MEDIA_ICONS[m.type] ?? '🗃', title: m.title,
         detail: join(m.creator, m.year, m.lent_to ? `with ${m.lent_to}` : where(m.place_id) && `📍 ${where(m.place_id)}`), link: `/media/${m.id}` });
     }
@@ -83,21 +95,21 @@ export async function search(db: Db, owner: number, query: string, only?: Search
   if (wants('project')) {
     const w = every(['name', 'activity', 'notes']);
     for (const p of await db.all<{ id: number; name: string; activity: string | null; status: string }>(
-      `SELECT id, name, activity, status FROM projects WHERE owner_id = ? AND ${w.sql} ORDER BY updated_at DESC LIMIT ${PER_KIND}`, [owner, ...w.args])) {
+      `SELECT id, name, activity, status FROM projects WHERE owner_id = ? AND (${w.sql}${await tagged('project', 'id')}) ORDER BY updated_at DESC LIMIT ${PER_KIND}`, [owner, ...w.args])) {
       out.push({ kind: 'project', id: p.id, icon: '🧵', title: p.name, detail: join('Project', p.activity, p.status), link: `/projects/${p.id}` });
     }
   }
   if (wants('job')) {
     const w = every(['name', 'activity', 'steps', 'note']);
     for (const j of await db.all<{ id: number; name: string; activity: string | null }>(
-      `SELECT id, name, activity FROM upkeep_jobs WHERE (owner_id = ? OR assigned_to = ?) AND ${w.sql} ORDER BY name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, owner, ...w.args])) {
+      `SELECT id, name, activity FROM upkeep_jobs WHERE (owner_id = ? OR assigned_to = ?) AND (${w.sql}${await tagged('job', 'id')}) ORDER BY name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, owner, ...w.args])) {
       out.push({ kind: 'job', id: j.id, icon: '🔧', title: j.name, detail: join('Upkeep', j.activity), link: `/things/upkeep/${j.id}` });
     }
   }
   if (wants('pet')) {
     const w = every(['name', 'species', 'breed', 'microchip', 'vet_name', 'note']);
     for (const p of await db.all<{ id: number; name: string; species: string | null; breed: string | null }>(
-      `SELECT id, name, species, breed FROM pets WHERE owner_id = ? AND ${w.sql} ORDER BY name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
+      `SELECT id, name, species, breed FROM pets WHERE owner_id = ? AND (${w.sql}${await tagged('pet', 'id')}) ORDER BY name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
       out.push({ kind: 'pet', id: p.id, icon: '🐾', title: p.name, detail: join('Pet', p.breed ?? p.species), link: `/things/pets/${p.id}` });
     }
   }
@@ -112,14 +124,14 @@ export async function search(db: Db, owner: number, query: string, only?: Search
   if (wants('plan')) {
     const w = every(['name', 'note', 'story']);
     for (const p of await db.all<{ id: number; name: string; start_day: string }>(
-      `SELECT id, name, start_day FROM plans WHERE owner_id = ? AND ${w.sql} ORDER BY start_day DESC LIMIT ${PER_KIND}`, [owner, ...w.args])) {
+      `SELECT id, name, start_day FROM plans WHERE owner_id = ? AND (${w.sql}${await tagged('plan', 'id')}) ORDER BY start_day DESC LIMIT ${PER_KIND}`, [owner, ...w.args])) {
       out.push({ kind: 'plan', id: p.id, icon: '✨', title: p.name, detail: join('Plan', p.start_day), link: `/plans/${p.id}` });
     }
   }
   if (wants('event')) {
     const w = every(['title', 'note']);
     for (const e of await db.all<{ id: number; title: string; day: string; yearly: number }>(
-      `SELECT id, title, day, yearly FROM events WHERE owner_id = ? AND ${w.sql} ORDER BY day DESC LIMIT ${PER_KIND}`, [owner, ...w.args])) {
+      `SELECT id, title, day, yearly FROM events WHERE owner_id = ? AND (${w.sql}${await tagged('event', 'id')}) ORDER BY day DESC LIMIT ${PER_KIND}`, [owner, ...w.args])) {
       out.push({ kind: 'event', id: e.id, icon: e.yearly ? '🎂' : '📌', title: e.title, detail: join(e.yearly ? `Every year, ${e.day.slice(5)}` : e.day), link: `/calendar?day=${e.yearly ? e.day.slice(5) : e.day}` });
     }
   }

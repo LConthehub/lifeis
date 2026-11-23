@@ -8,6 +8,7 @@
  */
 import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { Problem } from './problem.ts';
+import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
 import { clean, dayNumber, dayOrNull, pictureType, stamp, todayOf, type Clock } from './small.ts';
 import { upkeep, type EveryUnit, type Job, type JobKind } from './upkeep.ts';
 
@@ -22,6 +23,7 @@ export type PetSummary = {
   care_due: number;
   /** The most pressing of its care: "Vaccinations", and how it stands. */
   next: { id: number; name: string; state: Job['due']['state']; days_left: number | null } | null;
+  tag_list: TagRef[];
 };
 export type Pet = PetSummary & {
   microchip: string | null; vet_name: string | null; vet_phone: string | null; food: string | null; note: string | null;
@@ -78,6 +80,7 @@ export function pets(db: Db, owner: number, clock: Clock = () => new Date()) {
       id: r.id, name: r.name, species: r.species, breed: r.breed, born_on: r.born_on, photo: Boolean(r.photo),
       care_due: mine.filter((j) => PRESSING.includes(j.due.state)).length,
       next: first && first.due.state !== 'unscheduled' ? { id: first.id, name: careName(first.name, r.name), state: first.due.state, days_left: first.due.days_left } : null,
+      tag_list: [],
     };
   }
 
@@ -85,15 +88,16 @@ export function pets(db: Db, owner: number, clock: Clock = () => new Date()) {
     const r = await row(db, id);
     const care = (await upkeep(db, owner, clock).list()).filter((j) => j.pet?.id === id);
     return {
-      ...summary(r, care), microchip: r.microchip, vet_name: r.vet_name, vet_phone: r.vet_phone, food: r.food, note: r.note, care,
+      ...summary(r, care), tag_list: (await attachTags(db, owner, 'pet', [{ id }]))[0]!.tag_list, microchip: r.microchip, vet_name: r.vet_name, vet_phone: r.vet_phone, food: r.food, note: r.note, care,
       weights: await db.all<PetWeight>('SELECT id, day, value, unit FROM pet_weights WHERE pet_id = ? ORDER BY day DESC, id DESC LIMIT 100', [id]),
     };
   }
 
   return {
-    async list(): Promise<PetSummary[]> {
+    async list(find: { tag?: number | null } = {}): Promise<PetSummary[]> {
       const care = await upkeep(db, owner, clock).list();
-      return (await db.all<Row>(`SELECT ${COLUMNS} FROM pets WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id`, [owner])).map((r) => summary(r, care));
+      const found = await onlyTagged(db, owner, 'pet', await db.all<Row>(`SELECT ${COLUMNS} FROM pets WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id`, [owner]), find.tag);
+      return attachTags(db, owner, 'pet', found.map((r) => summary(r, care)));
     },
     get: whole,
 
@@ -114,6 +118,7 @@ export function pets(db: Db, owner: number, clock: Clock = () => new Date()) {
     /** Remove a pet, with its care and its weights. */
     async remove(id: number): Promise<void> {
       await db.run('DELETE FROM pets WHERE id = ? AND owner_id = ?', [id, owner]);
+      await unlink(db, 'pet', id);
     },
 
     /** The care that suits this pet and isn't already theirs. */

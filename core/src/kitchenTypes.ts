@@ -3,6 +3,8 @@
  * prep_minutes), so a page can't tell whether the answer came from the server or from the app itself.
  */
 
+import type { TagRef } from './tags.ts';
+
 export type Part = 'ingredients' | 'steps';
 export type Meal = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
@@ -89,7 +91,10 @@ export type RecipeSummary = {
   servings: number | null;
   prep_minutes: number | null;
   cook_minutes: number | null;
+  /** The names of its tags. */
   tags: string[];
+  /** Its tags in full: where each sits. */
+  tag_list: TagRef[];
   updated_at: string;
   /** Whether it has a picture (asked for at /api/kitchen/recipes/:id/photo). */
   has_photo: boolean;
@@ -97,12 +102,13 @@ export type RecipeSummary = {
   photo_added_at: string | null;
 };
 
-export type Recipe =Omit<RecipeSummary, 'tags'> & {
+export type Recipe =Omit<RecipeSummary, 'tags' | 'tag_list'> & {
   owner_id: number;
   source_url: string | null;
   original_text: string | null;
   notes: string | null;
   tags: string[];
+  tag_list: TagRef[];
   created_at: string;
   ingredients: RecipeLine[];
   steps: RecipeLine[];

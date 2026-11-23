@@ -16,6 +16,7 @@
 import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { placePaths, setAsideByItem } from './inventory.ts';
 import { Problem } from './problem.ts';
+import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
 import { clean, dayNumber, dayOrNull, rounded, stamp, todayOf, type Clock } from './small.ts';
 import * as units from './units.ts';
 
@@ -90,6 +91,7 @@ export type ProjectSummary = {
   sessions_count: number;
   /** How many of its lines are short of something. */
   short_count: number;
+  tag_list: TagRef[];
 };
 /** One thing a project costs: what was planned, and once paid, what it came to. */
 export type Cost = {
@@ -110,7 +112,7 @@ export type CostInput = { label?: string | null; planned_cents?: number | null; 
 export type Budget = { currency: string; planned: number; spent: number; expected: number; left: number; unpaid: number };
 export type Project = ProjectSummary & { lines: Line[]; sessions: Session[]; costs: Cost[]; budget: Budget };
 
-type ProjectRow = Omit<ProjectSummary, 'minutes' | 'sessions_count' | 'short_count'>;
+type ProjectRow = Omit<ProjectSummary, 'minutes' | 'sessions_count' | 'short_count' | 'tag_list'>;
 type LineRow = Omit<Line, 'amount' | 'have' | 'place' | 'short' | 'short_text'> & {
   item_quantity: number | null; item_unit: string | null; item_place: number | null; item_there: number | null;
 };
@@ -186,6 +188,7 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
       minutes: sessions.reduce((sum, s) => sum + (s.minutes ?? 0), 0),
       sessions_count: sessions.length,
       short_count: lines.filter((line) => line.short).length,
+      tag_list: (await attachTags(q, owner, 'project', [{ id }]))[0]!.tag_list,
     };
   }
 
@@ -274,7 +277,7 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
 
   return {
     /** The person's projects, the ones being worked on first. */
-    async listProjects(find: { status?: string | null; activity?: string | null } = {}): Promise<ProjectSummary[]> {
+    async listProjects(find: { status?: string | null; activity?: string | null; tag?: number | null } = {}): Promise<ProjectSummary[]> {
       let sql = `SELECT ${PROJECT_COLUMNS} FROM projects WHERE owner_id = ?`;
       const args: Value[] = [owner];
       if (find.status) {
@@ -288,7 +291,7 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
       sql += ` ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 WHEN 'planned' THEN 2 WHEN 'idea' THEN 3 WHEN 'done' THEN 4 ELSE 5 END,
                COALESCE(due_on, '9999'), name COLLATE NOCASE`;
       const out: ProjectSummary[] = [];
-      for (const row of await db.all<ProjectRow>(sql, args)) {
+      for (const row of await onlyTagged(db, owner, 'project', await db.all<ProjectRow>(sql, args), find.tag)) {
         const { lines: _lines, sessions: _sessions, ...summary } = await project(db, row.id);
         out.push(summary);
       }
@@ -333,6 +336,7 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
     /** Remove a project. What it had set aside is free again; what it had already used stays used. */
     async deleteProject(id: number): Promise<void> {
       await db.run('DELETE FROM projects WHERE id = ? AND owner_id = ?', [id, owner]);
+      await unlink(db, 'project', id);
     },
 
     // ---------- what it uses ----------

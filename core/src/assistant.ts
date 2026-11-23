@@ -23,6 +23,7 @@ import { money } from './money.ts';
 import { Problem } from './problem.ts';
 import { projects } from './projects.ts';
 import { addDays, clean, todayOf, type Clock } from './small.ts';
+import { attachTags } from './tags.ts';
 
 export const ASSISTANT_SERVICE = {
   name: 'An AI assistant',
@@ -149,7 +150,8 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
     const today = todayOf(clock);
     const out: Record<string, unknown> = { today };
     if (areas.includes('kitchen')) {
-      const recipes = await db.all<{ id: number; title: string; tags: string | null }>('SELECT id, title, tags FROM recipes WHERE owner_id = ? ORDER BY title', [owner]);
+      const recipes = (await attachTags(db, owner, 'recipe', await db.all<{ id: number; title: string }>('SELECT id, title FROM recipes WHERE owner_id = ? ORDER BY title', [owner])))
+        .map((r) => ({ id: r.id, title: r.title, tags: r.tag_list.map((t) => t.name).join(',') }));
       const lines = await db.all<{ recipe_id: number; text: string }>(
         "SELECT l.recipe_id, l.text FROM recipe_lines l JOIN recipes r ON r.id = l.recipe_id WHERE r.owner_id = ? AND l.part = 'ingredients' AND l.is_heading = 0 ORDER BY l.recipe_id, l.sort_order", [owner]);
       out.recipes = recipes.map((r) => ({

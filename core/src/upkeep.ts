@@ -19,6 +19,7 @@ import { inventory } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
 import { money } from './money.ts';
 import { Problem } from './problem.ts';
+import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
 import { addDays, clean, dayNumber, dayOrNull, labelKey, rounded, stamp, todayOf, type Clock } from './small.ts';
 import * as units from './units.ts';
 
@@ -114,6 +115,7 @@ export type Job = {
   supplies: JobSupply[];
   due: Due;
   last_done: { day: string; reading: number | null } | null;
+  tag_list: TagRef[];
 };
 export type DoneResult = { job: Job; done: DoneRecord[]; to_buy: string[]; check_by_hand: string[] };
 
@@ -441,6 +443,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
       steps: row.steps, note: row.note, tools, supplies,
       due: dueOf(row, last ? { day: last.day, reading: lastReading } : null, await latestReading(q, row), today()),
       last_done: last,
+      tag_list: [],
     };
   }
 
@@ -522,15 +525,18 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
       [row.owner_id, row.item_id, row.item_id === null ? row.id : null, value, day, now()]);
   }
 
-  async function listJobs(): Promise<Job[]> {
-    const all: Job[] = [];
-    for (const row of await rows(db)) all.push(await whole(db, row));
+  async function listJobs(find: { tag?: number | null } = {}): Promise<Job[]> {
+    const every: Job[] = [];
+    for (const row of await rows(db)) every.push(await whole(db, row));
+    const all = await attachTags(db, viewer, 'job', await onlyTagged(db, viewer, 'job', every, find.tag));
     return all.sort((a, b) => ORDER.indexOf(a.due.state) - ORDER.indexOf(b.due.state)
       || (a.due.days_left ?? Infinity) - (b.due.days_left ?? Infinity) || a.name.localeCompare(b.name));
   }
   async function getJob(id: number): Promise<Job & { done: DoneRecord[] }> {
     const row = await seen(db, id);
-    return { ...(await whole(db, row)), done: await doneList(db, id) };
+    const job = await whole(db, row);
+    job.tag_list = (await attachTags(db, viewer, 'job', [job]))[0]!.tag_list;
+    return { ...job, done: await doneList(db, id) };
   }
 
   /** What a point is worth in cents, or null while points have no value. */
@@ -635,6 +641,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
     async remove(id: number): Promise<void> {
       await mine(db, id);
       await db.run('DELETE FROM upkeep_jobs WHERE id = ?', [id]);
+      await unlink(db, 'job', id);
     },
 
     /** A reading taken without doing the job: the car's miles today. */

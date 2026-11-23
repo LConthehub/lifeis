@@ -1103,6 +1103,53 @@ export const MIGRATIONS: Migration[] = [
       `UPDATE upkeep_jobs SET activity = 'Yarn crafts' WHERE activity = 'Knitting & crochet' COLLATE NOCASE`,
     ],
   },
+  {
+    // Tags: one list for the household, nesting like Kitchen > Appliances, put on things, recipes, projects, plans,
+    // spending, titles, pets, upkeep jobs and calendar dates. A link names the kind of thing and its id; there is no
+    // foreign key to the thing (the kinds live in many tables), so the code takes a thing's links away when it is
+    // removed and every read joins the thing, so a stray link never shows. Recipe tags were a comma list of words:
+    // each distinct word becomes one top-level tag for its owner, linked to the recipes that had it. The old
+    // recipes.tags column is left where it is and no longer read.
+    number: 39,
+    name: 'tags',
+    statements: [
+      `CREATE TABLE tags (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        key TEXT NOT NULL,
+        parent_id INTEGER REFERENCES tags(id),
+        created_at TEXT NOT NULL
+      )`,
+      // NULL parents are never equal in a unique index, so top-level tags are keyed under 0.
+      `CREATE UNIQUE INDEX idx_tags_key ON tags(owner_id, COALESCE(parent_id, 0), key)`,
+      `CREATE INDEX idx_tags_parent ON tags(parent_id)`,
+      `CREATE TABLE tag_links (
+        tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        target_id INTEGER NOT NULL,
+        PRIMARY KEY (tag_id, kind, target_id)
+      )`,
+      `CREATE INDEX idx_tag_links_target ON tag_links(kind, target_id)`,
+      `INSERT INTO tags (owner_id, name, key, parent_id, created_at)
+        WITH RECURSIVE split(owner_id, word, rest) AS (
+          SELECT owner_id, '', tags || ',' FROM recipes WHERE tags IS NOT NULL AND tags <> ''
+          UNION ALL
+          SELECT owner_id, TRIM(SUBSTR(rest, 1, INSTR(rest, ',') - 1)), SUBSTR(rest, INSTR(rest, ',') + 1) FROM split WHERE rest <> ''
+        )
+        SELECT owner_id, SUBSTR(MIN(word), 1, 40), LOWER(SUBSTR(MIN(word), 1, 40)), NULL, strftime('%Y-%m-%dT%H:%M:%S', 'now') || '+00:00'
+        FROM split WHERE word <> '' GROUP BY owner_id, LOWER(SUBSTR(word, 1, 40))`,
+      `INSERT OR IGNORE INTO tag_links (tag_id, kind, target_id)
+        WITH RECURSIVE split(recipe_id, owner_id, word, rest) AS (
+          SELECT id, owner_id, '', tags || ',' FROM recipes WHERE tags IS NOT NULL AND tags <> ''
+          UNION ALL
+          SELECT recipe_id, owner_id, TRIM(SUBSTR(rest, 1, INSTR(rest, ',') - 1)), SUBSTR(rest, INSTR(rest, ',') + 1) FROM split WHERE rest <> ''
+        )
+        SELECT t.id, 'recipe', s.recipe_id FROM split s
+        JOIN tags t ON t.owner_id = s.owner_id AND t.parent_id IS NULL AND t.key = LOWER(SUBSTR(s.word, 1, 40))
+        WHERE s.word <> ''`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

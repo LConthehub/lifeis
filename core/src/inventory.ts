@@ -14,6 +14,7 @@
 import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { historyOf, noteHistory, noteMove, placePath, type HistoryEntry } from './history.ts';
 import { Problem } from './problem.ts';
+import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
 import { clean, dayNumber, dayOrNull, inOrder, labelKey, pictureType, rounded, stamp, todayOf, type Clock } from './small.ts';
 import { STARTERS, groupOfKind, type Starter } from './starters.ts';
 import * as units from './units.ts';
@@ -75,6 +76,7 @@ export const MAX_DOCUMENT = 12_000_000;
 const DOCUMENT_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 export type Item = {
   id: number;
+  tag_list: TagRef[];
   kind_id: number;
   kind: string;
   icon: string | null;
@@ -137,7 +139,7 @@ export function stickerCode(read: string): string | null {
   const m = /(?:^|\/p\/)([2-9A-HJ-NP-Za-hj-np-z]{10})\/?$/.exec(read.trim());
   return m ? m[1]!.toUpperCase() : null;
 }
-type ItemRow = Omit<Item, 'amount' | 'place' | 'low' | 'values' | 'set_aside' | 'free' | 'photo' | 'activities' | 'records' | 'warranty_days'> & { photo: number } & Records;
+type ItemRow = Omit<Item, 'tag_list' | 'amount' | 'place' | 'low' | 'values' | 'set_aside' | 'free' | 'photo' | 'activities' | 'records' | 'warranty_days'> & { photo: number } & Records;
 
 /** The code out of a scanned thing's sticker: a web address ending in /t/ and the code. Null when it isn't one. */
 export function thingStickerCode(read: string): string | null {
@@ -438,7 +440,8 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       values.get(row.item_id)![String(row.field_id)] = shownValue(row.type, row.value);
     }
     const today = todayOf(clock);
-    return rows.map(({ bought_on, bought_at, price_cents, value_cents, serial, model, warranty_until, ...row }) => {
+    const tagged = await attachTags(q, owner, 'thing', rows);
+    return tagged.map(({ bought_on, bought_at, price_cents, value_cents, serial, model, warranty_until, ...row }) => {
       const setAside = rounded(aside.get(row.id) ?? 0, 4);
       return {
         ...row,
@@ -765,7 +768,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     // ---------- things ----------
 
     /** The person's things: all of them, or of one kind, in one place (and the places inside it), or matching some words. */
-    async listItems(find: { kind_id?: number | null; place_id?: number | null; q?: string | null; low?: boolean } = {}): Promise<Item[]> {
+    async listItems(find: { kind_id?: number | null; place_id?: number | null; q?: string | null; low?: boolean; tag?: number | null } = {}): Promise<Item[]> {
       let where = '';
       const args: Value[] = [];
       if (find.kind_id != null) {
@@ -792,6 +795,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
         }
         found = found.filter((one) => one.place_id !== null && inside.has(one.place_id));
       }
+      found = await onlyTagged(db, owner, 'thing', found, find.tag);
       return find.low ? found.filter((one) => one.low) : found;
     },
 
@@ -1004,6 +1008,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     /** Remove a thing. Projects that used it keep its name on their list. */
     async deleteItem(id: number): Promise<void> {
       await db.run('DELETE FROM items WHERE id = ? AND owner_id = ?', [id, owner]);
+      await unlink(db, 'thing', id);
     },
   };
 }

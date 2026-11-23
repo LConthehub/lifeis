@@ -15,6 +15,7 @@
  */
 import { atomic, type Db, type Queries } from './db.ts';
 import { Problem } from './problem.ts';
+import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
 import { clean, dayOrNull, labelKey, stamp, todayOf, type Clock } from './small.ts';
 
 export type Person = { id: number; username: string };
@@ -41,6 +42,7 @@ export type Entry = {
   /** Who wrote it down. */
   by: string;
   mine: boolean;
+  tag_list: TagRef[];
 };
 export type ProjectSpend = { project_id: number; project: string; label: string; cents: number; day: string };
 export type Month = {
@@ -171,7 +173,7 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
     },
 
     /** A month ("2046-03"; this month when left out): every category you can see, and what was spent. */
-    async month(given?: string | null): Promise<Month> {
+    async month(given?: string | null, tag?: number | null): Promise<Month> {
       const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(given ?? '') ? given! : todayOf(clock).slice(0, 7);
       const within = [`${month}-01`, `${month}-31`];
       const sign = await db.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'shopping_currency'", [owner]);
@@ -185,7 +187,7 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
         id: c.id, name: c.name, monthly_cents: c.monthly_cents, spent: c.spent, left: c.monthly_cents - c.spent, mine: c.owner_id === owner, owner: c.owner,
         shared_with: shares.filter((s) => s.category_id === c.id).map((s) => ({ id: s.id, username: s.username })),
       }));
-      const entries = await db.all<Omit<Entry, 'mine'> & { owner_id: number }>(
+      const entries = await db.all<Omit<Entry, 'mine' | 'tag_list'> & { owner_id: number }>(
         `SELECT e.id, e.label, e.cents, e.day, e.note, e.category_id, c.name AS category, u.username AS by, e.owner_id
          FROM money_entries e LEFT JOIN money_categories c ON c.id = e.category_id JOIN users u ON u.id = e.owner_id
          WHERE e.day BETWEEN ? AND ? AND ((e.category_id IS NULL AND e.owner_id = ?) OR e.category_id IN (${SEEN}))
@@ -201,7 +203,7 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
       return {
         month, currency: sign?.value ?? '$', categories, uncategorised, projects: { spent: onProjects, lines },
         total: { planned, spent, left: planned - spent },
-        entries: entries.map(({ owner_id, ...e }) => ({ ...e, mine: owner_id === owner })),
+        entries: (await attachTags(db, owner, 'spending', await onlyTagged(db, owner, 'spending', entries, tag))).map(({ owner_id, ...e }) => ({ ...e, mine: owner_id === owner })),
         people: await db.all<Person>('SELECT id, username FROM users WHERE id != ? ORDER BY username', [owner]),
       };
     },
@@ -259,6 +261,7 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
       await atomic(db, async (tx) => {
         await changeable(tx, id);
         await tx.run('DELETE FROM money_entries WHERE id = ?', [id]);
+        await unlink(tx, 'spending', id);
       });
     },
   };

@@ -59,6 +59,8 @@ export { upkeep, dueOf, addInterval, STARTER_JOBS, EVERY_UNITS } from './upkeep.
 export type { Job, JobInput, DoneInput, DoneRecord, Due, DueState, Upkeep } from './upkeep.ts';
 export { reminders, remindersDue, zoneNow, digestText, newTopic, COVERS, NTFY_SERVICE, PUSH_SERVICE, EMAIL_SERVICE } from './reminders.ts';
 export type { Reminders, ReminderSettings, ReminderTools, Digest, DigestLine, Channel, PushSender, PushSubscription } from './reminders.ts';
+export { tags, TAG_KINDS, isTagKind, MAX_TAG_NAME } from './tags.ts';
+export type { TagKind, TagRef, TagNode, Tagged, TagPage, Tags } from './tags.ts';
 export { search, SEARCH_KINDS } from './search.ts';
 export type { SearchKind, SearchResult } from './search.ts';
 export { DOCUMENT_KINDS, MAX_DOCUMENT } from './inventory.ts';

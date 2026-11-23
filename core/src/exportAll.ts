@@ -26,6 +26,7 @@ import { Problem } from './problem.ts';
 import { recipeKey } from './recipeFiles.ts';
 import { cut, linesAsText, splitLines } from './recipeText.ts';
 import { clean, dayNumber, labelKey, pictureType, stamp, todayOf, type Clock } from './small.ts';
+import { exportRows, setByPaths, tagsOnto } from './tags.ts';
 import * as units from './units.ts';
 import { dueOf } from './upkeep.ts';
 
@@ -314,16 +315,18 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
       .sort((a, b) => String(a[0]).toLowerCase() < String(b[0]).toLowerCase() ? -1 : 1));
 
   // ---------- recipes, the week's meals, the grocery list, the pantry ----------
-  const recipes = await all('SELECT id, title, description, servings, prep_minutes, cook_minutes, source_url, notes, tags FROM recipes WHERE owner_id = ? ORDER BY title COLLATE NOCASE, id');
+  const recipes = await all('SELECT id, title, description, servings, prep_minutes, cook_minutes, source_url, notes FROM recipes WHERE owner_id = ? ORDER BY title COLLATE NOCASE, id');
+  const recipeTags = await tagsOnto(q, owner, 'recipe', recipes.map((r) => r.id as number));
   const recipeLines = await all('SELECT l.recipe_id, l.part, l.is_heading, l.text FROM recipe_lines l JOIN recipes r ON r.id = l.recipe_id WHERE r.owner_id = ? ORDER BY l.recipe_id, l.part, l.sort_order, l.id');
   const equipment = await all('SELECT e.recipe_id, e.label, e.quantity FROM recipe_equipment e JOIN recipes r ON r.id = e.recipe_id WHERE r.owner_id = ? ORDER BY e.recipe_id, e.sort_order, e.id');
   const linesOf = (id: Value | undefined) => recipeLines.filter((l) => l.recipe_id === id).map((l) => ({ part: l.part as 'ingredients' | 'steps', text: str(l.text), is_heading: Boolean(l.is_heading) }));
   out.csv('recipes.csv', ['Title', 'Description', 'Servings', 'Prep minutes', 'Cook minutes', 'Tags', 'Ingredients', 'Steps', 'Source address', 'Notes', 'Cooked in'],
     recipes.map((r) => [
-      str(r.title), str(r.description), str(r.servings), str(r.prep_minutes), str(r.cook_minutes), str(r.tags).split(',').filter(Boolean).join(', '),
+      str(r.title), str(r.description), str(r.servings), str(r.prep_minutes), str(r.cook_minutes), (recipeTags.get(r.id as number) ?? []).map((t) => t.path).join(', '),
       linesAsText(linesOf(r.id), 'ingredients'), linesAsText(linesOf(r.id), 'steps'), str(r.source_url), str(r.notes),
       equipment.filter((e) => e.recipe_id === r.id).map((e) => (num(e.quantity) !== 1 ? `${str(e.label)} x${str(e.quantity)}` : str(e.label))).join('; '),
     ]));
+  if (await hasTable(q, 'tags')) out.csv('tags.csv', ['Tag', 'Used on', 'Name'], await exportRows(q, owner));
   if (await hasTable(q, 'recipe_photos')) {
     for (const p of await all('SELECT r.id, r.title, p.type, p.bytes FROM recipe_photos p JOIN recipes r ON r.id = p.recipe_id WHERE r.owner_id = ?')) {
       const bytes = bytesOf(p.bytes);
@@ -584,6 +587,7 @@ export async function exportEverything(db: Db, owner: number, clock: Clock = () 
 
 const FILE_ABOUT: [string, string][] = [
   ['recipes.csv', 'Your recipes: title, servings, times, tags, ingredients and steps as text, where it came from, notes.'],
+  ['tags.csv', 'Your tags as paths such as Kitchen > Appliances, and each thing, recipe, project, plan, spending line, title, pet, job or date that carries them.'],
   ['recipes-open-format/', 'The same recipes in the open format other recipe apps read (a folder each, with a recipe.json). Put the Recipes folder into a Nextcloud Cookbook.'],
   ['meal-plan.csv', 'The meals planned on the week.'],
   ['grocery-list.csv', 'The grocery list, with what is already checked off.'],
@@ -938,12 +942,13 @@ const importers: Record<string, Importer> = {
       if (seen.take(recipeKey(title, ingredients))) { d.already += 1; continue; }
       const servings = numberOf(cellOf(row, 'Servings'));
       const minutes = (text: string) => { const n = wholeOf(text); return n !== null && n >= 0 && n <= 100_000 ? n : null; };
-      const tags = [...new Set(cellOf(row, 'Tags').split(/[,;]/).map((s) => cut(s.trim().toLowerCase(), 40)).filter(Boolean))].sort();
+      const tags = [...new Set(cellOf(row, 'Tags').split(/[,;]/).map((s) => s.trim()).filter(Boolean))].sort();
       const made = await c.tx.run(
-        `INSERT INTO recipes (title, description, servings, prep_minutes, cook_minutes, source_url, original_text, notes, tags, owner_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+        `INSERT INTO recipes (title, description, servings, prep_minutes, cook_minutes, source_url, original_text, notes, owner_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
         [title, clean(row.description, 5000), servings !== null && servings > 0 && servings <= 1000 ? servings : null, minutes(cellOf(row, 'Prep minutes')), minutes(cellOf(row, 'Cook minutes')),
-          clean(cellOf(row, 'Source address'), 1000), row.notes?.trim() || null, cut(tags.join(','), 500) || null, c.owner, c.at, c.at]);
+          clean(cellOf(row, 'Source address'), 1000), row.notes?.trim() || null, c.owner, c.at, c.at]);
+      await setByPaths(c.tx, c.owner, 'recipe', made.lastId, tags, c.at);
       const parts: ['ingredients' | 'steps', ReturnType<typeof splitLines>][] = [['ingredients', splitLines(ingredients, 'ingredients')], ['steps', splitLines(steps, 'steps')]];
       for (const [part, lines] of parts) {
         for (const [i, line] of lines.entries()) {

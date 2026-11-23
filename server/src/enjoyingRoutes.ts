@@ -55,7 +55,7 @@ export function enjoyingRoutes(db: Db, follow?: FollowTools): Route[] {
     ['GET', at('calendar'), async (c) => {
       const start = c.query.get('start');
       if (!start) throw notUnderstood('start');
-      return { json: await dates(c).between(start, queryNumber(c.query, 'days') ?? 7) };
+      return { json: await dates(c).between(start, queryNumber(c.query, 'days') ?? 7, queryNumber(c.query, 'tag')) };
     }],
     // Other calendars followed by their link: off until one is added. The link itself is never sent back.
     ['GET', at('calendar/others'), async (c) => ({ json: await followed(c, await others(c).list()) })],
@@ -84,7 +84,7 @@ export function enjoyingRoutes(db: Db, follow?: FollowTools): Route[] {
       return {
         json: await shelf(c).list({
           type: c.query.get('type'), q, format: c.query.get('format'), place_id: queryNumber(c.query, 'place_id'),
-          wanted: c.query.get('wanted') === '1', lent: c.query.get('lent') === '1',
+          wanted: c.query.get('wanted') === '1', lent: c.query.get('lent') === '1', tag: queryNumber(c.query, 'tag'),
         }),
       };
     }],

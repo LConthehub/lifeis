@@ -29,6 +29,7 @@ import { recallRoutes } from './recallRoutes.ts';
 import { startRoutes } from './startRoutes.ts';
 import { licenseRoutes } from './licenseRoutes.ts';
 import { exportRoutes } from './exportRoutes.ts';
+import { tagRoutes } from './tagRoutes.ts';
 
 export type Outside = {
   /** How the weather and the barcode lookups are asked. Left out: they can't be turned on. */
@@ -347,5 +348,6 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ...startRoutes(db),
     ...licenseRoutes(db),
     ...exportRoutes(db),
+    ...tagRoutes(db),
   ];
 }

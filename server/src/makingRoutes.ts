@@ -159,7 +159,7 @@ export function makingRoutes(db: Db): Route[] {
       if ((q?.length ?? 0) > 100) throw notUnderstood('q');
       return {
         json: await things(c).listItems({
-          kind_id: queryNumber(c.query, 'kind_id'), place_id: queryNumber(c.query, 'place_id'), q, low: c.query.get('low') === '1',
+          kind_id: queryNumber(c.query, 'kind_id'), place_id: queryNumber(c.query, 'place_id'), q, low: c.query.get('low') === '1', tag: queryNumber(c.query, 'tag'),
         }),
       };
     }],
@@ -228,7 +228,7 @@ export function makingRoutes(db: Db): Route[] {
     // ==================== UPKEEP ====================
     // Jobs that come round again. See core/'s upkeep.ts.
 
-    ['GET', at('things/upkeep'), async (c) => ({ json: await jobs(c).list() })],
+    ['GET', at('things/upkeep'), async (c) => ({ json: await jobs(c).list({ tag: queryNumber(c.query, 'tag') }) })],
     ['GET', at('things/upkeep/people'), async (c) => ({ json: await jobs(c).people() })],
     // People in the household without a sign-in, who do chores, and what a point is worth.
     ['GET', at('things/upkeep/members'), async (c) => ({ json: await jobs(c).members() })],
@@ -293,7 +293,7 @@ export function makingRoutes(db: Db): Route[] {
     // ==================== PETS ====================
     // Who they are, how their weight goes, and their care (upkeep that is theirs). See core/'s pets.ts.
 
-    ['GET', at('things/pets'), async (c) => ({ json: await animals(c).list() })],
+    ['GET', at('things/pets'), async (c) => ({ json: await animals(c).list({ tag: queryNumber(c.query, 'tag') }) })],
     ['POST', at('things/pets'), async (c) => ({ status: 201, json: await animals(c).create(petFrom(c.body)) })],
     ['GET', at('things/pets/:id'), async (c) => ({ json: await animals(c).get(c.id) })],
     ['PUT', at('things/pets/:id'), async (c) => ({ json: await animals(c).update(c.id, petFrom(c.body)) })],
@@ -322,7 +322,7 @@ export function makingRoutes(db: Db): Route[] {
 
     // ==================== PROJECTS ====================
 
-    ['GET', at('projects'), async (c) => ({ json: await making(c).listProjects({ status: c.query.get('status'), activity: c.query.get('activity') }) })],
+    ['GET', at('projects'), async (c) => ({ json: await making(c).listProjects({ status: c.query.get('status'), activity: c.query.get('activity'), tag: queryNumber(c.query, 'tag') }) })],
     ['POST', at('projects'), async (c) => ({ status: 201, json: await making(c).createProject(projectFrom(c.body)) })],
     ['GET', at('projects/activities'), async (c) => ({ json: await making(c).listActivities() })],
     ['GET', at('projects/sessions'), async (c) => {

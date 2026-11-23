@@ -22,6 +22,7 @@ import type {
   RecipeEquipment, RecipeInput, RecipeLine, RecipeSummary,
 } from './kitchenTypes.ts';
 import { Problem } from './problem.ts';
+import { attachTags, onlyTagged, setByNames, unlink, type TagRef } from './tags.ts';
 import { addDays, clean, dayNumber, inOrder, labelKey, pictureType, rounded, stamp, todayOf, type Clock } from './small.ts';
 import { cut, folderName, linesAsText, readImport, splitLines, TEXT_LIMIT, toSchemaOrg, type TextLine } from './recipeText.ts';
 import { MAX_PASTED_GROCERIES, readGroceryList, readRecipeFile, recipeKey, type RecipeFile, type Unread } from './recipeFiles.ts';
@@ -48,9 +49,8 @@ export type PantryScan = { barcode: string; ingredient: { id: number; name: stri
 const WEEK_TEMPLATES = 'week_templates';
 const MAX_TEMPLATES = 50;
 
-const tagList = (tags: string | null) => (tags ?? '').split(',').filter(Boolean);
 
-type RecipeRow = Omit<Recipe, 'tags' | 'ingredients' | 'steps' | 'equipment' | 'ingredients_text' | 'steps_text' | 'showing_servings' | 'has_photo'> & { tags: string | null; photo_added_at: string | null };
+type RecipeRow = Omit<Recipe, 'tags' | 'tag_list' | 'ingredients' | 'steps' | 'equipment' | 'ingredients_text' | 'steps_text' | 'showing_servings' | 'has_photo'> & { tags: string | null; photo_added_at: string | null };
 type LineRow = Omit<RecipeLine, 'is_heading' | 'scaled'> & { is_heading: number };
 type PantryRow = Omit<PantryItem, 'low' | 'days_left' | 'amount'>;
 type GroceryRow = Omit<GroceryItem, 'done' | 'from_plan' | 'amount'> & { done: number; from_plan: number };
@@ -135,6 +135,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
     const rows = await q.all<LineRow>(
       `SELECT l.*, i.name AS ingredient FROM recipe_lines l LEFT JOIN ingredients i ON i.id = l.ingredient_id
        WHERE l.recipe_id = ? ORDER BY l.part, l.sort_order`, [id]);
+    const tagged: TagRef[] = (await attachTags(q, owner, 'recipe', [{ id }]))[0]!.tag_list;
     const factor = servings && row.servings ? servings / row.servings : 1;
     const lines: RecipeLine[] = rows.map((line) => ({
       ...line,
@@ -151,7 +152,8 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
       ingredients_text: linesAsText(lines, 'ingredients'),
       steps_text: linesAsText(lines, 'steps'),
       showing_servings: servings || row.servings,
-      tags: tagList(row.tags),
+      tags: tagged.map((t) => t.name),
+      tag_list: tagged,
     };
   }
 
@@ -166,12 +168,17 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
     for (const text of [body.ingredients_text, body.steps_text, body.original_text, body.notes]) {
       if (text && text.length > TEXT_LIMIT) throw new Problem(400, 'That recipe is too long');
     }
-    const tags = new Set((body.tags ?? []).filter((t) => t.trim()).map((t) => cut(t.trim().toLowerCase(), 40)));
     return [
       title, clean(body.description, 5000), body.servings ?? null, body.prep_minutes ?? null, body.cook_minutes ?? null,
       clean(body.source_url, 1000), body.original_text || null, body.notes?.trim() || null,
-      cut([...tags].sort().join(','), 500) || null,
+      null, // the old comma list of tags: recipe tags live in tag_links now
     ];
+  }
+
+  /** A recipe's tags, given as words: each is found by name, or made. Left out, they stay as they are. */
+  async function tagsFrom(q: Queries, id: number, names: string[] | undefined) {
+    if (names === undefined) return;
+    await setByNames(q, owner, 'recipe', id, [...new Set(names.map((t) => cut(t.trim().toLowerCase(), 40)).filter(Boolean))].sort(), now());
   }
 
   async function createIn(q: Queries, body: RecipeInput): Promise<number> {
@@ -181,6 +188,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
       [...recipeValues(body), owner, now(), now()]);
     await saveLines(q, made.lastId, splitLines(body.ingredients_text, 'ingredients'), splitLines(body.steps_text, 'steps'));
     await saveEquipment(q, made.lastId, body.equipment ?? []);
+    await tagsFrom(q, made.lastId, body.tags);
     return made.lastId;
   }
 
@@ -461,19 +469,23 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
 
     // ---------- recipes ----------
 
-    async listRecipes(find: { q?: string | null; tag?: string | null } = {}): Promise<RecipeSummary[]> {
-      let sql = 'SELECT id, title, description, servings, prep_minutes, cook_minutes, tags, updated_at, (SELECT p.added_at FROM recipe_photos p WHERE p.recipe_id = recipes.id) AS photo_added_at FROM recipes WHERE owner_id = ?';
+    async listRecipes(find: { q?: string | null; tag?: number | string | null } = {}): Promise<RecipeSummary[]> {
+      let sql = 'SELECT id, title, description, servings, prep_minutes, cook_minutes, updated_at, (SELECT p.added_at FROM recipe_photos p WHERE p.recipe_id = recipes.id) AS photo_added_at FROM recipes WHERE owner_id = ?';
       const args: Value[] = [owner];
       if (find.q) {
         sql += " AND (title LIKE ? OR id IN (SELECT recipe_id FROM recipe_lines WHERE part = 'ingredients' AND text LIKE ?))";
         args.push(`%${find.q.trim()}%`, `%${find.q.trim()}%`);
       }
-      if (find.tag) {
-        sql += " AND (',' || tags || ',') LIKE ?";
-        args.push(`%,${find.tag.trim().toLowerCase()},%`);
-      }
-      const rows = await db.all<Omit<RecipeSummary, 'tags' | 'has_photo'> & { tags: string | null }>(sql + ' ORDER BY title COLLATE NOCASE', args);
-      return rows.map((row) => ({ ...row, tags: tagList(row.tags), has_photo: row.photo_added_at !== null }));
+      const rows = await db.all<Omit<RecipeSummary, 'tags' | 'tag_list' | 'has_photo'>>(sql + ' ORDER BY title COLLATE NOCASE', args);
+      let tag: number | null = null;
+      if (typeof find.tag === 'string' && !/^\d+$/.test(find.tag.trim())) {
+        // A tag asked for by its name: the top-level one of that name, else any.
+        const named = await db.get<{ id: number }>('SELECT id FROM tags WHERE owner_id = ? AND key = ? ORDER BY parent_id IS NOT NULL, id LIMIT 1', [owner, labelKey(find.tag)]);
+        if (!named) return [];
+        tag = named.id;
+      } else if (find.tag != null && find.tag !== '') tag = Number(find.tag);
+      const shown = await attachTags(db, owner, 'recipe', await onlyTagged(db, owner, 'recipe', rows, tag));
+      return shown.map((row) => ({ ...row, tags: row.tag_list.map((t) => t.name), has_photo: row.photo_added_at !== null }));
     },
 
     /** A recipe, with amounts for other servings shown beside the lines when asked. */
@@ -496,12 +508,14 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
            original_text = ?, notes = ?, tags = ?, updated_at = ? WHERE id = ?`, [...values, now(), id]);
         await saveLines(tx, id, splitLines(body.ingredients_text, 'ingredients'), splitLines(body.steps_text, 'steps'));
         if (body.equipment !== undefined) await saveEquipment(tx, id, body.equipment);
+        await tagsFrom(tx, id, body.tags);
         return readRecipe(tx, id);
       });
     },
 
     async deleteRecipe(id: number): Promise<void> {
       await db.run('DELETE FROM recipes WHERE id = ? AND owner_id = ?', [id, owner]); // its picture goes with it
+      await unlink(db, 'recipe', id);
     },
 
     /** Keep a picture of the recipe (JPEG, PNG or WebP), in place of any before. */

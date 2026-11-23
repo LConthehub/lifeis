@@ -15,6 +15,7 @@ import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { historyOf, noteHistory, noteMove, placePath, type HistoryEntry } from './history.ts';
 import { placePaths } from './inventory.ts';
 import { Problem } from './problem.ts';
+import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
 import { clean, dayNumber, dayOrNull, inOrder, labelKey, stamp, todayOf, type Clock } from './small.ts';
 
 export const MEDIA_TYPES = ['film', 'show', 'music', 'book', 'game', 'other'] as const;
@@ -232,6 +233,7 @@ export type MediaSummary = {
   unvalued: number;
   /** Worth less cost, over the copies that have a cost (null if none does). */
   gain_cents: number | null;
+  tag_list: TagRef[];
 };
 export type Media = MediaSummary & {
   summary: string | null;
@@ -243,7 +245,7 @@ export type Media = MediaSummary & {
   updated_at: string;
 };
 
-type MediaRow = Omit<Media, 'genres' | 'wanted' | 'formats' | 'pieces' | 'lent_to' | 'times' | 'last_on' | 'ids' | 'copies' | 'log' | 'added_at' | 'copy_count' | 'cost_cents' | 'worth_cents' | 'unvalued' | 'gain_cents'> & { genres: string | null; wanted: number; ids: string | null };
+type MediaRow = Omit<Media, 'genres' | 'wanted' | 'formats' | 'pieces' | 'lent_to' | 'times' | 'last_on' | 'ids' | 'copies' | 'log' | 'added_at' | 'copy_count' | 'cost_cents' | 'worth_cents' | 'unvalued' | 'gain_cents' | 'tag_list'> & { genres: string | null; wanted: number; ids: string | null };
 
 const list = (text: string | null) => (text ?? '').split(',').filter(Boolean);
 
@@ -310,6 +312,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
       worth_cents: copies.some((c) => (c.value_cents ?? c.cost_cents) !== null) ? copies.reduce((sum, c) => sum + (c.value_cents ?? c.cost_cents ?? 0), 0) : null,
       unvalued: copies.filter((c) => c.value_cents === null && c.cost_cents === null).length,
       gain_cents: copies.some((c) => c.cost_cents !== null) ? copies.reduce((sum, c) => sum + (c.cost_cents !== null ? (c.value_cents ?? c.cost_cents) - c.cost_cents : 0), 0) : null,
+      tag_list: [],
     };
   }
 
@@ -317,7 +320,8 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
     const row = await owned(q, id);
     const copies = await copiesOf(q, 'AND c.media_id = ?', [id]);
     const log = await logOf(q, 'AND l.media_id = ?', [id]);
-    return { ...summary(row, copies, log), summary: row.summary, note: row.note, ids: parsedIds(row.ids), copies, log, created_at: row.created_at, updated_at: row.updated_at };
+    const tag_list = (await attachTags(q, owner, 'title', [{ id }]))[0]!.tag_list;
+    return { ...summary(row, copies, log), tag_list, summary: row.summary, note: row.note, ids: parsedIds(row.ids), copies, log, created_at: row.created_at, updated_at: row.updated_at };
   }
 
   /** A title's own columns, checked, in the order the SQL below names them. */
@@ -420,7 +424,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
      * The collection, by title. Narrowed by type, by words (in the title, who made it, or the genres), by
      * format, by place (and the places inside it), to what's wanted, or to what's out on loan.
      */
-    async list(find: { type?: string | null; q?: string | null; format?: string | null; place_id?: number | null; wanted?: boolean; lent?: boolean } = {}): Promise<MediaSummary[]> {
+    async list(find: { type?: string | null; q?: string | null; format?: string | null; place_id?: number | null; wanted?: boolean; lent?: boolean; tag?: number | null } = {}): Promise<MediaSummary[]> {
       let where = '';
       const args: Value[] = [];
       if (find.type) {
@@ -460,7 +464,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
         if (find.lent && !mine.some((copy) => copy.lent_to)) continue;
         out.push(summary(row, mine, log.filter((entry) => entry.media_id === row.id)));
       }
-      return out;
+      return attachTags(db, owner, 'title', await onlyTagged(db, owner, 'title', out, find.tag));
     },
 
     get: (id: number) => one(db, id),
@@ -492,6 +496,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
     /** Remove a title, with its copies and its log. */
     async remove(id: number): Promise<void> {
       await db.run('DELETE FROM media WHERE id = ? AND owner_id = ?', [id, owner]);
+      await unlink(db, 'title', id);
     },
 
     // ---------- copies ----------
