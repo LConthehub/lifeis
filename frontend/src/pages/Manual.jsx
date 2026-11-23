@@ -29,7 +29,7 @@ export default function ManualPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 print:hidden">
-        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">House manual</h1>
+        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">House Manual</h1>
         <button type="button" disabled={!written && !manual.pets.length} onClick={() => window.print()} className={quietButtonClass}>Print</button>
       </div>
       <p className="text-sm text-gray-600 dark:text-life-100 print:hidden">
@@ -39,7 +39,7 @@ export default function ManualPage() {
       {!onDevice() && <Sharing manual={manual} onChanged={setManual} />}
 
       <div className="report-sheet space-y-4">
-        <h2 className="hidden text-lg font-bold text-black print:block">House manual</h2>
+        <h2 className="hidden text-lg font-bold text-black print:block">House Manual</h2>
         {manual.sections.map((s) => (
           <section key={s.id} className={`${cardClass} break-inside-avoid-page print:bg-white print:p-0 print:shadow-none print:ring-0`} aria-label={s.title}>
             <div className="mb-1 flex items-baseline gap-2">

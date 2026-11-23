@@ -92,7 +92,7 @@ say('the model got the kitchen and the question', received.at(-1).model === 'lla
 say('and nothing from the parts not ticked', !/Secret gift|Necklace/.test(sent));
 
 // A handwritten card: the model copies it out, and the person checks it before it becomes a recipe.
-await page.getByRole('link', { name: 'delicious' }).click(); await wait();
+await page.getByRole('link', { name: 'tasty' }).click(); await wait();
 await page.getByRole('button', { name: 'Bring one in' }).click();
 await page.getByRole('button', { name: 'From a photo or a book' }).click(); await wait(600);
 const importing = page.getByRole('dialog');

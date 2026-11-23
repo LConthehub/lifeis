@@ -16,9 +16,6 @@ html { -webkit-text-size-adjust: 100%; }
   padding-left: max(env(safe-area-inset-left), var(--safe-area-inset-left, 0px));
   padding-right: max(env(safe-area-inset-right), var(--safe-area-inset-right, 0px));
 }
-/* On a phone the section's pages sit in a bar at the bottom: the page leaves room for it, and for the home bar. */
-.safe-bottom-room { padding-bottom: calc(5rem + max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom, 0px))); }
-@media (min-width: 640px) { .safe-bottom-room { padding-bottom: 1.5rem; } }
 .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom, 0px)); }
 body { @apply text-gray-800 dark:text-life-50; }
 

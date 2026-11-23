@@ -21,7 +21,7 @@ await page.getByRole('button', { name: 'Sign in' }).click();
 await wait(1000);
 { const skip = page.getByRole('dialog').getByRole('button', { name: 'Skip, show me everything' }); if (await skip.isVisible().catch(() => false)) { await skip.click(); await wait(900); } }
 const header = flat(await page.locator('nav[aria-label="Sections"]').innerText());
-say('the header has its sections: ' + header, /delicious\s+organized\s+budgeted\s+planned\s+projects\s+entertaining/.test(header));
+say('the header has its sections: ' + header, /tasty\s+organized\s+budgeted\s+doing\s+entertaining/.test(header));
 
 // A place for the tapes, then the collection.
 await page.goto(base + '/things/places'); await wait();
@@ -276,7 +276,7 @@ say('the film and the album are in, with what they cost: ' + t.slice(0, 140), /J
 await page.goto(base + '/media'); await wait(700);
 
 // Watched while sewing.
-await page.getByRole('link', { name: 'projects' }).click(); await wait();
+await page.getByRole('link', { name: 'doing', exact: true }).click(); await wait();
 await page.getByRole('button', { name: '+ New project' }).click();
 await field('What it is').fill('Shirt dress'); await field('Where it').selectOption('active');
 await page.getByRole('button', { name: 'Save' }).click(); await wait(1000);
@@ -293,7 +293,8 @@ await time.getByRole('link', { name: 'Alien' }).click(); await wait(900);
 say('and the film says it was watched while working on the dress', /while working on Shirt dress/.test(await text()));
 
 // The calendar gathers it all.
-await page.getByRole('link', { name: 'planned' }).click(); await wait(900);
+await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'organized' }).click(); await wait(600);
+await page.getByRole('navigation', { name: 'Life is organized' }).getByRole('link', { name: 'Calendar' }).click(); await wait(900);
 await page.getByRole('button', { name: '+ Add' }).first().click();
 await field('What').fill('Dentist'); await field('Time').fill('14:30');
 await page.getByRole('button', { name: 'Save' }).click(); await wait(900);

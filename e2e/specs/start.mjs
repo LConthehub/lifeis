@@ -154,7 +154,7 @@ check('the edited example and their own recipe stay, nothing else', left.join('|
 check('no examples are on offer any more', (await card.getByRole('button', { name: 'Clear the examples' }).count()) === 0);
 await page.reload(); await wait(page, 1500);
 check('after a reload, the start does not come back', (await dlg.count()) === 0 && (await page.getByRole('region', { name: 'Finish setting up' }).count()) === 0);
-check('and the chosen parts are what shows', (await page.locator('nav[aria-label=Sections] a').allInnerTexts()).join(',') === 'delicious,organized', (await page.locator('nav[aria-label=Sections] a').allInnerTexts()).join(','));
+check('and the chosen parts are what shows', (await page.locator('nav[aria-label=Sections] a').allInnerTexts()).join(',') === 'tasty,organized', (await page.locator('nav[aria-label=Sections] a').allInnerTexts()).join(','));
 
 // ---------- someone else: skip on step 1 ----------
 await api(page, 'POST', '/api/users', { username: 'ben', password: PASS });
@@ -167,7 +167,7 @@ check('a second new household is asked too', await d2.isVisible());
 await d2.getByRole('button', { name: 'Skip, show me everything' }).click(); await wait(second, 1500);
 check('skipping on the first step closes it', (await d2.count()) === 0);
 const life = (await api(second, 'GET', '/api/life')).json;
-check('everything shows, as it always did', life.sections.length === 6 && (await second.locator('nav[aria-label=Sections] a').count()) === 6, JSON.stringify(life.sections));
+check('everything shows, as it always did', life.sections.length === 6 && (await second.locator('nav[aria-label=Sections] a').count()) === 5, JSON.stringify(life.sections));
 check('and no sample was made', (await api(second, 'GET', '/api/kitchen/recipes')).json.length === 0 && (await api(second, 'GET', '/api/kitchen/grocery')).json.length === 0);
 await second.reload(); await wait(second, 1500);
 check('nor any card, nor the dialog again', (await d2.count()) === 0 && (await second.getByRole('region', { name: /Getting started|Finish setting up/ }).count()) === 0);
