@@ -2,8 +2,8 @@
 <resources>
     <string name="app_name">Life Is</string>
     <string name="title_activity_main">Life Is</string>
-    <string name="package_name">space.emailmy.lifeis</string>
-    <string name="custom_url_scheme">space.emailmy.lifeis</string>
+    <string name="package_name">living.lifeis.home</string>
+    <string name="custom_url_scheme">living.lifeis.home</string>
     <string name="shortcut_groceries_short">Add to groceries</string>
     <string name="shortcut_groceries_long">Add to the grocery list</string>
     <string name="shortcut_spent_short">Something spent</string>

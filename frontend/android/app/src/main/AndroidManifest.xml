@@ -30,7 +30,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Links that open one of Life Is's short requests: space.emailmy.lifeis://do/add-to-groceries?item=eggs -->
+            <!-- Links that open one of Life Is's short requests: living.lifeis.home://do/add-to-groceries?item=eggs -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

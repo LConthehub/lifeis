@@ -97,7 +97,7 @@ function goTo(path) {
 }
 
 /**
- * A link that opens the app (space.emailmy.lifeis://do/add-to-groceries?item=eggs, from a shortcut on the icon,
+ * A link that opens the app (living.lifeis.home://do/add-to-groceries?item=eggs, from a shortcut on the icon,
  * Siri or Google) goes to that page in the app, as if it had been tapped there.
  */
 async function followLinks() {

@@ -1,4 +1,4 @@
-package space.emailmy.lifeis;
+package living.lifeis.home;
 
 import com.getcapacitor.BridgeActivity;
 

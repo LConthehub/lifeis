@@ -11,7 +11,7 @@ are written once and reviewed before anything goes live.
 - **Website:** https://lifeis.living  **Privacy policy:** https://lifeis.living/privacy (both live).
 - **Contact email:** `hello@lifeis.living`, once that address is created in iCloud. Google shows it publicly.
 - **Publisher name.** A personal account shows the account holder's legal name.
-- **The app ID** is `space.emailmy.lifeis`. It can never change after the first upload.
+- **The app ID** is `living.lifeis.home`. It can never change after the first upload.
 
 ## Title (30 characters at most)
 

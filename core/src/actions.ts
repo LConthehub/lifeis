@@ -4,7 +4,7 @@
  *
  * This is the one list that every way of asking from outside Life Is maps onto: Siri and the Shortcuts app on
  * Apple devices (App Intents), Google's assistant and long-pressing the app icon on Android (shortcuts), and a
- * link that opens the app at the action (space.emailmy.lifeis://do/add-to-groceries?item=eggs). Each of those
+ * link that opens the app at the action (living.lifeis.home://do/add-to-groceries?item=eggs). Each of those
  * is a thin wrapper that names an action and passes its few words; what the action does, and what it may
  * touch, is decided here once.
  *

@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "space.emailmy.lifeis"
+    namespace = "living.lifeis.home"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "space.emailmy.lifeis"
+        applicationId "living.lifeis.home"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -16,8 +16,25 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // The upload key lives outside the repo: <home>/lifeis-signing/keystore.properties (or keystore.properties
+    // next to this project's root, which git ignores). Without it, release builds come out unsigned.
+    def signingProps = new Properties()
+    def signingFile = [rootProject.file('keystore.properties'),
+                       new File(System.getProperty('user.home'), 'lifeis-signing/keystore.properties')].find { it.exists() }
+    if (signingFile) { signingFile.withInputStream { signingProps.load(it) } }
+    signingConfigs {
+        if (signingFile) {
+            release {
+                storeFile file(signingProps['storeFile'])
+                storePassword signingProps['storePassword']
+                keyAlias signingProps['keyAlias']
+                keyPassword signingProps['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (signingFile) { signingConfig signingConfigs.release }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
