@@ -37,7 +37,7 @@ if (await first.isVisible().catch(() => false)) { await first.getByRole('button'
 await api('POST', '/api/things/upkeep/members', { name: 'Dana' });
 
 await page.goto(`${base}/things/licenses`); await wait(1000);
-check('Licenses is a tab of the organized section, after Upkeep', (await page.locator('nav a').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim()).join('|').includes('Upkeep|🪪 Licenses'), (await page.locator('nav a').allInnerTexts()).join('|').replace(/\s+/g, ' ').slice(0, 160));
+check('Licenses is a tab of the organized section, after Upkeep', (await page.locator('nav a').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim()).join('|').includes('Upkeep|Licenses'), (await page.locator('nav a').allInnerTexts()).join('|').replace(/\s+/g, ' ').slice(0, 160));
 check('it says what belongs here when empty', (await main()).includes("Driver's licenses, passports, fishing and professional licenses"));
 
 // A driver's license for someone in the household, with a number, running out in 20 days.

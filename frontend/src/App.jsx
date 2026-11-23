@@ -54,7 +54,7 @@ const SECTIONS = [
   { word: 'eating', shown: 'tasty', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
     tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫'], ['/prices', 'Prices', '💲']] },
   { word: 'keeping', shown: 'organized', home: '/things', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || ['/manual', '/calendar', '/mail'].some((p) => path.startsWith(p)),
-    tabs: [['/calendar', 'Calendar', '📅'], ['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/upkeep', 'Upkeep', '🔧'],['/things/pets', 'Pets', '🐾'], ['/things/licenses', 'Licenses', '🪪'], ['/manual', 'House Manual', '📒'], ['/mail', 'Mail', '✉️']] },
+    tabs: [['/calendar', 'Calendar', '📅'], ['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/upkeep', 'Upkeep', '🔧'], ['/things/licenses', 'Licenses', '🪪'], ['/things/pets', 'Pets', '🐾'], ['/manual', 'House Manual', '📒'], ['/mail', 'Mail', '✉️']] },
   { word: 'spending', shown: 'budgeted', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month', '💵']] },
   { word: 'making', shown: 'doing', home: '/projects', owns: (path) => path.startsWith('/projects') || path.startsWith('/plans') || path.startsWith('/things/activities'),
     tabs: [['/projects', 'Projects', '🧵'], ['/plans', 'Plans', '✨'], ['/things/activities', 'Activities', '🛠']] },

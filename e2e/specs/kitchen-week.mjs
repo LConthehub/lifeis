@@ -57,7 +57,7 @@ say('"Copy this week to…" takes you to the week it went to, with the three mea
 
 // ---------- templates ----------
 await page.getByRole('button', { name: 'Templates' }).click(); await wait(500);
-await dialog.getByPlaceholder('School week, Holiday').fill('School week');
+await dialog.getByPlaceholder('School week, Vacation').fill('School week');
 await dialog.getByRole('button', { name: 'Save this week as a template' }).click(); await wait(700);
 say('a week is saved as a named template', /School week/.test(await dialog.innerText()) && /3 meals/.test(await dialog.innerText()));
 await dialog.getByRole('button', { name: 'Rename School week' }).click();
