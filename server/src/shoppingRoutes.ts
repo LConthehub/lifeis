@@ -41,6 +41,9 @@ export function shoppingRoutes(db: Db): Route[] {
     ['POST', at('/stores'), async (c) => ({ status: 201, json: await mine(c).addStore({ name: read.text(c.body, 'name'), note: read.maybeText(c.body, 'note') }) })],
     ['PUT', at('/stores/:id'), async (c) => ({ json: await mine(c).updateStore(c.id, { name: read.text(c.body, 'name'), note: read.maybeText(c.body, 'note') }) })],
     ['DELETE', at('/stores/:id'), async (c) => ({ json: await mine(c).removeStore(c.id) })],
+    // The order a shop's aisles run in, kept in the person's settings (an empty list forgets it).
+    ['GET', at('/stores/:id/aisles'), async (c) => ({ json: { aisles: await mine(c).aisles(c.id) } })],
+    ['PUT', at('/stores/:id/aisles'), async (c) => ({ json: await mine(c).setAisles(c.id, read.texts(c.body, 'aisles')) })],
     // Prices over time.
     ['GET', at('/trends'), async (c) => ({ json: { currency: (await mine(c).summary()).currency, trends: await mine(c).trends(), spending: await mine(c).spending() } })],
     ['GET', at('/prices/:id/history'), async (c) => ({ json: await mine(c).history(c.id) })],

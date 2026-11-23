@@ -4,7 +4,7 @@ import { calendar, type Calendar } from '../src/calendar.ts';
 import type { Db } from '../src/db.ts';
 import { inventory, type Inventory } from '../src/inventory.ts';
 import { kitchen } from '../src/kitchen.ts';
-import { media, piecesText, piecesWord, type MediaCollection } from '../src/media.ts';
+import { centsFromDollars, collectionTotals, dollarsText, media, piecesText, piecesWord, sameTitles, sortTitles, sortWords, type MediaCollection } from '../src/media.ts';
 import { migrate } from '../src/migrations.ts';
 import { projects, type Projects } from '../src/projects.ts';
 import { memoryDb } from './memoryDb.ts';
@@ -264,4 +264,116 @@ it('the word for the pieces comes from the format, and one piece is not shown', 
   expect(piecesText('Hardcover', 3)).toBe('3 pieces');
   expect(piecesText('CD', 1)).toBeNull();
   expect(piecesText('CD', null)).toBeNull();
+});
+
+// ---------- sorting, prices and worth, duplicates ----------
+
+it('titles are put in order ignoring a leading The, A or An, without changing what is shown', async () => {
+  expect(sortWords('The Thing')).toBe('thing');
+  expect(sortWords('An American Werewolf')).toBe('american werewolf');
+  expect(sortWords('A Clockwork Orange')).toBe('clockwork orange');
+  expect(sortWords('Theater of Blood')).toBe('theater of blood'); // not an article: "The" must be a word
+  expect(sortWords('The')).toBe('the');                          // nothing left to sort by: kept
+  expect(sortWords('Anna Karenina')).toBe('anna karenina');
+  await shelf.create({ type: 'film', title: 'The Thing', creator: 'John Carpenter', year: 1982, minutes: 109 });
+  await shelf.create({ type: 'film', title: 'Alien', creator: 'Ridley Scott', year: 1979 });
+  await shelf.create({ type: 'film', title: 'A Clockwork Orange', creator: 'The Kubrick Estate', year: 1971 });
+  await shelf.create({ type: 'film', title: 'Zodiac', year: null });
+  const all = await shelf.list();
+  const before = all.map((m) => m.id);
+  expect(sortTitles(all, 'title').map((m) => m.title)).toEqual(['Alien', 'A Clockwork Orange', 'The Thing', 'Zodiac']);
+  // Creators sort the same way, and a title with no creator comes last.
+  expect(sortTitles(all, 'creator').map((m) => m.title)).toEqual(['The Thing', 'A Clockwork Orange', 'Alien', 'Zodiac']);
+  // Newest year first, and no year last.
+  expect(sortTitles(all, 'year').map((m) => m.title)).toEqual(['The Thing', 'Alien', 'A Clockwork Orange', 'Zodiac']);
+  expect(all.map((m) => m.id)).toEqual(before); // the list given was not rearranged, and the titles shown are as they were typed
+  expect(all.map((m) => m.title)).toContain('The Thing');
+});
+
+it('recently added and recently watched sort from what the list carries', async () => {
+  let second = 0;
+  const early = media(db, owner, () => new Date(2046, 2, 1, 8, 0, second++)); // each call a second later than the last
+  const a = await early.create({ type: 'film', title: 'Alpha' });
+  const b = await early.create({ type: 'film', title: 'Bravo' });
+  const c = await early.create({ type: 'film', title: 'Charlie' });
+  await shelf.log(a.id, { day: '2046-01-05' });
+  await shelf.log(c.id, { day: '2046-02-05' });
+  await shelf.log(c.id, { day: '2046-01-01' });
+  const all = await shelf.list();
+  expect(sortTitles(all, 'added').map((m) => m.title)).toEqual(['Charlie', 'Bravo', 'Alpha']);
+  // Last watched: Charlie (Feb), Alpha (Jan), Bravo never, so last.
+  expect(sortTitles(all, 'recent').map((m) => m.title)).toEqual(['Charlie', 'Alpha', 'Bravo']);
+  expect(b.id).toBeGreaterThan(a.id);
+});
+
+it('a copy keeps what it cost and what it is worth, in cents, and a title adds up its copies', async () => {
+  const film = await shelf.create({ type: 'film', title: 'Alien', year: 1979 }, { format: 'VHS', cost_cents: 1299, bought_on: '1999-05-01' });
+  expect(film.copies[0]).toMatchObject({ cost_cents: 1299, bought_on: '1999-05-01', value_cents: null, valued_on: null });
+  expect(film).toMatchObject({ copy_count: 1, cost_cents: 1299, worth_cents: 1299, unvalued: 0, gain_cents: 0 }); // no value typed: worth is what it cost
+  // A worth with no day is noted today; it replaces the cost in the worth.
+  let after = await shelf.updateCopy(film.copies[0]!.id, { format: 'VHS', value_cents: 4000 });
+  expect(after.copies[0]).toMatchObject({ cost_cents: 1299, value_cents: 4000, valued_on: '2046-03-05' }); // cost left out: unchanged
+  after = await shelf.addCopy(film.id, { format: 'Blu-ray', value_cents: 2000, valued_on: '2045-01-01' });
+  expect(after).toMatchObject({ copy_count: 2, cost_cents: 1299, worth_cents: 6000, unvalued: 0, gain_cents: 2701 });
+  after = await shelf.addCopy(film.id, { format: 'DVD' });
+  expect(after).toMatchObject({ copy_count: 3, cost_cents: 1299, worth_cents: 6000, unvalued: 1 });
+  // Taking the worth off takes its day off too.
+  after = await shelf.updateCopy(after.copies[1]!.id, { format: 'Blu-ray', value_cents: null });
+  expect(after.copies[1]).toMatchObject({ value_cents: null, valued_on: null });
+  // Refused: not a whole number of cents, below nothing, or a day that isn't one.
+  await expect(shelf.updateCopy(film.copies[0]!.id, { format: 'VHS', cost_cents: -5 })).rejects.toEqual(problem(400));
+  await expect(shelf.updateCopy(film.copies[0]!.id, { format: 'VHS', value_cents: 1.5 })).rejects.toEqual(problem(400));
+  await expect(shelf.updateCopy(film.copies[0]!.id, { format: 'VHS', bought_on: 'last spring' })).rejects.toEqual(problem(400));
+  await expect(shelf.addCopy(film.id, { format: 'LaserDisc', cost_cents: 10 ** 12 })).rejects.toEqual(problem(400));
+  expect((await shelf.get(film.id)).copies).toHaveLength(3); // the refused one left nothing behind
+});
+
+it('totals use the value, else the cost, and count the copies with neither', async () => {
+  await shelf.create({ type: 'film', title: 'Alien' }, { format: 'VHS', cost_cents: 1000, value_cents: 2500 });   // worth 2500, gained 1500
+  await shelf.create({ type: 'music', title: 'Rumours' }, { format: 'Vinyl', cost_cents: 800 });                // worth 800 (its cost), gained 0
+  await shelf.create({ type: 'book', title: 'Dune' }, { format: 'Paperback', value_cents: 300 });               // worth 300, no cost: no gain counted
+  await shelf.create({ type: 'game', title: 'Chess' }, { format: 'Board game' });                               // nothing typed
+  await shelf.create({ type: 'book', title: 'Emma' });                                                          // wanted-style title: no copy at all
+  const all = await shelf.list();
+  expect(collectionTotals(all)).toEqual({ titles: 5, copies: 4, cost_cents: 1800, worth_cents: 3600, unvalued: 1, difference_cents: 1500 });
+  expect(collectionTotals(all.filter((m) => m.type === 'book'))).toEqual({ titles: 2, copies: 1, cost_cents: 0, worth_cents: 300, unvalued: 0, difference_cents: 0 });
+  expect(collectionTotals([])).toEqual({ titles: 0, copies: 0, cost_cents: 0, worth_cents: 0, unvalued: 0, difference_cents: 0 });
+  // Value sorts the highest first; the ones with nothing come last.
+  expect(sortTitles(all, 'value').map((m) => m.title)).toEqual(['Alien', 'Rumours', 'Dune', 'Chess', 'Emma']);
+});
+
+it('dollars are read as cents and shown with two decimals', () => {
+  expect([centsFromDollars('12.99'), centsFromDollars('$1,200'), centsFromDollars('5'), centsFromDollars('0.5'), centsFromDollars(' 7.10 ')]).toEqual([1299, 120000, 500, 50, 710]);
+  for (const bad of ['', 'abc', '1.234', '-3', '12.', '1e3', '$', '99999999999']) expect(centsFromDollars(bad), bad).toBeNull();
+  expect([dollarsText(1299), dollarsText(5), dollarsText(123456789), dollarsText(0), dollarsText(-250)]).toEqual(['$12.99', '$0.05', '$1,234,567.89', '$0.00', '-$2.50']);
+});
+
+it('a typed name matches a title of the same kind you already have, the way names are compared elsewhere', async () => {
+  await shelf.create({ type: 'film', title: 'Alien', year: 1979 }, { format: 'VHS' });
+  await shelf.create({ type: 'film', title: 'Alien', year: 2026 });
+  await shelf.create({ type: 'book', title: 'Alien' });
+  const all = await shelf.list();
+  expect(sameTitles(all, 'film', ' alien ').map((m) => m.year).sort()).toEqual([1979, 2026]);
+  expect(sameTitles(all, 'film', 'ALIEN').length).toBe(2);
+  expect(sameTitles(all, 'music', 'Alien')).toEqual([]);
+  expect(sameTitles(all, 'film', 'Aliens')).toEqual([]);
+  expect(sameTitles(all, 'film', '   ')).toEqual([]);
+});
+
+it('the page keeps copies of these rules that give the same answers', async () => {
+  // Pages cannot import from core, so frontend/src/components/collectionTools.js repeats them; this holds the two together.
+  const url = new URL('../../frontend/src/components/collectionTools.js', import.meta.url).href;
+  const page = (await import(/* @vite-ignore */ url)) as Record<string, (...args: unknown[]) => unknown>;
+  for (const t of ['The Thing', 'A Clockwork Orange', 'An Affair', 'Theater', 'The', 'Än Ünicode', '  the   spaced ']) expect(page.sortWords!(t), t).toBe(sortWords(t));
+  for (const d of ['12.99', '$1,200', '1.234', '', '7', '-1', '0.5']) expect(page.centsFromDollars!(d), d).toBe(centsFromDollars(d));
+  for (const c of [0, 5, 1299, 123456789, -250]) expect(page.dollarsText!(c), String(c)).toBe(dollarsText(c));
+  await shelf.create({ type: 'film', title: 'The Thing', year: 1982 }, { format: 'VHS', cost_cents: 500, value_cents: 900 });
+  await shelf.create({ type: 'film', title: 'Alien', year: 1979 }, { format: 'VHS', cost_cents: 700 });
+  await shelf.create({ type: 'film', title: 'Zodiac' });
+  const all = await shelf.list();
+  for (const how of ['title', 'creator', 'year', 'added', 'recent', 'value'] as const) {
+    expect((page.sortTitles!(all, how) as { id: number }[]).map((m) => m.id), how).toEqual(sortTitles(all, how).map((m) => m.id));
+  }
+  expect(page.collectionTotals!(all)).toEqual(collectionTotals(all));
+  expect((page.sameTitles!(all, 'film', ' the thing ') as unknown[]).length).toBe(sameTitles(all, 'film', ' the thing ').length);
 });

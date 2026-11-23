@@ -9,6 +9,7 @@ import { AssistantService } from '../components/Assistant';
 import { RemindersSettings } from '../components/Reminders';
 import { RecallAlertsService } from '../components/Recalls';
 import { PeopleSignIn, SignInSecurity } from '../components/Security';
+import YourFiles from '../components/YourFiles';
 
 const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 120: '2 hours', 480: '8 hours', 0: 'Stay signed in' };
 
@@ -69,6 +70,7 @@ const GROUPS = [
     sections: [
       { id: 'unlock', title: 'Unlocking Life Is', words: 'trial pay price purchase buy free', when: onDevice, render: () => <Unlock /> },
       { id: 'backup', title: 'Backups', words: 'backup restore export file passphrase drive icloud', when: onDevice, render: () => <DeviceBackup /> },
+      { id: 'your-files', title: 'Download everything, and bring it back in', words: 'download everything export import bring in zip csv spreadsheet open files data stays with you portable pictures merge', render: () => <YourFiles hasBackup={onDevice()} /> },
       { id: 'recipes-out', title: 'Download recipes', words: 'export nextcloud cookbook zip', when: () => !inApp(), render: () => <RecipesOut /> },
     ],
   },

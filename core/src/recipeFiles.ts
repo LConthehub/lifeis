@@ -11,7 +11,8 @@
  *
  * Promises kept: a recipe's words are never reworded, shortened or tidied (the same line-splitting as
  * everywhere else is all that touches them), the whole object it came as is kept as the recipe's original, and
- * nothing is looked up or sent anywhere. Pictures are left out: a recipe in Life Is has no picture.
+ * nothing is looked up or sent anywhere. A Paprika recipe's picture does not stay inside its original (it is most of
+ * a file's size); the page shrinks it and sends it beside the recipe as `photo`, and it is kept as the recipe's picture.
  *
  * Nothing here touches the database.
  */
@@ -30,11 +31,20 @@ const isObject = (value: unknown): value is Json => typeof value === 'object' &&
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 
 /** One thing found in a chosen file, as the page unpacked it. `original` is a Life Is export's original.txt. */
-export type FileSource = { name: string; data: unknown; original?: string | null };
+export type FileSource = {
+  name: string;
+  data: unknown;
+  original?: string | null;
+  /** The recipe's picture, shrunk by the page, when this is being brought in. */
+  photo?: Uint8Array | null;
+  /** When being looked over: the page has a picture for it (it isn't sent until the recipe is brought in). */
+  has_photo?: boolean;
+};
 /** Something in the file that couldn't be opened at all (a damaged entry), and why. */
 export type Unread = { name: string; why: string };
 export type RecipeFile = { sources: FileSource[]; unreadable?: Unread[] };
-export type FileRecipe = { name: string; input: RecipeInput };
+/** `pictured`: it came with a picture; `photo` is the picture itself, when it was sent. */
+export type FileRecipe = { name: string; input: RecipeInput; photo: Uint8Array | null; pictured: boolean };
 
 // ---------- reading what another app wrote ----------
 
@@ -145,10 +155,13 @@ export function readRecipeFile(file: RecipeFile): { recipes: FileRecipe[]; faile
   const recipes: FileRecipe[] = [];
   const failed: Unread[] = [...(file.unreadable ?? [])];
   for (const source of file.sources) {
-    for (const one of expand(source.data)) {
+    const found = expand(source.data);
+    for (const one of found) {
       const name = (isObject(one) && text(one.name).trim()) || source.name || 'A recipe';
       try {
-        recipes.push({ name, input: toInput(one, source.original) });
+        // A picture belongs to a recipe only when the source holds just that one.
+        const alone = found.length === 1;
+        recipes.push({ name, input: toInput(one, source.original), photo: alone ? source.photo ?? null : null, pictured: alone && Boolean(source.photo?.length || source.has_photo) });
       } catch (problem) {
         failed.push({ name, why: problem instanceof Problem ? problem.message : "It couldn't be read" });
       }

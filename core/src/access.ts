@@ -46,6 +46,9 @@ export function isPaidPath(path: string): boolean {
   // A short request from Siri, Google or a link belongs to the part of Life Is it touches.
   const action = /^\/api\/actions\/([a-z-]+)/.exec(path)?.[1];
   if (action) return ACTION_LIST.find((a) => a.id === action)?.part !== 'kitchen';
+  // Bringing a download back in writes into every part at once, so it counts as a change to the paid parts.
+  // Downloading everything, and looking a file over, stay free: your data is always yours to take.
+  if (/^\/api\/export\/(bring-in|pictures)$/.test(path)) return true;
   return (PAID_PARTS as readonly string[]).includes(part ?? '');
 }
 

@@ -1,6 +1,6 @@
 // Bringing many things in at once: recipes from another app's file (a real .paprikarecipes zip is built here,
 // opened by the page, looked over, brought in, and brought in again), and a grocery list pasted in on a phone.
-import { crc32, deflateRawSync, gzipSync } from 'node:zlib';
+import { crc32, deflateRawSync, deflateSync, gzipSync } from 'node:zlib';
 import { browserChoice } from '../browser.mjs';
 import { chromium } from 'playwright-core';
 const [base, shots] = process.argv.slice(2);
@@ -31,11 +31,24 @@ function zip(files) {
   return Buffer.concat([...parts, dir, end]);
 }
 
+/** A small real PNG (a solid colour), as a file would carry one: Paprika keeps each recipe's picture as base64 text. */
+function png(width, height, [r, g, b]) {
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const out = Buffer.alloc(12 + data.length);
+    out.writeUInt32BE(data.length, 0); body.copy(out, 4); out.writeUInt32BE(crc32(body), 8 + data.length);
+    return out;
+  };
+  const head = Buffer.alloc(13); head.writeUInt32BE(width, 0); head.writeUInt32BE(height, 4); head[8] = 8; head[9] = 2;
+  const row = Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: width }, () => [r, g, b]).flat())]);
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', head), chunk('IDAT', deflateSync(Buffer.concat(Array.from({ length: height }, () => row)))), chunk('IEND', Buffer.alloc(0))]);
+}
+
 const PANCAKES = {
   name: 'Buttermilk  Pancakes', ingredients: '1 1/2 cups   all-purpose flour\n2 TBSP sugar\n1 egg, beaten\n1 1/4 cups buttermilk',
   directions: 'Whisk the dry things together.\n\nAdd the egg & buttermilk;  stir until just combined.\n\nCook on a hot griddle.',
   notes: 'Grandma said: never overmix.', description: 'Fluffy.  Really.', servings: 'Serves 4', prep_time: '10 min', cook_time: '1 hr 15 min',
-  source: 'Grandma', source_url: 'https://example.com/pancakes', categories: ['Breakfast', 'Kid Friendly'], rating: 5, photo_data: Buffer.alloc(30_000, 7).toString('base64'),
+  source: 'Grandma', source_url: 'https://example.com/pancakes', categories: ['Breakfast', 'Kid Friendly'], rating: 5, photo_data: png(120, 80, [200, 120, 40]).toString('base64'),
 };
 const SOUP = { name: 'Tomato Soup', ingredients: '1 can tomatoes\n1 cup stock', directions: 'Simmer for twenty minutes.', servings: '6', categories: ['Soup'] };
 const CHILI = { name: 'Weeknight Chili', ingredients: '1 lb ground beef\n1 can kidney beans\n2 tbsp chili powder', directions: 'Brown the beef.\n\nAdd everything else and simmer.', total_time: '45 min' };
@@ -74,19 +87,24 @@ say('the way says where Pinterest recipes go', /open the pin's website[\s\S]*Fro
 await dialog.getByLabel('Choose a file of recipes').setInputFiles(named('My Recipes.paprikarecipes', paprika)); await wait(1200);
 const look = await dialog.innerText();
 say('the look-over counts them: ' + look.match(/\d+ recipes found[^\n]*/)?.[0], /3 recipes found, 1 already in Life Is\./.test(look));
-say('it names them, and says the pictures are left out', /Buttermilk\s+Pancakes/.test(look) && /Tomato Soup/.test(look) && /Weeknight Chili/.test(look) && /1 picture left out/.test(look));
+say('it names them, and says which pictures will come in', /Buttermilk\s+Pancakes/.test(look) && /Tomato Soup/.test(look) && /Weeknight Chili/.test(look) && /1 picture will come in with them\./.test(look) && /already in Life Is is not changed, so it is not given a picture/.test(look), look);
 say('nothing is kept by looking', (await send('GET', '/api/kitchen/recipes')).length === 2);
 await page.screenshot({ path: shots + '/bring-in-recipes.png' });
 await dialog.getByRole('button', { name: 'Bring in 2' }).click(); await wait(1200);
 const done = await dialog.innerText();
-say('it reports added, already there and could not be read: ' + done.match(/Brought in:[^\n]*/)?.[0], /Brought in: 2 recipes added, 1 already there, 0 could not be read\./.test(done));
+say('it reports added, already there and could not be read: ' + done.match(/Brought in:[^\n]*/)?.[0], /Brought in: 2 recipes added, 1 already there, 0 could not be read, 1 picture kept\./.test(done));
 await dialog.getByRole('button', { name: 'Done' }).click(); await wait(900);
 const titles = await page.locator('main ul li a span.font-medium').evaluateAll((all) => all.map((n) => n.textContent));
 say('they are in the recipe box: ' + titles.join(' | '), titles.length === 4 && titles.includes('Weeknight Chili') && titles.includes('Buttermilk  Pancakes'));
 say('the same name with another first ingredient came in as its own recipe', titles.includes('Buttermilk Pancakes (spelt)') && titles.includes('Buttermilk  Pancakes'));
+const everyRecipe = await send('GET', '/api/kitchen/recipes');
+const pictured = Object.fromEntries(everyRecipe.map((r) => [r.title.replace(/\s+/g, ' '), r.has_photo]));
+say('only the new recipe with a picture has one; the soup already kept was not given the picture', JSON.stringify(pictured) === JSON.stringify({ 'Buttermilk Pancakes': true, 'Buttermilk Pancakes (spelt)': false, 'Weeknight Chili': false, 'tomato soup': false }) || (pictured['Buttermilk Pancakes'] === true && pictured['tomato soup'] === false && Object.values(pictured).filter(Boolean).length === 1), JSON.stringify(pictured));
 say('the soup already kept was left as it was', (await send('GET', '/api/kitchen/recipes')).filter((r) => /tomato\s+soup/i.test(r.title)).length === 1);
 
 await page.goto(base + '/recipes/' + (await send('GET', '/api/kitchen/recipes')).find((r) => r.title === 'Buttermilk  Pancakes').id); await wait(1000);
+const shownPicture = await page.locator('main img[src*="/photo"]').evaluate((img) => [img.complete && img.naturalWidth > 0, img.alt, img.loading]).catch(() => null);
+say("the recipe shows its Paprika picture, with the recipe's name as its alt text", Array.isArray(shownPicture) && shownPicture[0] === true && shownPicture[1] === 'Buttermilk  Pancakes' && shownPicture[2] === 'lazy', JSON.stringify(shownPicture));
 const main = await page.locator('main').innerText();
 const lis = await page.locator('main section ul li').evaluateAll((all) => all.map((n) => n.textContent));
 say('its ingredients are exactly as written, one a line', JSON.stringify(lis.slice(0, 4)) === JSON.stringify(PANCAKES.ingredients.split('\n')), JSON.stringify(lis));

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { Field, buttonClass, errorMessage } from './ui';
-import { unpackRecipeFile } from './unpackRecipes';
+import { bringRecipesIn, unpackRecipeFile } from './unpackRecipes';
 
 const plural = (n, one, many) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 
@@ -11,7 +11,8 @@ const plural = (n, one, many) => `${n.toLocaleString('en-US')} ${n === 1 ? one :
  * Nothing is looked up or sent anywhere but to Life Is itself.
  */
 export default function RecipeFile({ onDone }) {
-  const [seen, setSeen] = useState(null);    // { body, look, pictures }
+  const [seen, setSeen] = useState(null);    // { body, photos, look, pictures }
+  const [progress, setProgress] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -23,16 +24,19 @@ export default function RecipeFile({ onDone }) {
     if (!file) return;
     setError(''); setSeen(null); setDone(null); setName(file.name); setBusy(true);
     try {
-      const { body, pictures } = await unpackRecipeFile(file);
-      setSeen({ body, pictures, look: (await axios.post('/api/kitchen/recipes/file/read', body)).data });
+      const { body, pictures, photos } = await unpackRecipeFile(file);
+      setSeen({ body, photos, pictures, look: (await axios.post('/api/kitchen/recipes/file/read', body)).data });
     } catch (err) {
       setError(err?.response ? errorMessage(err, "Couldn't read that file") : err?.message || "Couldn't read that file");
     }
     setBusy(false);
   };
   const bring = async () => {
-    setError(''); setBusy(true);
-    try { setDone((await axios.post('/api/kitchen/recipes/file', seen.body)).data); setSeen(null); } catch (err) { setError(errorMessage(err, "Couldn't bring them in")); }
+    setError(''); setBusy(true); setProgress('');
+    try {
+      setDone(await bringRecipesIn(seen.body, seen.photos, (n) => setProgress(`${n.toLocaleString('en-US')} of ${seen.body.sources.length.toLocaleString('en-US')} sent…`)));
+      setSeen(null);
+    } catch (err) { setError(err?.message || "Couldn't bring them in"); }
     setBusy(false);
   };
 
@@ -40,7 +44,7 @@ export default function RecipeFile({ onDone }) {
     return (
       <div className="space-y-3">
         <p role="status" className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-700 dark:text-life-50">
-          Brought in: {plural(done.added, 'recipe', 'recipes')} added, {done.already} already there, {done.failed.length} could not be read.
+          Brought in: {plural(done.added, 'recipe', 'recipes')} added, {done.already} already there, {done.failed.length} could not be read{done.pictures > 0 ? `, ${plural(done.pictures, 'picture', 'pictures')} kept` : ''}.
         </p>
         <Failed list={done.failed} />
         <div className="text-right"><button type="button" onClick={() => onDone(done)} className={`${buttonClass} min-h-[44px]`}>Done</button></div>
@@ -53,8 +57,8 @@ export default function RecipeFile({ onDone }) {
       <p className="text-sm text-gray-600 dark:text-life-100">
         Choose the file Paprika exports (Paprika: Settings, Export, All recipes, which makes a <span className="font-medium">.paprikarecipes</span> file),
         a recipe <span className="font-medium">.json</span> file, or the zip you get from "Download all recipes" in another copy of Life Is.
-        The file is opened here and nothing is sent anywhere. Every recipe is kept word for word, and a recipe you already have is not added twice.
-        Pictures in a file are left out: Life Is doesn't keep a picture with a recipe.
+        The file is opened here and nothing is sent anywhere but to Life Is itself. Every recipe is kept word for word, and a recipe you already have is not added twice.
+        A picture in the file is made smaller and kept as that recipe's picture.
       </p>
       <Field label="A file">
         <input type="file" accept=".paprikarecipes,.paprikarecipe,.zip,.json,.gz,application/zip,application/json" onChange={choose} disabled={busy}
@@ -65,6 +69,7 @@ export default function RecipeFile({ onDone }) {
         and use "From a website".
       </p>
       {busy && !look && <p className="text-sm text-life-700 dark:text-life-200" role="status">Reading {name}…</p>}
+      {busy && look && progress && <p className="text-sm text-life-700 dark:text-life-200" role="status">{progress}</p>}
       {look && (
         <div className="space-y-2 rounded-lg bg-life-50 p-3 text-sm dark:bg-life-700" data-look="recipes">
           <p className="font-medium text-life-800 dark:text-life-50">
@@ -74,7 +79,12 @@ export default function RecipeFile({ onDone }) {
             {look.first.map((title, i) => <li key={i} className="truncate">{title}</li>)}
             {look.found - look.failed.length > look.first.length && <li>and {look.found - look.failed.length - look.first.length} more</li>}
           </ul>
-          {seen.pictures > 0 && <p className="text-xs text-gray-600 dark:text-life-200">{plural(seen.pictures, 'picture', 'pictures')} left out.</p>}
+          {seen.pictures > 0 && (
+            <p className="text-xs text-gray-600 dark:text-life-200" data-look="pictures">
+              {look.pictures > 0 ? `${plural(look.pictures, 'picture', 'pictures')} will come in with them.` : 'No pictures will be added.'}
+              {look.already > 0 && ' A recipe already in Life Is is not changed, so it is not given a picture.'}
+            </p>
+          )}
           <Failed list={look.failed} />
         </div>
       )}

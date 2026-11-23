@@ -39,7 +39,7 @@ export type FoundBook = {
   pages: number | null; /** What it's about, as the library files it: a few subjects at most. */ genres: string[];
 };
 /** A film, album or game by its barcode, with what it's on when the answer says. */
-export type FoundTitle = { barcode: string; type: 'film' | 'music' | 'game' | 'other'; title: string; creator: string | null; year: number | null; format: string | null; from: string };
+export type FoundTitle = { barcode: string; type: 'film' | 'music' | 'game' | 'book' | 'other'; title: string; creator: string | null; year: number | null; format: string | null; from: string };
 export type Lookups = { available: boolean; books: boolean; groceries: boolean; titles: boolean };
 
 const SETTING = 'lookup_books';
@@ -117,7 +117,10 @@ export function lookups(db: Db, owner: number, _clock: Clock = () => new Date(),
         const credits = Array.isArray(release['artist-credit']) ? release['artist-credit'] as Array<Record<string, unknown>> : [];
         const artist = credits.map((c) => `${text(c.name) ?? ''}${typeof c.joinphrase === 'string' ? c.joinphrase : ''}`).join('').trim();
         const media = Array.isArray(release.media) ? release.media as Array<Record<string, unknown>> : [];
-        return { barcode, type: 'music', title, creator: artist ? clean(artist, 300) : null, year: yearIn(release.date), format: text(media[0]?.format, 40), from: 'MusicBrainz' };
+        const medium = text(media[0]?.format, 40);
+        // A spoken book is filed on CD by MusicBrainz too; it's a book, not music.
+        const spoken = audiobookFormat(`${title} ${medium ?? ''}`);
+        return { barcode, type: spoken ? 'book' : 'music', title, creator: artist ? clean(artist, 300) : null, year: yearIn(release.date), format: spoken ?? medium, from: 'MusicBrainz' };
       }
 
       const product = await ask(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`, 'UPCitemdb');
@@ -210,19 +213,39 @@ const FORMATS: Array<[RegExp, string]> = [
   [/xbox series/i, 'Xbox Series'], [/xbox one/i, 'Xbox One'],
 ];
 
+/** Words that say a product is a spoken book: an audiobook, unabridged, or a book on CD or tape. */
+const SPOKEN = /audio ?books?|unabridged|books? on (cds?|tapes?)/i;
+
+/**
+ * The format of a spoken book, from the text that names it: "Book on CD" when it mentions a CD or disc, "Book on
+ * tape" when it mentions a tape or cassette, otherwise "Audiobook". Null when the text doesn't say it's a spoken
+ * book. "Audio CD" alone is not enough: shops label ordinary music CDs that way.
+ */
+export function audiobookFormat(text: string): string | null {
+  if (!SPOKEN.test(text)) return null;
+  if (/\btapes?\b|\bcassettes?\b/i.test(text)) return 'Book on tape';
+  if (/\bcds?\b|\bdiscs?\b/i.test(text)) return 'Book on CD';
+  return 'Audiobook';
+}
+
 /**
  * A shop's product name, read for what a collection needs: "The Matrix [Blu-ray] (Widescreen)" is the film
- * The Matrix, on Blu-ray. What kind of thing it is comes from the shop's category, then from the format.
+ * The Matrix, on Blu-ray. What kind of thing it is comes from the shop's category, then from the format. A
+ * spoken book ("Unabridged Audiobook CD") is a book, whatever disc it's on.
  */
-export function readProduct(name: string, category: string): { type: 'film' | 'music' | 'game' | 'other'; title: string; format: string | null } {
-  const format = FORMATS.find(([pattern]) => pattern.test(name))?.[1] ?? null;
+export function readProduct(name: string, category: string): { type: 'film' | 'music' | 'game' | 'book' | 'other'; title: string; format: string | null } {
+  const spoken = audiobookFormat(`${name} ${category}`);
+  const format = spoken ?? FORMATS.find(([pattern]) => pattern.test(name))?.[1] ?? null;
   const games = /video game|games?\b/i.test(category) || /^(Switch|PS[45]|Xbox)/.test(format ?? '');
   const music = /music|\bcds?\b|vinyl|records?\b/i.test(category) || ['Vinyl', 'CD', 'Cassette'].includes(format ?? '');
   const film = /movie|dvd|blu-?ray|video|film/i.test(category) || ['4K Blu-ray', 'Blu-ray', 'DVD', 'VHS'].includes(format ?? '');
-  const type = games ? 'game' : music ? 'music' : film ? 'film' : 'other';
+  const type = spoken ? 'book' : games ? 'game' : music ? 'music' : film ? 'film' : 'other';
   // What's in brackets is about the box, not the title: the format, the edition, the region.
-  const title = clean(name.replace(/\s*[([][^)\]]*[)\]]/g, '').replace(/\s+-\s+(blu-?ray|dvd|4k.*|nintendo switch|playstation \d|xbox.*)$/i, '')
-    .replace(/(\s+(blu-?ray|dvd|cd|vinyl|lp))+$/i, ''), 300) || clean(name, 300)!;
+  const plain = name.replace(/\s*[([][^)\]]*[)\]]/g, '').replace(/\s+-\s+(blu-?ray|dvd|4k.*|nintendo switch|playstation \d|xbox.*)$/i, '')
+    .replace(/(\s+(blu-?ray|dvd|cd|vinyl|lp))+$/i, '');
+  // A spoken book's name also says what it is ("Unabridged", "Audiobook", "Tape"): that's not part of the title.
+  const bare = spoken ? plain.replace(/\b((un)?abridged|audio ?books?|books? on|cds?|discs?|tapes?|cassettes?)\b/gi, ' ').replace(/\s+/g, ' ') : plain;
+  const title = clean(bare, 300) || clean(name, 300)!;
   return { type, title, format };
 }
 

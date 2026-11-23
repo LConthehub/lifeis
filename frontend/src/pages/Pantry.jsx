@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
-import Modal, { Field, inputClass, buttonClass, cardClass, errorMessage } from '../components/ui';
+import ScanToPantry from '../components/ScanToPantry';
+import UseItUp from '../components/UseItUp';
+import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 
 const LOCATIONS = [['fridge', 'Fridge'], ['freezer', 'Freezer'], ['pantry', 'Cabinet'], ['spices', 'Spices'], ['other', 'Elsewhere']];
 const BLANK = { name: '', quantity: '', unit: '', location: 'pantry', expires_on: '', low_at: '' };
@@ -10,6 +12,7 @@ export default function Pantry() {
   const [data, setData] = useState(null);
   const [editing, setEditing] = useState(null);
   const [q, setQ] = useState('');
+  const [scanning, setScanning] = useState(false);
   const load = useCallback(() => { axios.get('/api/kitchen/pantry').then(({ data: d }) => setData(d)).catch(() => setData({ items: [], low: [], expiring: [] })); }, []);
   useEffect(() => { load(); }, [load]);
   if (!data) return null;
@@ -20,7 +23,8 @@ export default function Pantry() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Pantry</h1>
-        <button type="button" onClick={() => setEditing({ ...BLANK })} className={buttonClass}>+ Add</button>
+        <button type="button" onClick={() => setScanning(true)} className={`${quietButtonClass} min-h-[44px]`}>📷 Scan to add</button>
+        <button type="button" onClick={() => setEditing({ ...BLANK })} className={`${buttonClass} min-h-[44px]`}>+ Add</button>
       </div>
       {(data.low.length > 0 || data.expiring.length > 0) && (
         <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">
@@ -28,6 +32,7 @@ export default function Pantry() {
           {data.expiring.length > 0 && <>Use soon: {data.expiring.join(', ')}.</>}
         </p>
       )}
+      <UseItUp key={data.items.map((p) => `${p.id}${p.expires_on}`).join()} />
       {data.items.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find something" aria-label="Find in the pantry" className={`${inputClass} max-w-sm`} />}
       {data.items.length === 0 ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing here yet. Add what you have, or check things off the grocery list and they land here.</div>
@@ -55,6 +60,11 @@ export default function Pantry() {
             );
           })}
         </div>
+      )}
+      {scanning && (
+        <Modal title="Scan to add to the pantry" onClose={() => { setScanning(false); load(); }}>
+          <ScanToPantry onChanged={load} />
+        </Modal>
       )}
       {editing && (
         <Modal title={editing.id ? editing.name : 'Add to the pantry'} onClose={() => setEditing(null)}>

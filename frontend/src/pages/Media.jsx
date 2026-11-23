@@ -4,6 +4,9 @@ import axios from 'axios';
 import Scanner from '../components/Scanner';
 import PlacePicker from '../components/PlacePicker';
 import BookList from '../components/BookList';
+import BulkScan from '../components/BulkScan';
+import CollectionSummary from '../components/CollectionSummary';
+import { SORTS, centsFromDollars, decadeOf, dollarsField, dollarsText, labelKey, sameTitles, sortTitles } from '../components/collectionTools';
 import { bookServerName } from '../components/BookServers';
 import { HistoryList } from './Thing';
 import { stickerCode } from './Places';
@@ -47,8 +50,6 @@ export function piecesWord(format) {
 }
 /** "12 discs", or nothing when there is no number or just the one piece. */
 const piecesText = (format, pieces) => (pieces >= 2 ? `${pieces} ${piecesWord(format).many}` : null);
-// A product that says it's an audiobook is a book you listen to, whatever disc it comes on.
-const AUDIOBOOK_WORDS = /audio ?book|unabridged|book on (cd|tape)/i;
 const isEbook = (format) => /e-?book|kindle|kobo|epub|nook/i.test(format);
 
 /**
@@ -70,6 +71,11 @@ export const LIBRARIES = {
   },
 };
 
+const SORT_KEY = 'lifeis.mediaSort';
+const savedSort = () => { try { const s = localStorage.getItem(SORT_KEY); return SORTS.some(([id]) => id === s) ? s : 'title'; } catch { return 'title'; } };
+const saveSort = (how) => { try { localStorage.setItem(SORT_KEY, how); } catch { /* remembered for this visit only */ } };
+const control = 'min-h-[44px]';
+
 /**
  * Everything you own to watch, hear, read or play, by title, with the formats you have it on. Given a
  * `library` (books, ebooks, audiobooks), the same collection shows only what belongs in it.
@@ -80,8 +86,13 @@ export default function MediaPage({ library = null }) {
   const [type, setType] = useState(lib?.type ?? '');
   const [show, setShow] = useState('');     // '', 'wanted' or 'lent'
   const [q, setQ] = useState('');
+  const [genre, setGenre] = useState('');
+  const [from, setFrom] = useState('');     // the years asked for: from, and to
+  const [to, setTo] = useState('');
+  const [sort, setSort] = useState(savedSort);
   const [adding, setAdding] = useState(null);       // null, or what the new title starts with
   const [scanning, setScanning] = useState(false);
+  const [scanMany, setScanMany] = useState(false);
   const [listing, setListing] = useState(false);
   const navigate = useNavigate();
   const load = useCallback(() => { axios.get('/api/media').then(({ data }) => setTitles(data)).catch(() => setTitles([])); }, []);
@@ -89,17 +100,28 @@ export default function MediaPage({ library = null }) {
   if (!titles) return null;
   const mine = lib ? titles.filter((m) => m.type === lib.type && lib.fits(m)) : titles;
   const word = q.trim().toLowerCase();
-  const shown = mine.filter((m) => (!type || m.type === type) && (show !== 'wanted' || m.wanted) && (show !== 'lent' || m.lent_to.length > 0)
+  const lo = from === '' ? null : Number(from);
+  const hi = to === '' ? null : Number(to);
+  const matching = mine.filter((m) => (!type || m.type === type) && (show !== 'wanted' || m.wanted) && (show !== 'lent' || m.lent_to.length > 0)
+    && (!genre || m.genres.some((g) => labelKey(g) === labelKey(genre)))
+    && (lo === null || (m.year != null && m.year >= lo)) && (hi === null || (m.year != null && m.year <= hi))
     && (!word || [m.title, m.creator, ...m.genres, ...m.formats].some((v) => String(v ?? '').toLowerCase().includes(word))));
+  const shown = sortTitles(matching, sort);
+  const genres = [...new Map(mine.flatMap((m) => m.genres).map((g) => [labelKey(g), g])).values()].sort((a, b) => labelKey(a).localeCompare(labelKey(b)));
+  const decades = [...new Set(mine.filter((m) => m.year != null).map((m) => decadeOf(m.year)))].sort((a, b) => b - a);
+  const decade = from !== '' && to !== '' && Number(from) % 10 === 0 && Number(to) === Number(from) + 9 ? String(from) : '';
+  const filtering = Boolean((!lib && type) || show || word || genre || from !== '' || to !== '');
+  const clearFilters = () => { setType(lib?.type ?? ''); setShow(''); setQ(''); setGenre(''); setFrom(''); setTo(''); };
   const count = (id) => titles.filter((m) => m.type === id).length;
   const chip = (active) => `rounded-full px-3 py-1 text-sm ${active ? 'bg-life-600 text-white' : 'bg-white text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">{lib ? lib.title : 'Collection'}</h1>
-        {lib && <button type="button" onClick={() => setListing(true)} className={quietButtonClass}>Bring in a list</button>}
-        <button type="button" onClick={() => setScanning(true)} className={quietButtonClass}>📷 Scan a barcode</button>
-        <button type="button" onClick={() => setAdding({ type: type || 'film', format: lib?.format || '' })} className={buttonClass}>+ Add</button>
+        <button type="button" onClick={() => setListing(true)} className={`${quietButtonClass} ${control}`}>Bring in a list</button>
+        <button type="button" onClick={() => setScanning(true)} className={`${quietButtonClass} ${control}`}>📷 Scan a barcode</button>
+        <button type="button" onClick={() => setScanMany(true)} className={`${quietButtonClass} ${control}`}>📷 Scan many</button>
+        <button type="button" onClick={() => setAdding({ type: type || 'film', format: lib?.format || '' })} className={`${buttonClass} ${control}`}>+ Add</button>
       </div>
       {mine.length === 0 && lib ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>{lib.empty}</div>
@@ -118,7 +140,50 @@ export default function MediaPage({ library = null }) {
             {mine.some((m) => m.wanted) && <button type="button" onClick={() => setShow(show === 'wanted' ? '' : 'wanted')} aria-pressed={show === 'wanted'} className={chip(show === 'wanted')}>Wanted</button>}
             {mine.some((m) => m.lent_to.length) && <button type="button" onClick={() => setShow(show === 'lent' ? '' : 'lent')} aria-pressed={show === 'lent'} className={chip(show === 'lent')}>Lent out</button>}
           </div>
-          {mine.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a title, a person, a genre or a format" aria-label="Find in the collection" className={`${inputClass} max-w-sm`} />}
+          {mine.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a title, a person, a genre or a format" aria-label="Find in the collection" className={`${inputClass} ${control} max-w-sm`} />}
+          <div className="grid grid-cols-2 items-end gap-3 sm:flex sm:flex-wrap" role="group" aria-label="Sort and narrow down">
+            {mine.length > 1 && (
+              <div className="col-span-2 space-y-1 sm:col-span-1">
+                <span id="sort-by" className="block text-xs font-medium text-gray-600 dark:text-life-200">Sort by</span>
+                <select aria-labelledby="sort-by" value={sort} onChange={(e) => { setSort(e.target.value); saveSort(e.target.value); }} className={`${inputClass} ${control}`}>
+                  {SORTS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                </select>
+              </div>
+            )}
+            {genres.length > 0 && (
+              <div className="space-y-1">
+                <span id="genre-is" className="block text-xs font-medium text-gray-600 dark:text-life-200">Genre</span>
+                <select aria-labelledby="genre-is" value={genre} onChange={(e) => setGenre(e.target.value)} className={`${inputClass} ${control}`}>
+                  <option value="">Any genre</option>
+                  {genres.map((g) => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
+            )}
+            {decades.length > 0 && (
+              <div className="space-y-1">
+                <span id="decade-is" className="block text-xs font-medium text-gray-600 dark:text-life-200">Decade</span>
+                <select aria-labelledby="decade-is" value={decade} onChange={(e) => { const d = e.target.value; setFrom(d); setTo(d === '' ? '' : String(Number(d) + 9)); }} className={`${inputClass} ${control}`}>
+                  <option value="">Any decade</option>
+                  {decades.map((d) => <option key={d} value={d}>{d}s</option>)}
+                </select>
+              </div>
+            )}
+            {decades.length > 0 && (
+              <fieldset className="col-span-2 sm:col-span-1">
+                <legend className="mb-1 text-xs font-medium text-gray-600 dark:text-life-200">Years, from and to</legend>
+                <span className="flex items-center gap-2">
+                  <input type="number" inputMode="numeric" min="0" max="9999" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="From" aria-label="Year from" className={`${inputClass} ${control} sm:w-24`} />
+                  <span aria-hidden="true" className="text-gray-400">to</span>
+                  <input type="number" inputMode="numeric" min="0" max="9999" value={to} onChange={(e) => setTo(e.target.value)} placeholder="To" aria-label="Year to" className={`${inputClass} ${control} sm:w-24`} />
+                </span>
+              </fieldset>
+            )}
+          </div>
+          <p className="flex flex-wrap items-center gap-x-3 text-xs text-gray-500 dark:text-life-300" role="status">
+            <span>Showing {shown.length} of {mine.length}</span>
+            {filtering && <button type="button" onClick={clearFilters} className="inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200">Clear filters</button>}
+          </p>
+          <CollectionSummary titles={shown} />
           {shown.length === 0 ? <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing matches.</div> : (
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {shown.map((m) => (
@@ -135,6 +200,9 @@ export default function MediaPage({ library = null }) {
                         {m.lent_to.map((who) => <span key={who} className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">with {who}</span>)}
                       </span>
                       {m.times > 0 && <span className="mt-1 block text-xs text-gray-500 dark:text-life-300">{DID[m.type].toLowerCase()} {m.times === 1 ? 'once' : `${m.times} times`}, last on {m.last_on}</span>}
+                      {m.cost_cents != null || m.worth_cents != null ? (
+                        <span className="mt-1 block text-xs text-gray-500 dark:text-life-300">{[m.cost_cents != null && `cost ${dollarsText(m.cost_cents)}`, m.worth_cents != null && `worth ${dollarsText(m.worth_cents)}`].filter(Boolean).join(' · ')}</span>
+                      ) : null}
                     </span>
                   </Link>
                 </li>
@@ -145,12 +213,17 @@ export default function MediaPage({ library = null }) {
       )}
       {adding && (
         <Modal title="Add to the collection" onClose={() => setAdding(null)}>
-          <TitleForm title={adding} withCopy onDone={(m) => navigate(`/media/${m.id}`)} />
+          <TitleForm title={adding} withCopy known={titles} onDone={(m) => navigate(`/media/${m.id}`)} />
         </Modal>
       )}
       {listing && (
-        <Modal title="Bring in a list of books" onClose={() => { setListing(false); load(); }}>
-          <BookList format={lib?.format || ''} onDone={() => { setListing(false); load(); }} />
+        <Modal title={lib ? 'Bring in a list of books' : 'Bring in a list'} onClose={() => { setListing(false); load(); }}>
+          <BookList format={lib?.format || ''} mixed={!lib} type={type || 'film'} onDone={() => { setListing(false); load(); }} />
+        </Modal>
+      )}
+      {scanMany && (
+        <Modal title="Scan many" onClose={() => { setScanMany(false); load(); }}>
+          <BulkScan lookUp={lookUp} ignoreCode={stickerCode} defaultType={type || lib?.type || 'film'} onDone={() => { setScanMany(false); load(); }} />
         </Modal>
       )}
       {scanning && (
@@ -186,12 +259,9 @@ async function lookUp(code) {
     }
     const { data: { title } } = await axios.get('/api/lookups/title', { params: { code } });
     if (!title) return { hint: "Neither MusicBrainz nor UPCitemdb knows this barcode. Add it and type the title in." };
-    // The lookup files every disc as a film, music or a game. One that says it's an audiobook is a book.
-    const heard = AUDIOBOOK_WORDS.test(`${title.title} ${title.format || ''}`);
-    const format = !heard ? (title.format || '') : /tape|cassette/i.test(`${title.title} ${title.format}`) ? 'Book on tape' : /\bcds?\b/i.test(`${title.title} ${title.format}`) ? 'Book on CD' : 'Audiobook';
-    const type = heard ? 'book' : title.type;
+    const format = title.format || '';
     return {
-      from: title.from, start: { type, title: title.title, creator: title.creator || '', year: title.year ?? '', format, barcode: code },
+      from: title.from, start: { type: title.type, title: title.title, creator: title.creator || '', year: title.year ?? '', format, barcode: code },
       detail: [title.creator, title.year, format],
     };
   } catch (err) { return { hint: errorMessage(err, "It couldn't be looked up just now.") }; }
@@ -263,7 +333,7 @@ function ScanToFind({ onAdd }) {
 }
 
 /** A title's own details. With `withCopy`, also the first copy: what it's on and where it is. */
-function TitleForm({ title, withCopy = false, onDone }) {
+function TitleForm({ title, withCopy = false, known = [], onDone }) {
   const [form, setForm] = useState({
     type: title.type || 'film', title: title.title || '', creator: title.creator || '', year: title.year ?? '', genres: (title.genres || []).join(', '),
     minutes: title.minutes ?? '', cover: title.cover || '', summary: title.summary || '', note: title.note || '', wanted: !!title.wanted, format: title.format || '', place_id: '',
@@ -272,7 +342,16 @@ function TitleForm({ title, withCopy = false, onDone }) {
   const [formats, setFormats] = useState([]);
   const [places, setPlaces] = useState([]);
   const [error, setError] = useState('');
+  const [different, setDifferent] = useState('');   // the type and name the person said are a different one
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  // A new title whose name is one you already have, of the same kind: asked about, never blocked.
+  const askAbout = `${form.type}|${labelKey(form.title)}`;
+  const dupes = withCopy && !title.id && different !== askAbout ? sameTitles(known, form.type, form.title) : [];
+  const addCopyTo = async (existing) => {
+    if (!form.format.trim()) { setError("Say what the new copy is on first (the box below)."); return; }
+    setError('');
+    try { onDone((await axios.post(`/api/media/${existing.id}/copies`, { format: form.format, place_id: form.place_id === '' ? null : Number(form.place_id), barcode: form.barcode || null })).data); } catch (err) { setError(errorMessage(err, "Couldn't add the copy")); }
+  };
   useEffect(() => { axios.get('/api/media/formats', { params: { type: form.type } }).then(({ data }) => setFormats(data)).catch(() => {}); }, [form.type]);
   useEffect(() => { if (withCopy) axios.get('/api/things/places').then(({ data }) => setPlaces(data)).catch(() => {}); }, [withCopy]);
   const submit = async (e) => {
@@ -290,6 +369,20 @@ function TitleForm({ title, withCopy = false, onDone }) {
         </Field>
         <div className="col-span-2"><Field label="Title *"><input required autoFocus={!title.id} value={form.title} onChange={set('title')} className={inputClass} /></Field></div>
       </div>
+      {dupes.length > 0 && (
+        <div role="status" data-duplicate className="space-y-2 rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">
+          {dupes.map((d) => (
+            <div key={d.id} className="space-y-1">
+              <p>You already have {d.title} ({d.formats.length ? d.formats.join(', ') : 'wanted, no copy yet'}){d.year ? `, from ${d.year}` : ''}.</p>
+              <div className="flex flex-wrap gap-2">
+                <Link to={`/media/${d.id}`} className="inline-flex min-h-[44px] items-center rounded-lg border border-honey-700/40 px-3 text-honey-700 hover:bg-white/50">Open it</Link>
+                {withCopy && !form.wanted && <button type="button" onClick={() => addCopyTo(d)} className="min-h-[44px] rounded-lg border border-honey-700/40 px-3 hover:bg-white/50">Add as a new copy of it</button>}
+              </div>
+            </div>
+          ))}
+          <button type="button" onClick={() => setDifferent(askAbout)} className="min-h-[44px] text-left underline">It's a different one</button>
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-3">
         <div className="col-span-2"><Field label={CREATOR[form.type]}><input value={form.creator} onChange={set('creator')} className={inputClass} /></Field></div>
         <Field label="Year"><input type="number" min="0" max="9999" step="1" value={form.year} onChange={set('year')} className={inputClass} /></Field>
@@ -373,6 +466,11 @@ export function MediaTitlePage() {
             <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">Your copies</h2>
             <button type="button" onClick={() => setModal({ copy: {} })} className="text-sm text-life-600 hover:underline dark:text-life-200">+ Add</button>
           </div>
+          {title.cost_cents != null || title.worth_cents != null ? (
+            <p className="mb-1 text-xs text-gray-600 dark:text-life-200" data-money>
+              Together: {[title.cost_cents != null && `cost ${dollarsText(title.cost_cents)}`, title.worth_cents != null && `worth ${dollarsText(title.worth_cents)}`].filter(Boolean).join(', ')}
+            </p>
+          ) : null}
           {title.copies.length === 0 ? <p className="text-sm text-gray-500 dark:text-life-200">No copies. Add one for each you own: the VHS, the Blu-ray, the file on your media server.</p> : (
             <ul className="divide-y divide-life-50 dark:divide-life-700">
               {title.copies.map((copy) => (
@@ -382,6 +480,9 @@ export function MediaTitlePage() {
                       <span className="block text-sm text-gray-800 dark:text-life-50">{[copy.format, piecesText(copy.format, copy.pieces)].filter(Boolean).join(' · ')}</span>
                       <span className="block text-xs text-gray-500 dark:text-life-300">
                         {[copy.place && `📍 ${copy.place}`, copy.source && `from ${sourceName(copy.source)}`, copy.barcode && `barcode ${copy.barcode}`, copy.note].filter(Boolean).join(' · ') || 'no place'}
+                      </span>
+                      <span className="block text-xs text-gray-500 dark:text-life-300">
+                        {[copy.cost_cents != null && `cost ${dollarsText(copy.cost_cents)}${copy.bought_on ? ` on ${copy.bought_on}` : ''}`, copy.value_cents != null && `worth ${dollarsText(copy.value_cents)}${copy.valued_on ? ` on ${copy.valued_on}` : ''}`].filter(Boolean).join(' · ')}
                       </span>
                     </span>
                     {copy.lent_to && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">with {copy.lent_to} since {copy.lent_on}</span>}
@@ -435,7 +536,7 @@ function CopyHistory({ copy }) {
 
 function CopyForm({ title, copy, onDone }) {
   const [scanning, setScanning] = useState(false);
-  const [form, setForm] = useState({ format: copy.format || '', place_id: copy.place_id ?? '', barcode: copy.barcode || '', lent_to: copy.lent_to || '', lent_on: copy.lent_on || '', note: copy.note || '', link: copy.link || '', pieces: copy.pieces ?? '' });
+  const [form, setForm] = useState({ format: copy.format || '', place_id: copy.place_id ?? '', barcode: copy.barcode || '', lent_to: copy.lent_to || '', lent_on: copy.lent_on || '', note: copy.note || '', link: copy.link || '', pieces: copy.pieces ?? '', cost: dollarsField(copy.cost_cents), bought_on: copy.bought_on || '', value: dollarsField(copy.value_cents), valued_on: copy.valued_on || '' });
   const [askPieces, setAskPieces] = useState(false);
   const [formats, setFormats] = useState([]);
   const [places, setPlaces] = useState([]);
@@ -449,7 +550,14 @@ function CopyForm({ title, copy, onDone }) {
   }, [title.type]);
   const submit = async (e) => {
     e.preventDefault();
-    const body = { format: form.format, place_id: form.place_id === '' ? null : Number(form.place_id), barcode: form.barcode || null, lent_to: form.lent_to || null, lent_on: form.lent_on || null, note: form.note || null, link: form.link.trim() || null, pieces: form.pieces === '' ? null : Number(form.pieces) };
+    // Prices are typed as dollars and kept as cents. Empty is fine; something that isn't an amount is said so.
+    const cost = form.cost.trim() === '' ? null : centsFromDollars(form.cost);
+    const value = form.value.trim() === '' ? null : centsFromDollars(form.value);
+    if ((form.cost.trim() !== '' && cost === null) || (form.value.trim() !== '' && value === null)) { setError('A price is dollars and cents, like 12.99'); return; }
+    const today = toDateInput(new Date());
+    // A worth that was changed is noted today, unless a day was typed for it.
+    const valuedOn = value === null ? null : (form.value !== dollarsField(copy.value_cents) && form.valued_on === (copy.valued_on || '')) ? today : (form.valued_on || today);
+    const body = { cost_cents: cost, bought_on: form.bought_on || null, value_cents: value, valued_on: valuedOn, format: form.format, place_id: form.place_id === '' ? null : Number(form.place_id), barcode: form.barcode || null, lent_to: form.lent_to || null, lent_on: form.lent_on || null, note: form.note || null, link: form.link.trim() || null, pieces: form.pieces === '' ? null : Number(form.pieces) };
     try { onDone((copy.id ? await axios.put(`/api/media/copies/${copy.id}`, body) : await axios.post(`/api/media/${title.id}/copies`, body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   const remove = async () => { try { onDone((await axios.delete(`/api/media/copies/${copy.id}`)).data); } catch (err) { setError(errorMessage(err, "Couldn't remove it")); } };
@@ -486,6 +594,15 @@ function CopyForm({ title, copy, onDone }) {
       <Field label="A link that opens it (for one kept in an app or on a server)">
         <input type="text" inputMode="url" value={form.link} onChange={set('link')} placeholder="https://read.amazon.com/…" className={inputClass} />
       </Field>
+      <fieldset className="space-y-3 rounded-lg bg-life-50 p-3 dark:bg-life-700">
+        <legend className="px-1 text-xs font-medium text-gray-600 dark:text-life-200">Cost and worth (all optional, and typed by you: nothing is looked up)</legend>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="What it cost ($)"><input inputMode="decimal" value={form.cost} onChange={set('cost')} placeholder="12.99" className={`${inputClass} min-h-[44px]`} /></Field>
+          <Field label="Bought on"><input type="date" value={form.bought_on} onChange={set('bought_on')} className={`${inputClass} min-h-[44px]`} /></Field>
+          <Field label="Worth now ($)"><input inputMode="decimal" value={form.value} onChange={set('value')} placeholder="20.00" className={`${inputClass} min-h-[44px]`} /></Field>
+          {form.value.trim() !== '' && <Field label="Worth noted on"><input type="date" value={form.valued_on} onChange={set('valued_on')} className={`${inputClass} min-h-[44px]`} /></Field>}
+        </div>
+      </fieldset>
       <p className="text-xs text-gray-500 dark:text-life-300">
         Open the book in Kindle, Apple Books or Google Play Books, use Share or copy its address, and paste it here. Life Is only keeps it: it's followed when you press it.
       </p>

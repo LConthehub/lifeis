@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { inApp } from '../where';
+import Picture from '../components/Picture';
 import RecipeFile from '../components/RecipeFile';
+import { shrink } from '../components/shrink';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, minutesText, toDateInput } from '../components/ui';
+
+/** Where a recipe's picture is asked for; the version makes a changed picture show at once instead of the one remembered. */
+const photoAddress = (r) => `/api/kitchen/recipes/${r.id}/photo?v=${encodeURIComponent(r.photo_added_at || '')}`;
 
 /** The recipe box: search, tags, add, paste in, export. */
 export default function Recipes() {
@@ -41,13 +46,18 @@ export default function Recipes() {
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {(rows || []).map((r) => (
             <li key={r.id}>
-              <Link to={`/recipes/${r.id}`} className={`${cardClass} block h-full hover:ring-life-300`}>
-                <span className="block font-medium text-life-800 dark:text-life-50">{r.title}</span>
-                <span className="block text-xs text-gray-500 dark:text-life-200">
-                  {[r.servings && `serves ${r.servings}`, (r.prep_minutes || r.cook_minutes) && minutesText((r.prep_minutes || 0) + (r.cook_minutes || 0))].filter(Boolean).join(' · ')}
+              <Link to={`/recipes/${r.id}`} className={`${cardClass} flex h-full gap-3 hover:ring-life-300`}>
+                {r.has_photo && (
+                  <Picture src={photoAddress(r)} alt={r.title} loading="lazy" decoding="async" className="h-16 w-16 shrink-0 rounded-lg bg-life-50 object-cover dark:bg-life-700" />
+                )}
+                <span className="block min-w-0 flex-1">
+                  <span className="block font-medium text-life-800 dark:text-life-50">{r.title}</span>
+                  <span className="block text-xs text-gray-500 dark:text-life-200">
+                    {[r.servings && `serves ${r.servings}`, (r.prep_minutes || r.cook_minutes) && minutesText((r.prep_minutes || 0) + (r.cook_minutes || 0))].filter(Boolean).join(' · ')}
+                  </span>
+                  {r.description && <span className="mt-1 block line-clamp-2 text-sm text-gray-600 dark:text-life-100">{r.description}</span>}
+                  {r.tags.length > 0 && <span className="mt-2 flex flex-wrap gap-1">{r.tags.map((t) => <span key={t} className="rounded-full bg-life-50 px-2 py-0.5 text-[11px] text-life-700 dark:bg-life-700 dark:text-life-100">{t}</span>)}</span>}
                 </span>
-                {r.description && <span className="mt-1 block line-clamp-2 text-sm text-gray-600 dark:text-life-100">{r.description}</span>}
-                {r.tags.length > 0 && <span className="mt-2 flex flex-wrap gap-1">{r.tags.map((t) => <span key={t} className="rounded-full bg-life-50 px-2 py-0.5 text-[11px] text-life-700 dark:bg-life-700 dark:text-life-100">{t}</span>)}</span>}
               </Link>
             </li>
           ))}
@@ -322,6 +332,8 @@ export function RecipePage() {
   const [modal, setModal] = useState(null);
   const [missing, setMissing] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
+  const [pictureError, setPictureError] = useState('');
+  const picker = useRef(null);
   const load = useCallback(() => {
     axios.get(`/api/kitchen/recipes/${id}`, { params: { servings: servings ? Number(servings) : undefined } })
       .then(({ data }) => setR(data)).catch(() => setMissing(true));
@@ -333,6 +345,17 @@ export function RecipePage() {
     if (!window.confirm(`Delete "${r.title}"? It can't be brought back.`)) return;
     await axios.delete(`/api/kitchen/recipes/${r.id}`).catch(() => {});
     navigate('/recipes');
+  };
+  const picture = async (file) => {
+    if (!file) return;
+    setPictureError('');
+    try { await axios.put(`/api/kitchen/recipes/${r.id}/photo`, { data: await shrink(file) }); load(); } catch (err) {
+      setPictureError(err?.response ? errorMessage(err, "The picture couldn't be kept") : "That file couldn't be opened as a picture. Try a JPEG or PNG.");
+    }
+  };
+  const removePicture = async () => {
+    setPictureError('');
+    try { await axios.delete(`/api/kitchen/recipes/${r.id}/photo`); load(); } catch (err) { setPictureError(errorMessage(err, "The picture couldn't be removed")); }
   };
   let stepNumber = 0;
   return (
@@ -349,6 +372,17 @@ export function RecipePage() {
         <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Edit</button>
       </div>
       {r.description && <p className="whitespace-pre-wrap text-gray-700 dark:text-life-100">{r.description}</p>}
+      <div className="space-y-2" data-section="picture">
+        {r.has_photo && <Picture src={photoAddress(r)} alt={r.title} loading="lazy" decoding="async" className="max-h-72 w-full rounded-xl bg-life-50 object-contain dark:bg-life-700 sm:max-w-md" />}
+        <input ref={picker} type="file" accept="image/*" className="hidden" aria-label="Choose or take a picture of the recipe" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; picture(file); }} />
+        <div className="flex flex-wrap gap-2 text-sm">
+          <button type="button" onClick={() => picker.current?.click()} className={r.has_photo ? `${quietButtonClass} min-h-[44px]` : 'min-h-[44px] rounded-lg px-1 text-life-600 hover:underline dark:text-life-200'}>
+            {r.has_photo ? 'Change the picture' : 'Add a picture'}
+          </button>
+          {r.has_photo && <button type="button" onClick={removePicture} className="min-h-[44px] rounded-lg px-3 text-gray-600 hover:underline dark:text-life-200">Remove</button>}
+        </div>
+        {pictureError && <p className="text-sm text-red-600">{pictureError}</p>}
+      </div>
       <div className="grid gap-4 sm:grid-cols-[2fr_3fr]">
         <section className={cardClass}>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

@@ -16,23 +16,41 @@
  * them or none (a transaction).
  */
 import { atomic, type Db, type Queries, type Value } from './db.ts';
-import { placePaths } from './inventory.ts';
+import { MAX_THING_PHOTO, placePaths } from './inventory.ts';
 import type {
   EquipmentInput, EquipmentShortage, ExportFile, GroceryItem, Ingredient, Meal, PantryInput, PantryItem, Part, PlanInput, PlannedMeal, Recipe,
   RecipeEquipment, RecipeInput, RecipeLine, RecipeSummary,
 } from './kitchenTypes.ts';
 import { Problem } from './problem.ts';
-import { addDays, clean, dayNumber, inOrder, labelKey, rounded, stamp, todayOf, type Clock } from './small.ts';
+import { addDays, clean, dayNumber, inOrder, labelKey, pictureType, rounded, stamp, todayOf, type Clock } from './small.ts';
 import { cut, folderName, linesAsText, readImport, splitLines, TEXT_LIMIT, toSchemaOrg, type TextLine } from './recipeText.ts';
 import { MAX_PASTED_GROCERIES, readGroceryList, readRecipeFile, recipeKey, type RecipeFile, type Unread } from './recipeFiles.ts';
+import { barcodeKey } from './media.ts';
+import { sizeOf } from './shopping.ts';
 import * as units from './units.ts';
 
 export const MEALS: readonly string[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 export const LOCATIONS: readonly string[] = ['fridge', 'freezer', 'pantry', 'spices', 'other'];
 
+/** A meal as copied from one week to another: where it goes, and what it is. Never "cooked". */
+type MealCopy = { day: string; meal: Meal; recipe_id: number | null; title: string | null; servings: number | null };
+/** A week's meals kept under a name, by weekday (0 is the first day of the week). The recipe is kept by id and by title, so a deleted one can be named. */
+type TemplateMeal = { weekday: number; meal: Meal; recipe_id: number | null; recipe_title: string | null; title: string | null; servings: number | null };
+type StoredTemplate = { id: number; name: string; meals: TemplateMeal[] };
+export type WeekTemplate = { id: number; name: string; meals: (TemplateMeal & { missing: boolean })[]; /** Titles of recipes that are gone. */ missing: string[] };
+export type CopyResult = { added: number; /** Meals that were already there, the same, so not added twice. */ already: number; /** Days that got meals and already had something. */ days_with_meals: number; missing: string[] };
+export type UseItUp = {
+  /** What is within the window (or past), soonest first. */
+  soon: { name: string; days_left: number }[];
+  suggestions: { recipe_id: number; title: string; servings: number | null; uses: string[]; have_others: number; other_total: number }[];
+};
+export type PantryScan = { barcode: string; ingredient: { id: number; name: string; product: string | null; size: string } | null; in_pantry: PantryItem | null };
+const WEEK_TEMPLATES = 'week_templates';
+const MAX_TEMPLATES = 50;
+
 const tagList = (tags: string | null) => (tags ?? '').split(',').filter(Boolean);
 
-type RecipeRow = Omit<Recipe, 'tags' | 'ingredients' | 'steps' | 'equipment' | 'ingredients_text' | 'steps_text' | 'showing_servings'> & { tags: string | null };
+type RecipeRow = Omit<Recipe, 'tags' | 'ingredients' | 'steps' | 'equipment' | 'ingredients_text' | 'steps_text' | 'showing_servings' | 'has_photo'> & { tags: string | null; photo_added_at: string | null };
 type LineRow = Omit<RecipeLine, 'is_heading' | 'scaled'> & { is_heading: number };
 type PantryRow = Omit<PantryItem, 'low' | 'days_left' | 'amount'>;
 type GroceryRow = Omit<GroceryItem, 'done' | 'from_plan' | 'amount'> & { done: number; from_plan: number };
@@ -112,7 +130,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
   }
 
   async function readRecipe(q: Queries, id: number, servings?: number | null): Promise<Recipe> {
-    const row = await q.get<RecipeRow>('SELECT * FROM recipes WHERE id = ? AND owner_id = ?', [id, owner]);
+    const row = await q.get<RecipeRow>('SELECT r.*, (SELECT p.added_at FROM recipe_photos p WHERE p.recipe_id = r.id) AS photo_added_at FROM recipes r WHERE r.id = ? AND r.owner_id = ?', [id, owner]);
     if (!row) throw new Problem(404, 'Recipe not found');
     const rows = await q.all<LineRow>(
       `SELECT l.*, i.name AS ingredient FROM recipe_lines l LEFT JOIN ingredients i ON i.id = l.ingredient_id
@@ -126,6 +144,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
     }));
     return {
       ...row,
+      has_photo: row.photo_added_at !== null,
       ingredients: lines.filter((line) => line.part === 'ingredients'),
       steps: lines.filter((line) => line.part === 'steps'),
       equipment: await equipmentOf(q, id),
@@ -163,6 +182,15 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
     await saveLines(q, made.lastId, splitLines(body.ingredients_text, 'ingredients'), splitLines(body.steps_text, 'steps'));
     await saveEquipment(q, made.lastId, body.equipment ?? []);
     return made.lastId;
+  }
+
+  /** A picture Life Is can keep: a real JPEG, PNG or WebP (by its bytes, not its name), no larger than a thing's photo. */
+  const picturable = (bytes: Uint8Array) => bytes.length <= MAX_THING_PHOTO && pictureType(bytes) !== null;
+
+  async function keepPhoto(q: Queries, recipeId: number, bytes: Uint8Array) {
+    await q.run(
+      'INSERT INTO recipe_photos (recipe_id, type, bytes, added_at) VALUES (?, ?, ?, ?) ON CONFLICT(recipe_id) DO UPDATE SET type = excluded.type, bytes = excluded.bytes, added_at = excluded.added_at',
+      [recipeId, pictureType(bytes)!, bytes, now()]);
   }
 
   // ==================== PANTRY ====================
@@ -334,7 +362,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
   function recipesFromFile(file: RecipeFile) {
     const read = readRecipeFile(file);
     const failed: Unread[] = [...read.failed];
-    const recipes: { name: string; input: RecipeInput; key: string }[] = [];
+    const recipes: { name: string; input: RecipeInput; key: string; photo: Uint8Array | null; pictured: boolean }[] = [];
     for (const one of read.recipes) {
       try {
         recipeValues(one.input); // the checks saving makes, so a recipe that would be refused is named now
@@ -344,6 +372,63 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
       }
     }
     return { recipes, failed };
+  }
+
+  // ---------- week copies and templates ----------
+
+  const mealKey = (m: { day: string; meal: string; recipe_id: number | null; title: string | null }) =>
+    `${m.day}|${m.meal}|${m.recipe_id ?? `t:${(m.title ?? '').trim().toLowerCase()}`}`;
+
+  /** Add meals beside what's there. A meal already there the same (day, meal, recipe or title) isn't added twice. */
+  async function putMeals(tx: Queries, items: MealCopy[], missing: string[]): Promise<CopyResult> {
+    if (items.length === 0) return { added: 0, already: 0, days_with_meals: 0, missing };
+    const days = [...new Set(items.map((i) => i.day))].sort();
+    const there = await planRows(tx, days[0]!, days[days.length - 1]!);
+    const keys = new Set(there.map(mealKey));
+    const busy = new Set(there.map((m) => m.day).filter((d) => days.includes(d)));
+    let added = 0;
+    let already = 0;
+    for (const item of items) {
+      if (keys.has(mealKey(item))) { already += 1; continue; }
+      await tx.run('INSERT INTO meal_plan (owner_id, day, meal, recipe_id, title, servings, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [owner, item.day, item.meal, item.recipe_id, item.recipe_id === null ? clean(item.title, 200) : null, item.servings, now()]);
+      keys.add(mealKey(item));
+      added += 1;
+    }
+    return { added, already, days_with_meals: busy.size, missing };
+  }
+
+  async function readTemplates(q: Queries): Promise<StoredTemplate[]> {
+    const row = await q.get<{ value: string | null }>('SELECT value FROM user_settings WHERE user_id = ? AND key = ?', [owner, WEEK_TEMPLATES]);
+    try {
+      const list = JSON.parse(row?.value ?? '[]') as unknown;
+      return Array.isArray(list) ? list.filter((t): t is StoredTemplate => Boolean(t) && typeof t.id === 'number' && typeof t.name === 'string' && Array.isArray(t.meals)) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async function writeTemplates(q: Queries, list: StoredTemplate[]) {
+    if (list.length === 0) await q.run('DELETE FROM user_settings WHERE user_id = ? AND key = ?', [owner, WEEK_TEMPLATES]);
+    else {
+      await q.run('INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value',
+        [owner, WEEK_TEMPLATES, JSON.stringify(list)]);
+    }
+  }
+
+  /** A template, with each recipe in it checked to still be there. */
+  async function describeTemplate(q: Queries, t: StoredTemplate): Promise<WeekTemplate> {
+    const ids = [...new Set(t.meals.map((m) => m.recipe_id).filter((id): id is number => id !== null))];
+    const alive = new Set<number>();
+    for (const id of ids) if (await q.get('SELECT id FROM recipes WHERE id = ? AND owner_id = ?', [id, owner])) alive.add(id);
+    const meals = t.meals.map((m) => ({ ...m, missing: m.recipe_id !== null && !alive.has(m.recipe_id) }));
+    return { id: t.id, name: t.name, meals, missing: [...new Set(meals.filter((m) => m.missing).map((m) => m.recipe_title ?? 'a recipe'))] };
+  }
+
+  async function templatesIn(q: Queries): Promise<WeekTemplate[]> {
+    const out: WeekTemplate[] = [];
+    for (const t of await readTemplates(q)) out.push(await describeTemplate(q, t));
+    return out.sort((a, b) => inOrder(a.name.toLowerCase(), b.name.toLowerCase()));
   }
 
   function planWindow(start: string, days: number): [string, string] {
@@ -377,7 +462,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
     // ---------- recipes ----------
 
     async listRecipes(find: { q?: string | null; tag?: string | null } = {}): Promise<RecipeSummary[]> {
-      let sql = 'SELECT id, title, description, servings, prep_minutes, cook_minutes, tags, updated_at FROM recipes WHERE owner_id = ?';
+      let sql = 'SELECT id, title, description, servings, prep_minutes, cook_minutes, tags, updated_at, (SELECT p.added_at FROM recipe_photos p WHERE p.recipe_id = recipes.id) AS photo_added_at FROM recipes WHERE owner_id = ?';
       const args: Value[] = [owner];
       if (find.q) {
         sql += " AND (title LIKE ? OR id IN (SELECT recipe_id FROM recipe_lines WHERE part = 'ingredients' AND text LIKE ?))";
@@ -387,8 +472,8 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
         sql += " AND (',' || tags || ',') LIKE ?";
         args.push(`%,${find.tag.trim().toLowerCase()},%`);
       }
-      const rows = await db.all<Omit<RecipeSummary, 'tags'> & { tags: string | null }>(sql + ' ORDER BY title COLLATE NOCASE', args);
-      return rows.map((row) => ({ ...row, tags: tagList(row.tags) }));
+      const rows = await db.all<Omit<RecipeSummary, 'tags' | 'has_photo'> & { tags: string | null }>(sql + ' ORDER BY title COLLATE NOCASE', args);
+      return rows.map((row) => ({ ...row, tags: tagList(row.tags), has_photo: row.photo_added_at !== null }));
     },
 
     /** A recipe, with amounts for other servings shown beside the lines when asked. */
@@ -416,7 +501,33 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
     },
 
     async deleteRecipe(id: number): Promise<void> {
-      await db.run('DELETE FROM recipes WHERE id = ? AND owner_id = ?', [id, owner]);
+      await db.run('DELETE FROM recipes WHERE id = ? AND owner_id = ?', [id, owner]); // its picture goes with it
+    },
+
+    /** Keep a picture of the recipe (JPEG, PNG or WebP), in place of any before. */
+    async setPhoto(id: number, bytes: Uint8Array): Promise<Recipe> {
+      if (!picturable(bytes)) throw new Problem(400, bytes.length > MAX_THING_PHOTO ? 'That picture is too large to keep' : "That isn't a picture Life Is can keep (JPEG, PNG or WebP)");
+      return atomic(db, async (tx) => {
+        await readRecipe(tx, id); // 404 unless it is yours
+        await keepPhoto(tx, id, bytes);
+        return readRecipe(tx, id);
+      });
+    },
+
+    /** The recipe's picture, or null when it has none. */
+    async photo(id: number): Promise<{ type: string; bytes: Uint8Array } | null> {
+      const row = await db.get<{ type: string; bytes: Uint8Array }>(
+        'SELECT p.type, p.bytes FROM recipe_photos p JOIN recipes r ON r.id = p.recipe_id WHERE p.recipe_id = ? AND r.owner_id = ?', [id, owner]);
+      if (!row && !(await db.get('SELECT 1 AS there FROM recipes WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Recipe not found');
+      return row ?? null;
+    },
+
+    async removePhoto(id: number): Promise<Recipe> {
+      return atomic(db, async (tx) => {
+        await readRecipe(tx, id);
+        await tx.run('DELETE FROM recipe_photos WHERE recipe_id = ?', [id]);
+        return readRecipe(tx, id);
+      });
     },
 
     /** Pasted text, or schema.org recipe JSON (one recipe or a list). Each is saved with its original beside it. */
@@ -433,31 +544,35 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
      * What a file from another app holds, and nothing kept: how many recipes, the first few by name, how many
      * are in Life Is already (the same name and first ingredient), and any that couldn't be read.
      */
-    async lookOverRecipeFile(file: RecipeFile): Promise<{ found: number; first: string[]; already: number; fresh: number; failed: Unread[] }> {
+    async lookOverRecipeFile(file: RecipeFile): Promise<{ found: number; first: string[]; already: number; fresh: number; pictures: number; failed: Unread[] }> {
       const { recipes, failed } = recipesFromFile(file);
       const kept = await keptRecipeKeys(db);
       let already = 0;
+      let pictures = 0; // pictures that will be kept: only a new recipe is given one
       for (const one of recipes) {
         if (kept.has(one.key)) already += 1;
-        else kept.add(one.key); // the same recipe twice in one file is one new recipe
+        else { kept.add(one.key); if (one.pictured) pictures += 1; } // the same recipe twice in one file is one new recipe
       }
-      return { found: recipes.length + failed.length, first: recipes.slice(0, 8).map((one) => one.name), already, fresh: recipes.length - already, failed };
+      return { found: recipes.length + failed.length, first: recipes.slice(0, 8).map((one) => one.name), already, fresh: recipes.length - already, pictures, failed };
     },
 
     /** Keep the new recipes of a file from another app, all in one change. Bringing the same file in again adds nothing. */
-    async bringInRecipeFile(file: RecipeFile): Promise<{ found: number; added: number; already: number; failed: Unread[] }> {
+    async bringInRecipeFile(file: RecipeFile): Promise<{ found: number; added: number; already: number; pictures: number; failed: Unread[] }> {
       const { recipes, failed } = recipesFromFile(file);
       return atomic(db, async (tx) => {
         const kept = await keptRecipeKeys(tx);
         let added = 0;
         let already = 0;
+        let pictures = 0;
         for (const one of recipes) {
-          if (kept.has(one.key)) { already += 1; continue; }
-          await createIn(tx, one.input);
+          if (kept.has(one.key)) { already += 1; continue; } // a recipe already here is left as it is, with no picture added
+          const id = await createIn(tx, one.input);
+          // A picture that can't be kept (not a real picture, or too large) leaves the recipe without one; the recipe still comes in.
+          if (one.photo && picturable(one.photo)) { await keepPhoto(tx, id, one.photo); pictures += 1; }
           kept.add(one.key);
           added += 1;
         }
-        return { found: recipes.length + failed.length, added, already, failed };
+        return { found: recipes.length + failed.length, added, already, pictures, failed };
       });
     },
 
@@ -504,6 +619,89 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
           [owner, ingredient, body.quantity ?? null, units.canonical(body.unit), body.location ?? null, body.expires_on || null,
             body.low_at ?? null, now()]);
         return (await pantryRows(tx)).find((item) => item.ingredient_id === ingredient)!;
+      });
+    },
+
+    /**
+     * Recipes for what is about to run out: the pantry items whose use-by day is within `days` (or has passed),
+     * and the recipes that use them, most first, then the ones whose other ingredients the pantry already has.
+     * Ingredients are matched the way the grocery list does: by the ingredient a recipe line was read as.
+     */
+    async useItUp(days = 5, limit = 12): Promise<UseItUp> {
+      if (!(Number.isInteger(days) && days >= 0 && days <= 60)) throw new Problem(400, '0 to 60 days');
+      const pantry = await pantryRows(db);
+      const soonItems = pantry.filter((p) => p.days_left !== null && p.days_left <= days && p.quantity !== 0).sort((a, b) => a.days_left! - b.days_left! || inOrder(a.name.toLowerCase(), b.name.toLowerCase()));
+      const soon = new Map(soonItems.map((p) => [p.ingredient_id, p]));
+      const have = new Set(pantry.filter((p) => p.quantity !== 0).map((p) => p.ingredient_id));
+      if (soon.size === 0) return { soon: [], suggestions: [] };
+      const lines = await db.all<{ recipe_id: number; ingredient_id: number; title: string; servings: number | null }>(
+        `SELECT DISTINCT l.recipe_id, l.ingredient_id, r.title, r.servings FROM recipe_lines l JOIN recipes r ON r.id = l.recipe_id
+         WHERE r.owner_id = ? AND l.part = 'ingredients' AND l.is_heading = 0 AND l.ingredient_id IS NOT NULL`, [owner]);
+      const byRecipe = new Map<number, { title: string; servings: number | null; ids: Set<number> }>();
+      for (const line of lines) {
+        const one = byRecipe.get(line.recipe_id) ?? { title: line.title, servings: line.servings, ids: new Set<number>() };
+        one.ids.add(line.ingredient_id);
+        byRecipe.set(line.recipe_id, one);
+      }
+      const suggestions = [...byRecipe.entries()].flatMap(([recipe_id, r]) => {
+        const uses = [...r.ids].filter((id) => soon.has(id)).map((id) => soon.get(id)!).sort((a, b) => a.days_left! - b.days_left!);
+        if (uses.length === 0) return [];
+        const others = [...r.ids].filter((id) => !soon.has(id));
+        return [{ recipe_id, title: r.title, servings: r.servings, uses: uses.map((p) => p.name), have_others: others.filter((id) => have.has(id)).length, other_total: others.length }];
+      }).sort((a, b) => b.uses.length - a.uses.length || b.have_others - a.have_others || a.other_total - b.other_total || inOrder(a.title.toLowerCase(), b.title.toLowerCase()));
+      return { soon: soonItems.map((p) => ({ name: p.name, days_left: p.days_left! })), suggestions: suggestions.slice(0, limit) };
+    },
+
+    /** What a scanned barcode is, as the grocery list knows it, and whether that is in the pantry. Asks nobody outside. */
+    async scanForPantry(code: string): Promise<PantryScan> {
+      const barcode = barcodeKey(code);
+      if (!/^[0-9A-Z]{4,40}$/.test(barcode)) throw new Problem(400, "That isn't a barcode");
+      const found = await db.get<{ id: number; name: string; product: string | null; size_quantity: number | null; size_unit: string | null; usual_quantity: number | null; usual_unit: string | null }>(
+        `SELECT i.id, i.name, b.label AS product, b.size_quantity, b.size_unit, i.usual_size_quantity AS usual_quantity, i.usual_size_unit AS usual_unit
+         FROM ingredient_barcodes b JOIN ingredients i ON i.id = b.ingredient_id WHERE b.owner_id = ? AND b.barcode = ?`, [owner, barcode]);
+      if (!found) return { barcode, ingredient: null, in_pantry: null };
+      const size = found.size_quantity !== null ? units.amount(found.size_quantity, found.size_unit) : units.amount(found.usual_quantity, found.usual_unit);
+      return {
+        barcode, ingredient: { id: found.id, name: found.name, product: found.product, size },
+        in_pantry: (await pantryRows(db)).find((p) => p.ingredient_id === found.id) ?? null,
+      };
+    },
+
+    /**
+     * Put what was scanned in the pantry: more of it when it's there. A barcode not seen before needs the
+     * ingredient it is (one of yours by `ingredient_id`, or a `name`), and is remembered from then on. The amount
+     * left out is the usual size of that product; null is "some".
+     */
+    async addScanned(body: { code: string; quantity?: number | null; unit?: string | null; ingredient_id?: number | null; name?: string | null; product?: string | null; size?: string | null }):
+      Promise<{ item: PantryItem; learned: boolean }> {
+      const barcode = barcodeKey(body.code);
+      if (!/^[0-9A-Z]{4,40}$/.test(barcode)) throw new Problem(400, "That isn't a barcode");
+      if (body.quantity != null && !(body.quantity > 0 && body.quantity < 1e7)) throw new Problem(400, 'The amount is more than 0');
+      const packet = sizeOf(body.size);
+      return atomic(db, async (tx) => {
+        const known = await tx.get<{ ingredient_id: number; size_quantity: number | null; size_unit: string | null; usual_quantity: number | null; usual_unit: string | null }>(
+          `SELECT b.ingredient_id, b.size_quantity, b.size_unit, i.usual_size_quantity AS usual_quantity, i.usual_size_unit AS usual_unit
+           FROM ingredient_barcodes b JOIN ingredients i ON i.id = b.ingredient_id WHERE b.owner_id = ? AND b.barcode = ?`, [owner, barcode]);
+        let ingredient = known?.ingredient_id ?? null;
+        if (ingredient === null) {
+          if (body.ingredient_id != null) {
+            if (!(await tx.get('SELECT id FROM ingredients WHERE id = ? AND owner_id = ?', [body.ingredient_id, owner]))) throw new Problem(404, "That isn't one of your ingredients");
+            ingredient = body.ingredient_id;
+          } else {
+            ingredient = await ingredientId(tx, body.name ?? '');
+          }
+          if (ingredient === null) throw new Problem(400, 'Say what it is');
+          await tx.run(
+            'INSERT INTO ingredient_barcodes (owner_id, barcode, ingredient_id, label, size_quantity, size_unit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [owner, barcode, ingredient, clean(body.product, 200), packet?.quantity ?? null, packet?.unit ?? null, now()]);
+        }
+        // The amount: what was said; else the size of this product; else the usual size; else "some".
+        const usual = known?.size_quantity != null ? { quantity: known.size_quantity, unit: known.size_unit }
+          : known?.usual_quantity != null ? { quantity: known.usual_quantity, unit: known.usual_unit } : packet;
+        const quantity = body.quantity !== undefined ? body.quantity : (usual?.quantity ?? null);
+        const unit = body.quantity != null ? (body.unit ?? null) : body.quantity === null ? null : (usual?.unit ?? null);
+        await addToPantry(tx, ingredient, quantity, unit);
+        return { item: (await pantryRows(tx)).find((p) => p.ingredient_id === ingredient)!, learned: !known };
       });
     },
 
@@ -562,6 +760,82 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
         .map((need) => ({ ...need, need: rounded(need.need, 3), short: rounded(Math.max(0, need.need - (need.have ?? 0)), 3) }))
         .filter((need) => need.short > 0)
         .sort((a, b) => inOrder(a.day, b.day) || mealOrder.indexOf(a.meal) - mealOrder.indexOf(b.meal) || inOrder(a.label.toLowerCase(), b.label.toLowerCase()));
+    },
+
+    /**
+     * Copy the meals of the week starting `from` onto the week starting `to`, each onto the same day of the week.
+     * Meals already on those days stay; copies are added beside them. A copy is never "cooked", and keeps its servings.
+     */
+    async copyWeek(from: string, to: string, days = 7): Promise<CopyResult> {
+      const [first, last] = planWindow(from, days);
+      const offset = dayNumber(to) - dayNumber(from);
+      if (offset === 0) throw new Problem(400, 'Choose a different week to copy to');
+      return atomic(db, async (tx) => {
+        const items: MealCopy[] = (await planRows(tx, first, last))
+          .filter((m) => m.recipe_id !== null || m.title)
+          .map((m) => ({ day: addDays(m.day, offset), meal: m.meal, recipe_id: m.recipe_id, title: m.title, servings: m.servings }));
+        return putMeals(tx, items, []);
+      });
+    },
+
+    // ---------- week templates (kept with the person's settings, no table) ----------
+
+    listTemplates(): Promise<WeekTemplate[]> {
+      return templatesIn(db);
+    },
+
+    /** Keep the week starting `start` as a template under a name. */
+    async saveTemplate(start: string, name: string): Promise<WeekTemplate[]> {
+      const tidy = clean(name, 60);
+      if (!tidy) throw new Problem(400, 'Give the template a name');
+      const [first, last] = planWindow(start, 7);
+      return atomic(db, async (tx) => {
+        const list = await readTemplates(tx);
+        if (list.some((t) => t.name.toLowerCase() === tidy.toLowerCase())) throw new Problem(409, 'You already have a template by that name');
+        if (list.length >= MAX_TEMPLATES) throw new Problem(400, `You can keep up to ${MAX_TEMPLATES} templates`);
+        const meals: TemplateMeal[] = (await planRows(tx, first, last)).filter((m) => m.recipe_id !== null || m.title).map((m) => ({
+          weekday: dayNumber(m.day) - dayNumber(first), meal: m.meal, recipe_id: m.recipe_id,
+          recipe_title: m.recipe_id !== null ? m.recipe_title : null, title: m.recipe_id === null ? m.title : null, servings: m.servings,
+        }));
+        if (meals.length === 0) throw new Problem(400, 'That week has nothing planned, so there is nothing to keep');
+        await writeTemplates(tx, [...list, { id: Math.max(0, ...list.map((t) => t.id)) + 1, name: tidy, meals }]);
+        return templatesIn(tx);
+      });
+    },
+
+    async renameTemplate(id: number, name: string): Promise<WeekTemplate[]> {
+      const tidy = clean(name, 60);
+      if (!tidy) throw new Problem(400, 'Give the template a name');
+      return atomic(db, async (tx) => {
+        const list = await readTemplates(tx);
+        const one = list.find((t) => t.id === id);
+        if (!one) throw new Problem(404, 'Not found');
+        if (list.some((t) => t.id !== id && t.name.toLowerCase() === tidy.toLowerCase())) throw new Problem(409, 'You already have a template by that name');
+        one.name = tidy;
+        await writeTemplates(tx, list);
+        return templatesIn(tx);
+      });
+    },
+
+    async deleteTemplate(id: number): Promise<WeekTemplate[]> {
+      return atomic(db, async (tx) => {
+        await writeTemplates(tx, (await readTemplates(tx)).filter((t) => t.id !== id));
+        return templatesIn(tx);
+      });
+    },
+
+    /** Put a template on the week starting `start`. A recipe that has been deleted is named and left out; the rest still goes on. */
+    async useTemplate(id: number, start: string): Promise<CopyResult> {
+      dayNumber(start);
+      return atomic(db, async (tx) => {
+        const one = (await readTemplates(tx)).find((t) => t.id === id);
+        if (!one) throw new Problem(404, 'Not found');
+        const described = await describeTemplate(tx, one);
+        const items: MealCopy[] = described.meals.filter((m) => !m.missing).map((m) => ({
+          day: addDays(start, m.weekday), meal: m.meal, recipe_id: m.recipe_id, title: m.title, servings: m.servings,
+        }));
+        return putMeals(tx, items, described.missing);
+      });
     },
 
     async deletePlan(id: number): Promise<void> {

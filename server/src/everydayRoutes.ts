@@ -12,11 +12,11 @@ import { addDays, todayOf } from '../../core/src/small.ts';
 import { search, type SearchKind } from '../../core/src/index.ts';
 import { manual } from '../../core/src/index.ts';
 import { reminders, COVERS, EMAIL_SERVICE, NTFY_SERVICE, PUSH_SERVICE, type PushSender, type ReminderSettings } from '../../core/src/index.ts';
-import { home, life, lookups, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
+import { home, life, lookups, MAX_THING_PHOTO, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
 import type { AssistantTools } from '../../core/src/index.ts';
 import { enjoyingRoutes } from './enjoyingRoutes.ts';
-import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
+import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, type Route } from './http.ts';
 import { mailRoutes, type MailTools } from './mailRoutes.ts';
 import { makingRoutes } from './makingRoutes.ts';
 import { moneyRoutes } from './moneyRoutes.ts';
@@ -27,6 +27,7 @@ import { shoppingRoutes } from './shoppingRoutes.ts';
 import { recallRoutes } from './recallRoutes.ts';
 import { startRoutes } from './startRoutes.ts';
 import { licenseRoutes } from './licenseRoutes.ts';
+import { exportRoutes } from './exportRoutes.ts';
 
 export type Outside = {
   /** How the weather and the barcode lookups are asked. Left out: they can't be turned on. */
@@ -42,10 +43,26 @@ export type Outside = {
   push?: { publicKey: string; send: PushSender };
 };
 
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/** A picture sent as base64 text, as the pages send them. Too large or damaged: refused. */
+function pictureFrom(text: string): Uint8Array {
+  if (text.length > MAX_THING_PHOTO * 1.4 || !BASE64.test(text)) throw new Refusal(400, 'That picture is too large to keep, or was damaged on the way');
+  return Uint8Array.from(atob(text), (letter) => letter.charCodeAt(0));
+}
+
 /** What a page unpacked from a file of recipes: each thing found in it as JSON, and any entry that couldn't be opened. */
 function recipeFileFrom(body: Body) {
   return {
-    sources: read.records(body, 'sources').map((one) => ({ name: read.maybeText(one, 'name') ?? 'A recipe', data: one.data, original: read.maybeText(one, 'original') })),
+    sources: read.records(body, 'sources').map((one) => {
+      // A recipe's picture comes beside it, already shrunk by the page (`photo`); looking over only hears that there is one.
+      const photo = read.maybeText(one, 'photo');
+      return {
+        name: read.maybeText(one, 'name') ?? 'A recipe', data: one.data, original: read.maybeText(one, 'original'),
+        photo: photo && BASE64.test(photo) && photo.length <= MAX_THING_PHOTO * 1.4 ? pictureFrom(photo) : null,
+        has_photo: one.has_photo === true,
+      };
+    }),
     unreadable: read.records(body, 'unreadable').map((one) => ({ name: read.maybeText(one, 'name') ?? 'A recipe', why: read.maybeText(one, 'why') ?? "It couldn't be opened" })),
   };
 }
@@ -213,6 +230,14 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ['GET', /^\/api\/kitchen\/recipes\/(\d{1,15})$/, async (c) => ({ json: await c.kitchen.getRecipe(c.id, queryNumber(c.query, 'servings')) })],
     ['PUT', /^\/api\/kitchen\/recipes\/(\d{1,15})$/, async (c) => ({ json: await c.kitchen.updateRecipe(c.id, recipeFrom(c.body)) })],
     ['DELETE', /^\/api\/kitchen\/recipes\/(\d{1,15})$/, async (c) => (await c.kitchen.deleteRecipe(c.id), { status: 204 })],
+    // A recipe's picture, sent as base64 text in "data" the way a thing's photo is.
+    ['PUT', /^\/api\/kitchen\/recipes\/(\d{1,15})\/photo$/, async (c) => ({ json: await c.kitchen.setPhoto(c.id, pictureFrom(read.text(c.body, 'data'))) })],
+    ['DELETE', /^\/api\/kitchen\/recipes\/(\d{1,15})\/photo$/, async (c) => ({ json: await c.kitchen.removePhoto(c.id) })],
+    ['GET', /^\/api\/kitchen\/recipes\/(\d{1,15})\/photo$/, async (c) => {
+      const photo = await c.kitchen.photo(c.id);
+      if (!photo) return { status: 404, json: { detail: 'Not found' } };
+      return { body: photo.bytes, headers: { 'Content-Type': photo.type, 'Cache-Control': 'private, max-age=60', 'X-Content-Type-Options': 'nosniff' } };
+    }],
 
     ['GET', /^\/api\/kitchen\/pantry$/, async (c) => ({ json: await c.kitchen.listPantry() })],
     ['PUT', /^\/api\/kitchen\/pantry$/, async (c) => ({
@@ -242,6 +267,22 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     })],
     ['DELETE', /^\/api\/kitchen\/plan\/(\d{1,15})$/, async (c) => (await c.kitchen.deletePlan(c.id), { status: 204 })],
     ['POST', /^\/api\/kitchen\/plan\/(\d{1,15})\/cooked$/, async (c) => ({ json: await c.kitchen.cooked(c.id) })],
+    // Copying a week onto another, and week templates (kept with the person's settings).
+    ['POST', /^\/api\/kitchen\/plan\/copy$/, async (c) => ({ json: await c.kitchen.copyWeek(read.text(c.body, 'from'), read.text(c.body, 'to'), read.maybeWhole(c.body, 'days') ?? 7) })],
+    ['GET', /^\/api\/kitchen\/plan\/templates$/, async (c) => ({ json: await c.kitchen.listTemplates() })],
+    ['POST', /^\/api\/kitchen\/plan\/templates$/, async (c) => ({ status: 201, json: await c.kitchen.saveTemplate(read.text(c.body, 'start'), read.text(c.body, 'name')) })],
+    ['PUT', /^\/api\/kitchen\/plan\/templates\/(\d{1,15})$/, async (c) => ({ json: await c.kitchen.renameTemplate(c.id, read.text(c.body, 'name')) })],
+    ['DELETE', /^\/api\/kitchen\/plan\/templates\/(\d{1,15})$/, async (c) => ({ json: await c.kitchen.deleteTemplate(c.id) })],
+    ['POST', /^\/api\/kitchen\/plan\/templates\/(\d{1,15})\/use$/, async (c) => ({ json: await c.kitchen.useTemplate(c.id, read.text(c.body, 'start')) })],
+    // Recipes for what is about to run out, and putting something scanned in the pantry.
+    ['GET', /^\/api\/kitchen\/use-it-up$/, async (c) => ({ json: await c.kitchen.useItUp(queryNumber(c.query, 'days') ?? 5) })],
+    ['GET', /^\/api\/kitchen\/pantry\/scan$/, async (c) => ({ json: await c.kitchen.scanForPantry(c.query.get('code') ?? '') })],
+    ['POST', /^\/api\/kitchen\/pantry\/scan$/, async (c) => ({
+      json: await c.kitchen.addScanned({
+        code: read.text(c.body, 'code'), quantity: Object.hasOwn(c.body, 'quantity') ? read.maybeNumber(c.body, 'quantity') : undefined, unit: read.maybeText(c.body, 'unit'),
+        ingredient_id: read.maybeWhole(c.body, 'ingredient_id'), name: read.maybeText(c.body, 'name'), product: read.maybeText(c.body, 'product'), size: read.maybeText(c.body, 'size'),
+      }),
+    })],
 
     ['GET', /^\/api\/kitchen\/grocery$/, async (c) => ({ json: await c.kitchen.listGrocery() })],
     ['POST', /^\/api\/kitchen\/grocery$/, async (c) => ({
@@ -271,5 +312,6 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ...recallRoutes(db, outside),
     ...startRoutes(db),
     ...licenseRoutes(db),
+    ...exportRoutes(db),
   ];
 }

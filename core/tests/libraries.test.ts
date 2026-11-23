@@ -1,6 +1,6 @@
 /** Book servers (Audiobookshelf, Calibre-Web, Kavita, any OPDS catalogue), a list of books brought in, and a link on a copy. */
 import { beforeEach, expect, it } from 'vitest';
-import { csvRows, importBookList, readBookList } from '../src/bookList.ts';
+import { csvRows, importBookList, importMediaList, readBookList, readMediaList } from '../src/bookList.ts';
 import type { Answer, Fetcher, Sealer } from '../src/connections.ts';
 import type { Db } from '../src/db.ts';
 import { libraries, librariesDue, readOpdsPage } from '../src/libraries.ts';
@@ -295,6 +295,87 @@ it('"they are all on Kindle" overrides what the list says', async () => {
   const result = await importBookList(db, owner, clock, readBookList('Dune by Frank Herbert\nEmma').books, { format: 'Kindle' });
   expect(result).toMatchObject({ added: 2, copies: 2 });
   expect((await shelf.list()).map((m) => m.formats)).toEqual([['Kindle'], ['Kindle']]);
+});
+
+// ---------- a list of anything: films, music, games, books ----------
+
+// What the owner's old collection app's export might look like. Its real column names are not known, so these are guesses at the usual ones.
+const OLD_APP = `Title,Director,Release Year,Media,UPC,Price Paid,Current Value,Notes,Wishlist,Star Rating,Date Added
+Alien,Ridley Scott,1979,Blu-ray,024543012345,"$1,014.99",$25.00,"the steelbook, ex-rental",,5,2024-01-01
+Rumours,Fleetwood Mac,1977,Vinyl,,12,30.50,,,4,
+Halo,Bungie,2001,Game,,,,,yes,3,
+The Thing,John Carpenter,1982,,,,,,,,
+`;
+
+it('a list of anything is read: the kind from a Type or Media column, prices in cents, and what was understood and ignored', () => {
+  const list = readMediaList(OLD_APP, 'film');
+  expect(list.items.map((i) => [i.title, i.type, i.format, i.creator, i.year])).toEqual([
+    ['Alien', 'film', 'Blu-ray', 'Ridley Scott', 1979], ['Rumours', 'music', 'Vinyl', 'Fleetwood Mac', 1977],
+    ['Halo', 'game', null, 'Bungie', 2001], ['The Thing', 'film', null, 'John Carpenter', 1982],
+  ]);
+  expect(list.items[0]).toMatchObject({ barcode: '024543012345', cost_cents: 101499, value_cents: 2500, note: 'the steelbook, ex-rental', wanted: false });
+  expect(list.items[1]).toMatchObject({ cost_cents: 1200, value_cents: 3050, barcode: null });
+  expect(list.items[2]!.wanted).toBe(true);
+  expect(list.types).toEqual({ film: 2, music: 1, game: 1 });
+  expect(list.wanted).toBe(1);
+  expect(list.columns).toEqual({
+    understood: [
+      { column: 'Title', as: 'Title' }, { column: 'Director', as: 'Creator' }, { column: 'Release Year', as: 'Year' }, { column: 'Media', as: 'Type or format' },
+      { column: 'UPC', as: 'Barcode' }, { column: 'Price Paid', as: 'Price paid' }, { column: 'Current Value', as: 'Value' }, { column: 'Notes', as: 'Notes' },
+      { column: 'Wishlist', as: 'Wanted' },
+    ],
+    ignored: ['Star Rating', 'Date Added'],
+  });
+});
+
+it('column names are matched generously, and a Type column names the kind of each line', () => {
+  const list = readMediaList(' TITLE ,Type,Artist/Author,price-paid,Date Bought,Wanted?\nRumours,Album,Fleetwood Mac,9.99,3/5/2024,\nAlien,movie,,,,\nJaws,DVD,,,,\nDune,book,Frank Herbert,,,\nChess,Whatever,,,,x\n', 'show');
+  expect(list.items.map((i) => [i.title, i.type, i.format])).toEqual([['Rumours', 'music', null], ['Alien', 'film', null], ['Jaws', 'film', 'DVD'], ['Dune', 'book', null], ['Chess', 'show', null]]);
+  // "Wanted?" is Wanted once the punctuation is ignored; "Artist/Author" is no name any rule knows, so it is said to be ignored, not guessed at.
+  expect(list.columns!.ignored).toEqual(['Artist/Author']);
+  expect(list.columns!.understood.map((c) => c.as)).toEqual(['Title', 'Type', 'Price paid', 'Day bought', 'Wanted']);
+  expect(list.items.map((i) => i.wanted)).toEqual([false, false, false, false, true]);
+  expect(list.items[0]).toMatchObject({ cost_cents: 999, bought_on: '2024-03-05', creator: null });
+  expect(readMediaList('Title,Artist\nRumours,Fleetwood Mac\n').columns).toEqual({ understood: [{ column: 'Title', as: 'Title' }, { column: 'Artist', as: 'Creator' }], ignored: [] });
+});
+
+it('plain lines are read as the chosen kind, with no columns to report; nothing readable is refused', () => {
+  const list = readMediaList('Alien by Ridley Scott\nJaws\n', 'film');
+  expect(list.items.map((i) => [i.title, i.creator, i.type])).toEqual([['Alien', 'Ridley Scott', 'film'], ['Jaws', null, 'film']]);
+  expect(list.columns).toBeNull();
+  expect(readMediaList('Halo\n', 'nonsense').items[0]!.type).toBe('film'); // an unknown kind falls back to film
+  expect(() => readMediaList('  ')).toThrow('Paste a list');
+});
+
+it('a list of anything is brought in once: copies with their prices, wanted ones with none, and what you have is left alone', async () => {
+  const mine = await shelf.create({ type: 'film', title: 'Alien', year: 1979 }, { format: 'VHS', barcode: '0-86162-10903-4' });
+  const book = await shelf.create({ type: 'book', title: 'Alien' }, { format: 'Paperback' }); // the same name, another kind: not the same title
+  const { items } = readMediaList(OLD_APP, 'film');
+  const first = await importMediaList(db, owner, clock, items, { otherwise: 'DVD' });
+  expect(first).toEqual({ listed: 4, added: 3, copies: 3, already: 0, wanted: 1, logged: 0 });
+  const alien = await shelf.get(mine.id);
+  expect(alien.copies.map((c) => c.format).sort()).toEqual(['Blu-ray', 'VHS']);
+  expect(alien.copies.find((c) => c.format === 'Blu-ray')).toMatchObject({ cost_cents: 101499, value_cents: 2500, source: 'list', barcode: '024543012345' });
+  expect((await shelf.get(book.id)).copies).toHaveLength(1);
+  const rumours = (await shelf.list({ q: 'Rumours' }))[0]!;
+  expect(rumours).toMatchObject({ type: 'music', formats: ['Vinyl'], cost_cents: 1200, worth_cents: 3050 });
+  expect(await shelf.get(rumours.id)).toMatchObject({ copies: [expect.objectContaining({ cost_cents: 1200, value_cents: 3050 })] });
+  expect((await shelf.list({ q: 'Halo' }))[0]).toMatchObject({ type: 'game', wanted: true, formats: [] });
+  expect((await shelf.list({ q: 'The Thing' }))[0]).toMatchObject({ formats: ['DVD'] });
+  // The same list again changes nothing.
+  expect(await importMediaList(db, owner, clock, items, { otherwise: 'DVD' })).toEqual({ listed: 4, added: 0, copies: 0, already: 4, wanted: 0, logged: 0 });
+  expect(await shelf.list()).toHaveLength(5);
+  // A barcode that is already a copy's finds its title, whatever the list calls it, and a format said for all overrides.
+  const again = await importMediaList(db, owner, clock, readMediaList('Title,Barcode\nAlien: Special Edition,086162109034\n').items, { format: 'LaserDisc' });
+  expect(again).toMatchObject({ added: 0, copies: 1 });
+  expect((await shelf.get(mine.id)).formats).toContain('LaserDisc');
+  expect(await importMediaList(db, owner, clock, readMediaList('Mystery\n').items)).toMatchObject({ added: 1 });
+  expect((await shelf.list({ q: 'Mystery' }))[0]!.formats).toEqual(['Not said']);
+});
+
+it('the book import is as it was: Type and Media columns are not read there, and the list of books gives the same answers', () => {
+  expect(readBookList('Title,Author,Type\nDune,Frank Herbert,film\n').books).toEqual([
+    { title: 'Dune', creator: 'Frank Herbert', year: null, isbn: null, shelf: null, read_on: null, format: null }]);
 });
 
 // ---------- Calibre's own Content server ----------

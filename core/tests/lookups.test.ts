@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookGenres, readProduct, shopsOwnBarcode } from '../src/lookups.ts';
+import { audiobookFormat, bookGenres, readProduct, shopsOwnBarcode } from '../src/lookups.ts';
 
 describe('reading what a shop calls a product', () => {
   it('finds the title and the format, and what kind of thing it is', () => {
@@ -12,6 +12,20 @@ describe('reading what a shop calls a product', () => {
   });
   it('keeps the name whole when it is all brackets', () => {
     expect(readProduct('[Untitled]', '').title).toBe('[Untitled]');
+  });
+  it('files an audiobook on CD as a book on CD, not as music', () => {
+    expect(readProduct('Project Hail Mary Unabridged Audiobook CD', 'Books > Audiobooks')).toEqual({ type: 'book', title: 'Project Hail Mary', format: 'Book on CD' });
+  });
+  it('files an audiobook on tape as a book on tape', () => {
+    expect(readProduct('Dune Unabridged Audiobook Tape', '')).toEqual({ type: 'book', title: 'Dune', format: 'Book on tape' });
+    expect(readProduct('Dune Audiobook Cassette', '')).toEqual({ type: 'book', title: 'Dune', format: 'Book on tape' });
+  });
+  it('files a plain unabridged audiobook with no medium as an audiobook', () => {
+    expect(readProduct('Dune Unabridged', '')).toEqual({ type: 'book', title: 'Dune', format: 'Audiobook' });
+  });
+  it('keeps an Audio CD music, since shops label ordinary music CDs that way', () => {
+    expect(readProduct('Rumours [Audio CD]', 'Music')).toEqual({ type: 'music', title: 'Rumours', format: 'CD' });
+    expect(audiobookFormat('Rumours Audio CD')).toBeNull();
   });
 });
 

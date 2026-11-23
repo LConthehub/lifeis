@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
+import ArrangeAisles from '../components/ArrangeAisles';
 import PasteList from '../components/PasteList';
 import Scanner from '../components/Scanner';
 import ShareList from '../components/ShareList';
@@ -80,7 +81,10 @@ export default function Groceries() {
   // The heading each thing sits under. By shop, where you are now comes first and "any shop" last.
   const groupOf = (g) => (by === 'shop' ? lineOf(g).likely_store || 'Any store' : g.aisle || 'Everything else');
   const here = (shop.store || '').toLowerCase();
-  const aisles = [...new Set(open.map(groupOf))].sort((a, b) => (by !== 'shop' ? 0
+  // By aisle at a store with an order of its own: the aisles run in that order, any not in it after, as before.
+  const walk = shop.aisle_order ? shop.aisle_order.map((a) => a.toLowerCase()) : [];
+  const walked = (a) => { const i = walk.indexOf(a.toLowerCase()); return i < 0 ? 1e9 : i; };
+  const aisles = [...new Set(open.map(groupOf))].sort((a, b) => (by !== 'shop' ? walked(a) - walked(b)
     : (b.toLowerCase() === here) - (a.toLowerCase() === here) || (a === 'Any store') - (b === 'Any store') || a.localeCompare(b)));
   const isHere = (group) => group.toLowerCase() === here;
   const canNarrow = by === 'shop' && aisles.some(isHere) && aisles.some((a) => !isHere(a) && a !== 'Any store');
@@ -138,6 +142,12 @@ export default function Groceries() {
               Just {shop.store}
             </label>
           )}
+        </div>
+      )}
+      {by === 'aisle' && shop.store_id !== null && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-life-300">
+          <button type="button" onClick={() => setModal({ arrange: true })} className={`${quietButtonClass} min-h-[44px]`}>Arrange aisles for {shop.store}</button>
+          {shop.aisle_order ? <span>In {shop.store}'s order.</span> : <span>The usual order.</span>}
         </div>
       )}
       <div className={cardClass}>
@@ -251,6 +261,11 @@ export default function Groceries() {
       {modal?.scan && (
         <Modal title="Scan a grocery" onClose={() => { setModal(null); load(); }}>
           <ScanGrocery open={open} sign={sign} putAway={putAway} onChanged={load} />
+        </Modal>
+      )}
+      {modal?.arrange && (
+        <Modal title={`Aisles at ${shop.store}`} onClose={() => setModal(null)}>
+          <ArrangeAisles shop={shop} onSaved={(data) => { setShop(data); setModal(null); }} />
         </Modal>
       )}
       {modal?.share && (

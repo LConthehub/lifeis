@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { Field, inputClass, buttonClass, quietButtonClass, errorMessage } from './ui';
+import MediaList from './MediaList';
 
 const ON = [['', 'What the list says of each'], ['eBook', 'eBooks'], ['Kindle', 'Kindle'], ['Apple Books', 'Apple Books'], ['Google Play Books', 'Google Play Books'], ['Kobo', 'Kobo'], ['Audiobook', 'Audiobooks'], ['Audible', 'Audible'], ['Paperback', 'Paperbacks'], ['Hardcover', 'Hardcovers']];
 
@@ -8,7 +9,7 @@ const ON = [['', 'What the list says of each'], ['eBook', 'eBooks'], ['Kindle', 
  * Bring in a list of books: a file from Goodreads or a spreadsheet, or lines typed in. It is looked over
  * first, so what will happen is said before anything is added. Nothing is looked up or sent anywhere else.
  */
-export default function BookList({ format = '', onDone }) {
+function Books({ format = '', onDone }) {
   const [text, setText] = useState('');
   const [seen, setSeen] = useState(null);
   const [form, setForm] = useState({ format: format === 'eBook' ? 'eBook' : format === 'Audiobook' ? 'Audiobook' : '', to_read_as_wanted: true, log_read: true });
@@ -88,4 +89,9 @@ export default function BookList({ format = '', onDone }) {
       </div>
     </form>
   );
+}
+
+/** Books (a list from Goodreads and the like), or, with `mixed`, a list of anything: films, music, games and books. */
+export default function BookList({ mixed = false, type = 'film', ...rest }) {
+  return mixed ? <MediaList type={type} onDone={rest.onDone} /> : <Books {...rest} />;
 }

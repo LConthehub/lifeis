@@ -91,9 +91,13 @@ export type RecipeSummary = {
   cook_minutes: number | null;
   tags: string[];
   updated_at: string;
+  /** Whether it has a picture (asked for at /api/kitchen/recipes/:id/photo). */
+  has_photo: boolean;
+  /** When the picture was added: a page uses it to ask for the new picture after a change. */
+  photo_added_at: string | null;
 };
 
-export type Recipe = Omit<RecipeSummary, 'tags'> & {
+export type Recipe =Omit<RecipeSummary, 'tags'> & {
   owner_id: number;
   source_url: string | null;
   original_text: string | null;

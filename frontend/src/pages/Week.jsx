@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { CopyWeek, Templates, copiedMessage, mondayOf } from '../components/WeekTools';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, fromDateInput } from '../components/ui';
 
 const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -17,6 +18,7 @@ export default function Week() {
   const [start, setStart] = useState(() => startOfWeek(new Date()));
   const [meals, setMeals] = useState(null);
   const [adding, setAdding] = useState(null);
+  const [tool, setTool] = useState(null);                  // 'copy' or 'templates'
   const [message, setMessage] = useState('');
   // Meals whose recipes need more of a pan or dish than there is.
   const [short, setShort] = useState([]);
@@ -36,6 +38,16 @@ export default function Week() {
     load();
   };
   const remove = async (m) => { await axios.delete(`/api/kitchen/plan/${m.id}`).catch(() => {}); load(); };
+  // A copy or a template used: say what happened, and show the week it went to.
+  const copied = (said, target) => { setTool(null); setMessage(said); setStart(mondayOf(target)); load(); };
+  const copyLast = async () => {
+    const from = new Date(start); from.setDate(from.getDate() - 7);
+    try {
+      const { data } = await axios.post('/api/kitchen/plan/copy', { from: toDateInput(from), to: startText });
+      setMessage(data.added === 0 && data.already === 0 ? 'Last week has nothing planned, so there was nothing to copy.' : copiedMessage(data, start));
+      load();
+    } catch (err) { setMessage(errorMessage(err, "Couldn't copy last week")); }
+  };
   const shop = async () => {
     try {
       const { data } = await axios.post('/api/kitchen/grocery/from-plan', { start: startText, days: 7 });
@@ -52,6 +64,11 @@ export default function Week() {
         <button type="button" onClick={() => setStart(startOfWeek(new Date()))} className={quietButtonClass}>This week</button>
         <button type="button" onClick={() => move(7)} className={quietButtonClass} aria-label="Week after">→</button>
         <button type="button" onClick={shop} className={buttonClass}>Make the grocery list</button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={copyLast} className={`${quietButtonClass} min-h-[44px]`}>Copy last week</button>
+        <button type="button" onClick={() => setTool('copy')} className={`${quietButtonClass} min-h-[44px]`}>Copy this week to…</button>
+        <button type="button" onClick={() => setTool('templates')} className={`${quietButtonClass} min-h-[44px]`}>Templates</button>
       </div>
       <p className="text-xs text-gray-500 dark:text-life-300">The grocery list is what these meals need, for the servings you planned, minus what's in your pantry.</p>
       {message && <p className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-800 dark:text-life-100">{message}</p>}
@@ -98,6 +115,8 @@ export default function Week() {
           );
         })}
       </div>
+      {tool === 'copy' && <Modal title="Copy this week to…" onClose={() => setTool(null)}><CopyWeek start={start} onDone={copied} /></Modal>}
+      {tool === 'templates' && <Modal title="Week templates" onClose={() => setTool(null)}><Templates start={start} onDone={copied} /></Modal>}
       {adding && (
         <Modal title={fromDateInput(adding).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} onClose={() => setAdding(null)}>
           <AddMeal day={adding} onDone={() => { setAdding(null); load(); }} />

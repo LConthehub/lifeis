@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { LATEST } from '../../core/src/index.ts';
+import { LATEST, splitDownload } from '../../core/src/index.ts';
 import { createApp } from '../src/app.ts';
 import { verifyPassword } from '../src/auth.ts';
 import { openDatabase, type OpenDatabase } from '../src/database.ts';
@@ -256,6 +256,59 @@ it('the kitchen answers the pages as it always has', async () => {
   expect((await admin.get('/api/kitchen/recipes')).json).toEqual([]);
 });
 
+it('the week copies, keeps templates, suggests recipes for what is going off, and takes scanned things into the pantry', async () => {
+  const admin = await owner();
+  const soup = (await admin.post('/api/kitchen/recipes', { title: 'Cream soup', servings: 4, ingredients_text: '1 cup cream\n1 onion' })).json.id;
+  await admin.post('/api/kitchen/plan', { day: MONDAY, meal: 'dinner', recipe_id: soup, servings: 6 });
+  const next = '2046-03-12';
+  expect((await admin.post('/api/kitchen/plan/copy', { from: MONDAY, to: next })).json).toEqual({ added: 1, already: 0, days_with_meals: 0, missing: [] });
+  expect((await admin.post('/api/kitchen/plan/copy', { from: MONDAY, to: MONDAY })).status).toBe(400);
+  expect((await admin.post('/api/kitchen/plan/copy', { from: MONDAY })).status).toBe(422);
+  expect((await admin.get(`/api/kitchen/plan?start=${next}&days=7`)).json[0]).toMatchObject({ day: next, recipe_id: soup, servings: 6, cooked_on: null });
+
+  const made = await admin.post('/api/kitchen/plan/templates', { start: MONDAY, name: 'School week' });
+  expect(made.status).toBe(201);
+  const id = made.json[0].id;
+  expect((await admin.post('/api/kitchen/plan/templates', { start: MONDAY, name: 'school week' })).status).toBe(409);
+  expect((await admin.put(`/api/kitchen/plan/templates/${id}`, { name: 'Term time' })).json.map((t: { name: string }) => t.name)).toEqual(['Term time']);
+  expect((await admin.post(`/api/kitchen/plan/templates/${id}/use`, { start: '2046-03-19' })).json).toMatchObject({ added: 1, missing: [] });
+  await admin.delete(`/api/kitchen/recipes/${soup}`);
+  expect((await admin.get('/api/kitchen/plan/templates')).json[0].missing).toEqual(['Cream soup']);
+  expect((await admin.delete(`/api/kitchen/plan/templates/${id}`)).json).toEqual([]);
+  expect((await admin.post('/api/kitchen/plan/templates/999/use', { start: MONDAY })).status).toBe(404);
+
+  // Use it up: cream goes off in two days, and a recipe uses it.
+  const soon = new Date(Date.now() + 2 * 86_400_000);
+  const soonDay = `${soon.getFullYear()}-${String(soon.getMonth() + 1).padStart(2, '0')}-${String(soon.getDate()).padStart(2, '0')}`;
+  await admin.put('/api/kitchen/pantry', { name: 'cream', quantity: 1, unit: 'cup', expires_on: soonDay });
+  await admin.post('/api/kitchen/recipes', { title: 'Cream soup', servings: 4, ingredients_text: '1 cup cream\n1 onion' });
+  const ideas = (await admin.get('/api/kitchen/use-it-up')).json;
+  expect(ideas.soon).toEqual([{ name: 'cream', days_left: 2 }]);
+  expect(ideas.suggestions).toMatchObject([{ title: 'Cream soup', uses: ['cream'] }]);
+
+  // Scan to add: a new barcode is named once; a look-up that is off asks nobody (this Life Is can't reach outside at all).
+  expect((await admin.get('/api/kitchen/pantry/scan?code=5012345678900')).json).toMatchObject({ barcode: '5012345678900', ingredient: null });
+  expect((await admin.get('/api/lookups/product?code=5012345678900')).status).toBe(400);
+  expect((await admin.post('/api/kitchen/pantry/scan', { code: '5012345678900' })).status).toBe(400);
+  const first = (await admin.post('/api/kitchen/pantry/scan', { code: '5012345678900', name: 'coffee', size: '12 oz' })).json;
+  expect(first).toMatchObject({ learned: true, item: { name: 'coffee', amount: '12 oz' } });
+  expect((await admin.get('/api/kitchen/pantry/scan?code=5012345678900')).json.ingredient).toMatchObject({ name: 'coffee', size: '12 oz' });
+  expect((await admin.post('/api/kitchen/pantry/scan', { code: '5012345678900', quantity: 4, unit: 'oz' })).json).toMatchObject({ learned: false, item: { amount: '16 oz' } });
+  expect((await admin.get('/api/kitchen/pantry/scan?code=x')).status).toBe(400);
+
+  // A shop's aisle order.
+  await admin.post('/api/shopping/stores', { name: 'Aldi' });
+  await admin.put('/api/shopping/settings', { store: 'Aldi' });
+  const shop = (await admin.get('/api/shopping')).json;
+  expect(shop).toMatchObject({ store: 'Aldi', aisle_order: null });
+  expect((await admin.put(`/api/shopping/stores/${shop.store_id}/aisles`, { aisles: ['Produce', 'Dairy'] })).json.aisle_order).toEqual(['Produce', 'Dairy']);
+  expect((await admin.get(`/api/shopping/stores/${shop.store_id}/aisles`)).json).toEqual({ aisles: ['Produce', 'Dairy'] });
+  expect((await admin.put('/api/shopping/stores/9999/aisles', { aisles: ['x'] })).status).toBe(404);
+  const other = await member(admin, 'partner');
+  expect((await other.get('/api/kitchen/plan/templates')).json).toEqual([]);
+  expect((await other.put(`/api/shopping/stores/${shop.store_id}/aisles`, { aisles: ['x'] })).status).toBe(404);
+});
+
 it('recipes download as a zip of Nextcloud Cookbook folders', async () => {
   const admin = await owner();
   await admin.post('/api/kitchen/recipes/import', { text: 'Crème brûlée\n1 cup cream\nWarm the cream.' });
@@ -286,12 +339,47 @@ it('recipes download as a zip of Nextcloud Cookbook folders', async () => {
 
 // ---------- the pages ----------
 
+it("a recipe's picture is kept, shown, replaced and removed over the web, and is private to its owner", async () => {
+  const admin = await owner();
+  const soup = (await admin.post('/api/kitchen/recipes', { title: 'Soup', ingredients_text: '1 leek' })).json;
+  expect([soup.has_photo, (await admin.get(`/api/kitchen/recipes/${soup.id}/photo`)).status]).toEqual([false, 404]);
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7, 7]);
+  const put = await admin.put(`/api/kitchen/recipes/${soup.id}/photo`, { data: png.toString('base64') });
+  expect([put.status, put.json.has_photo, put.json.ingredients_text]).toEqual([200, true, '1 leek']);
+  expect((await admin.get('/api/kitchen/recipes')).json[0].has_photo).toBe(true);
+  const shown = await admin.get(`/api/kitchen/recipes/${soup.id}/photo`);
+  expect([shown.status, shown.headers.get('content-type'), shown.headers.get('cache-control'), shown.bytes.equals(png)]).toEqual([200, 'image/png', 'private, max-age=60', true]);
+  // Not a picture, damaged, or missing: refused, and the picture stays.
+  expect((await admin.put(`/api/kitchen/recipes/${soup.id}/photo`, { data: Buffer.from('<svg onload=alert(1)>').toString('base64') })).status).toBe(400);
+  expect((await admin.put(`/api/kitchen/recipes/${soup.id}/photo`, { data: 'not base64!' })).status).toBe(400);
+  expect((await admin.put(`/api/kitchen/recipes/${soup.id}/photo`, {})).status).toBe(422);
+  expect((await admin.get(`/api/kitchen/recipes/${soup.id}/photo`)).bytes.equals(png)).toBe(true);
+
+  const other = await member(admin, 'partner');
+  expect([(await other.get(`/api/kitchen/recipes/${soup.id}/photo`)).status, (await other.put(`/api/kitchen/recipes/${soup.id}/photo`, { data: png.toString('base64') })).status,
+    (await other.delete(`/api/kitchen/recipes/${soup.id}/photo`)).status]).toEqual([404, 404, 404]);
+  expect((await admin.get(`/api/kitchen/recipes/${soup.id}/photo`)).status).toBe(200);
+
+  expect((await admin.delete(`/api/kitchen/recipes/${soup.id}/photo`)).json.has_photo).toBe(false);
+  expect((await admin.get(`/api/kitchen/recipes/${soup.id}/photo`)).status).toBe(404);
+  await admin.put(`/api/kitchen/recipes/${soup.id}/photo`, { data: png.toString('base64') });
+  await admin.delete(`/api/kitchen/recipes/${soup.id}`);
+  expect((await database.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM recipe_photos'))!.n).toBe(0);
+
+  // A file of recipes: the picture beside a recipe is kept with a new one; looking over only hears there is one.
+  const file = { sources: [{ name: 'Pancakes', data: { name: 'Pancakes', ingredients: '1 cup flour', directions: 'Fry.' }, photo: png.toString('base64') }] };
+  expect((await admin.post('/api/kitchen/recipes/file/read', { sources: [{ ...file.sources[0], photo: undefined, has_photo: true }] })).json).toMatchObject({ fresh: 1, pictures: 1 });
+  expect((await admin.post('/api/kitchen/recipes/file', file)).json).toMatchObject({ added: 1, pictures: 1 });
+  const pancakes = (await admin.get('/api/kitchen/recipes')).json[0];
+  expect([pancakes.title, pancakes.has_photo, (await admin.get(`/api/kitchen/recipes/${pancakes.id}/photo`)).bytes.equals(png)]).toEqual(['Pancakes', true, true]);
+});
+
 it('recipes from another app are looked over, brought in once, and a pasted grocery list is added as typed', async () => {
   const admin = await owner();
   const soup = { name: 'Tomato Soup', ingredients: '1 can tomatoes\n1 cup stock', directions: 'Simmer.', prep_time: '10 min', categories: ['Soup'], photo_data: 'AAAA' };
   const file = { sources: [{ name: 'Tomato Soup', data: soup }, { name: 'Pancakes', data: { name: 'Pancakes', ingredients: '1 cup flour', directions: 'Fry.' } }, { name: 'Odd', data: 'x' }], unreadable: [{ name: 'Broken', why: 'It was damaged' }] };
   const look = await admin.post('/api/kitchen/recipes/file/read', file);
-  expect([look.status, look.json]).toEqual([200, { found: 4, first: ['Tomato Soup', 'Pancakes'], already: 0, fresh: 2,
+  expect([look.status, look.json]).toEqual([200, { found: 4, first: ['Tomato Soup', 'Pancakes'], already: 0, fresh: 2, pictures: 0,
     failed: [{ name: 'Broken', why: 'It was damaged' }, { name: 'Odd', why: "That isn't a recipe" }] }]);
   expect((await admin.get('/api/kitchen/recipes')).json).toEqual([]);
   const brought = await admin.post('/api/kitchen/recipes/file', file);
@@ -791,6 +879,43 @@ it('a copy keeps how many discs it is over the web, and a bad number is refused'
   expect((await admin.put(`/api/media/copies/${book.copies[0].id}`, { format: 'Book on CD', note: 'in the car', pieces: null })).json.copies[0].pieces).toBeNull();
 });
 
+it('a copy keeps what it cost and is worth over the web, in cents, and a bad amount is refused', async () => {
+  const admin = await owner();
+  const made = await admin.post('/api/media', { type: 'film', title: 'Alien', copy: { format: 'VHS', cost_cents: 1299, bought_on: '1999-05-01' } });
+  expect(made.status).toBeLessThan(300);
+  const film = made.json;
+  expect(film.copies[0]).toMatchObject({ cost_cents: 1299, bought_on: '1999-05-01', value_cents: null, valued_on: null });
+  const id = film.copies[0].id;
+  // A worth with no day is noted on a day (today, as the server counts it); what was not sent stays as it was.
+  const worth = (await admin.put(`/api/media/copies/${id}`, { format: 'VHS', value_cents: 4050 })).json.copies[0];
+  expect(worth).toMatchObject({ cost_cents: 1299, bought_on: '1999-05-01', value_cents: 4050 });
+  expect(worth.valued_on).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect((await admin.get('/api/media')).json[0]).toMatchObject({ copy_count: 1, cost_cents: 1299, worth_cents: 4050, unvalued: 0, gain_cents: 2751 });
+  expect((await admin.get(`/api/media/${film.id}`)).json.copies[0]).toMatchObject({ cost_cents: 1299, value_cents: 4050 });
+  // Bad amounts are refused, whether not a whole number of cents, below nothing, too large, text, or a day that is not one; nothing else in the request is kept.
+  for (const bad of [{ cost_cents: -5 }, { cost_cents: 12.5 }, { value_cents: 'twelve' }, { value_cents: 10 ** 12 }, { bought_on: 'last spring' }, { valued_on: '2046-13-45' }]) {
+    expect((await admin.put(`/api/media/copies/${id}`, { format: 'VHS', note: 'changed', ...bad })).status, JSON.stringify(bad)).toBeGreaterThanOrEqual(400);
+    expect((await admin.post(`/api/media/${film.id}/copies`, { format: 'DVD', ...bad })).status, JSON.stringify(bad)).toBeGreaterThanOrEqual(400);
+  }
+  const after = (await admin.get(`/api/media/${film.id}`)).json;
+  expect(after.copies).toHaveLength(1);
+  expect(after.copies[0]).toMatchObject({ cost_cents: 1299, value_cents: 4050, note: null });
+  // Sent as null: cleared, and the worth's day with it.
+  expect((await admin.put(`/api/media/copies/${id}`, { format: 'VHS', value_cents: null })).json.copies[0]).toMatchObject({ value_cents: null, valued_on: null, cost_cents: 1299 });
+});
+
+it('a list of films and albums is looked over and brought in over the web, with its columns told back', async () => {
+  const admin = await owner();
+  const text = 'Title,Director,Media,Price Paid,Mood\nAlien,Ridley Scott,Blu-ray,14.99,tense\nRumours,Fleetwood Mac,Vinyl,12,calm\n';
+  const seen = (await admin.post('/api/media/list/read', { text, any: true, type: 'film' })).json;
+  expect(seen).toMatchObject({ count: 2, types: { film: 1, music: 1 }, columns: { ignored: ['Mood'] } });
+  expect(seen.columns.understood.map((c: { as: string }) => c.as)).toEqual(['Title', 'Creator', 'Type or format', 'Price paid']);
+  const done = await admin.post('/api/media/list', { text, any: true, type: 'film' });
+  expect([done.status, done.json]).toEqual([201, { listed: 2, added: 2, copies: 2, already: 0, wanted: 0, logged: 0 }]);
+  expect((await admin.get('/api/media')).json.map((m: { title: string; cost_cents: number }) => [m.title, m.cost_cents])).toEqual([['Alien', 1499], ['Rumours', 1200]]);
+  expect((await admin.post('/api/media/list/read', { text: '  ', any: true })).status).toBe(400);
+});
+
 it('a kind carries the activity its things are for, and one button adds it to the things already there', async () => {
   const admin = await owner();
   let kinds = (await admin.post('/api/things/kinds', { name: 'Odds and ends', activity: 'Sewing' })).json;
@@ -860,7 +985,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.
@@ -1046,4 +1171,49 @@ it('licenses are kept over the web, with a renewal that follows them, and the nu
   expect((await admin.delete(`/api/things/licenses/${again.id}`)).status).toBe(204);
   expect((await admin.get(`/api/things/upkeep/${kept.reminder.job_id}`)).status).toBe(200);
   expect((await visitor().get('/api/things/licenses')).status).toBe(401);
+});
+
+it('download everything: a zip with a dated name that holds only your own, and a way to bring it back in part by part', async () => {
+  time = new Date('2046-03-05T12:00:00Z');
+  const admin = await owner();
+  const other = await member(admin, 'partner');
+  await admin.post('/api/kitchen/recipes/import', { text: 'Crème brûlée\n1 cup cream\nWarm the cream.' });
+  await other.post('/api/kitchen/recipes/import', { text: 'Partner pie\n1 apple\nBake it.' });
+  const kind = (await admin.post('/api/things/kinds', { name: 'Fabric' })).json.find((k: { name: string }) => k.name === 'Fabric');
+  const thing = (await admin.post('/api/things/items', { kind_id: kind.id, name: 'Blue linen', quantity: 3 })).json;
+  const photo = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  expect((await admin.put(`/api/things/items/${thing.id}/photo`, { data: photo.toString('base64') })).status).toBe(200);
+
+  expect((await visitor().get('/api/export/everything.zip')).status).toBe(401);
+  const got = await admin.get('/api/export/everything.zip', { 'X-Local-Day': MONDAY });
+  expect([got.status, got.headers.get('content-type'), got.headers.get('content-disposition')])
+    .toEqual([200, 'application/zip', 'attachment; filename="lifeis-everything-2046-03-05.zip"']);
+  expect(got.headers.get('cache-control')).toBe('private, no-store');
+  const mine = await splitDownload(new Uint8Array(got.bytes));
+  expect(Object.keys(mine.files)).toEqual(expect.arrayContaining(['README.txt', 'recipes.csv', 'things.csv']));
+  expect(mine.files['recipes.csv']).toContain('Crème brûlée');
+  expect(JSON.stringify(mine.files)).not.toContain('Partner pie');
+  expect((await other.get('/api/export/everything.zip')).bytes.toString('latin1')).not.toContain('Blue linen');
+
+  // The partner looks at the zip, brings in recipes and things only, then the pictures; the same file again adds nothing.
+  const files = mine.files;
+  const looked = (await other.post('/api/export/look', { files })).json;
+  expect(looked.made_on).toBe('2046-03-05');
+  expect(looked.kinds.find((k: { key: string }) => k.key === 'things')).toMatchObject({ found: 1, fresh: 1, already: 0, importable: true });
+  expect(looked.kinds.find((k: { key: string }) => k.key === 'recipes')).toMatchObject({ found: 1, fresh: 1 });
+  expect((await other.get('/api/things/items')).json).toEqual([]);
+  const brought = (await other.post('/api/export/bring-in', { files, kinds: ['things', 'recipes'] })).json;
+  expect(brought.kinds.map((k: { key: string; ok: boolean; fresh: number }) => [k.key, k.ok, k.fresh])).toEqual([['things', true, 1], ['recipes', true, 1]]);
+  expect(brought.pending).toEqual([expect.objectContaining({ as: 'thing-photo' })]);
+  const pictures = await other.post('/api/export/pictures', { pictures: [{ as: 'thing-photo', id: brought.pending[0].id, data: Buffer.from(mine.pictures.values().next().value!).toString('base64') }] });
+  expect(pictures.json).toEqual({ kept: 1, left: 0 });
+  expect((await other.get('/api/things/items')).json.map((i: { name: string; photo: boolean }) => [i.name, i.photo])).toEqual([['Blue linen', true]]);
+  expect((await other.get('/api/kitchen/recipes')).json.map((r: { title: string }) => r.title).sort()).toEqual(['Crème brûlée', 'Partner pie']);
+  const again = (await other.post('/api/export/bring-in', { files, kinds: ['things', 'recipes'] })).json;
+  expect(again.kinds.map((k: { fresh: number; already: number }) => [k.fresh, k.already])).toEqual([[0, 1], [0, 1]]);
+  expect(again.pending).toEqual([]);
+
+  // What cannot be read is said in words.
+  expect([(await other.post('/api/export/look', { files: { 'notes.txt': 'hello' } })).status, (await other.post('/api/export/look', {})).status, (await other.post('/api/export/pictures', { pictures: [{ as: 'thing-photo', id: 1, data: 5 }] })).status]).toEqual([400, 422, 422]);
+  expect((await visitor().post('/api/export/look', { files })).status).toBe(401);
 });

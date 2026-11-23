@@ -1052,6 +1052,30 @@ export const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    // A recipe can keep one picture, the way a thing keeps a photo: its type, its bytes, and when it was added.
+    number: 35,
+    name: 'a picture for a recipe',
+    statements: [
+      `CREATE TABLE recipe_photos (
+        recipe_id INTEGER PRIMARY KEY REFERENCES recipes(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        bytes BLOB NOT NULL,
+        added_at TEXT NOT NULL
+      )`,
+    ],
+  },
+  {
+    // What a copy of a film, record or book cost and what it is worth now, typed by the person (never looked up), in cents.
+    number: 36,
+    name: 'what a copy cost and is worth',
+    statements: [
+      `ALTER TABLE media_copies ADD COLUMN cost_cents INTEGER`,
+      `ALTER TABLE media_copies ADD COLUMN bought_on TEXT`,
+      `ALTER TABLE media_copies ADD COLUMN value_cents INTEGER`,
+      `ALTER TABLE media_copies ADD COLUMN valued_on TEXT`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

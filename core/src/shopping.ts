@@ -71,6 +71,10 @@ export type Shopping = {
   store: string | null;
   /** Your shops, to choose from, by name. */
   stores: string[];
+  /** The id of the shop today's shop is, when it is one on your list. */
+  store_id: number | null;
+  /** The order the aisles run in at today's shop; null when none has been set, and the list keeps its usual order. */
+  aisle_order: string[] | null;
   lines: ShoppingLine[];
   coupons: Coupon[];
   totals: {
@@ -131,6 +135,9 @@ export type Scanned = {
 
 const CURRENCY = 'shopping_currency';
 const STORE = 'shopping_store';
+/** Each shop's aisle order is kept in the person's settings under this key plus the shop's id (no table of its own). */
+const AISLES = (storeId: number) => `shopping_aisles_${storeId}`;
+const MAX_AISLES = 100;
 const MAX_CENTS = 100_000_000;
 
 type CouponRow = Omit<Coupon, 'days_left' | 'worth_cents' | 'ingredient'> & { ingredient: string | null };
@@ -160,6 +167,21 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
   const keep = (key: string, value: string | null) => (value === null
     ? db.run('DELETE FROM user_settings WHERE user_id = ? AND key = ?', [owner, key])
     : db.run(`INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value`, [owner, key, value]));
+
+  /** The aisles of a shop in the order its person walks them; null when none has been set. */
+  const aisleOrder = async (storeId: number): Promise<string[] | null> => {
+    try {
+      const list = JSON.parse((await setting(AISLES(storeId))) ?? 'null') as unknown;
+      return Array.isArray(list) && list.length > 0 ? list.filter((a): a is string => typeof a === 'string') : null;
+    } catch {
+      return null;
+    }
+  };
+  const storeRow = async (id: number) => {
+    const row = await db.get<{ id: number; name: string }>('SELECT id, name FROM stores WHERE id = ? AND owner_id = ?', [id, owner]);
+    if (!row) throw new Problem(404, 'Not found');
+    return row;
+  };
 
   const line = async (q: Queries, id: number): Promise<Line> => {
     const found = await q.get<Line>('SELECT id, ingredient_id, label, quantity, unit, done FROM grocery WHERE id = ? AND owner_id = ?', [id, owner]);
@@ -218,10 +240,14 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
     const couponsCents = Math.min(trolley, coupons.filter((c) => c.used_on === day).reduce((sum, c) => sum + c.worth_cents, 0));
 
     const left = lines.filter((l) => l.done === 0);
+    const here = await setting(STORE);
+    const hereRow = here ? await db.get<{ id: number }>('SELECT id FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE', [owner, here]) : undefined;
     return {
       currency: (await setting(CURRENCY)) ?? '$',
-      store: await setting(STORE),
+      store: here,
       stores: storeNames,
+      store_id: hereRow?.id ?? null,
+      aisle_order: hereRow ? await aisleOrder(hereRow.id) : null,
       lines: lines.map((l) => ({
         id: l.id, price_cents: onLine.get(l.id)?.cents ?? null, size: onLine.has(l.id) ? units.amount(onLine.get(l.id)!.quantity, onLine.get(l.id)!.unit) : '',
         assumed: onLine.get(l.id)?.assumed === 1, last: lastFor(l),
@@ -308,7 +334,31 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
     /** Take a shop off your list. What you paid there stays in the prices, under its name. */
     async removeStore(id: number): Promise<Store[]> {
       await db.run('DELETE FROM stores WHERE id = ? AND owner_id = ?', [id, owner]);
+      await keep(AISLES(id), null);
       return this.stores();
+    },
+
+    /** The order a shop's aisles run in, or null when none has been set. */
+    async aisles(storeId: number): Promise<string[] | null> {
+      await storeRow(storeId);
+      return aisleOrder(storeId);
+    },
+
+    /**
+     * Say the order the aisles run in at a shop, first to last. The list grouped by aisle then follows it when you
+     * shop there. Aisles left out of the order come after those named, in the usual order. An empty order forgets it.
+     */
+    async setAisles(storeId: number, aisles: string[]): Promise<Shopping> {
+      await storeRow(storeId);
+      const seen = new Set<string>();
+      const tidy: string[] = [];
+      for (const a of aisles) {
+        const name = clean(a, 60);
+        if (name && !seen.has(name.toLowerCase())) { seen.add(name.toLowerCase()); tidy.push(name); }
+      }
+      if (tidy.length > MAX_AISLES) throw new Problem(400, `Up to ${MAX_AISLES} aisles`);
+      await keep(AISLES(storeId), tidy.length ? JSON.stringify(tidy) : null);
+      return summary();
     },
 
     /** The sign prices are shown with: $, £, €, kr. Nothing is converted. */
