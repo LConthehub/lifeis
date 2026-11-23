@@ -134,7 +134,7 @@ export function readBookList(text: string): { books: ListedBook[]; skipped: numb
     }
   }
   if (books.length === 0) throw new Problem(400, "No books were found in that. A table needs a column called Title; otherwise put one book on each line, like \"Dune by Frank Herbert\".");
-  if (books.length > MAX_BOOKS) throw new Problem(400, `That's more than ${MAX_BOOKS} books. Bring it in as two lists.`);
+  if (books.length > MAX_BOOKS) throw new Problem(400, `That's more than ${MAX_BOOKS} books. Import it as two lists.`);
   return { books, skipped };
 }
 
@@ -347,7 +347,7 @@ export function readMediaList(text: string, type: string = 'film'): ReadList {
     }
   }
   if (items.length === 0) throw new Problem(400, 'Nothing was found in that. A table needs a column called Title; otherwise put one title on each line, like "Alien by Ridley Scott".');
-  if (items.length > MAX_BOOKS) throw new Problem(400, `That's more than ${MAX_BOOKS} titles. Bring it in as two lists.`);
+  if (items.length > MAX_BOOKS) throw new Problem(400, `That's more than ${MAX_BOOKS} titles. Import it as two lists.`);
   return { items, skipped, columns, types, says_format: items.filter((i) => i.format).length, wanted: items.filter((i) => i.wanted).length };
 }
 

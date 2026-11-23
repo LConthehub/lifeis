@@ -45,7 +45,7 @@ export type MediaInput = {
   /** You'd like to have it. */
   wanted?: boolean;
   note?: string | null;
-  /** What other catalogues call it: { tmdb: "348", isbn: "9780441172719" }. */
+  /** What other catalogs call it: { tmdb: "348", isbn: "9780441172719" }. */
   ids?: Record<string, string>;
 };
 export type CopyInput = {
@@ -481,7 +481,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
       const values = titleValues(input);
       return atomic(db, async (tx) => {
         const before = await owned(tx, id);
-        if (input.ids === undefined) values[9] = before.ids; // not sent: what other catalogues call it stays
+        if (input.ids === undefined) values[9] = before.ids; // not sent: what other catalogs call it stays
         await tx.run(
           `UPDATE media SET type = ?, title = ?, creator = ?, year = ?, summary = ?, genres = ?, minutes = ?, cover = ?, wanted = ?, ids = ?, note = ?,
            updated_at = ? WHERE id = ?`, [...values, now(), id]);

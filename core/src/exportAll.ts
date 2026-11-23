@@ -644,13 +644,13 @@ function readme(at: Date, today: string, counts: Record<string, number>, picture
     ...(ignored.length ? ['', '  Also left out of settings.csv, because they are not plain preferences or are tied to this Life Is: ' + ignored.join(', ') + '.'] : []),
     '  settings.csv holds only plain preferences (which parts of Life Is you show, a money sign, and the like).',
     '',
-    'BRINGING IT BACK',
+    'IMPORTING IT BACK',
     '  To put everything back exactly as it was, into an empty Life Is, use the encrypted backup (Settings, Your data): it holds everything, including what is left out here, and only your passphrase opens it.',
-    '  To bring these open files into a Life Is that is already in use (a second copy, or after starting fresh), open Settings, Your data, "Bring in from a download", and choose this zip. You choose which kinds to bring in. The kinds that can be brought in:',
+    '  To import these open files into a Life Is that is already in use (a second copy, or after starting fresh), open Settings, Your data, "Import from a download", and choose this zip. You choose which kinds to import. The kinds that can be imported:',
     importable,
-    '  Nothing is ever overwritten or deleted. A record that matches one already kept (by what is in brackets above) is left as it is; a new one is added; bringing the same file in twice adds nothing the second time.',
+    '  Nothing is ever overwritten or deleted. A record that matches one already kept (by what is in brackets above) is left as it is; a new one is added; importing the same file twice adds nothing the second time.',
     '  Links are rebuilt by name: a thing’s place by its path (a missing place is made), a meal’s recipe by its title, a pet’s care by the pet’s name. Where a link cannot be rebuilt the record still comes in, without it, and the report says how many. A license’s reminder is not recreated, only the license.',
-    '  Not yet able to be brought in (they are here for you to read and keep):',
+    '  Not yet able to be imported (they are here for you to read and keep):',
     notYet,
     '',
   ].join('\r\n');
@@ -1339,7 +1339,7 @@ function checkedFiles(files: Files): void {
   const names = Object.keys(files).map((n) => n.toLowerCase());
   const known = KINDS.map((k) => k.file);
   if (!names.some((n) => known.includes(n) || known.includes(n.replace(/^[^/]*\//, '')) || n.endsWith('readme.txt'))) {
-    throw new Problem(400, "That doesn't look like a download made by Life Is. Choose the zip you got from “Download everything”.");
+    throw new Problem(400, "That doesn't look like a download made by Life Is. Choose the zip you got from “Export everything”.");
   }
 }
 
@@ -1378,7 +1378,7 @@ export async function lookAtDownload(db: Db, owner: number, files: Files, clock:
  */
 export async function bringInDownload(db: Db, owner: number, files: Files, chosen: string[], clock: Clock = () => new Date()): Promise<Brought> {
   checkedFiles(files);
-  if (!Array.isArray(chosen) || chosen.some((k) => typeof k !== 'string')) throw new Problem(400, 'Choose what to bring in');
+  if (!Array.isArray(chosen) || chosen.some((k) => typeof k !== 'string')) throw new Problem(400, 'Choose what to import');
   const kinds: KindReport[] = [];
   const pending: Pending[] = [];
   for (const key of ORDER.filter((k) => chosen.includes(k))) {

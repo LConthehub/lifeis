@@ -47,7 +47,7 @@ export default function Money() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="flex-1 text-xl font-semibold text-life-800 dark:text-life-50">Spending</h1>
-        <button type="button" onClick={() => setModal({ statement: true })} className="min-h-[44px] px-2 text-sm text-life-600 hover:underline dark:text-life-200">Bring in a statement</button>
+        <button type="button" onClick={() => setModal({ statement: true })} className="min-h-[44px] px-2 text-sm text-life-600 hover:underline dark:text-life-200">Import a statement</button>
         <button type="button" onClick={() => setModal({ entry: {} })} className={buttonClass}>+ Spent</button>
       </div>
       <div className="flex items-center justify-between gap-2">
@@ -116,7 +116,7 @@ export default function Money() {
         {error && <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>}
       </section>
       {modal?.entry && <Modal title="Something spent" onClose={() => setModal(null)}><EntryForm categories={data.categories} onDone={done} /></Modal>}
-      {modal?.statement && <Modal title="Bring in a statement" wide onClose={() => { setModal(null); load(); }}><Statement categories={data.categories} currency={sign} onDone={broughtIn} /></Modal>}
+      {modal?.statement && <Modal title="Import a statement" wide onClose={() => { setModal(null); load(); }}><Statement categories={data.categories} currency={sign} onDone={broughtIn} /></Modal>}
       {modal?.category && <Modal title={modal.category.id ? modal.category.name : 'A category'} onClose={() => setModal(null)}><CategoryForm category={modal.category} people={data.people} onDone={done} /></Modal>}
     </div>
   );

@@ -26,7 +26,7 @@ export default function Recipes() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Recipes</h1>
-        <button type="button" onClick={() => setModal('import')} className={quietButtonClass}>Bring one in</button>
+        <button type="button" onClick={() => setModal('import')} className={quietButtonClass}>Import one</button>
         <button type="button" onClick={() => setModal('new')} className={buttonClass}>+ New recipe</button>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -74,7 +74,7 @@ export default function Recipes() {
         </Modal>
       )}
       {modal === 'import' && (
-        <Modal title="Bring a recipe in" onClose={() => setModal(null)} wide>
+        <Modal title="Import a recipe" onClose={() => setModal(null)} wide>
           <BringIn onDraft={(draft) => setModal({ draft })} onDone={(made) => (made.length === 1 ? navigate(`/recipes/${made[0].id}`) : (setModal(null), load()))} />
         </Modal>
       )}
@@ -242,7 +242,7 @@ function ImportForm({ onDone }) {
       </p>
       <textarea required rows={14} value={text} onChange={(e) => setText(e.target.value)} className={`${inputClass} font-mono text-xs`} aria-label="Recipe text" />
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex justify-end"><button type="submit" className={buttonClass}>Bring it in</button></div>
+      <div className="flex justify-end"><button type="submit" className={buttonClass}>Import it</button></div>
     </form>
   );
 }

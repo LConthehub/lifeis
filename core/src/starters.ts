@@ -111,7 +111,7 @@ const SETS: Starter[] = [
         text('Brand'), text('Color'), choice('Season', 'All year', 'Warm weather', 'Cold weather'), text('Care') ] },
       { name: 'Shoes', icon: '👟', fields: [text('Size'), text('Whose'), text('Brand'), text('Color'), choice('Season', 'All year', 'Warm weather', 'Cold weather')] },
       { name: 'Bedding and linens', icon: '🛏', fields: [
-        choice('Size', 'Cot', 'Twin', 'Twin XL', 'Full', 'Queen', 'King', 'Cal King', 'Other'), choice('Type', 'Sheets', 'Duvet cover', 'Blanket', 'Pillowcase', 'Towel', 'Tablecloth', 'Other'),
+        choice('Size', 'Crib', 'Twin', 'Twin XL', 'Full', 'Queen', 'King', 'Cal King', 'Other'), choice('Type', 'Sheets', 'Duvet cover', 'Blanket', 'Pillowcase', 'Towel', 'Tablecloth', 'Other'),
         text('For which bed or room'), text('Color') ] },
     ],
   },

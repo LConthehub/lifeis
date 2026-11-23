@@ -195,7 +195,7 @@ export function readSchemaOrg(given: unknown): RecipeInput {
 
 /** What was pasted, as recipes: schema.org JSON (one recipe or a list), or plain text. */
 export function readImport(text: string): RecipeInput[] {
-  if (text.length > TEXT_LIMIT * 10) throw new Problem(400, "That's too much to bring in at once");
+  if (text.length > TEXT_LIMIT * 10) throw new Problem(400, "That's too much to import at once");
   const stripped = text.trim();
   if (!stripped.startsWith('{') && !stripped.startsWith('[')) return [readPasted(text)];
   let data: unknown;

@@ -46,9 +46,9 @@ export default function BookServers() {
         <button type="button" onClick={() => setEditing({})} className={buttonClass}>+ Connect a book server</button>
       </div>
       <p className="text-sm text-gray-600 dark:text-life-200">
-        Bring in your Calibre, Calibre-Web, Kavita or Audiobookshelf library, so every book you have is in one place: on the shelf, on a server, or both.
+        Import your Calibre, Calibre-Web, Kavita or Audiobookshelf library, so every book you have is in one place: on the shelf, on a server, or both.
         Each one keeps a link that opens it on its server. Life Is only reads: nothing on the server is ever changed.
-        Kindle, Apple Books and Google Play Books can't be read this way; for those, bring in a list from Books.
+        Kindle, Apple Books and Google Play Books can't be read this way; for those, import a list from Books.
       </p>
       {message && <p className={`rounded-lg px-3 py-2 text-sm ${message.ok ? 'bg-life-50 text-life-800 dark:bg-life-700 dark:text-life-50' : 'bg-red-50 text-red-700'}`}>{message.ok || message.error}</p>}
       {servers.length === 0 ? (
@@ -102,8 +102,8 @@ function BookServerForm({ server, onDone }) {
     }
   };
   const remove = async () => {
-    const what = form.with_copies ? `Disconnect ${server.name} and take what it brought in out of the collection? Books you've logged or own another copy of stay.`
-      : `Disconnect ${server.name}? What it brought in stays in the collection.`;
+    const what = form.with_copies ? `Disconnect ${server.name} and take what it imported out of the collection? Books you've logged or own another copy of stay.`
+      : `Disconnect ${server.name}? What it imported stays in the collection.`;
     if (!window.confirm(what)) return;
     try { onDone((await axios.delete(`/api/libraries/${server.id}`, { params: form.with_copies ? { with_copies: 1 } : {} })).data); } catch (err) { setError(errorMessage(err, "Couldn't disconnect")); }
   };
@@ -143,7 +143,7 @@ function BookServerForm({ server, onDone }) {
           <span className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={remove} className="text-sm text-red-600 hover:underline">Disconnect</button>
             <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-life-200">
-              <input type="checkbox" checked={form.with_copies} onChange={(e) => setForm({ ...form, with_copies: e.target.checked })} className="accent-life-600" /> and take what it brought in out of the collection
+              <input type="checkbox" checked={form.with_copies} onChange={(e) => setForm({ ...form, with_copies: e.target.checked })} className="accent-life-600" /> and take what it imported out of the collection
             </label>
           </span>
         ) : <span />}

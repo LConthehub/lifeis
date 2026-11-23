@@ -36,7 +36,7 @@ export default function RecipeFile({ onDone }) {
     try {
       setDone(await bringRecipesIn(seen.body, seen.photos, (n) => setProgress(`${n.toLocaleString('en-US')} of ${seen.body.sources.length.toLocaleString('en-US')} sent…`)));
       setSeen(null);
-    } catch (err) { setError(err?.message || "Couldn't bring them in"); }
+    } catch (err) { setError(err?.message || "Couldn't import them"); }
     setBusy(false);
   };
 
@@ -44,7 +44,7 @@ export default function RecipeFile({ onDone }) {
     return (
       <div className="space-y-3">
         <p role="status" className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-700 dark:text-life-50">
-          Brought in: {plural(done.added, 'recipe', 'recipes')} added, {done.already} already there, {done.failed.length} could not be read{done.pictures > 0 ? `, ${plural(done.pictures, 'picture', 'pictures')} kept` : ''}.
+          Imported: {plural(done.added, 'recipe', 'recipes')} added, {done.already} already there, {done.failed.length} could not be read{done.pictures > 0 ? `, ${plural(done.pictures, 'picture', 'pictures')} kept` : ''}.
         </p>
         <Failed list={done.failed} />
         <div className="text-right"><button type="button" onClick={() => onDone(done)} className={`${buttonClass} min-h-[44px]`}>Done</button></div>
@@ -65,7 +65,7 @@ export default function RecipeFile({ onDone }) {
           className="block min-h-[44px] w-full text-sm text-gray-700 dark:text-life-100" aria-label="Choose a file of recipes" />
       </Field>
       <p className="text-xs text-gray-500 dark:text-life-300">
-        AnyList has no way to export, so there is nothing to bring in from it. A recipe pinned on Pinterest is a web page: open the pin's website
+        AnyList has no way to export, so there is nothing to import from it. A recipe pinned on Pinterest is a web page: open the pin's website
         and use "From a website".
       </p>
       {busy && !look && <p className="text-sm text-life-700 dark:text-life-200" role="status">Reading {name}…</p>}
@@ -92,7 +92,7 @@ export default function RecipeFile({ onDone }) {
       {look && (
         <div className="flex justify-end">
           <button type="button" onClick={bring} disabled={busy || look.fresh === 0} className={`${buttonClass} min-h-[44px]`}>
-            {look.fresh === 0 ? 'Nothing new to bring in' : busy ? 'Bringing them in…' : `Bring in ${look.fresh}`}
+            {look.fresh === 0 ? 'Nothing new to import' : busy ? 'Importing…' : `Import ${look.fresh}`}
           </button>
         </div>
       )}

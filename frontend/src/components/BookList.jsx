@@ -34,13 +34,13 @@ function Books({ format = '', onDone }) {
     setBusy(true);
     try {
       setDone((await axios.post('/api/media/list', { text, format: form.format || null, otherwise: format || 'eBook', to_read_as_wanted: form.to_read_as_wanted, log_read: form.log_read })).data);
-    } catch (err) { setError(errorMessage(err, "Couldn't bring it in")); } finally { setBusy(false); }
+    } catch (err) { setError(errorMessage(err, "Couldn't import it")); } finally { setBusy(false); }
   };
   if (done) {
     const parts = [`${done.added} new ${done.added === 1 ? 'book' : 'books'}`, done.copies > done.added - done.wanted && `${done.copies} copies added`, done.wanted > 0 && `${done.wanted} wanted`, done.logged > 0 && `${done.logged} read on their day`, done.already > 0 && `${done.already} you already had`].filter(Boolean);
     return (
       <div className="space-y-3">
-        <p role="status" className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-700 dark:text-life-50">Brought in: {parts.join(', ')}.</p>
+        <p role="status" className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-700 dark:text-life-50">Imported: {parts.join(', ')}.</p>
         <div className="text-right"><button type="button" onClick={() => onDone(done)} className={buttonClass}>Done</button></div>
       </div>
     );
@@ -84,7 +84,7 @@ function Books({ format = '', onDone }) {
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex justify-end gap-2">
-        {seen ? <button type="button" disabled={busy} onClick={bring} className={buttonClass}>{busy ? 'Bringing them in…' : `Bring in ${seen.count}`}</button>
+        {seen ? <button type="button" disabled={busy} onClick={bring} className={buttonClass}>{busy ? 'Importing…' : `Import ${seen.count}`}</button>
           : <button type="submit" disabled={busy || !text.trim()} className={seen ? quietButtonClass : buttonClass}>{busy ? 'Reading…' : 'Look it over'}</button>}
       </div>
     </form>

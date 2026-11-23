@@ -1076,6 +1076,19 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE media_copies ADD COLUMN valued_on TEXT`,
     ],
   },
+  {
+    // A bed size: "Cot" becomes "Crib", the American word, on the list of sizes and in what was chosen.
+    // Only choice fields are changed, and a list that already has "Crib" is left as it is.
+    number: 37,
+    name: 'Crib, not cot, for bed sizes',
+    statements: [
+      `UPDATE item_values SET value = 'Crib'
+        WHERE value = 'Cot' AND field_id IN (SELECT id FROM kind_fields WHERE type = 'choice')`,
+      `UPDATE kind_fields SET choices = REPLACE(choices, '"Cot"', '"Crib"')
+        WHERE type = 'choice' AND choices LIKE '%"Cot"%'
+          AND NOT (choices LIKE '%"Crib"%')`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

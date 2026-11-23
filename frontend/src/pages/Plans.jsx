@@ -98,7 +98,7 @@ export default function PlansPage() {
       </div>
       {plans.length === 0 && (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
-          A plan is anything with a day and things that belong to it: a holiday with its menu, dishes and films, or one afternoon's sewing.
+          A plan is anything with a day and things that belong to it: a vacation with its menu, dishes and films, or one afternoon's sewing.
           Make one ahead, or write one down afterwards. Either way it stays here to look back on.
         </div>
       )}

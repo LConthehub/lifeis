@@ -78,7 +78,7 @@ export function Templates({ start, onDone }) {
     <div className="space-y-4">
       <form onSubmit={save} className="space-y-2">
         <Field label={`Save ${weekName(start)} as a template`}>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="School week, Holiday" className={`${inputClass} min-h-[44px]`} />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="School week, Vacation" className={`${inputClass} min-h-[44px]`} />
         </Field>
         <button type="submit" disabled={!name.trim()} className={`${buttonClass} min-h-[44px]`}>Save this week as a template</button>
       </form>

@@ -40,7 +40,7 @@ export default function Servers() {
         <button type="button" onClick={() => setEditing({})} className={buttonClass}>+ Connect a server</button>
       </div>
       <p className="text-sm text-gray-600 dark:text-life-200">
-        Bring your Jellyfin or Emby library into the collection, beside your tapes, discs, records and books. A film you also own on disc
+        Import your Jellyfin or Emby library into the collection, beside your tapes, discs, records and books. A film you also own on disc
         becomes one title with both copies. Life Is only reads from the server: nothing on it is ever changed.
       </p>
       {message && <p className={`rounded-lg px-3 py-2 text-sm ${message.ok ? 'bg-life-50 text-life-800 dark:bg-life-700 dark:text-life-50' : 'bg-red-50 text-red-700'}`}>{message.ok || message.error}</p>}
@@ -97,8 +97,8 @@ function ServerForm({ server, onDone }) {
     }
   };
   const remove = async () => {
-    const what = form.with_copies ? `Disconnect ${server.name} and take what it brought in out of the collection? Titles you've logged or own another copy of stay.`
-      : `Disconnect ${server.name}? What it brought in stays in the collection.`;
+    const what = form.with_copies ? `Disconnect ${server.name} and take what it imported out of the collection? Titles you've logged or own another copy of stay.`
+      : `Disconnect ${server.name}? What it imported stays in the collection.`;
     if (!window.confirm(what)) return;
     try { onDone((await axios.delete(`/api/connections/${server.id}`, { params: form.with_copies ? { with_copies: 1 } : {} })).data); } catch (err) { setError(errorMessage(err, "Couldn't disconnect")); }
   };
@@ -132,7 +132,7 @@ function ServerForm({ server, onDone }) {
           <span className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={remove} className="text-sm text-red-600 hover:underline">Disconnect</button>
             <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-life-200">
-              <input type="checkbox" checked={form.with_copies} onChange={(e) => setForm({ ...form, with_copies: e.target.checked })} className="accent-life-600" /> and take what it brought in out of the collection
+              <input type="checkbox" checked={form.with_copies} onChange={(e) => setForm({ ...form, with_copies: e.target.checked })} className="accent-life-600" /> and take what it imported out of the collection
             </label>
           </span>
         ) : <span />}

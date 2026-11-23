@@ -31,15 +31,15 @@ await wait(1000);
 // ---- a list, for the libraries nothing can read ----
 await page.getByRole('link', { name: 'entertaining' }).click(); await wait();
 await page.getByRole('link', { name: 'eBooks' }).first().click(); await wait();
-await page.getByRole('button', { name: 'Bring in a list' }).click();
+await page.getByRole('button', { name: 'Import a list' }).click();
 await field('Or the list itself').fill('Title,Author,ISBN13,Exclusive Shelf,Date Read,Binding\n"Dune (Dune Chronicles, #1)",Frank Herbert,"=""9780441172719""",read,2024/03/05,Kindle Edition\nThe Left Hand of Darkness,Ursula K. Le Guin,,to-read,,Paperback\n"Piranesi",Susanna Clarke,,read,,Kindle Edition\n');
 await dialog().getByRole('button', { name: 'Look it over' }).click(); await wait(900);
 let d = flat(await dialog().innerText());
 say('the list is looked over before anything is added: ' + d.match(/3 books found[^.]*\./)?.[0], /3 books found/.test(d) && /Dune \(Dune Chronicles, #1\), Frank Herbert · eBook/.test(d) && /The 1 on the to-read shelf/.test(d) && /1 have one/.test(d));
 await field('They are on').selectOption('Kindle');
-await dialog().getByRole('button', { name: 'Bring in 3' }).click(); await wait(1200);
+await dialog().getByRole('button', { name: 'Import 3' }).click(); await wait(1200);
 d = flat(await dialog().innerText());
-say('bringing it in says what happened: ' + d.match(/Brought in:[^.]*\./)?.[0], /Brought in: 3 new books, 1 wanted, 1 read on their day\./.test(d));
+say('bringing it in says what happened: ' + d.match(/Imported:[^.]*\./)?.[0], /Imported: 3 new books, 1 wanted, 1 read on their day\./.test(d));
 await dialog().getByRole('button', { name: 'Done' }).click(); await wait(900);
 let t = await text();
 say('the Kindle books are under eBooks, and the wanted one is not: ' + flat(t).slice(0, 200), /Dune/.test(t) && /Piranesi/.test(t) && /Kindle/.test(t) && !/Left Hand/.test(t));
@@ -108,7 +108,7 @@ say('the Servers page fits a phone', await page.evaluate(() => document.document
 await page.setViewportSize({ width: 1100, height: 900 });
 
 await page.getByRole('button', { name: 'Edit Calibre-Web' }).click();
-await page.getByLabel(/take what it brought in/).check();
+await page.getByLabel(/take what it imported/).check();
 await dialog().getByRole('button', { name: 'Disconnect' }).click(); await wait(1200);
 await page.getByRole('link', { name: 'eBooks' }).first().click(); await wait(1000);
 t = await text();

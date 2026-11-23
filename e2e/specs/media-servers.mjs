@@ -59,7 +59,7 @@ await page.screenshot({ path: shots + '/collection-with-server.png' });
 
 await page.getByRole('link', { name: 'Servers' }).first().click(); await wait();
 await page.getByRole('button', { name: 'Edit' }).click();
-await page.getByLabel(/take what it brought in/).check();
+await page.getByLabel(/take what it imported/).check();
 await page.getByRole('button', { name: 'Disconnect' }).click(); await wait(1200);
 await page.getByRole('link', { name: 'Collection' }).first().click(); await wait(1000);
 t = await text();

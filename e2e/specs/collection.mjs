@@ -261,15 +261,15 @@ say('and the one you had gained a copy only because it was asked for: ' + flat(a
 
 // A list of films and albums from another app: every column named, understood or ignored.
 await page.goto(base + '/media'); await wait(900);
-await page.getByRole('button', { name: 'Bring in a list' }).click();
+await page.getByRole('button', { name: 'Import a list' }).click();
 await field('Or the list itself').fill('Title,Director,Media,Price Paid,Mood\nJaws,Steven Spielberg,DVD,9.99,tense\nAbbey Road,The Beatles,Vinyl,25,calm\n');
 await page.getByRole('dialog').getByRole('button', { name: 'Look it over' }).click(); await wait(900);
 const look = flat(await page.getByRole('dialog').innerText());
 say('the look-over counts the kinds: ' + look.match(/\d+ titles found[^.]*\./)?.[0], /2 titles found \(1 film, 1 music\)/.test(look));
 say('and lists the columns understood: ' + flat(await page.locator('[data-understood]').innerText()), /Title/.test(await page.locator('[data-understood]').innerText()) && /Director\s*→\s*(is read as\s*)?Creator/.test(await page.locator('[data-understood]').innerText()) && /Price Paid\s*→\s*(is read as\s*)?Price paid/.test(await page.locator('[data-understood]').innerText()));
 say('and the column left out: ' + flat(await page.locator('[data-ignored]').innerText()), /Mood/.test(await page.locator('[data-ignored]').innerText()) && !/Director/.test(await page.locator('[data-ignored]').innerText()));
-await page.getByRole('dialog').getByRole('button', { name: 'Bring in 2' }).click(); await wait(1200);
-say('bringing it in says what happened: ' + flat(await page.getByRole('dialog').innerText()).match(/Brought in:[^.]*\./)?.[0], /Brought in: 2 new titles, 2 copies added\./.test(await page.getByRole('dialog').innerText()));
+await page.getByRole('dialog').getByRole('button', { name: 'Import 2' }).click(); await wait(1200);
+say('bringing it in says what happened: ' + flat(await page.getByRole('dialog').innerText()).match(/Imported:[^.]*\./)?.[0], /Imported: 2 new titles, 2 copies added\./.test(await page.getByRole('dialog').innerText()));
 await page.getByRole('dialog').getByRole('button', { name: 'Done' }).click(); await wait(900);
 t = flat(await text());
 say('the film and the album are in, with what they cost: ' + t.slice(0, 140), /Jaws/.test(t) && /Abbey Road/.test(t) && /cost \$9\.99/.test(t) && /Vinyl/.test(t));
@@ -299,7 +299,7 @@ await page.getByRole('button', { name: '+ Add' }).first().click();
 await field('What').fill('Dentist'); await field('Time').fill('14:30');
 await page.getByRole('button', { name: 'Save' }).click(); await wait(900);
 t = await text();
-say('today shows the dentist, the sewing and what was watched: ' + flat(t).replace(/Nothing on\./g, '').slice(0, 260),
+say('today shows the dentist, the sewing and what was watched: ' + flat(t).replace(/Nothing planned\./g, '').slice(0, 260),
   /14:30\s*Dentist/.test(flat(t)) && /Shirt dress/.test(t) && /2 h · Cut out/.test(t) && /while working on Shirt dress/.test(t));
 await page.screenshot({ path: shots + '/calendar.png', fullPage: true });
 await page.getByRole('button', { name: /Dentist/ }).click(); await wait(400);

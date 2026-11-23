@@ -65,11 +65,11 @@ export const LIBRARIES = {
   },
   ebooks: {
     type: 'book', title: 'eBooks', format: 'eBook', fits: (m) => m.formats.some(isEbook),
-    empty: "No eBooks yet. Add one and say what it's on (eBook, Kindle, Kobo, anything you like), bring in a list from Goodreads, or connect Calibre-Web or Kavita under Servers.",
+    empty: "No eBooks yet. Add one and say what it's on (eBook, Kindle, Kobo, anything you like), import a list from Goodreads, or connect Calibre-Web or Kavita under Servers.",
   },
   audiobooks: {
     type: 'book', title: 'Audiobooks', format: 'Audiobook', fits: (m) => m.formats.some(isAudio),
-    empty: 'No audiobooks yet. Add one and say what it\'s on (Audiobook, Audible, CD, or anything with "audio" in it), bring in a list, or connect Audiobookshelf under Servers. Books on CD or tape belong here too: say "Book on CD" or "Book on tape" and where they are kept.',
+    empty: 'No audiobooks yet. Add one and say what it\'s on (Audiobook, Audible, CD, or anything with "audio" in it), import a list, or connect Audiobookshelf under Servers. Books on CD or tape belong here too: say "Book on CD" or "Book on tape" and where they are kept.',
   },
 };
 
@@ -123,7 +123,7 @@ export default function MediaPage({ library = null }) {
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">{lib ? lib.title : 'Collection'}</h1>
         {mine.length > 0 && <Link to={printAddress} className={`${quietButtonClass} ${control} inline-flex items-center`}>Print or save a list</Link>}
-        <button type="button" onClick={() => setListing(true)} className={`${quietButtonClass} ${control}`}>Bring in a list</button>
+        <button type="button" onClick={() => setListing(true)} className={`${quietButtonClass} ${control}`}>Import a list</button>
         <button type="button" onClick={() => setScanning(true)} className={`${quietButtonClass} ${control}`}>📷 Scan a barcode</button>
         <button type="button" onClick={() => setScanMany(true)} className={`${quietButtonClass} ${control}`}>📷 Scan many</button>
         <button type="button" onClick={() => setAdding({ type: type || 'film', format: lib?.format || '' })} className={`${buttonClass} ${control}`}>+ Add</button>
@@ -223,7 +223,7 @@ export default function MediaPage({ library = null }) {
         </Modal>
       )}
       {listing && (
-        <Modal title={lib ? 'Bring in a list of books' : 'Bring in a list'} onClose={() => { setListing(false); load(); }}>
+        <Modal title={lib ? 'Import a list of books' : 'Import a list'} onClose={() => { setListing(false); load(); }}>
           <BookList format={lib?.format || ''} mixed={!lib} type={type || 'film'} onDone={() => { setListing(false); load(); }} />
         </Modal>
       )}
@@ -449,7 +449,7 @@ function TitleForm({ title, withCopy = false, known = [], onDone }) {
     const body = { type: form.type, title: form.title, creator: form.creator || null, year: form.year === '' ? null : Number(form.year), genres: commaList(form.genres),
       minutes: form.minutes === '' ? null : Number(form.minutes), cover: form.cover || null, summary: form.summary || null, note: form.note || null, wanted: form.wanted };
     if (withCopy && !form.wanted && form.format) body.copy = { format: form.format, place_id: form.place_id === '' ? null : Number(form.place_id), barcode: form.barcode || null };
-    // What TMDB calls it is kept with the title, beside any other catalogue's number.
+    // What TMDB calls it is kept with the title, beside any other catalog's number.
     if (tmdb) body.ids = { ...(title.ids || {}), tmdb: tmdb.id, tmdb_kind: tmdb.kind };
     try {
       const saved = (title.id ? await axios.put(`/api/media/${title.id}`, body) : await axios.post('/api/media', body)).data;

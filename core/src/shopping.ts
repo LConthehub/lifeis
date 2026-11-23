@@ -1,23 +1,23 @@
 /**
- * Shopping: what things cost, the total as the trolley fills, and coupons.
+ * Shopping: what things cost, the total as the cart fills, and coupons.
  *
  * This sits beside the grocery list (kitchen.ts) and changes nothing in it. As you shop, a line on the list can
  * be given the price you paid. That does two jobs: it counts towards today's total, and it is kept as a
- * price for that ingredient, with the shop and the day, so next time the list can say what it cost last
+ * price for that ingredient, with the store and the day, so next time the list can say what it cost last
  * time and guess the trip before you start.
  *
  * A price is what you paid, in whole cents, so adding up never drifts. With it goes the size you bought: the
  * amount on the list ("2 lb chicken thighs"), or, when the list only says "coffee", the size on the packet
- * ("30 oz"). Sizes are what let two shops, or a small bag and a big tin, be compared for one ounce.
+ * ("30 oz"). Sizes are what let two stores, or a small bag and a big tin, be compared for one ounce.
  *
- * Shops are a list of your own to choose from, so a shop is spelt one way and prices can be set side by side.
- * Each thing can have a usual shop and a usual size ("coffee: Costco, 3 lb"). The usual shop lets the list be
- * read shop by shop; the usual size shows on a line that gives no amount, and is the size a price is taken
+ * Stores are a list of your own to choose from, so a store is spelled one way and prices can be set side by side.
+ * Each thing can have a usual store and a usual size ("coffee: Costco, 3 lb"). The usual store lets the list be
+ * read store by store; the usual size shows on a line that gives no amount, and is the size a price is taken
  * to be for unless another is typed. A line ticked off without a price takes last time's as a stand-in, marked as
  * assumed: it counts in the total, but isn't remembered as a price anyone actually saw.
  *
  * A coupon is money or a percentage off, for one thing on the list or for the whole shop, perhaps only at one
- * shop and until a day. Saying you're using it takes it off today's total, and it isn't offered again.
+ * store and until a day. Saying you're using it takes it off today's total, and it isn't offered again.
  */
 import type { Db, Queries } from './db.ts';
 import { barcodeKey } from './media.ts';
@@ -37,11 +37,11 @@ export type ShoppingLine = {
   last: LastPrice | null;
   /** Coupons that could be used on this line. */
   coupons: number[];
-  /** The shop this is usually bought at, when one has been said. */
+  /** The store this is usually bought at, when one has been said. */
   usual_store: string | null;
   /** The size it's usually bought in ("30 oz"); empty when none has been said. */
   usual_size: string;
-  /** Where it will most likely be bought: the usual shop, or else where it was bought last. */
+  /** Where it will most likely be bought: the usual store, or else where it was bought last. */
   likely_store: string | null;
 };
 export type CouponInput = {
@@ -62,16 +62,16 @@ export type Coupon = {
   used_on: string | null;
   /** Days until it runs out; 0 is today, below 0 it has. Null when it doesn't. */
   days_left: number | null;
-  /** What it takes off today's shop, in cents, as the trolley stands. */
+  /** What it takes off today's shop, in cents, as the cart stands. */
   worth_cents: number;
 };
 export type Shopping = {
   currency: string;
   /** Where today's shop is, kept with each price. */
   store: string | null;
-  /** Your shops, to choose from, by name. */
+  /** Your stores, to choose from, by name. */
   stores: string[];
-  /** The id of the shop today's shop is, when it is one on your list. */
+  /** The id of the store today's shop is, when it is one on your list. */
   store_id: number | null;
   /** The order the aisles run in at today's shop; null when none has been set, and the list keeps its usual order. */
   aisle_order: string[] | null;
@@ -102,7 +102,7 @@ export type Trend = {
   per: string | null;
   /** Oldest first. */
   points: PricePoint[];
-  /** The latest price at each shop, cheapest first. */
+  /** The latest price at each store, cheapest first. */
   shops: PricePoint[];
   latest: PricePoint;
   lowest: PricePoint;
@@ -135,7 +135,7 @@ export type Scanned = {
 
 const CURRENCY = 'shopping_currency';
 const STORE = 'shopping_store';
-/** Each shop's aisle order is kept in the person's settings under this key plus the shop's id (no table of its own). */
+/** Each store's aisle order is kept in the person's settings under this key plus the store's id (no table of its own). */
 const AISLES = (storeId: number) => `shopping_aisles_${storeId}`;
 const MAX_AISLES = 100;
 const MAX_CENTS = 100_000_000;
@@ -168,7 +168,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
     ? db.run('DELETE FROM user_settings WHERE user_id = ? AND key = ?', [owner, key])
     : db.run(`INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value`, [owner, key, value]));
 
-  /** The aisles of a shop in the order its person walks them; null when none has been set. */
+  /** The aisles of a store in the order its person walks them; null when none has been set. */
   const aisleOrder = async (storeId: number): Promise<string[] | null> => {
     try {
       const list = JSON.parse((await setting(AISLES(storeId))) ?? 'null') as unknown;
@@ -230,12 +230,12 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       const target = c.ingredient_id !== null ? done.find((l) => l.ingredient_id === c.ingredient_id) : undefined;
       const base = c.ingredient_id !== null ? (target ? onLine.get(target.id)?.cents ?? 0 : 0) : trolley;
       if (c.percent_off !== null) return Math.round(base * c.percent_off / 100);
-      // Money off one thing can't be more than the thing cost; before it's in the trolley, the coupon's own figure stands.
+      // Money off one thing can't be more than the thing cost; before it's in the cart, the coupon's own figure stands.
       return c.ingredient_id !== null && target && onLine.has(target.id) ? Math.min(c.cents_off!, base) : c.cents_off!;
     };
     const coupons = rows
       .map((c): Coupon => ({ ...c, days_left: c.expires_on ? dayNumber(c.expires_on) - dayNumber(day) : null, worth_cents: worth(c) }))
-      // One that ran out more than a fortnight ago, unused, is no longer worth showing.
+      // One that ran out more than two weeks ago, unused, is no longer worth showing.
       .filter((c) => c.used_on !== null || c.days_left === null || c.days_left >= -14);
     const couponsCents = Math.min(trolley, coupons.filter((c) => c.used_on === day).reduce((sum, c) => sum + c.worth_cents, 0));
 
@@ -271,7 +271,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
   return {
     summary,
 
-    /** Where today's shop is. Kept with each price from now on. A shop not seen before joins your list. */
+    /** Where today's shop is. Kept with each price from now on. A store not seen before joins your list. */
     async setStore(name: string | null): Promise<Shopping> {
       const tidy = clean(name, 100);
       if (tidy) await db.run('INSERT OR IGNORE INTO stores (owner_id, name, created_at) VALUES (?, ?, ?)', [owner, tidy, stamp(clock())]);
@@ -297,9 +297,9 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       return summary();
     },
 
-    // ---------- shops ----------
+    // ---------- stores ----------
 
-    /** Your shops, with how many prices were seen at each. */
+    /** Your stores, with how many prices were seen at each. */
     stores(): Promise<Store[]> {
       return db.all<Store>(
         `SELECT s.id, s.name, s.note,
@@ -316,7 +316,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       return this.stores();
     },
 
-    /** Rename a shop, or change its note. Its prices and coupons follow the new name. */
+    /** Rename a store, or change its note. Its prices and coupons follow the new name. */
     async updateStore(id: number, input: { name: string; note?: string | null }): Promise<Store[]> {
       const name = clean(input.name, 100);
       if (!name) throw new Problem(400, 'Give the store a name');
@@ -331,21 +331,21 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       return this.stores();
     },
 
-    /** Take a shop off your list. What you paid there stays in the prices, under its name. */
+    /** Take a store off your list. What you paid there stays in the prices, under its name. */
     async removeStore(id: number): Promise<Store[]> {
       await db.run('DELETE FROM stores WHERE id = ? AND owner_id = ?', [id, owner]);
       await keep(AISLES(id), null);
       return this.stores();
     },
 
-    /** The order a shop's aisles run in, or null when none has been set. */
+    /** The order a store's aisles run in, or null when none has been set. */
     async aisles(storeId: number): Promise<string[] | null> {
       await storeRow(storeId);
       return aisleOrder(storeId);
     },
 
     /**
-     * Say the order the aisles run in at a shop, first to last. The list grouped by aisle then follows it when you
+     * Say the order the aisles run in at a store, first to last. The list grouped by aisle then follows it when you
      * shop there. Aisles left out of the order come after those named, in the usual order. An empty order forgets it.
      */
     async setAisles(storeId: number, aisles: string[]): Promise<Shopping> {
@@ -410,7 +410,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
          WHERE b.owner_id = ? AND b.barcode = ?`, [owner, barcode]);
       if (!found) return { barcode, ingredient: null, line: null, last: null };
       const known = { id: found.id, name: found.name, product: found.product, size: units.amount(found.size_quantity, found.size_unit) };
-      // On the list: the line still to get if there is one, else the one already in the trolley.
+      // On the list: the line still to get if there is one, else the one already in the cart.
       const onList = await db.get<Line>('SELECT id, ingredient_id, label, quantity, unit, done FROM grocery WHERE owner_id = ? AND ingredient_id = ? ORDER BY done, id LIMIT 1', [owner, known.id]);
       const before = await db.get<PriceRow>(
         `SELECT grocery_id, ingredient_id, label, cents, quantity, unit, store, day, assumed FROM prices

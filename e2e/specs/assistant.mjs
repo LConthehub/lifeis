@@ -93,7 +93,7 @@ say('and nothing from the parts not ticked', !/Secret gift|Necklace/.test(sent))
 
 // A handwritten card: the model copies it out, and the person checks it before it becomes a recipe.
 await page.getByRole('link', { name: 'tasty' }).click(); await wait();
-await page.getByRole('button', { name: 'Bring one in' }).click();
+await page.getByRole('button', { name: 'Import one' }).click();
 await page.getByRole('button', { name: 'From a photo or a book' }).click(); await wait(600);
 const importing = page.getByRole('dialog');
 say('handwriting is offered, and says where the photo goes', /It's handwritten/.test(await importing.innerText()) && /on your own computer or network, so the photo doesn't leave home/.test(await importing.innerText()));

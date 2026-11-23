@@ -50,7 +50,7 @@ export default function Statement({ categories, currency, onDone }) {
       const body = { text, keep: kept, categories: chosen, suggest: false };
       if (seen.spending_is) body.spending_is = seen.spending_is;
       setDone((await axios.post('/api/money/statement', body)).data);
-    } catch (err) { setError(errorMessage(err, "Couldn't bring it in")); } finally { setBusy(false); }
+    } catch (err) { setError(errorMessage(err, "Couldn't import it")); } finally { setBusy(false); }
   };
 
   if (done) {
@@ -58,7 +58,7 @@ export default function Statement({ categories, currency, onDone }) {
     return (
       <div className="space-y-3">
         <p role="status" data-statement-done className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-700 dark:text-life-50">
-          {done.added === 0 ? 'Nothing new was added' : `Brought in ${done.added} ${done.added === 1 ? 'line' : 'lines'}${where ? `: ${where}` : ''}`}
+          {done.added === 0 ? 'Nothing new was added' : `Imported ${done.added} ${done.added === 1 ? 'line' : 'lines'}${where ? `: ${where}` : ''}`}
           {done.already > 0 && `. ${done.already} ${done.already === 1 ? 'was' : 'were'} already in Life Is`}
           {done.left_out > 0 && `. ${done.left_out} left out`}.
         </p>
@@ -73,7 +73,7 @@ export default function Statement({ categories, currency, onDone }) {
   const row = ([r, i]) => (
     <li key={i} className="py-1" data-statement-row>
       <label className={`flex cursor-pointer items-start gap-2 ${touch}`}>
-        <span className="flex h-11 w-9 shrink-0 items-center justify-center"><input type="checkbox" checked={Boolean(picks[i]?.keep)} onChange={(e) => set(i, { keep: e.target.checked })} className="h-5 w-5 accent-life-600" aria-label={`Bring in ${r.label}`} /></span>
+        <span className="flex h-11 w-9 shrink-0 items-center justify-center"><input type="checkbox" checked={Boolean(picks[i]?.keep)} onChange={(e) => set(i, { keep: e.target.checked })} className="h-5 w-5 accent-life-600" aria-label={`Import ${r.label}`} /></span>
         <span className="min-w-0 flex-1 py-2.5">
           <span className="flex items-baseline justify-between gap-2 text-sm text-gray-800 dark:text-life-50">
             <span className="min-w-0 break-words">{r.label}</span>
@@ -148,7 +148,7 @@ export default function Statement({ categories, currency, onDone }) {
       {seen && (
         <div className="flex justify-end gap-2">
           <button type="button" onClick={() => setSeen(null)} className={`${quietButtonClass} ${touch}`}>Back</button>
-          <button type="button" disabled={busy || kept.length === 0} onClick={bring} className={`${buttonClass} ${touch}`}>{busy ? 'Bringing them in…' : `Bring in ${kept.length}`}</button>
+          <button type="button" disabled={busy || kept.length === 0} onClick={bring} className={`${buttonClass} ${touch}`}>{busy ? 'Importing…' : `Import ${kept.length}`}</button>
         </div>
       )}
     </form>

@@ -111,7 +111,7 @@ check('a link is made, saying what is left out', /\/m\/[0-9a-f]{64}$/.test(link)
 const guest = await (await browser.newContext({ viewport: { width: 393, height: 852 } })).newPage();
 const answer = await guest.goto(link); await guest.waitForTimeout(600);
 const seen = (await guest.locator('body').innerText()).replace(/\s+/g, ' ');
-check('the link opens with no sign-in', answer.status() === 200 && seen.includes('House manual') && seen.includes('Water shut-off') && seen.includes('Where: Basement › Boiler cupboard'), seen.slice(0, 140));
+check('the link opens with no sign-in', answer.status() === 200 && seen.includes('House Manual') && seen.includes('Water shut-off') && seen.includes('Where: Basement › Boiler cupboard'), seen.slice(0, 140));
 check('it has the plumber and the pets, and not the alarm code', seen.includes('555 0142') && seen.includes('Rex') && seen.includes('Two cups, twice a day') && !seen.includes('4821') && !seen.includes('Alarm'));
 check('nothing else of Life Is opens for them', (await guest.request.get(`${base}/api/manual`)).status() === 401);
 check('and the page itself can fetch nothing', await guest.evaluate(() => fetch('/api/health').then(() => false).catch(() => true)));

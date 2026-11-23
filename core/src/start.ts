@@ -96,7 +96,7 @@ const WEEK = 7;
 const SAMPLE_RECIPES = [
   {
     title: 'Sheet-pan sausage and vegetables', servings: 4, prep_minutes: 15, cook_minutes: 40, tags: ['example', 'weeknight'],
-    description: 'One pan, little washing up, and it works with whatever vegetables are in the drawer.',
+    description: 'One pan, few dishes to wash, and it works with whatever vegetables are in the drawer.',
     ingredients_text: '1 lb smoked sausage, sliced into coins\n1 lb baby potatoes, halved\n2 bell peppers, cut in chunks\n1 red onion, cut in wedges\n2 tbsp olive oil\n1 tsp garlic powder\n1 tsp paprika\n1/2 tsp salt\n1/4 tsp black pepper',
     steps_text: 'Heat the oven to 425°F with a rack in the middle.\nToss the potatoes with half the oil, the salt and the pepper on a large sheet pan. Roast for 15 minutes.\nAdd the sausage, peppers and onion with the rest of the oil, the garlic powder and the paprika. Stir it all together.\nRoast 20 to 25 minutes more, stirring once, until the potatoes are tender and the edges are browned.',
     notes: 'Serve as it is, or over rice.',

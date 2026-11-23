@@ -8,7 +8,7 @@ export default function Art({ slot, className = '' }) {
   return <img src={`/art/${file}`} alt="" aria-hidden="true" draggable="false" className={className} />;
 }
 
-/** The coloured stripe under the header and at the top of the sign-in card. Until the owner's wave is added it is plain
+/** The colored stripe under the header and at the top of the sign-in card. Until the owner's wave is added it is plain
  *  straight bands (plum, green, gold, orange, cream); once ART.wave names a file, that picture tiles across it. */
 export function Stripe({ className = '' }) {
   if (ART.wave) {

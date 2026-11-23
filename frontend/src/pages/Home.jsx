@@ -87,7 +87,7 @@ export default function Home({ user }) {
               {s.days.map((d) => (
                 <div key={d.day}>
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-life-600 dark:text-life-300">{dayName(d.day, today)}</h3>
-                  {d.entries.length === 0 ? <Quiet>Nothing on.</Quiet> : (
+                  {d.entries.length === 0 ? <Quiet>Nothing planned.</Quiet> : (
                     <ul className="mt-1 space-y-1">
                       {d.entries.map((e, i) => {
                         const body = (
@@ -258,8 +258,8 @@ export default function Home({ user }) {
         )}
 
         {shows('projects') && (
-          <Card title="Projects in hand" to="/projects" link="All projects">
-            {s.projects.length === 0 ? <Quiet>Nothing in hand. Ideas wait on the projects page.</Quiet> : (
+          <Card title="Projects underway" to="/projects" link="All projects">
+            {s.projects.length === 0 ? <Quiet>Nothing underway. Ideas wait on the projects page.</Quiet> : (
               <ul className="divide-y divide-life-50 dark:divide-life-700">
                 {s.projects.map((p) => (
                   <li key={p.id}>

@@ -104,7 +104,7 @@ function takePicture(data) {
  * Throws a plain sentence when the file is too large, isn't a recipe file, or has nothing in it.
  */
 export async function unpackRecipeFile(file) {
-  if (file.size > MAX_BYTES) throw new Error('That file is larger than 50 MB. Bring it in as two files.');
+  if (file.size > MAX_BYTES) throw new Error('That file is larger than 50 MB. Import it as two files.');
   const bytes = new Uint8Array(await file.arrayBuffer());
   const sources = [];
   const unreadable = [];
@@ -135,7 +135,7 @@ export async function unpackRecipeFile(file) {
       } catch (problem) {
         unreadable.push({ name: name.replace(/\.paprikarecipe$/i, ''), why: problem instanceof SyntaxError ? "It isn't a recipe Life Is can read" : problem.message || "It couldn't be opened" });
       }
-      if (sources.length + unreadable.length > MAX_RECIPES) throw new Error('That file has more than 2,000 recipes. Bring it in as two files.');
+      if (sources.length + unreadable.length > MAX_RECIPES) throw new Error('That file has more than 2,000 recipes. Import it as two files.');
     }
   } else if (isGzip(bytes)) {
     try { add(file.name.replace(/\.(paprikarecipe|gz)$/i, ''), decode(await inflate(bytes, 'gzip'))); } catch { unreadable.push({ name: file.name, why: "It isn't a recipe Life Is can read" }); }
@@ -144,7 +144,7 @@ export async function unpackRecipeFile(file) {
   }
   if (sources.length + unreadable.length === 0) throw new Error('No recipes were found in that file.');
   const body = { sources, unreadable };
-  if (new Blob([JSON.stringify(body)]).size > MAX_SENT_BYTES) throw new Error("That's more than can be brought in at once. Bring it in as two files.");
+  if (new Blob([JSON.stringify(body)]).size > MAX_SENT_BYTES) throw new Error("That's more than can be imported at once. Import it as two files.");
   return { body, pictures: photos.size, photos };
 }
 
@@ -186,9 +186,9 @@ export async function bringRecipesIn(body, photos, onProgress = () => {}) {
       const { data } = await axios.post('/api/kitchen/recipes/file', { sources: one.sources, unreadable: n === 0 ? body.unreadable : [] });
       total.found += data.found; total.added += data.added; total.already += data.already; total.pictures += data.pictures; total.failed.push(...data.failed);
     } catch (err) {
-      const reason = err?.response?.data?.detail || err?.message || "Couldn't bring them in";
+      const reason = err?.response?.data?.detail || err?.message || "Couldn't import them";
       throw new Error(total.added > 0 || sentCount > 0
-        ? `${reason} ${total.added} recipes were brought in before it stopped. Choose the file again to bring in the rest: a recipe already in Life Is is not added twice.`
+        ? `${reason} ${total.added} recipes were imported before it stopped. Choose the file again to import the rest: a recipe already in Life Is is not added twice.`
         : reason);
     }
     sentCount += one.sources.length;

@@ -73,7 +73,7 @@ const GROUPS = [
       { id: 'unlock', title: 'Unlocking Life Is', words: 'trial pay price purchase buy free', when: onDevice, render: () => <Unlock /> },
       { id: 'last-copy', title: 'Your copy', words: 'last copy made backup download how long ago lost phone remind digest', render: () => <CopyNotice hasBackup={onDevice()} /> },
       { id: 'backup', title: 'Backups', words: 'backup restore export file passphrase drive icloud', when: onDevice, render: () => <DeviceBackup /> },
-      { id: 'your-files', title: 'Download everything, and bring it back in', words: 'download everything export import bring in zip csv spreadsheet open files data stays with you portable pictures merge', render: () => <YourFiles hasBackup={onDevice()} /> },
+      { id: 'your-files', title: 'Import and export', words: 'download everything export import bring in zip csv spreadsheet open files data stays with you portable pictures merge', render: () => <YourFiles hasBackup={onDevice()} /> },
       { id: 'recipes-out', title: 'Download recipes', words: 'export nextcloud cookbook zip', when: () => !inApp(), render: () => <RecipesOut /> },
     ],
   },
@@ -278,7 +278,7 @@ function MediaServers() {
 
 function RecipesFromWeb() {
   return (
-    <Titled title="🍳 Recipes from a website" hint='Nothing to turn on. Only when you paste an address under Recipes → "Bring one in", Life Is fetches that one page from that site, as a browser would; nothing about you or your recipes is sent. Reading a recipe off a photo happens on your own device and reaches nowhere.' />
+    <Titled title="🍳 Recipes from a website" hint='Nothing to turn on. Only when you paste an address under Recipes → "Import one", Life Is fetches that one page from that site, as a browser would; nothing about you or your recipes is sent. Reading a recipe off a photo happens on your own device and reaches nowhere.' />
   );
 }
 

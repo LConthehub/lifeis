@@ -166,7 +166,7 @@ export function readRecipeFile(file: RecipeFile): { recipes: FileRecipe[]; faile
         failed.push({ name, why: problem instanceof Problem ? problem.message : "It couldn't be read" });
       }
     }
-    if (recipes.length + failed.length > MAX_FILE_RECIPES) throw new Problem(400, `That's more than ${MAX_FILE_RECIPES.toLocaleString('en-US')} recipes. Bring it in as two files.`);
+    if (recipes.length + failed.length > MAX_FILE_RECIPES) throw new Problem(400, `That's more than ${MAX_FILE_RECIPES.toLocaleString('en-US')} recipes. Import it as two files.`);
   }
   return { recipes, failed };
 }

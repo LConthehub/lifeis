@@ -1,5 +1,5 @@
 /**
- * The kinds of project Life Is knows by name, and the examples it shows for each, so the greyed-out hints
+ * The kinds of project Life Is knows by name, and the examples it shows for each, so the grayed-out hints
  * on a woodworking project talk about screws and not zippers. A kind is still whatever the person types:
  * these are only suggestions, matched on the words in it.
  *

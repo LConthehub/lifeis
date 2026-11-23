@@ -3,12 +3,12 @@
  * place. Life Is only ever reads from them; nothing on a server is changed. Each copy keeps a link that
  * opens the book on its server.
  *
- * Three servers are known by name, and anything else that offers an OPDS catalogue can be given by its
+ * Three servers are known by name, and anything else that offers an OPDS catalog can be given by its
  * address:
  *   - Audiobookshelf: its own way of answering, with a key (Settings, Users, your user, API token).
- *   - Calibre-Web: an OPDS catalogue at /opds, with your username and password.
- *   - Kavita: an OPDS catalogue whose address holds your key (User settings, 3rd Party Clients, OPDS).
- *   - OPDS: the address of a list of books in any other catalogue (Calibre itself, Komga, COPS).
+ *   - Calibre-Web: an OPDS catalog at /opds, with your username and password.
+ *   - Kavita: an OPDS catalog whose address holds your key (User settings, 3rd Party Clients, OPDS).
+ *   - OPDS: the address of a list of books in any other catalog (Calibre itself, Komga, COPS).
  *
  * Kindle, Apple Books and Google Play Books offer no way to read a library, so they can't be linked here;
  * a list from them can be brought in (bookList.ts), and a copy can carry a link that opens it there.
@@ -47,7 +47,7 @@ const MAX_PAGES = 400;
 const COVERS_PER_SYNC = 300;
 const text = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value.trim() : null);
 
-// ---------- reading a catalogue (OPDS is Atom, a kind of XML) ----------
+// ---------- reading a catalog (OPDS is Atom, a kind of XML) ----------
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 /** The words out of a piece of a feed: tags gone, &amp; and its kind turned back into letters. */
@@ -73,10 +73,10 @@ const linksIn = (xml: string): Link[] => [...xml.matchAll(/<link\b[^>]*>/gi)].ma
   rel: attribute(element, 'rel') ?? '', type: attribute(element, 'type') ?? '', href: attribute(element, 'href') ?? '',
 })).filter((l) => l.href);
 
-export type OpdsEntry = Imported & { /** Whether it's a book to have (it can be downloaded), or only a way further into the catalogue. */ book: boolean; /** Where this entry leads, when it's a way further in. */ leads: string | null; /** Where each file of the book can be downloaded. */ files: string[] };
+export type OpdsEntry = Imported & { /** Whether it's a book to have (it can be downloaded), or only a way further into the catalog. */ book: boolean; /** Where this entry leads, when it's a way further in. */ leads: string | null; /** Where each file of the book can be downloaded. */ files: string[] };
 export type OpdsPage = { entries: OpdsEntry[]; next: string | null };
 
-/** One page of an OPDS catalogue, read. `at` is the page's own address, which the links in it are relative to. */
+/** One page of an OPDS catalog, read. `at` is the page's own address, which the links in it are relative to. */
 export function readOpdsPage(xml: string, at: string): OpdsPage {
   if (!/<feed[\s>]/i.test(xml)) throw new Problem(400, "That address answered, but not with a catalog of books (an OPDS feed)");
   const resolve = (href: string) => { try { return new URL(href, at).href; } catch { return null; } };
@@ -210,7 +210,7 @@ export async function readLibrary(fetcher: Fetcher, kind: LibraryKind, url: stri
     return { items, coverHeaders: { Authorization: headers.Authorization } };
   }
   if (kind === 'kavita') {
-    // Kavita's catalogue address holds the key. Its libraries are a menu; each leads to a list of series.
+    // Kavita's catalog address holds the key. Its libraries are a menu; each leads to a list of series.
     const root = `${url}/api/opds/${encodeURIComponent(secret.key ?? '')}`;
     const libraries = await readOpds(fetcher, who, `${root}/libraries`, {}, true);
     const items: Imported[] = [];
@@ -230,7 +230,7 @@ export async function readLibrary(fetcher: Fetcher, kind: LibraryKind, url: stri
   }
   const headers = basic(secret);
   if (kind === 'calibre') {
-    // Calibre's own Content server. Its catalogue starts with a menu; "By Title" is every book, a page at a time.
+    // Calibre's own Content server. Its catalog starts with a menu; "By Title" is every book, a page at a time.
     // Each book's files are at /get/<format>/<number>/<library>, which gives the page that opens it in Calibre's reader.
     // Over plain http it asks for a "Digest" sign-in, where each request is signed afresh; over https, for a plain one.
     // Either way it is answered as asked, and with no username nothing is sent at all.

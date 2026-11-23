@@ -101,7 +101,7 @@ export default function ChoreChart() {
           <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Chore chart</h1>
           <button type="button" disabled={sheets.length === 0} onClick={() => window.print()} className={`${buttonClass} min-h-[44px]`}>Print</button>
         </div>
-        <p className="text-sm text-gray-600 dark:text-life-100">A sheet for the fridge: each person's chores, with a box to tick on each day one is due. Points and what they are worth are on it for you to add up.</p>
+        <p className="text-sm text-gray-600 dark:text-life-100">A sheet for the fridge: each person's chores, with a box to check on each day one is due. Points and what they are worth are on it for you to add up.</p>
 
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Which week">
           <button type="button" onClick={() => setWeek('this')} aria-pressed={week === 'this'} className={pill(week === 'this')}>This week</button>

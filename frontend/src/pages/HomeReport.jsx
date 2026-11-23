@@ -15,7 +15,7 @@ const centsOf = (text) => {
 };
 
 // What printing needs that the screen does not: each room can start a page, a table's headings come round again
-// on every page, and a thing's row (with its photo) is never cut in two. Black on white, whatever the screen's colours.
+// on every page, and a thing's row (with its photo) is never cut in two. Black on white, whatever the screen's colors.
 const PRINT_RULES = `
 .report-sheet table { border-collapse: collapse; width: 100%; }
 .report-sheet th, .report-sheet td { overflow-wrap: anywhere; }
@@ -156,7 +156,7 @@ export default function HomeReport() {
         )}
       </div>
 
-      {/* The sheet itself: black on white whatever the page's colours. */}
+      {/* The sheet itself: black on white whatever the page's colors. */}
       <div className={`report-sheet space-y-5 rounded-xl bg-card print:bg-white p-4 text-black sm:p-6 ${perPage ? 'one-room-per-page' : ''}`} aria-label="The inventory">
         <header>
           <h2 className="text-lg font-bold">Home inventory</h2>

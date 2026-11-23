@@ -154,7 +154,7 @@ export function readStatement(text: string, options: ReadOptions = {}): Statemen
     throw new Problem(400, "I couldn't find the columns of a statement. Life Is looks for a heading line with a date (Date, Posting Date or Transaction Date) and an amount (Amount, or Debit and Credit). Check that this is the CSV from your bank's download or export, not a PDF or a summary.");
   }
   const lines = table.slice(at + 1);
-  if (lines.length > MAX_ROWS) throw new Problem(400, `That has more than ${MAX_ROWS.toLocaleString('en-US')} lines. Download a shorter stretch of time (a month or a year) and bring it in as more than one.`);
+  if (lines.length > MAX_ROWS) throw new Problem(400, `That has more than ${MAX_ROWS.toLocaleString('en-US')} lines. Download a shorter stretch of time (a month or a year) and import it as more than one.`);
 
   // Each line, as the file wrote it, before anyone decides which sign is spending.
   type Raw = { day: string; label: string; hint: string | null; amount: Amount; said: 'spent' | 'received' | null };

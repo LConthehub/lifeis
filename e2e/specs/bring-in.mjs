@@ -79,7 +79,7 @@ await send('POST', '/api/kitchen/recipes', { title: 'Buttermilk Pancakes (spelt)
 
 const bringInWay = async () => {
   await page.goto(base + '/recipes'); await wait(900);
-  await page.getByRole('button', { name: 'Bring one in' }).click(); await wait(400);
+  await page.getByRole('button', { name: 'Import one' }).click(); await wait(400);
   await dialog.getByRole('button', { name: 'Many, from another app' }).click(); await wait(300);
 };
 await bringInWay();
@@ -90,9 +90,9 @@ say('the look-over counts them: ' + look.match(/\d+ recipes found[^\n]*/)?.[0], 
 say('it names them, and says which pictures will come in', /Buttermilk\s+Pancakes/.test(look) && /Tomato Soup/.test(look) && /Weeknight Chili/.test(look) && /1 picture will come in with them\./.test(look) && /already in Life Is is not changed, so it is not given a picture/.test(look), look);
 say('nothing is kept by looking', (await send('GET', '/api/kitchen/recipes')).length === 2);
 await page.screenshot({ path: shots + '/bring-in-recipes.png' });
-await dialog.getByRole('button', { name: 'Bring in 2' }).click(); await wait(1200);
+await dialog.getByRole('button', { name: 'Import 2' }).click(); await wait(1200);
 const done = await dialog.innerText();
-say('it reports added, already there and could not be read: ' + done.match(/Brought in:[^\n]*/)?.[0], /Brought in: 2 recipes added, 1 already there, 0 could not be read, 1 picture kept\./.test(done));
+say('it reports added, already there and could not be read: ' + done.match(/Imported:[^\n]*/)?.[0], /Imported: 2 recipes added, 1 already there, 0 could not be read, 1 picture kept\./.test(done));
 await dialog.getByRole('button', { name: 'Done' }).click(); await wait(900);
 const titles = await page.locator('main ul li a span.font-medium').evaluateAll((all) => all.map((n) => n.textContent));
 say('they are in the recipe box: ' + titles.join(' | '), titles.length === 4 && titles.includes('Weeknight Chili') && titles.includes('Buttermilk  Pancakes'));
@@ -119,7 +119,7 @@ await bringInWay();
 await dialog.getByLabel('Choose a file of recipes').setInputFiles(named('My Recipes.paprikarecipes', paprika)); await wait(1200);
 const again = await dialog.innerText();
 say('the same file again finds all three already here', /3 recipes found, 3 already in Life Is\./.test(again));
-say('and offers nothing to bring in', await dialog.getByRole('button', { name: 'Nothing new to bring in' }).isDisabled());
+say('and offers nothing to import', await dialog.getByRole('button', { name: 'Nothing new to import' }).isDisabled());
 await dialog.getByRole('button', { name: 'Close' }).click().catch(() => page.keyboard.press('Escape')); await wait(300);
 say('still four recipes', (await send('GET', '/api/kitchen/recipes')).length === 4);
 
@@ -133,8 +133,8 @@ const mixed = zip([entry(CHILI), { path: 'Broken.paprikarecipe', bytes: Buffer.f
 await dialog.getByLabel('Choose a file of recipes').setInputFiles(named('mixed.paprikarecipes', mixed)); await wait(1200);
 const mixedLook = await dialog.innerText();
 say('a damaged entry is named and the rest is read', /3 recipes found, 1 already in Life Is, 1 that can't be read\./.test(mixedLook) && /Broken: .+/.test(mixedLook));
-await dialog.getByRole('button', { name: 'Bring in 1' }).click(); await wait(1200);
-say('and the report says so', /Brought in: 1 recipe added, 1 already there, 1 could not be read\./.test(await dialog.innerText()));
+await dialog.getByRole('button', { name: 'Import 1' }).click(); await wait(1200);
+say('and the report says so', /Imported: 1 recipe added, 1 already there, 1 could not be read\./.test(await dialog.innerText()));
 await dialog.getByRole('button', { name: 'Done' }).click(); await wait(600);
 say('the JSON recipe came in', (await send('GET', '/api/kitchen/recipes')).some((r) => r.title === 'Flapjacks' && r.servings === 12));
 

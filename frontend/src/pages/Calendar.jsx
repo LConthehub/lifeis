@@ -61,7 +61,7 @@ export default function Calendar() {
                 <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">{d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}</h2>
                 <button type="button" onClick={() => setEditing({ day: key })} className="text-sm text-life-600 hover:underline dark:text-life-200" aria-label={`Add to ${key}`}>+ Add</button>
               </div>
-              {here.length === 0 ? <p className="text-sm text-gray-400 dark:text-life-400">Nothing on.</p> : (
+              {here.length === 0 ? <p className="text-sm text-gray-400 dark:text-life-400">Nothing planned.</p> : (
                 <ul className="space-y-1.5">
                   {here.map((e, i) => {
                     const body = (

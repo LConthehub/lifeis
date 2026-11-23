@@ -29,9 +29,9 @@ export default function Groceries() {
   const [typed, setTyped] = useState({});           // prices being typed, by line
   const [sizes, setSizes] = useState({});           // sizes being typed, by line
   const [putAway, setPutAway] = useState(true);
-  // How the list is laid out: by aisle, or by the shop each thing is got at. Remembered on this device.
+  // How the list is laid out: by aisle, or by the store each thing is got at. Remembered on this device.
   const [by, setBy] = useState(() => { try { return window.localStorage.getItem('grocery-by') === 'shop' ? 'shop' : 'aisle'; } catch { return 'aisle'; } });
-  // By shop: whether to show only where you are (with what can be got anywhere). Remembered on this device.
+  // By store: whether to show only where you are (with what can be got anywhere). Remembered on this device.
   const [justHere, setJustHere] = useState(() => { try { return window.localStorage.getItem('grocery-just-here') === '1'; } catch { return false; } });
   const onlyHere = (on) => { setJustHere(on); try { window.localStorage.setItem('grocery-just-here', on ? '1' : '0'); } catch { /* remembered for this visit only */ } };
   const layOut = (how) => { setBy(how); try { window.localStorage.setItem('grocery-by', how); } catch { /* remembered for this visit only */ } };
@@ -55,7 +55,7 @@ export default function Groceries() {
   const price = async (g, cents, assumed = false, size = null) => {
     try { setShop((await axios.put(`/api/shopping/prices/${g.id}`, { cents, assumed, size: size || null })).data); } catch (err) { setMessage(errorMessage(err, "Couldn't save that price")); loadShop(); }
   };
-  // Into the trolley: with the price typed, or else last time's standing in. Out of it: the price goes too.
+  // Into the cart: with the price typed, or else last time's standing in. Out of it: the price goes too.
   const tick = async (g) => {
     const { data } = await axios.post(`/api/kitchen/grocery/${g.id}/tick`, { done: !g.done, put_away: putAway });
     setItems(data);
@@ -79,7 +79,7 @@ export default function Groceries() {
 
   const open = items.filter((g) => !g.done);
   const done = items.filter((g) => g.done);
-  // The heading each thing sits under. By shop, where you are now comes first and "any shop" last.
+  // The heading each thing sits under. By store, where you are now comes first and "any store" last.
   const groupOf = (g) => (by === 'shop' ? lineOf(g).likely_store || 'Any store' : g.aisle || 'Everything else');
   const here = (shop.store || '').toLowerCase();
   // By aisle at a store with an order of its own: the aisles run in that order, any not in it after, as before.
@@ -386,7 +386,7 @@ function CouponForm({ coupon, sign, lines, store, onDone }) {
 }
 
 /**
- * Scan something in the shop. Known and on the list: type its price and it goes in the trolley. Not seen
+ * Scan something in the store. Known and on the list: type its price and it goes in the cart. Not seen
  * before: say which thing on the list it is (or add it), and it's known from then on.
  */
 function ScanGrocery({ open, sign, putAway, onChanged }) {

@@ -36,13 +36,13 @@ export default function MediaList({ type = 'film', onDone }) {
     setBusy(true);
     try {
       setDone((await axios.post('/api/media/list', { text, any: true, type: form.type, otherwise: form.otherwise.trim() || null, wanted_as_wanted: form.wanted_as_wanted })).data);
-    } catch (err) { setError(errorMessage(err, "Couldn't bring it in")); } finally { setBusy(false); }
+    } catch (err) { setError(errorMessage(err, "Couldn't import it")); } finally { setBusy(false); }
   };
   if (done) {
     const parts = [`${done.added} new ${done.added === 1 ? 'title' : 'titles'}`, done.copies > 0 && `${done.copies} ${done.copies === 1 ? 'copy' : 'copies'} added`, done.wanted > 0 && `${done.wanted} wanted`, done.already > 0 && `${done.already} you already had`].filter(Boolean);
     return (
       <div className="space-y-3">
-        <p role="status" className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-700 dark:text-life-50">Brought in: {parts.join(', ')}.</p>
+        <p role="status" className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-700 dark:text-life-50">Imported: {parts.join(', ')}.</p>
         <div className="text-right"><button type="button" onClick={() => onDone(done)} className={`${buttonClass} min-h-[44px]`}>Done</button></div>
       </div>
     );
@@ -97,7 +97,7 @@ export default function MediaList({ type = 'film', onDone }) {
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex justify-end gap-2">
-        {seen ? <button type="button" disabled={busy} onClick={bring} className={`${buttonClass} min-h-[44px]`}>{busy ? 'Bringing them in…' : `Bring in ${seen.count}`}</button>
+        {seen ? <button type="button" disabled={busy} onClick={bring} className={`${buttonClass} min-h-[44px]`}>{busy ? 'Importing…' : `Import ${seen.count}`}</button>
           : <button type="submit" disabled={busy || !text.trim()} className={`${buttonClass} min-h-[44px]`}>{busy ? 'Reading…' : 'Look it over'}</button>}
       </div>
     </form>

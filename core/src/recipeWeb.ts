@@ -17,7 +17,7 @@ import { readSchemaOrg } from './recipeText.ts';
 
 export const RECIPE_WEB_SERVICE = {
   name: 'Recipes from a website',
-  sends: 'Only when you paste an address under "Bring a recipe in": Life Is fetches that one page from that site, as a browser would. The site sees a request from where Life Is runs, ' +
+  sends: 'Only when you paste an address under "Import a recipe": Life Is fetches that one page from that site, as a browser would. The site sees a request from where Life Is runs, ' +
     'and nothing about you or your recipes is sent. Nothing is fetched at any other time.',
 };
 

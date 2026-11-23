@@ -175,7 +175,7 @@ export function StickersPage() {
           </div>
         )}
       </div>
-      {/* The sheet itself: black on white whatever the page's colours, and the only thing that prints. */}
+      {/* The sheet itself: black on white whatever the page's colors, and the only thing that prints. */}
       <ul className={`sticker-sheet grid gap-3 rounded-xl bg-card print:bg-white p-3 text-black ${SIZES[size][1]}`} aria-label="The stickers that will print">
         {printing.map((s) => (
           <li key={s.id} className="flex break-inside-avoid flex-col items-center rounded-lg border border-dashed border-gray-400 p-2 text-center">

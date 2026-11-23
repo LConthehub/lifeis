@@ -159,11 +159,11 @@ export async function readServer(fetcher: Fetcher, kind: ServerKind, url: string
     // decides when to stop, not the size of a page; a server that gives no count stops at the first short page.
     const total = typeof page?.TotalRecordCount === 'number' ? page.TotalRecordCount : 0;
     if (items.length === 0 || start + PAGE >= total && (total > 0 || items.length < PAGE)) return out;
-    if (start > 500_000) throw new Problem(400, 'That library is larger than Life Is can bring in');
+    if (start > 500_000) throw new Problem(400, 'That library is larger than Life Is can import');
   }
 }
 
-/** The catalogue names worth matching titles on. A film's TMDB number is the same film wherever it's kept. */
+/** The catalog names worth matching titles on. A film's TMDB number is the same film wherever it's kept. */
 const MATCH_IDS = ['tmdb', 'imdb', 'tvdb', 'isbn', 'musicbrainzalbum', 'musicbrainzreleasegroup', 'igdb'];
 
 /**

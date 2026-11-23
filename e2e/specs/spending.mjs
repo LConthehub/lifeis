@@ -89,7 +89,7 @@ const stamp = (day) => `${String(nowDay.getMonth() + 1).padStart(2, '0')}/${Stri
 const statement = `Account summary,,\nDate,Description,Amount\n${stamp(1)},"Corner Market, Main St",12.50\n${stamp(2)},Pharmacy,7.25\n${stamp(2)},Gas Station,30.00\n${stamp(2)},Payment thank you,-100.00\n`;
 const dialogOf = () => ana.getByRole('dialog');
 const openStatement = async () => {
-  await ana.getByRole('button', { name: 'Bring in a statement' }).click(); await wait(ana, 400);
+  await ana.getByRole('button', { name: 'Import a statement' }).click(); await wait(ana, 400);
   await dialogOf().getByLabel('Or paste it here').fill(statement);
   await dialogOf().getByRole('button', { name: 'Look it over' }).click(); await wait(ana, 900);
 };
@@ -97,10 +97,10 @@ await openStatement();
 let box = (await dialogOf().innerText()).replace(/\s+/g, ' ');
 say('looking it over says how many lines, the dates and the total, without adding anything', /4 lines/.test(box) && /Spent: \$49\.75/.test(box) && /Money that came in \(1\)/.test(box) && /sent nowhere/.test(box));
 say('and that it assumed which sign is spending, with a way to switch', /took amounts with no minus sign/.test(box) && (await dialogOf().getByRole('button', { name: 'Switch it around' }).count()) === 1);
-say('the money that came in is unchecked', !(await dialogOf().getByLabel('Bring in Payment thank you').isChecked()));
+say('the money that came in is unchecked', !(await dialogOf().getByLabel('Import Payment thank you').isChecked()));
 await dialogOf().getByLabel('Category for Pharmacy').selectOption({ label: 'House (shared)' });
-await dialogOf().getByLabel('Bring in Gas Station').uncheck();
-say('the button counts what will be brought in', (await dialogOf().getByRole('button', { name: 'Bring in 2', exact: true }).count()) === 1);
+await dialogOf().getByLabel('Import Gas Station').uncheck();
+say('the button counts what will be brought in', (await dialogOf().getByRole('button', { name: 'Import 2', exact: true }).count()) === 1);
 await ana.setViewportSize({ width: 1000, height: 900 }); await wait(ana, 400);
 await ana.screenshot({ path: shots + '/statement.png' });
 await ana.setViewportSize({ width: 375, height: 800 }); await wait(ana, 500);
@@ -113,8 +113,8 @@ say('at 375px nothing scrolls sideways' + (fit.small.length ? ' (short controls:
 say('and every control in it is at least 44px tall', fit.small.filter((s) => !/^BUTTON ×|Close/.test(s)).length === 0);
 await ana.screenshot({ path: shots + '/statement-phone.png' });
 await ana.setViewportSize({ width: 420, height: 900 }); await wait(ana, 300);
-await dialogOf().getByRole('button', { name: 'Bring in 2', exact: true }).click(); await wait(ana, 1000);
-say('it says what was brought in', /Brought in 2 lines/.test((await dialogOf().innerText()).replace(/\s+/g, ' ')));
+await dialogOf().getByRole('button', { name: 'Import 2', exact: true }).click(); await wait(ana, 1000);
+say('it says what was imported', /Imported 2 lines/.test((await dialogOf().innerText()).replace(/\s+/g, ' ')));
 await dialogOf().getByRole('button', { name: 'Done' }).click(); await wait(ana, 1200);
 t = (await ana.locator('main').innerText()).replace(/\s+/g, ' ');
 const after = (await ana.locator('[data-month-totals]').innerText()).replace(/\s+/g, ' ');
@@ -122,9 +122,9 @@ say('the month now includes them, the unchecked one left out: ' + after, /Spent 
 say('and the shared House category took the one that was put in it', /House \$59\.25 of \$500\.00/.test(t));
 await openStatement();
 box = (await dialogOf().innerText()).replace(/\s+/g, ' ');
-say('looking at the same statement again shows the two as already there', /Already in Life Is \(2\)/.test(box) && /2 already in Life Is/.test(box) && (await dialogOf().getByLabel('Bring in Corner Market, Main St').count()) === 0);
-await dialogOf().getByLabel('Bring in Gas Station').uncheck();
-say('so there is nothing new to bring in', await dialogOf().getByRole('button', { name: 'Bring in 0', exact: true }).isDisabled());
+say('looking at the same statement again shows the two as already there', /Already in Life Is \(2\)/.test(box) && /2 already in Life Is/.test(box) && (await dialogOf().getByLabel('Import Corner Market, Main St').count()) === 0);
+await dialogOf().getByLabel('Import Gas Station').uncheck();
+say('so there is nothing new to bring in', await dialogOf().getByRole('button', { name: 'Import 0', exact: true }).isDisabled());
 const replay = await ana.evaluate(async (text) => (await fetch('/api/money/statement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, keep: [0, 1] }) })).json(), statement);
 say('and asking for them again adds nothing: ' + JSON.stringify(replay), replay.added === 0 && replay.already === 2);
 await dialogOf().getByRole('button', { name: 'Close' }).click(); await wait(ana, 600);

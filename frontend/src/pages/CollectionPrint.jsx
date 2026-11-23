@@ -194,7 +194,7 @@ export default function CollectionPrint() {
         </section>
       </div>
 
-      {/* The sheet itself: black on white whatever the page's colours. */}
+      {/* The sheet itself: black on white whatever the page's colors. */}
       <div className="list-sheet space-y-4 rounded-xl bg-card print:bg-white p-4 text-black sm:p-6" aria-label="The list">
         <header>
           <h2 className="text-lg font-bold">Collection</h2>

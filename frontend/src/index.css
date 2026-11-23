@@ -40,7 +40,7 @@ h1, h2, .font-display { font-family: theme('fontFamily.display'); font-variation
 /* Ticks and dots take the gold in the dark, where the brown would vanish. */
 :where(.dark) .accent-life-600 { accent-color: #eead3e; }
 
-/* Printing: only the sheet of stickers, black on white, with nothing of the screen's colours around it. */
+/* Printing: only the sheet of stickers, black on white, with nothing of the screen's colors around it. */
 @media print {
   html, body { background: #fff !important; }
   body::before, body::after { display: none !important; }
@@ -49,5 +49,5 @@ h1, h2, .font-display { font-family: theme('fontFamily.display'); font-variation
   .sticker-sheet, .report-sheet { padding: 0 !important; }
 }
 
-/* The one touch of the artwork's plum: the colour of selected words. */
+/* The one touch of the artwork's plum: the color of selected words. */
 ::selection { background: theme('colors.plum.500'); color: theme('colors.cream'); }

@@ -22,7 +22,7 @@ export function scheduleText(job) {
   return parts.length ? parts.join(', or ') + (parts.length > 1 ? ', whichever comes first' : '') : 'when it needs it';
 }
 
-/** When it's due, in words, and how to colour it. */
+/** When it's due, in words, and how to color it. */
 export function dueText(job) {
   const d = job.due;
   if (d.needs_date) return { text: 'set the date', tone: 'bg-honey-100 text-honey-700' };

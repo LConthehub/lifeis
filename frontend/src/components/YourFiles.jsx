@@ -103,7 +103,7 @@ export function CopyNotice({ hasBackup }) {
         <div className="mt-2 rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700" data-copy-stale>
           <p>It's been a while. A copy kept somewhere else is the only way back if this phone is lost.</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <button type="button" onClick={download} disabled={busy} className={`${buttonClass} ${touch}`}>{busy ? 'Making the zip…' : 'Download everything'}</button>
+            <button type="button" onClick={download} disabled={busy} className={`${buttonClass} ${touch}`}>{busy ? 'Making the zip…' : 'Export everything'}</button>
             {hasBackup && <button type="button" onClick={backup} className={`${quietButtonClass} ${touch}`}>Make a backup</button>}
           </div>
         </div>
@@ -124,11 +124,11 @@ export function DownloadEverything() {
 
   return (
     <section className={cardClass}>
-      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Download everything</h2>
+      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Export everything</h2>
       <p className="text-sm text-gray-600 dark:text-life-100">One zip of open files you can read anywhere: a spreadsheet for each kind of record (recipes, things, upkeep, pets, spending and the rest), your pictures and papers in folders, and your recipes in the format other recipe apps read. It holds only your own, never a password or a key, and goes nowhere but to your own device.</p>
       {said && <p className="mt-2 break-words rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-800 dark:text-life-50" role="status">{said}</p>}
       {error && <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>}
-      <div className="mt-3"><button type="button" onClick={download} disabled={busy} className={`${buttonClass} ${touch}`}>{busy ? 'Making the zip…' : 'Download everything'}</button></div>
+      <div className="mt-3"><button type="button" onClick={download} disabled={busy} className={`${buttonClass} ${touch}`}>{busy ? 'Making the zip…' : 'Export'}</button></div>
     </section>
   );
 }
@@ -137,7 +137,7 @@ export function DownloadEverything() {
 async function openDownload(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let entries;
-  try { entries = zipEntries(bytes).filter((e) => !e.name.endsWith('/') && !e.name.startsWith('__MACOSX/')); } catch { throw new Error("That isn't a zip file. Choose the zip you got from “Download everything”."); }
+  try { entries = zipEntries(bytes).filter((e) => !e.name.endsWith('/') && !e.name.startsWith('__MACOSX/')); } catch { throw new Error("That isn't a zip file. Choose the zip you got from “Export everything”."); }
   const files = {};
   let size = 0;
   const found = new Map();
@@ -152,8 +152,8 @@ async function openDownload(file) {
       files[entry.name] = text;
     }
   }
-  if (Object.keys(files).length === 0) throw new Error("That zip doesn't hold a download from Life Is. Choose the zip you got from “Download everything”.");
-  if (size > MOST_TEXT) throw new Error("That download's spreadsheets are too large to bring in at once. Bring in a smaller one.");
+  if (Object.keys(files).length === 0) throw new Error("That zip doesn't hold a download from Life Is. Choose the zip you got from “Export everything”.");
+  if (size > MOST_TEXT) throw new Error("That download's spreadsheets are too large to import at once. Import a smaller one.");
   return { files, find: (name) => found.get(name) ?? found.get(name.replace(/^[^/]*\//, '')) };
 }
 
@@ -223,12 +223,12 @@ export function BringInFromDownload() {
       const { data } = await axios.post('/api/export/bring-in', { files: opened.files, kinds: chosen });
       let pictures = null;
       if (data.pending.length) {
-        setProgress(`Bringing in ${plural(data.pending.length, 'picture or paper')}…`);
-        pictures = await sendPictures(data.pending, opened.find, (n) => setProgress(`Bringing in pictures and papers: ${n} of ${data.pending.length}…`));
+        setProgress(`Importing ${plural(data.pending.length, 'picture or paper')}…`);
+        pictures = await sendPictures(data.pending, opened.find, (n) => setProgress(`Importing pictures and papers: ${n} of ${data.pending.length}…`));
       }
       setReport({ kinds: data.kinds, pictures, wanted: data.pending.length });
       setLooked(null); setOpened(null);
-    } catch (err) { setError(err?.response ? whyNot(err, "Couldn't bring that in") : err.message || "Couldn't bring that in"); }
+    } catch (err) { setError(err?.response ? whyNot(err, "Couldn't import that") : err.message || "Couldn't import that"); }
     setProgress('');
     setBusy(false);
   };
@@ -236,8 +236,8 @@ export function BringInFromDownload() {
 
   return (
     <section className={cardClass}>
-      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Bring in from a download</h2>
-      <p className="text-sm text-gray-600 dark:text-life-100">Choose a zip made by “Download everything” (from this Life Is or another) and pick which kinds to bring in. Nothing you have is ever overwritten or deleted: a record that matches one you already have is left as it is, and only what is new is added. Bringing in the same file twice adds nothing the second time.</p>
+      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Import from a download</h2>
+      <p className="text-sm text-gray-600 dark:text-life-100">Choose a zip made by “Export everything” (from this Life Is or another) and pick which kinds to import. Nothing you have is ever overwritten or deleted: a record that matches one you already have is left as it is, and only what is new is added. Importing the same file twice adds nothing the second time.</p>
       {error && <p className="mt-2 break-words text-sm text-red-600" role="alert">{error}</p>}
 
       {!looked && !report && (
@@ -267,34 +267,34 @@ export function BringInFromDownload() {
               </li>
             ))}
           </ul>
-          {looked.kinds.every((k) => !k.importable || k.found === 0) && <p className="text-sm text-gray-600 dark:text-life-100">There is nothing in this download that can be brought in.</p>}
+          {looked.kinds.every((k) => !k.importable || k.found === 0) && <p className="text-sm text-gray-600 dark:text-life-100">There is nothing in this download that can be imported.</p>}
           {looked.kinds.some((k) => !k.importable && k.found > 0) && (
-            <p className="break-words text-sm text-gray-500 dark:text-life-200">Also in the download, for you to read and keep, but not yet able to be brought back in: {looked.kinds.filter((k) => !k.importable && k.found > 0).map((k) => `${k.label} (${k.found})`).join('; ')}.</p>
+            <p className="break-words text-sm text-gray-500 dark:text-life-200">Also in the download, for you to read and keep, but not yet able to be imported: {looked.kinds.filter((k) => !k.importable && k.found > 0).map((k) => `${k.label} (${k.found})`).join('; ')}.</p>
           )}
           <p className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-800 dark:text-life-50">The counts are what choosing everything would do. Anything already here is left exactly as it is.</p>
           {progress && <p className="text-sm text-gray-600 dark:text-life-100" role="status">{progress}</p>}
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" onClick={again} disabled={busy} className={`${quietButtonClass} ${touch}`}>Cancel</button>
-            <button type="button" onClick={bring} disabled={busy || chosen.length === 0} className={`${buttonClass} ${touch}`}>{busy ? 'Bringing it in…' : chosen.length ? `Bring in ${plural(chosen.length, 'kind')}` : 'Choose what to bring in'}</button>
+            <button type="button" onClick={bring} disabled={busy || chosen.length === 0} className={`${buttonClass} ${touch}`}>{busy ? 'Importing…' : chosen.length ? `Import ${plural(chosen.length, 'kind')}` : 'Choose what to import'}</button>
           </div>
         </div>
       )}
 
       {report && (
-        <div className="mt-3 space-y-2" role="status" aria-label="What was brought in">
+        <div className="mt-3 space-y-2" role="status" aria-label="What was imported">
           <ul className="space-y-2">
             {report.kinds.map((k) => (
               <li key={k.key} className="break-words text-sm" data-kind={k.key}>
                 <span className="font-medium text-gray-800 dark:text-life-50">{k.label}: </span>
                 {k.ok
                   ? <span className="text-gray-700 dark:text-life-100">{k.fresh} added, {k.already} already here{k.unlinked > 0 ? `, ${plural(k.unlinked, 'came', 'came')} without a link that could not be rebuilt` : ''}{k.skipped.length ? `. Not read: ${k.skipped.join(' ')}` : ''}{k.note ? `. ${k.note}` : ''}</span>
-                  : <span className="text-red-600">did not come in. {k.problem}</span>}
+                  : <span className="text-red-600">was not imported. {k.problem}</span>}
               </li>
             ))}
           </ul>
           {report.pictures && <p className="text-sm text-gray-700 dark:text-life-100">Pictures and papers: {report.pictures.kept} kept{report.pictures.left ? `, ${report.pictures.left} not kept (too large, not a picture, or the record already had one)` : ''}.</p>}
           {report.kinds.every((k) => k.ok && k.fresh === 0) && <p className="text-sm text-gray-700 dark:text-life-100">Nothing new: everything in it was already here.</p>}
-          <button type="button" onClick={again} className={`${quietButtonClass} ${touch}`}>Bring in another file</button>
+          <button type="button" onClick={again} className={`${quietButtonClass} ${touch}`}>Import another file</button>
         </div>
       )}
     </section>
@@ -305,7 +305,7 @@ export function BringInFromDownload() {
 export default function YourFiles({ hasBackup }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-gray-600 dark:text-life-100">{hasBackup ? 'A backup restores a whole Life Is exactly as it was, and only Life Is can read it. ' : ''}A download is open files you can read anywhere, with every picture and paper, and you bring it back in part by part.</p>
+      <p className="text-sm text-gray-600 dark:text-life-100">{hasBackup ? 'A backup restores a whole Life Is exactly as it was, and only Life Is can read it. ' : ''}A download is open files you can read anywhere, with every picture and paper, and you import it back part by part.</p>
       <DownloadEverything />
       <BringInFromDownload />
     </div>
