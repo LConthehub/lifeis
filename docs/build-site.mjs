@@ -128,24 +128,71 @@ ${body}
 const policy = readFileSync(path.join(here, 'privacy.md'), 'utf8');
 writeFileSync(path.join(out, 'privacy.html'), page('Life Is privacy policy', `<nav><a href="./">Life Is</a></nav>\n${html(policy)}`));
 // The front page has a layout of its own: wider, with pictures of the demo and a way into it.
+// Its words are in docs/home.md; the layout and styles are here.
 const DEMO = 'https://demo.lifeis.living';
+
+/** Reads docs/home.md: "## name" starts a part; "key: value" lines, "- " cards (split by " | ") with "  - " lines under them. */
+function readHome() {
+  const text = readFileSync(path.join(here, 'home.md'), 'utf8').replace(/\r\n/g, '\n').replace(/<!--[\s\S]*?-->/g, '');
+  const parts = {};
+  let part = null; let last = null;
+  for (const raw of text.split('\n')) {
+    const line = raw.trimEnd();
+    const head = /^##\s+(.+)$/.exec(line);
+    if (head) { part = { keys: {}, cards: [] }; parts[head[1].trim().toLowerCase()] = part; last = null; continue; }
+    if (!part || !line.trim()) continue;
+    const sub = /^\s+-\s+(.+)$/.exec(line);
+    const card = /^-\s+(.+)$/.exec(line);
+    const key = /^([a-z][a-z0-9 ]*?):\s*(.*)$/.exec(line);
+    if (sub && part.cards.length) part.cards[part.cards.length - 1].lines.push(sub[1].trim());
+    else if (card) { part.cards.push({ cells: card[1].split(' | ').map((c) => c.trim()), lines: [] }); last = null; }
+    else if (key) { part.keys[key[1].trim()] = key[2].trim(); last = key[1].trim(); }
+    else if (last) part.keys[last] += ` ${line.trim()}`;
+  }
+  return parts;
+}
+const HOME = readHome();
+/** One part of home.md, or a plain stop if it is missing. */
+const homePart = (name) => { if (!HOME[name]) { console.error(`docs/home.md is missing the part "## ${name}".`); process.exit(1); } return HOME[name]; };
+/** One line of a part, or a plain stop if it is missing or empty. */
+const say = (name, key) => { const v = homePart(name).keys[key]; if (!v) { console.error(`docs/home.md: the part "## ${name}" is missing "${key}:".`); process.exit(1); } return v; };
+/** The cards of a part, each with the number of cells it needs. */
+const cardsOf = (name, cells) => {
+  const list = homePart(name).cards;
+  if (!list.length) { console.error(`docs/home.md: the part "## ${name}" has no "- " lines.`); process.exit(1); }
+  for (const c of list) if (c.cells.length !== cells) { console.error(`docs/home.md: in "## ${name}", this line needs ${cells} parts split by " | ": ${c.cells.join(' | ')}`); process.exit(1); }
+  return list;
+};
+// Words from home.md: escaped, with **bold** and [links](address).
+const words = (text) => safe(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
 // One card for each section of the app, in the app's order and by the app's names (frontend/src/App.jsx).
 // Each name finishes the sentence "Life is…".
-const FEATURES = [
-  ['🍳', 'tasty', 'Food. Recipes kept exactly as you wrote them, the meals for the week, a grocery list that knows your pantry, and what things cost at each store.'],
-  ['🏠', 'organized', 'Home. Everything you own, room by room, with its receipt, manual and warranty. Upkeep that comes due: the furnace filter, the oil change, the bills, the chores. Care for your pets. A House Manual to hand a sitter. And one calendar for your dates, the week\'s meals and what is due.'],
-  ['💵', 'budgeted', 'Money. A plan for the month by category, private unless you share it. Bills you pay go straight in.'],
-  ['🧵', 'doing', 'Projects, with what they use, what they cost and the time on them. Plans for a trip or a party, with their food, their packing and their photos.'],
-  ['📚', 'entertaining', 'Media. Books, films, music and games on every format, on the shelf or on your own server. Who has borrowed what, and what you watched or read and when.'],
-];
-const SHOTS = [['demo-home.png', 'The front page: today, tomorrow and what needs you'], ['demo-upkeep.png', 'Upkeep: jobs, bills, renewals and chores, by how soon they are due'],
-  ['demo-inventory.png', 'The home inventory, room by room'], ['demo-pets.png', 'Pets, with what is next for each']];
+const FEATURES = cardsOf('what', 3).map((c) => c.cells);
+const SHOTS = cardsOf('pictures', 2).map((c) => c.cells);
 mkdirSync(path.join(out, 'img'), { recursive: true });
 const shots = SHOTS.filter(([file]) => {
   const from = path.join(here, '..', 'e2e', 'shots', file);
   if (existsSync(from)) copyFileSync(from, path.join(out, 'img', file));
   return existsSync(path.join(out, 'img', file));
 });
+const YOURS = cardsOf('yours', 2).map((c) => c.cells);
+const PRICES = cardsOf('price', 2);
+
+// The Android testers part. A link that is still a placeholder (not an https address) is never published:
+// the first button points to this part of the page and says the link is coming, the second shows its "soon" words.
+const PLACEHOLDER = (url) => !/^https:\/\/\S+$/.test(url);
+const STEP1 = say('android', 'step 1 link');
+const STEP2 = say('android', 'step 2 link');
+if (PLACEHOLDER(STEP1) && STEP1 !== 'TESTER_GROUP_URL') console.warn(`docs/home.md: "step 1 link" is not an https address, so the page shows "link coming" instead: ${STEP1}`);
+if (PLACEHOLDER(STEP2) && STEP2 !== 'PLAY_OPTIN_URL') console.warn(`docs/home.md: "step 2 link" is not an https address, so the page shows "link coming" instead: ${STEP2}`);
+const androidSection = `<h2 id="android-testers">${words(say('android', 'heading'))}</h2>
+<p class="lede">${words(say('android', 'intro'))}</p>
+<div class="grid">
+  <div class="card"><h3>${words(say('android', 'step 1 title'))}</h3><p>${words(say('android', 'step 1 text'))}</p>
+    <p class="act"><a class="button" href="${PLACEHOLDER(STEP1) ? '#android-testers' : safe(STEP1).replace(/"/g, '&quot;')}">${words(say('android', 'step 1 button'))}</a></p>${PLACEHOLDER(STEP1) ? `\n    <p class="soon">${words(say('android', 'step 1 soon'))}</p>` : ''}</div>
+  <div class="card"><h3>${words(say('android', 'step 2 title'))}</h3><p>${words(say('android', 'step 2 text'))}</p>
+    ${PLACEHOLDER(STEP2) ? `<p class="soon">${words(say('android', 'step 2 soon'))}</p>` : `<p class="act"><a class="button" href="${safe(STEP2).replace(/"/g, '&quot;')}">${words(say('android', 'step 2 button'))}</a></p>`}</div>
+</div>`;
 
 writeFileSync(path.join(out, 'index.html'), `<!doctype html>
 <html lang="en">
@@ -153,8 +200,8 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta name="description" content="Life Is: a home organizer that keeps your household on your own device. Recipes, things, upkeep, pets, records and more. No account, no ads, no subscription.">
-<title>Life Is: Home Organizer</title>
+<meta name="description" content="${safe(say('page', 'description'))}">
+<title>${safe(say('page', 'title'))}</title>
 <link rel="icon" href="icon.png" media="(prefers-color-scheme: light)">
 <link rel="icon" href="icon-dark.png" media="(prefers-color-scheme: dark)">
 <style>
@@ -187,6 +234,8 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 1.25rem; padding: 1.1rem 1.2rem; }
   .card h3 { margin: 0 0 .3rem; font-size: 1.05rem; } .card p { margin: 0; color: var(--soft); font-size: .95rem; }
   .card .icon { font-size: 1.5rem; } .card h3 .lifeis { font-weight: 400; color: var(--soft); }
+  .card .act { margin: .9rem 0 0; } .card .act .button { background: var(--btn); color: var(--btn-ink); min-height: 44px; margin: 0; }
+  .card .soon { margin-top: .6rem; font-style: italic; }
   .shots { display: grid; gap: 1.2rem; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
   figure { margin: 0; } figure img { width: 100%; height: auto; border-radius: .8rem; border: 1px solid var(--line); display: block; } figcaption { font-size: .9rem; color: var(--soft); margin-top: .4rem; }
   .price { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
@@ -201,54 +250,52 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
 <header class="hero">
   <div class="bar">
     <strong><img src="icon.png" alt=""> Life Is</strong>
-    <a href="#what">What it does</a>
-    <a href="#yours">Your data</a>
-    <a href="#price">Price</a>
-    <a href="docs/">Guides</a>
-    <a class="pill" href="${DEMO}">Try the demo</a>
+    <a href="#what">${words(say('menu', 'what'))}</a>
+    <a href="#yours">${words(say('menu', 'yours'))}</a>
+    <a href="#price">${words(say('menu', 'price'))}</a>
+    <a href="docs/">${words(say('menu', 'guides'))}</a>
+    <a class="pill" href="${DEMO}">${words(say('menu', 'demo'))}</a>
   </div>
   <div class="wrap" style="padding:0">
-    <h1>Your whole home, in one place that is yours.</h1>
-    <p>Life Is links what you own to when and how you use it: meals, things, upkeep, pets, records and plans. It lives on your own device. No account, no ads, no subscription.</p>
-    <a class="button" href="${DEMO}">Try the demo</a>
-    <a class="button quiet" href="#what">See what it does</a>
+    <h1>${words(say('hero', 'heading'))}</h1>
+    <p>${words(say('hero', 'text'))}</p>
+    <a class="button" href="${DEMO}">${words(say('hero', 'button'))}</a>
+    <a class="button quiet" href="#what">${words(say('hero', 'quiet button'))}</a>
   </div>
   <div class="bands" aria-hidden="true"></div>
 </header>
 <div class="wrap">
 ${shots[0] ? `<img class="shot" src="img/${shots[0][0]}" alt="${safe(shots[0][1])}" width="1280" height="900">` : ''}
 
-<h2 id="what">What it does</h2>
-<p class="lede">Six parts, and each finishes the sentence "Life is…". Use one, or all of them. They know about each other: a tool you scan into the garage is the same tool a job needs and a project uses.</p>
+<h2 id="what">${words(say('what', 'heading'))}</h2>
+<p class="lede">${words(say('what', 'intro'))}</p>
 <div class="grid">
 ${FEATURES.map(([icon, title, text]) => `  <div class="card"><div class="icon" aria-hidden="true">${icon}</div><h3><span class="lifeis">Life is</span> ${safe(title)}.</h3><p>${safe(text)}</p></div>`).join('\n')}
 </div>
 
-<h2>One search, and reminders that reach you</h2>
-<p class="lede">Type "kettle" and Life Is says which box it's in. Type a serial number, a recipe, a pet's name. Each morning it tells you what needs you today, the ways you choose, and only on days there is something to say.</p>
+<h2>${words(say('search', 'heading'))}</h2>
+<p class="lede">${words(say('search', 'intro'))}</p>
 ${shots.length > 1 ? `<div class="shots">\n${shots.slice(1).map(([file, caption]) => `  <figure><img src="img/${file}" alt="${safe(caption)}" loading="lazy" width="1280" height="900"><figcaption>${safe(caption)}</figcaption></figure>`).join('\n')}\n</div>` : ''}
 
-<h2 id="yours">Your data stays yours</h2>
-<p class="lede">Life Is is built so that nobody else holds your household.</p>
+<h2 id="yours">${words(say('yours', 'heading'))}</h2>
+<p class="lede">${words(say('yours', 'intro'))}</p>
 <div class="grid">
-  <div class="card"><h3>On your device, encrypted</h3><p>Everything is kept in an encrypted database on your phone, or on a computer you run yourself. There is no Life Is account and no Life Is cloud.</p></div>
-  <div class="card"><h3>Nothing leaves unless you say</h3><p>Looking up a barcode, the weather, email: each is off until you turn it on, and each says exactly what it sends before you do.</p></div>
-  <div class="card"><h3>No ads, no tracking</h3><p>This website loads nothing from anywhere else and sets no cookies. Neither does the app. Read the <a href="privacy">privacy policy</a>: it's short.</p></div>
+${YOURS.map(([title, text]) => `  <div class="card"><h3>${words(title)}</h3><p>${words(text)}</p></div>`).join('\n')}
 </div>
 
-<h2 id="price">One fair price</h2>
-<p class="lede">No subscription, and nothing you entered is ever held hostage.</p>
+<h2 id="price">${words(say('price', 'heading'))}</h2>
+<p class="lede">${words(say('price', 'intro'))}</p>
 <div class="price">
-  <div class="card"><h3>The phone app</h3><b>Free to download</b>
-    <ul class="plain"><li>The kitchen, backups, and connecting to your own server: free for good</li><li>Everything else: free for 7 days, then a single payment of $14.99</li><li>After the trial, nothing is hidden or deleted</li></ul></div>
-  <div class="card"><h3>On your own computer</h3><b>Free</b>
-    <ul class="plain"><li>Run Life Is at home and open it from any browser</li><li>Every part included</li><li>Share it with the people you live with, each with their own sign-in</li></ul></div>
+${PRICES.map((c) => `  <div class="card"><h3>${words(c.cells[0])}</h3><b>${words(c.cells[1])}</b>\n    <ul class="plain">${c.lines.map((l) => `<li>${words(l)}</li>`).join('')}</ul></div>`).join('\n')}
 </div>
-<p class="center"><a class="button" href="${DEMO}">Try the demo</a><br><span style="color:var(--soft);font-size:.95rem">A made-up household, reset every night. No sign-up.</span></p>
-<p class="lede" style="text-align:center;margin:0 auto">The app is on its way to the app stores. <a href="docs/">Read the guides</a> to see how it all works.</p>
+
+${androidSection}
+
+<p class="center"><a class="button" href="${DEMO}">${words(say('demo', 'button'))}</a><br><span style="color:var(--soft);font-size:.95rem">${words(say('demo', 'note'))}</span></p>
+<p class="lede" style="text-align:center;margin:0 auto">${words(say('closing', 'text'))}</p>
 </div>
 <footer>
-  <a href="docs/">Guides</a> · <a href="privacy">Privacy policy</a> · Questions: <a href="mailto:hello@lifeis.living">hello@lifeis.living</a>
+  <a href="docs/">${words(say('footer', 'guides'))}</a> · <a href="privacy">${words(say('footer', 'privacy'))}</a> · ${words(say('footer', 'questions'))} <a href="mailto:${safe(say('footer', 'email'))}">${safe(say('footer', 'email'))}</a>
 </footer>
 </body>
 </html>
