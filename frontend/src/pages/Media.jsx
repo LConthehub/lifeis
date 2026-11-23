@@ -8,7 +8,7 @@ import BulkScan from '../components/BulkScan';
 import CollectionSummary from '../components/CollectionSummary';
 import { SORTS, centsFromDollars, decadeOf, dollarsField, dollarsText, labelKey, sameTitles, sortTitles } from '../components/collectionTools';
 import { bookServerName } from '../components/BookServers';
-import { inApp } from '../where';
+import { onDevice } from '../where';
 import { HistoryList } from './Thing';
 import { stickerCode } from './Places';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
@@ -322,7 +322,7 @@ function ScanToFind({ onAdd }) {
         )}
         {found.hint && <p className="text-xs text-gray-500 dark:text-life-300">{found.hint}</p>}
         <div className="flex flex-wrap items-center justify-end gap-2">{again}
-          {found.tmdb && !inApp() && <button type="button" onClick={() => onAdd({ ...found.start, findOnTmdb: true })} className={quietButtonClass}>Find it on TMDB</button>}
+          {found.tmdb && !onDevice() && <button type="button" onClick={() => onAdd({ ...found.start, findOnTmdb: true })} className={quietButtonClass}>Find it on TMDB</button>}
           <button type="button" onClick={() => onAdd(found.start ?? { barcode: found.code })} className={buttonClass}>{found.start ? 'Add it' : 'Add it, keeping the barcode'}</button>
         </div>
       </div>
@@ -480,9 +480,9 @@ function TitleForm({ title, withCopy = false, known = [], onDone }) {
           <button type="button" onClick={() => setDifferent(askAbout)} className="min-h-[44px] text-left underline">It's a different one</button>
         </div>
       )}
-      {/* TMDB's terms restrict apps people pay for, so film lookups are offered only where Life Is is self-hosted,
-          not in the phone app, until TMDB has said a paid app may use them with the person's own key. */}
-      {!inApp() && <FilmFinder form={form} setForm={setForm} hasCover={Boolean(form.cover)} autoSearch={Boolean(title.findOnTmdb)} onPicked={setTmdb} />}
+      {/* TMDB's terms restrict apps people pay for, so film lookups are offered only on a Life Is the person hosts
+          themselves: in a browser, or in the phone app signed in to it. Never in the phone app keeping everything on the phone. */}
+      {!onDevice() && <FilmFinder form={form} setForm={setForm} hasCover={Boolean(form.cover)} autoSearch={Boolean(title.findOnTmdb)} onPicked={setTmdb} />}
       <div className="grid grid-cols-3 gap-3">
         <div className="col-span-2"><Field label={CREATOR[form.type]}><input value={form.creator} onChange={set('creator')} className={inputClass} /></Field></div>
         <Field label="Year"><input type="number" min="0" max="9999" step="1" value={form.year} onChange={set('year')} className={inputClass} /></Field>

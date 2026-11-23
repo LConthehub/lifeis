@@ -772,13 +772,13 @@ function BookLookupService() {
       {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p>
         : <button type="button" onClick={() => turnTitles(!l.titles)} className={`${quietButtonClass} mt-2`}>{l.titles ? 'Turn off' : 'Turn on'}</button>}
     </div>
-    {!inApp() && <FilmLookupService l={l} setL={setL} />}
+    {!onDevice() && <FilmLookupService l={l} setL={setL} />}
     </>
   );
 }
 
-// TMDB's terms restrict apps people pay for, so film lookups are offered only where Life Is is self-hosted,
-// not in the phone app, until TMDB has said a paid app may use them with the person's own key.
+// TMDB's terms restrict apps people pay for, so film lookups are offered only on a Life Is the person hosts
+// themselves: in a browser, or in the phone app signed in to it. Never in the phone app keeping everything on the phone.
 /** TMDB, for the details and poster of a film or show: it needs a key of your own, kept locked, and asks for a notice. */
 function FilmLookupService({ l, setL }) {
   const s = l.film_service;
