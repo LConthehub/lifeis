@@ -74,7 +74,7 @@ Search finds a thing by its serial or model number, which is what a repair shop 
 
 On the Things page, **Home inventory** lists everything room by room, with what each is worth, its serial number, and whether there is a photo and a receipt to show for it. It says how many things still have no value, so you know what is left to do.
 
-**Print it, or save it as a PDF, and keep a copy somewhere other than home.** An inventory that burns with the house helps nobody.
+**Press Print or save as PDF, and keep a copy somewhere other than home.** An inventory that burns with the house helps nobody.
 
 ## Pets
 
@@ -93,6 +93,6 @@ The House Manual is what someone else needs to know to look after your home: a s
 
 An entry can say where a thing is, using the places you already keep, and carry a phone number to tap. On a phone, under **Who to call**, tap **Choose from your contacts** to fill in a name and number. Only the one contact you tap is read, and Life Is asks for no access to your address book. Your pets appear by themselves, with their food and vet.
 
-**Print it** and put it in a drawer. Or **share it by a link**, for a sitter. The link opens the manual on their phone with no sign-in. You choose how long it works: a day, a week, or until you turn it off. Making a new link stops the old one.
+Press **Print** and put it in a drawer. Or use **Share it by a link**, for a sitter. The link opens the manual on their phone with no sign-in. You choose how long it works: a day, a week, or until you turn it off. Making a new link stops the old one.
 
 Mark an entry **private**, such as an alarm code, and it is never on the shared link. The shared page is plain: nothing on it can be changed, and it shows nothing else of your Life Is.

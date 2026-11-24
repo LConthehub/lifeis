@@ -15,19 +15,23 @@ A stolen disk shows only scrambled data.
 
 ## What can leave, and when
 
-Life Is works without the internet. A few things reach outside, and each one is **off until you turn it on** and **says exactly what it sends** before you do:
+Life Is works without the internet. A few things reach outside, and each one is **off until you turn it on** (importing a recipe has no switch: it acts only when you paste an address) and **says exactly what it sends**:
 
 | What | Sends |
 |---|---|
 | Barcode look-ups | The number under the barcode, and nothing else |
-| The weather | The town you chose |
-| A recipe from a website | A request for that page |
-| Email | Only between Life Is and your own mail provider |
-| Reminders | What you choose, the ways you choose. See [Upkeep](upkeep.html#how-you-are-told) |
-| An AI assistant | Only when you ask it a question. A model you run yourself, or a cloud one with a plain warning |
+| The weather | The town you type, then the place you pick, rounded to about half a mile |
+| A recipe from a website | A request for that one page |
+| Car recall checks | The make, model and year of each car, to the U.S. traffic safety agency (NHTSA) |
+| An AI assistant | Your question, only when you ask it, to the model at the address you give |
+| Reminders by ntfy, browser push or email (on a Life Is you run) | Each morning's reminder, to the ntfy server you choose, your browser maker's push service, or your own mail account. See [Upkeep](upkeep.html#how-you-are-told) |
+| Your own mail account (on a Life Is you run) | Only between Life Is and your mail provider |
+| Calendar links you follow (on a Life Is you run) | A request for the calendar, about once an hour |
+| Photos from Immich, and media and book servers (on a Life Is you run) | Only to the servers you name, with the key you give. Life Is only reads, and changes nothing there |
+| Film and show look-ups from TMDB (on a Life Is you run) | The title you type, with your own key |
 | Reading your bank | Only on a Life Is you run, and only when you press Read now. Your setup token once, then a read-only request for the accounts you chose. Nothing of yours is sent. See [Reading your bank](bank-reading.html) |
 
-All of them are listed in one place: **Settings › Connections**.
+All of them are listed in one place: **Settings › Connections**. The phone app can also show its own morning reminders, made on the phone, with nothing sent. The [privacy policy](../privacy) has the full list.
 
 ## Keeping a copy
 

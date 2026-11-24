@@ -101,6 +101,8 @@ Adults (18 and over). Not designed for children.
 - [ ] Run the app on a real Android device and fix what breaks
 - [ ] Build the purchase step and test it with Google's test accounts
 - [ ] Camera permission for the barcode scanner, checked on a device
-- [ ] Replace the placeholder icon and splash screen in the Android project
+- [x] Replace the placeholder icon and splash screen in the Android project
+- [ ] Add the camera permission to the Android app (the manifest has only internet and notifications, so the barcode scanner cannot open the camera)
+- [x] Privacy policy lists every outside connection (done on branch docs-cleanup, 24 Nov)
 - [ ] Create `hello@lifeis.living` in iCloud (custom email domain for lifeis.living) and send it a test message
 - [ ] Fill in the publisher name in the privacy policy

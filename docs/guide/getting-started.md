@@ -12,7 +12,7 @@ To see it first, try the [demo](https://demo.lifeis.living): a made-up household
 
 1. **Make your account.** On a computer, make the first account on that computer itself, at `http://localhost:8020`. That first account is the admin. Use a password of 12 or more characters and keep it somewhere safe: nobody can reset it for you.
 2. **Say what Life Is should look after.** Check what you want: cooking, the things you keep, projects, films and books, money. The rest stays out of your way. You can change this later in Settings.
-3. **Look at the front page.** It shows today and the next two days, and what needs you. Hide any card with **Choose what shows**.
+3. **Look at the front page.** It shows the next three days, starting today, and what needs you. Hide any card with **Choose what shows**.
 
 ## Three things worth doing on day one
 
@@ -26,4 +26,4 @@ Press `/` anywhere, or tap the magnifying glass, and type. One search covers rec
 
 ## Sharing it with the people you live with
 
-On a computer you run, the admin adds people under **Settings › Account**. Each person has their own sign-in and their own things. What is shared is shared by choice: a spending category, an upkeep job given to someone. Children without a sign-in can still be given chores: see [Upkeep](upkeep.html).
+On a computer you run, the admin adds people under **Settings › Account & sign-in**. Each person has their own sign-in and their own things. What is shared is shared by choice: a spending category, an upkeep job given to someone. Children without a sign-in can still be given chores: see [Upkeep](upkeep.html).

@@ -4,7 +4,7 @@ title: Life Is privacy policy
 
 # Life Is privacy policy
 
-Last updated: 21 November 2026
+Last updated: 24 November 2026
 
 **The short version: Life Is does not collect anything about you. What you put into it stays on your own device, or on a computer you run yourself. We never see it.**
 
@@ -22,7 +22,7 @@ Nothing.
 
 You choose one of two places the first time you open the app.
 
-**On your device.** Everything is stored in a database on the device, encrypted with a key that is made on the device and held in its secure key storage (Android Keystore, or the Keychain on Apple devices). The key never leaves the device. The app asks the device not to include its data in automatic cloud backups or device-to-device transfers.
+**On your device.** Everything is stored in a database on the device, encrypted with a key that is made on the device and held in its secure key storage (the Android Keystore, and the Apple Keychain when the app comes to Apple devices). The key never leaves the device. The app asks the device not to include its data in automatic cloud backups or device-to-device transfers.
 
 **On a Life Is you host yourself.** If you run the free Life Is software on your own computer, the app can sign in to it. Your information is then kept on that computer, under your control. The app stores only that computer's address and your sign-in, in the device's secure key storage, and talks to that address and no other.
 
@@ -34,20 +34,46 @@ The app makes a backup only when you ask it to. A backup is a single file, encry
 
 The app reaches outside your device only when you use a feature that needs to, and it sends only what that feature needs. None of these go through us.
 
+### Connections the phone app can use while it keeps everything on your phone
+
+These work in the phone app, and on a Life Is you host too.
+
 | When you | The app contacts | And sends |
 | --- | --- | --- |
 | Turn on the weather | Open-Meteo | The town name you type, then the rounded position (to about half a mile) of the place you pick |
 | Scan a book's barcode | Open Library | The number under the barcode |
 | Scan a grocery's barcode | Open Food Facts | The number under the barcode |
+| Scan the barcode of a film, album or game | MusicBrainz, then UPCitemdb if it is not music | The number under the barcode, and nothing else |
 | Import a recipe from a website | The website whose address you paste | A request for that one page, as a browser would make |
+| Turn on car recall checks | The U.S. National Highway Traffic Safety Administration (NHTSA) | The make, model and year of each car you recorded, and nothing else. No VIN and no name. Once a week, and when you press "Check now" |
+| Ask the assistant a question | The model at the address you give | Your question, and what Life Is holds in the parts you check, only when you ask. With a model on your own network, nothing leaves home. A model built into the phone keeps everything on the phone |
+
+The assistant, the weather, barcode look-ups and car recall checks are off until you turn them on. Importing a recipe from a website has no switch: it does something only when you paste an address.
+
+### Connections offered only on a Life Is you host
+
+These are not offered while the app keeps everything on your phone.
+
+| When you | The app contacts | And sends |
+| --- | --- | --- |
 | Connect to a Life Is you host | Your own computer | Your sign-in, and what you do in the app |
+| Look up a film or show by title (TMDB) | themoviedb.org, and image.tmdb.org for posters | The title you type (and the year), or a title's TMDB number, with your own key. Posters are fetched through your own Life Is, so your browser never asks TMDB for anything |
+| Get the morning reminder by ntfy | The ntfy server you choose | The reminder. Unless you say otherwise, only how many things there are, not what they are. Anyone who knows your topic name can read it, so it is long and random |
+| Get the morning reminder by browser push | Your browser maker's push service (Google, Apple or Mozilla) | The reminder, locked so only your browser can read it. They see that a message went, not what it says |
+| Get the morning reminder by email | The mail account you connected | The reminder, from that account to the same address. No one new is involved |
+| Connect your own mail account | Your mail provider | Your address and password, to sign in. Nothing goes anywhere else. Messages are read when you look and are never kept |
+| Follow a calendar link | Each calendar link you give | A request for its calendar, about once an hour, and nothing else. A calendar followed "busy only" keeps just the times |
+| Link photos from Immich | The Immich address you give | Your key, a question about which photos were taken on a plan's days, and a request for the ones a plan shows. Nothing in Immich is changed |
+| Connect a media or book server (Jellyfin, Emby, Audiobookshelf, Calibre, Calibre-Web, Kavita or another OPDS catalog) | The server you name | Your key or sign-in, and requests to read its list and covers. Life Is only reads. Nothing on the server is changed |
 | Turn on bank reading through SimpleFIN (only on a Life Is you host) | The SimpleFIN server your setup token names | Your setup token, once, to claim a private access address. After that, only when you press "Read now": a request for the accounts you chose and their transactions for the dates you picked, signed in with that access address. Nothing from Life Is is sent. |
 
 Each of those services has its own privacy policy, and sees the internet address the request comes from, as any website does.
 
 Reading bank accounts through SimpleFIN is off until you turn it on, and it is read only. It is offered only on a Life Is you host, never in the app while it keeps everything on your phone. The access address SimpleFIN gives you is kept sealed on your own server. It is never shown to a page, written to a log, or put in a download. You can disconnect at any time, which forgets it. SimpleFIN has its own privacy policy and sees the internet address the request comes from.
 
-If you run Life Is on your own computer, it offers further optional connections there, such as your own mail account, calendars you follow, or a media or photo library you run. Each is off until you turn it on, each says what it sends, and each connects your computer directly to the service you name.
+Each connection in the second table is off until you turn it on, says what it sends, and connects your computer directly to the service you name. Settings, under Connections, lists them all.
+
+The phone app can also show its own morning reminders as notifications made on the device. Nothing is sent for those.
 
 ## Photos and the camera
 
@@ -55,7 +81,7 @@ When you take or choose a photo of a recipe, the words are read from it on your 
 
 ## Payments
 
-The app is free to download. A single one-time payment unlocks the parts beyond the kitchen. That payment is handled entirely by the store you got the app from (Google Play or the Apple App Store), under their terms and privacy policies. We do not receive your card details. The store tells us only that a purchase was made, and gives us sales totals.
+The app is free to download now. When the one-time payment for the parts beyond the kitchen arrives, the store you got the app from will handle it, under its own terms and privacy policy. We will not receive your card details.
 
 ## Children
 

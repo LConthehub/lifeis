@@ -34,7 +34,7 @@ quiet button: See what it does
 
 ## what
 heading: What it does
-intro: Six parts, and each finishes the sentence "Life is…". Use one, or all of them. They know about each other: a tool you scan into the garage is the same tool a job needs and a project uses.
+intro: Five parts, and each finishes the sentence "Life is…". Use one, or all of them. They know about each other: a tool you scan into the garage is the same tool a job needs and a project uses.
 <!-- Cards: icon | word that finishes "Life is" | text -->
 - 🍳 | tasty | Food. Recipes kept exactly as you wrote them, the meals for the week, a grocery list that knows your pantry, and what things cost at each store.
 - 🏠 | organized | Home. Everything you own, room by room, with its receipt, manual and warranty. Upkeep that comes due: the furnace filter, the oil change, the bills, the chores. Care for your pets. A House Manual to hand a sitter. And one calendar for your dates, the week's meals and what is due.

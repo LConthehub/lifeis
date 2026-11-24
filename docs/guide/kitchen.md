@@ -15,7 +15,7 @@ Import a recipe four ways:
 - **From a photo.** A card or a cookbook page is read on your own device. The photo goes nowhere.
 - **From handwriting.** The built-in reader can't make out handwriting. If you turn on the assistant in Settings with an AI model that can look at pictures, a handwritten card can be read too: choose **It's handwritten**. With a model on your own computer, the photo doesn't leave home. With a cloud AI, the photo is sent to it and nothing else is. Either way you check the copy against the card before it is saved.
 
-**Life Is keeps what you wrote.** It does not shorten, reword or summarise a recipe. The original text is always there.
+**Life Is keeps what you wrote.** It does not shorten, reword or summarize a recipe. The original text is always there.
 
 A recipe can say which pans and dishes it needs, from the things you keep. Planning a big meal, Life Is tells you if you are short of an 8x8 dish before the day.
 

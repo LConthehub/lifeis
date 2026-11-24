@@ -2,7 +2,7 @@
 
 All notable changes to Life Is are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.2.0] - 2026-11-23
+## [Unreleased]
 
 ### Added
 
@@ -12,6 +12,24 @@ All notable changes to Life Is are listed here. The format follows [Keep a Chang
   dinner is (a frozen turkey's thaw included), and a budget from spending tagged to the holiday. A birthday or
   anniversary on the calendar can become a holiday with one tap. Gifts for someone who signs in stay hidden from them
   until the day has passed.
+- Receipt photos and in-store savings: a receipt is read on the device, full price and saving are kept apart, savings
+  are totaled, price drops are noticed inside a store's window, and a savings book can be typed in. A check step
+  asks you to check off what you got first.
+- The budget now covers projects and grocery trips: a paid project cost is one spending entry, saved up for and
+  flagged when it is over plan. The grocery list splits by store with estimates, and finishing a trip writes one
+  entry per store. A bank charge that matches is not counted twice. "Still to get" uses the same store prices as the
+  store card.
+- Privacy policy and Your data page now list every outside connection.
+
+### Changed
+
+- Every page uses Lucide icons in place of the emoji it chose itself.
+- The undo button on a paid cost says "Mark not paid".
+
+## [0.2.0] - 2026-11-23
+
+### Added
+
 - AGPL-3.0 license, contributor guide, and security policy.
 - A test workflow on GitHub that runs the type checks, tests, and build on every push and pull request.
 - Version 0.2.0.

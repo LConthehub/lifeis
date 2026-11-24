@@ -38,7 +38,7 @@ See [Upkeep](upkeep.html#how-you-are-told).
 
 ## It was signed out
 
-Life Is signs out after a while unused. Change how long under **Settings › Account**.
+Life Is signs out after a while unused. Change how long under **Settings › Account & sign-in**.
 
 ## Something else
 

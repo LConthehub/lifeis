@@ -3,7 +3,9 @@
 Life is chaotic, disorganized and overwhelming sometimes. Life Is helps put it back on track: a planner for everyday
 life that runs on your own computer, with your records kept there, encrypted.
 
-So far: the kitchen, the calendar, the things you keep, the projects that use them, and what you watch, read and hear.
+So far, in five sections: food (recipes, the week, groceries, the pantry, prices), home (the calendar, things and places,
+upkeep, routines, licenses, pets, a House Manual, tags, mail), money (a monthly budget, a year view, goals, income and
+bills), projects and plans (with holidays and activities), and media (books, films, music and games).
 
 ## The kitchen
 
@@ -70,6 +72,9 @@ each off until you turn it on, each saying exactly what it sends:
   which photos were taken on a plan's days and fetches the ones shown; a plan keeps only which photo it is. The
   key needs two permissions, `asset.read` and `asset.view`, and nothing in Immich is changed.
 - **Your Jellyfin or Emby**, read-only, at the address you give.
+- **More**: music and game barcodes, car recall checks, films from TMDB, morning reminders by ntfy, browser push or
+  email, an AI assistant, and bank reading. Settings → Connections lists every one, and `docs/privacy.md` has the
+  full table.
 
 ## It asks what you need
 
@@ -116,7 +121,7 @@ time in Settings; unchecking something only puts it out of sight.
   run out (each only once you have one). A plan with recipes says roughly what its food will cost, going by the last
   price of each ingredient. The grocery list, laid out by store, can show just the store you're in.
 
-- **Bring a recipe in**, three ways (Recipes → "Bring one in"). From a website: paste the address and Life Is reads the
+- **Bring a recipe in**, three ways (Recipes → "Import one"). From a website: paste the address and Life Is reads the
   recipe the page publishes for search engines, without the story around it. From a photo or a book: the words are read
   off the picture on your own device (the photo is sent nowhere and not kept). Or paste the text. Each gives a draft
   to look over; nothing is saved until you press Save, and what was read is kept alongside.
@@ -128,11 +133,11 @@ time in Settings; unchecking something only puts it out of sight.
   and what you watched, read or heard. Each of those leads back to the page it lives on.
 - **Birthdays and anniversaries.** Check "Every year" and give the day it first happened: it shows each year, counting
   the years.
-- **On your phone's calendar.** Settings → "Your calendar on your phone" makes a private link that Apple Calendar (or
+- **On your phone's calendar.** Settings → Calendars → "Your phone's calendar" makes a private link that Apple Calendar (or
   any calendar app that follows a link) reads, so plans, meals and dates show there too. Off until you make one;
   you check what it carries; it only shows and can't change anything; a new link stops the old one working. Anyone
   holding the link can read what's checked, so it is long, random, and yours to replace.
-- **Other calendars, on yours.** Settings → Outside services → "Other calendars" follows any calendar that has a link
+- **Other calendars, on yours.** Settings → Calendars → "Other calendars" follows any calendar that has a link
   (a work calendar, a shared family one). Followed "busy only" by default: just the times, under a name you give it.
   What each thing is called, where it is and its notes are dropped as it's read and never stored. The link is kept
   locked, read about once an hour, and a followed calendar is never passed on through your own phone link.
@@ -200,8 +205,10 @@ docker compose up -d --build
 - **On the device, with no server** (in progress, for the phone apps): everything a signed-in person does is written as
   handlers that know nothing of how a request arrived (`server/src/everydayRoutes.ts`). The server puts them behind its
   sign-in; the on-device build (`frontend/src/device`, `npx vite build --config vite.device.config.js`) hands the pages'
-  requests straight to them, with the database inside the app. Today that database is an unencrypted stand-in for
-  trying it in a browser; on a phone it will be SQLCipher through Capacitor.
+  requests straight to them, with the database inside the app. On a phone the database is SQLite encrypted with
+  SQLCipher through Capacitor, opened with a key the phone's keystore holds (`frontend/src/device/nativeDatabase.js`).
+  Only a browser build, for trying the on-device app, uses the unencrypted in-page stand-in
+  (`frontend/src/device/database.js`), and it is never what ships.
 - `core/`: the kitchen, in TypeScript, written so the same code runs on the server, in the browser and inside a
   phone app. `kitchen.ts` is the kitchen, `units.ts` reads amounts and converts units, `recipeText.ts` reads
   and writes recipes, `inventory.ts` is the things you keep, `projects.ts` the projects, `calendar.ts` the calendar, `media.ts` the
@@ -209,10 +216,10 @@ docker compose up -d --build
   shipped migration is never edited). It reaches
   the database only through the small `Db` interface in `db.ts`, which each place Life Is runs supplies.
 - `server/`: the program, on Node 24 with no build step: sign-in, the web addresses the pages call, and an
-  SQLCipher-encrypted SQLite database. It installs the encrypted database engine and three mail libraries (imapflow, nodemailer, mailparser). The only
-  places it ever reaches out to are the media servers a person connects (`connectionRoutes.ts`), whose keys it
-  stores locked (`vault.ts`), the weather service if a person turns it on (core's `weather.ts`), and a person's own mail provider if they add
-  an account (`postbox.ts`; the rules are core's `mail.ts`).
+  SQLCipher-encrypted SQLite database. It installs the encrypted database engine and three mail libraries (imapflow, nodemailer, mailparser). It
+  reaches out only to the services a person turns on or uses. Each one is listed under "Connections" in Settings and in
+  `docs/privacy.md`, and each service's `sends` sentence in `core/src` says what it sends. Keys are stored locked
+  (`vault.ts`).
 - `frontend/`: the pages. React, Vite and Tailwind. The small icons are from Lucide (ISC license; the notice is in
   `docs/site-src/lucide-ISC.txt`), used by name through `frontend/src/components/Icon.jsx`.
 - `backend/`: the first version of the program, in Python. Docker no longer runs it. It is kept for now as the
