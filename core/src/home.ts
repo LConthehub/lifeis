@@ -9,6 +9,7 @@ import { upkeep, type DueState } from './upkeep.ts';
 import { calendar, type Entry, type YearlyDate } from './calendar.ts';
 import type { Fetcher } from './connections.ts';
 import type { Db } from './db.ts';
+import { holidays, type HolidayCard } from './holidays.ts';
 import { inventory } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
 import type { EquipmentShortage, PlannedMeal } from './kitchenTypes.ts';
@@ -32,6 +33,7 @@ export const CARDS = [
   { key: 'mail', label: 'Email: what’s unread', section: null },
   { key: 'dates', label: 'Birthdays and other yearly dates coming up', section: 'planning' },
   { key: 'plans', label: 'Plans coming up', section: 'planning' },
+  { key: 'holidays', label: 'Holidays: what is next', section: 'planning' },
   { key: 'kitchen', label: 'Cooking: today’s meals, the grocery list, pans you’re short of', section: 'eating' },
   { key: 'pantry', label: 'Pantry: running low and use soon', section: 'eating' },
   { key: 'coupons', label: 'Coupons about to run out', section: 'eating' },
@@ -68,6 +70,8 @@ export type HomeSummary = {
   dates: YearlyDate[];
   /** Plans under way or starting in the next sixty days, soonest first. */
   plans: { id: number; name: string; start_day: string; end_day: string; /** 0 once it has begun. */ days_until: number }[];
+  /** Holidays with something to say today: time to start planning, what is next, take-down, notes for next year. */
+  holidays: HolidayCard[];
   /** Unused coupons with a week or less left, soonest first. */
   coupons: { currency: string; soon: { id: number; label: string; store: string | null; cents_off: number | null; percent_off: number | null; days_left: number }[] };
   weather: { place: WeatherPlace; forecast: Forecast | null } | null;
@@ -103,11 +107,12 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
       const hasMail = (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM mail_accounts WHERE owner_id = ?', [owner]))!.n > 0;
       const any = async (sql: string) => Boolean(await db.get(sql, [owner]));
       const hasPlans = await any('SELECT 1 AS n FROM plans WHERE owner_id = ? LIMIT 1');
+      const hasHolidays = await any('SELECT 1 AS n FROM holidays WHERE owner_id = ? LIMIT 1');
       const hasCoupons = await any('SELECT 1 AS n FROM coupons WHERE owner_id = ? AND used_on IS NULL LIMIT 1');
       // Routines for this person (or for everyone); a household member's show on the chore chart instead.
       const hasRoutines = Boolean(await db.get('SELECT 1 AS n FROM routines WHERE for_member IS NULL AND (for_user = ? OR for_user IS NULL) AND (owner_id = ? OR for_user = ? OR for_user IS NULL) LIMIT 1', [owner, owner, owner]));
       const offered = CARDS.filter((card) => (card.key === 'weather' ? place !== null : card.key === 'mail' ? hasMail : card.key === 'routines' ? hasRoutines
-        : (card.section === null || sections.includes(card.section)) && (card.key !== 'plans' || hasPlans) && (card.key !== 'coupons' || hasCoupons)));
+        : (card.section === null || sections.includes(card.section)) && (card.key !== 'plans' || hasPlans) && (card.key !== 'holidays' || hasHolidays) && (card.key !== 'coupons' || hasCoupons)));
       const cards = offered.map((card) => card.key).filter((key) => !out.includes(key));
       const shows = (key: CardKey) => cards.includes(key);
 
@@ -116,7 +121,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
         choices: offered.map((card) => ({ key: card.key, label: card.label, shown: !out.includes(card.key) })),
         days: [], kitchen: { meals: [], to_buy: 0, short: [], use_up: null }, pantry: { low: [], expiring: [] }, projects: [],
         things: { low: [], total: 0 }, upkeep: [], collection: { total: 0, wanted: 0, lent: [], lately: [] },
-        dates: [], plans: [], coupons: { currency: '$', soon: [] }, weather: null,
+        dates: [], plans: [], holidays: [], coupons: { currency: '$', soon: [] }, weather: null,
         week: { start: day, end: day, events: null, meals_planned: null, meals_cooked: null, sessions: null, minutes: null, enjoyed: null },
       };
       // Only what will be shown is read, so a section put out of sight costs nothing.
@@ -175,6 +180,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
           'SELECT id, name, start_day, end_day FROM plans WHERE owner_id = ? AND end_day >= ? AND start_day <= ? ORDER BY start_day, id LIMIT 6', [owner, day, addDays(day, 60)]))
           .map((p) => ({ ...p, days_until: Math.max(0, dayNumber(p.start_day) - dayNumber(day)) }));
       }
+      if (shows('holidays')) summary.holidays = await holidays(db, owner, clock).cards();
       if (shows('coupons')) {
         const sign = await db.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'shopping_currency'", [owner]);
         summary.coupons = {

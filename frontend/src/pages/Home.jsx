@@ -6,6 +6,7 @@ import { AskCard } from '../components/Assistant';
 import AskBack from '../components/AskBack';
 import { StartCard } from '../components/Start';
 import { RoutinesCard } from '../components/Routines';
+import HolidayCard from '../components/HolidayCard';
 import Icon, { hasIcon } from '../components/Icon';
 import { whoText, whenText } from './Mail';
 import { money as moneyText } from '../components/Budget';
@@ -236,6 +237,8 @@ export default function Home({ user }) {
             </p>
           </Card>
         )}
+
+        {shows('holidays') && <HolidayCard cards={s.holidays} onChange={load} />}
 
         {shows('plans') && (
           <Card title="Plans coming up" to="/plans" link="All plans">

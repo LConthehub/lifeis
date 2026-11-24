@@ -1376,6 +1376,117 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE coupons ADD COLUMN starts_on TEXT`,
     ],
   },
+  {
+    // A holiday is a plan that comes back each year. `holidays` is the holiday itself and how it finds its
+    // day; each year of it is an ordinary plan (plans.ts) with a row in `holiday_years`. Everything a year
+    // keeps of its own (who came, cards, gifts, decorations and where they go, countdown steps) hangs off that
+    // plan, so a year can be looked back on, and the next one is started from it.
+    number: 46,
+    name: 'holidays that return each year, with decor plans',
+    statements: [
+      `CREATE TABLE holidays (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        rule TEXT NOT NULL CHECK(rule IN ('fixed', 'weekday', 'manual')),
+        month INTEGER CHECK(month IS NULL OR (month >= 1 AND month <= 12)),
+        day_of_month INTEGER CHECK(day_of_month IS NULL OR (day_of_month >= 1 AND day_of_month <= 31)),
+        weekday INTEGER CHECK(weekday IS NULL OR (weekday >= 0 AND weekday <= 6)),
+        nth INTEGER CHECK(nth IS NULL OR nth IN (1, 2, 3, 4, -1)),
+        lead_weeks INTEGER NOT NULL DEFAULT 6 CHECK(lead_weeks >= 1 AND lead_weeks <= 26),
+        event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+        first_year INTEGER,
+        tag_id INTEGER REFERENCES tags(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_holidays_owner ON holidays(owner_id)`,
+      `CREATE TABLE holiday_years (
+        plan_id INTEGER PRIMARY KEY REFERENCES plans(id) ON DELETE CASCADE,
+        holiday_id INTEGER NOT NULL REFERENCES holidays(id) ON DELETE CASCADE,
+        year INTEGER NOT NULL,
+        dinner_time TEXT,
+        turkey_pounds REAL CHECK(turkey_pounds IS NULL OR turkey_pounds > 0),
+        put_up_on TEXT,
+        take_down_on TEXT,
+        taken_down_on TEXT,
+        budget_cents INTEGER CHECK(budget_cents IS NULL OR budget_cents >= 0),
+        notes_next TEXT,
+        notes_done INTEGER NOT NULL DEFAULT 0 CHECK(notes_done IN (0, 1)),
+        UNIQUE (holiday_id, year)
+      )`,
+      `CREATE INDEX idx_holiday_years ON holiday_years(holiday_id, year)`,
+      // Who came (guest) and who gets a card (card). done: came, or sent.
+      `CREATE TABLE holiday_people (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        role TEXT NOT NULL CHECK(role IN ('guest', 'card')),
+        name TEXT NOT NULL,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        member_id INTEGER REFERENCES household_members(id) ON DELETE SET NULL,
+        done INTEGER NOT NULL DEFAULT 0 CHECK(done IN (0, 1)),
+        note TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )`,
+      `CREATE INDEX idx_holiday_people ON holiday_people(plan_id, role)`,
+      // A gift idea, from idea to given. cents is what it cost; entry_id is the spending entry made for it.
+      `CREATE TABLE holiday_gifts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        who TEXT NOT NULL,
+        for_user INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        for_member INTEGER REFERENCES household_members(id) ON DELETE SET NULL,
+        idea TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'idea' CHECK(status IN ('idea', 'bought', 'wrapped', 'given')),
+        cents INTEGER CHECK(cents IS NULL OR cents >= 0),
+        entry_id INTEGER,
+        note TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )`,
+      `CREATE INDEX idx_holiday_gifts ON holiday_gifts(plan_id)`,
+      `CREATE INDEX idx_holiday_gifts_for ON holiday_gifts(for_user)`,
+      // A decoration and where it goes. thing_id is one of the person's things (kept in a box, which is a place);
+      // box_id is a box for one that isn't a thing. fix is what the take-down found; need is what last year found.
+      `CREATE TABLE holiday_decor (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        spot TEXT NOT NULL,
+        label TEXT NOT NULL,
+        thing_id INTEGER REFERENCES items(id) ON DELETE SET NULL,
+        box_id INTEGER REFERENCES places(id) ON DELETE SET NULL,
+        put_up INTEGER NOT NULL DEFAULT 0 CHECK(put_up IN (0, 1)),
+        taken_down INTEGER NOT NULL DEFAULT 0 CHECK(taken_down IN (0, 1)),
+        boxed INTEGER NOT NULL DEFAULT 0 CHECK(boxed IN (0, 1)),
+        fix TEXT CHECK(fix IS NULL OR fix IN ('broke', 'out')),
+        need TEXT CHECK(need IS NULL OR need IN ('broke', 'out')),
+        need_done INTEGER NOT NULL DEFAULT 0 CHECK(need_done IN (0, 1)),
+        note TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )`,
+      `CREATE INDEX idx_holiday_decor ON holiday_decor(plan_id, spot)`,
+      // The year's own countdown steps, counted back from dinner. (A frozen turkey's thaw day is worked out
+      // from turkey_pounds, not kept here.)
+      `CREATE TABLE holiday_steps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        words TEXT NOT NULL,
+        rule TEXT CHECK(rule IS NULL OR rule IN ('night_before', 'morning_of', 'hours_before')),
+        at_time TEXT,
+        hours INTEGER,
+        done INTEGER NOT NULL DEFAULT 0 CHECK(done IN (0, 1)),
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )`,
+      `CREATE INDEX idx_holiday_steps ON holiday_steps(plan_id)`,
+      // Ticks for countdown steps that belong to recipes (the key says which).
+      `CREATE TABLE holiday_ticks (
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        key TEXT NOT NULL,
+        PRIMARY KEY (plan_id, key)
+      )`,
+      // A photo of one spot (the porch, the mantel) is kept with the plan's photos, under the spot's name.
+      `ALTER TABLE plan_photos ADD COLUMN spot TEXT`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

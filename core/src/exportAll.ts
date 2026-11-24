@@ -82,6 +82,7 @@ export const KINDS: KindInfo[] = [
   { key: 'coupons', label: 'Coupons', file: 'coupons.csv', importable: true, matched: 'by name, store and code' },
   { key: 'projects', label: 'Projects, with their lines, time and costs', file: 'projects.csv', importable: true, matched: 'by name' },
   { key: 'plans', label: 'Plans, with their things to do and photos', file: 'plans.csv', importable: true, matched: 'by name and first day' },
+  { key: 'holidays', label: 'Holidays: how each finds its day, and what each year kept (guests, cards, gifts, decorations, countdown)', file: 'holidays.csv', importable: true, matched: 'by name; a year by its plan' },
   { key: 'tags', label: 'Tags, and what carries them', file: 'tags.csv', importable: true, matched: 'by path; a tag on something by that thing’s name' },
   { key: 'connections', label: 'Servers and accounts you connected (names and addresses only)', file: 'connections.csv', importable: false, matched: '' },
   { key: 'settings', label: 'Preferences', file: 'settings.csv', importable: false, matched: '' },
@@ -544,13 +545,43 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     (await all('SELECT i.plan_id, i.kind, i.label, i.quantity, i.done, i.note FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ? ORDER BY i.plan_id, i.sort_order, i.id'))
       .map((i) => [str(planOf.get(i.plan_id as number)?.name), str(i.kind), str(i.label), str(i.quantity), yes(i.done), str(i.note)]));
   const planPhotos: Cell[][] = [];
-  for (const p of await all('SELECT p.id, p.plan_id, p.source, p.type, p.bytes, p.caption FROM plan_photos p JOIN plans pl ON pl.id = p.plan_id WHERE pl.owner_id = ? ORDER BY p.plan_id, p.sort_order, p.id')) {
+  for (const p of await all('SELECT p.id, p.plan_id, p.source, p.type, p.bytes, p.caption, p.spot FROM plan_photos p JOIN plans pl ON pl.id = p.plan_id WHERE pl.owner_id = ? ORDER BY p.plan_id, p.sort_order, p.id')) {
     const plan = planOf.get(p.plan_id as number)!;
     const bytes = bytesOf(p.bytes);
     const file = bytes && p.type ? out.binary(`pictures/plans/${slug(str(plan.name), plan.id as number)}`, `photo-${p.id}`, str(p.type), bytes) : '';
-    planPhotos.push([str(plan.name), str(p.caption), p.source === 'immich' ? 'In your photo library, not copied here' : 'Kept here', file]);
+    planPhotos.push([str(plan.name), str(p.caption), p.source === 'immich' ? 'In your photo library, not copied here' : 'Kept here', file, str(p.spot)]);
   }
-  out.csv('plan-photos.csv', ['Plan', 'Caption', 'Where the photo is', 'File'], planPhotos);
+  out.csv('plan-photos.csv', ['Plan', 'Caption', 'Where the photo is', 'File', 'Decoration spot'], planPhotos);
+
+  // ---------- holidays: how each finds its day, and what each year keeps ----------
+  const holidayRows = await all('SELECT id, name, rule, month, day_of_month, weekday, nth, lead_weeks, first_year FROM holidays WHERE owner_id = ? ORDER BY id');
+  const holidayOf = new Map(holidayRows.map((h) => [h.id as number, h]));
+  out.csv('holidays.csv', ['Holiday', 'How it finds its day', 'Month', 'Day of the month', 'Weekday (0 is Sunday)', 'Which one (1 to 4, or -1 for the last)', 'Start planning (weeks ahead)', 'First year of the date'],
+    holidayRows.map((h) => [str(h.name), str(h.rule), str(h.month), str(h.day_of_month), str(h.weekday), str(h.nth), str(h.lead_weeks), str(h.first_year)]));
+  const yearRows = await all(`SELECT y.plan_id, y.holiday_id, y.year, y.dinner_time, y.turkey_pounds, y.put_up_on, y.take_down_on, y.taken_down_on, y.budget_cents, y.notes_next, y.notes_done
+    FROM holiday_years y JOIN plans p ON p.id = y.plan_id WHERE p.owner_id = ? ORDER BY y.holiday_id, y.year`);
+  out.csv('holiday-years.csv', ['Holiday', 'Plan', 'Starts', 'Dinner at', 'Turkey (pounds)', 'Put up on', 'Take down on', 'Taken down on', 'Budget', 'Notes for next year', 'Notes for next year asked for'],
+    yearRows.map((y) => [str(holidayOf.get(y.holiday_id as number)?.name), str(planOf.get(y.plan_id as number)?.name), str(planOf.get(y.plan_id as number)?.start_day), str(y.dinner_time), str(y.turkey_pounds),
+      str(y.put_up_on), str(y.take_down_on), str(y.taken_down_on), dollars(y.budget_cents), str(y.notes_next), yes(y.notes_done)]));
+  const listRows: Cell[][] = [];
+  const planCells = (planId: Value | undefined) => [str(planOf.get(planId as number)?.name), str(planOf.get(planId as number)?.start_day)];
+  for (const p of await all(`SELECT h.plan_id, h.role, h.name, h.done, h.note, u.username AS signin, m.name AS member FROM holiday_people h JOIN plans pl ON pl.id = h.plan_id
+    LEFT JOIN users u ON u.id = h.user_id LEFT JOIN household_members m ON m.id = h.member_id WHERE pl.owner_id = ? ORDER BY h.plan_id, h.role, h.sort_order, h.id`)) {
+    listRows.push([...planCells(p.plan_id), str(p.role), str(p.name), '', '', '', yes(p.done), str(p.note), str(p.signin ?? p.member)]);
+  }
+  for (const g of await all(`SELECT g.plan_id, g.who, g.idea, g.status, g.cents, g.note, u.username AS signin, m.name AS member FROM holiday_gifts g JOIN plans pl ON pl.id = g.plan_id
+    LEFT JOIN users u ON u.id = g.for_user LEFT JOIN household_members m ON m.id = g.for_member WHERE pl.owner_id = ? ORDER BY g.plan_id, g.sort_order, g.id`)) {
+    listRows.push([...planCells(g.plan_id), 'gift', str(g.idea), str(g.who), str(g.status), dollars(g.cents), '', str(g.note), str(g.signin ?? g.member)]);
+  }
+  for (const d of await all(`SELECT d.plan_id, d.spot, d.label, d.put_up, d.taken_down, d.boxed, d.fix, d.need, d.need_done, d.note, i.name AS thing FROM holiday_decor d JOIN plans pl ON pl.id = d.plan_id
+    LEFT JOIN items i ON i.id = d.thing_id WHERE pl.owner_id = ? ORDER BY d.plan_id, d.sort_order, d.id`)) {
+    const status = [d.put_up ? 'put up' : '', d.taken_down ? 'taken down' : '', d.boxed ? 'boxed' : '', d.fix ? `found ${d.fix}` : '', d.need ? `need ${d.need}` : '', d.need && d.need_done ? 'bought' : ''].filter(Boolean).join('; ');
+    listRows.push([...planCells(d.plan_id), 'decoration', str(d.label), str(d.spot), status, '', '', str(d.note), str(d.thing)]);
+  }
+  for (const s of await all(`SELECT s.plan_id, s.words, s.rule, s.at_time, s.hours, s.done FROM holiday_steps s JOIN plans pl ON pl.id = s.plan_id WHERE pl.owner_id = ? ORDER BY s.plan_id, s.sort_order, s.id`)) {
+    listRows.push([...planCells(s.plan_id), 'countdown step', str(s.words), '', str(s.rule), str(s.hours), yes(s.done), '', str(s.at_time)]);
+  }
+  out.csv('holiday-lists.csv', ['Plan', 'Starts', 'List', 'Name', 'Where, or who it is for', 'Status', 'Amount', 'Done', 'Note', 'Also'], listRows);
 
   // ---------- spending ----------
   const categories = await all('SELECT id, name, monthly_cents FROM money_categories WHERE owner_id = ? ORDER BY sort_order, id');
@@ -677,6 +708,7 @@ const FILE_ABOUT: [string, string][] = [
   ['events.csv', 'Calendar events you wrote.'],
   ['projects.csv', 'Projects, and project-lines.csv, project-time.csv and project-costs.csv for what they use, the time spent and what they cost.'],
   ['plans.csv', 'Plans, and plan-items.csv and plan-photos.csv for what belongs to each.'],
+  ['holidays.csv', 'Holidays: how each finds its day. holiday-years.csv has each year (its plan, dinner time, turkey, days to put up and take down, notes for next year) and holiday-lists.csv has what each year keeps: guests, cards, gifts, decorations and countdown steps.'],
   ['money-categories.csv', 'Your spending categories and what each is for a month.'],
   ['money-entries.csv', 'What you wrote down as spent.'],
   ['money-income.csv', 'What comes in, and how often; money-goals.csv and money-goal-saved.csv for savings goals and what was put toward each. Bills are in upkeep.csv.'],
@@ -779,7 +811,7 @@ export type KindReport = {
   /** Anything else worth saying in a sentence. */
   note?: string;
 };
-export type Pending = { file: string; as: 'thing-photo' | 'thing-paper' | 'pet-photo' | 'cover' | 'plan-photo'; id: number; kind?: string; name?: string };
+export type Pending = { file: string; as: 'thing-photo' | 'thing-paper' | 'pet-photo' | 'cover' | 'plan-photo'; id: number; kind?: string; name?: string; spot?: string };
 export type Brought = { kinds: KindReport[]; pending: Pending[] };
 
 type Ctx = { tx: Queries; owner: number; today: string; at: string; files: Files };
@@ -1707,12 +1739,105 @@ const importers: Record<string, Importer> = {
       }
       for (const p of photos.filter(mine)) {
         const file = cellOf(p, 'File');
-        if (file) d.pending.push({ file, as: 'plan-photo', id: made.lastId, name: cellOf(p, 'Caption') });
+        if (file) d.pending.push({ file, as: 'plan-photo', id: made.lastId, name: cellOf(p, 'Caption'), spot: cellOf(p, 'Decoration spot') });
         else library += 1;
       }
       if (lost) d.unlinked += 1;
     }
     if (library) d.note = `${library} photo${library === 1 ? ' that is' : 's that are'} in your photo library, not in the download, ${library === 1 ? 'was' : 'were'} left out`;
+    return d;
+  },
+
+  async holidays(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'holidays.csv');
+    if (!t) return d;
+    const years = tableOf(c.files, 'holiday-years.csv')?.rows ?? [];
+    const lists = tableOf(c.files, 'holiday-lists.csv')?.rows ?? [];
+    const seen = new Map((await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM holidays WHERE owner_id = ? ORDER BY id', [c.owner])).map((h) => [labelKey(h.name), h.id]));
+    const planAt = async (name: string, day: string) => (await c.tx.get<{ id: number }>('SELECT id FROM plans WHERE owner_id = ? AND start_day = ? AND name = ? COLLATE NOCASE ORDER BY id LIMIT 1', [c.owner, day, name]))?.id ?? null;
+    const tagFor = async (name: string) => {
+      const key = labelKey(name);
+      const have = await c.tx.get<{ id: number }>('SELECT id FROM tags WHERE owner_id = ? AND key = ? ORDER BY parent_id IS NOT NULL, id LIMIT 1', [c.owner, key]);
+      return have?.id ?? (await c.tx.run('INSERT INTO tags (owner_id, name, key, parent_id, created_at) VALUES (?, ?, ?, NULL, ?)', [c.owner, name.replace(/>/g, ' ').slice(0, 60), key, c.at])).lastId;
+    };
+    for (const [at, row] of t.rows.entries()) {
+      const name = clean(cellOf(row, 'Holiday'), 100);
+      const rule = cellOf(row, 'How it finds its day').toLowerCase();
+      if (!name || !['fixed', 'weekday', 'manual'].includes(rule)) { skip(d, at, name ? 'it does not say how it finds its day' : 'it has no name'); continue; }
+      const month = wholeOf(cellOf(row, 'Month'));
+      const dayOfMonth = wholeOf(cellOf(row, 'Day of the month'));
+      const weekday = wholeOf(cellOf(row, 'Weekday (0 is Sunday)'));
+      const nth = wholeOf(cellOf(row, 'Which one (1 to 4, or -1 for the last)'));
+      const lead = wholeOf(cellOf(row, 'Start planning (weeks ahead)'));
+      const fine = rule === 'manual' || (month !== null && month >= 1 && month <= 12 && (rule === 'fixed' ? dayOfMonth !== null && dayOfMonth >= 1 && dayOfMonth <= 31 : weekday !== null && weekday >= 0 && weekday <= 6 && nth !== null && [1, 2, 3, 4, -1].includes(nth)));
+      if (!fine) { skip(d, at, 'its date rule is not complete'); continue; }
+      d.found += 1;
+      const key = labelKey(name);
+      let id = seen.get(key);
+      if (id === undefined) {
+        id = (await c.tx.run(`INSERT INTO holidays (owner_id, name, rule, month, day_of_month, weekday, nth, lead_weeks, event_id, first_year, tag_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+          [c.owner, name, rule, rule === 'manual' ? null : month, rule === 'fixed' ? dayOfMonth : null, rule === 'weekday' ? weekday : null, rule === 'weekday' ? nth : null,
+            lead !== null && lead >= 1 && lead <= 26 ? lead : 6, wholeOf(cellOf(row, 'First year of the date')), await tagFor(name), c.at, c.at])).lastId;
+        seen.set(key, id);
+        d.fresh += 1;
+      } else d.already += 1;
+      for (const y of years.filter((r) => labelKey(cellOf(r, 'Holiday')) === key)) {
+        const start = dayOf(cellOf(y, 'Starts'));
+        const plan = start ? await planAt(cellOf(y, 'Plan'), start) : null;
+        if (!start || plan === null) { if (start || cellOf(y, 'Plan')) d.unlinked += 1; continue; }
+        if (await c.tx.get('SELECT 1 AS x FROM holiday_years WHERE plan_id = ?', [plan])) continue;
+        const year = Number(start.slice(0, 4));
+        if (await c.tx.get('SELECT 1 AS x FROM holiday_years WHERE holiday_id = ? AND year = ?', [id, year])) continue;
+        const time = cellOf(y, 'Dinner at');
+        const pounds = numberOf(cellOf(y, 'Turkey (pounds)'));
+        await c.tx.run('INSERT INTO holiday_years (plan_id, holiday_id, year, dinner_time, turkey_pounds, put_up_on, take_down_on, taken_down_on, budget_cents, notes_next, notes_done) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [plan, id, year, /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : null, pounds !== null && pounds > 0 ? pounds : null, dayOf(cellOf(y, 'Put up on')), dayOf(cellOf(y, 'Take down on')),
+            dayOf(cellOf(y, 'Taken down on')), centsOf(cellOf(y, 'Budget')), clean(cellOf(y, 'Notes for next year'), 5000), yesOf(cellOf(y, 'Notes for next year asked for')) ? 1 : 0]);
+        // What a year keeps comes with a year that is new, never added to one already kept.
+        let order = 1;
+        for (const l of lists.filter((r) => cellOf(r, 'Plan').toLowerCase() === cellOf(y, 'Plan').toLowerCase() && cellOf(r, 'Starts') === start)) {
+          const list = cellOf(l, 'List').toLowerCase();
+          const label = clean(cellOf(l, 'Name'), 300);
+          const also = cellOf(l, 'Also');
+          if (!label) continue;
+          if (list === 'guest' || list === 'card') {
+            const member = also ? await c.tx.get<{ id: number }>('SELECT id FROM household_members WHERE owner_id = ? AND name = ? COLLATE NOCASE LIMIT 1', [c.owner, also]) : undefined;
+            await c.tx.run('INSERT INTO holiday_people (plan_id, role, name, user_id, member_id, done, note, sort_order) VALUES (?, ?, ?, NULL, ?, ?, ?, ?)',
+              [plan, list, label.slice(0, 100), member?.id ?? null, yesOf(cellOf(l, 'Done')) ? 1 : 0, clean(cellOf(l, 'Note'), 500), order]);
+          } else if (list === 'gift') {
+            const status = cellOf(l, 'Status').toLowerCase();
+            const member = also ? await c.tx.get<{ id: number }>('SELECT id FROM household_members WHERE owner_id = ? AND name = ? COLLATE NOCASE LIMIT 1', [c.owner, also]) : undefined;
+            const kept = ['idea', 'bought', 'wrapped', 'given'].includes(status) ? status : 'idea';
+            const cents = kept === 'idea' ? null : centsOf(cellOf(l, 'Amount'));
+            // The spending entry a bought gift made comes in with the spending; it is found again here so editing the gift does not make a second.
+            const entry = cents === null ? undefined : await c.tx.get<{ id: number }>(
+              `SELECT e.id FROM money_entries e WHERE e.owner_id = ? AND e.cents = ? AND e.label IN (?, ?) AND NOT EXISTS (SELECT 1 FROM holiday_gifts g WHERE g.entry_id = e.id) ORDER BY e.id LIMIT 1`,
+              [c.owner, cents, `${name} gift: ${label}`.slice(0, 200), `${name} gift`]);
+            // A gift for someone with a sign-in stays words only: the person is not looked up, so nothing links to another account.
+            await c.tx.run('INSERT INTO holiday_gifts (plan_id, who, for_user, for_member, idea, status, cents, entry_id, note, sort_order) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)',
+              [plan, (clean(cellOf(l, 'Where, or who it is for'), 100) ?? 'Someone'), member?.id ?? null, label, kept, cents, entry?.id ?? null, clean(cellOf(l, 'Note'), 500), order]);
+          } else if (list === 'decoration') {
+            const spot = clean(cellOf(l, 'Where, or who it is for'), 100);
+            if (!spot) continue;
+            const status = cellOf(l, 'Status').toLowerCase();
+            const thing = also ? await c.tx.get<{ id: number }>('SELECT id FROM items WHERE owner_id = ? AND name = ? COLLATE NOCASE ORDER BY id DESC LIMIT 1', [c.owner, also]) : undefined;
+            const fix = /found (broke|out)/.exec(status)?.[1] ?? null;
+            const need = /need (broke|out)/.exec(status)?.[1] ?? null;
+            await c.tx.run('INSERT INTO holiday_decor (plan_id, spot, label, thing_id, box_id, put_up, taken_down, boxed, fix, need, need_done, note, sort_order) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [plan, spot, label.slice(0, 200), thing?.id ?? null, status.includes('put up') ? 1 : 0, status.includes('taken down') ? 1 : 0, status.includes('boxed') ? 1 : 0, fix, need, status.includes('bought') ? 1 : 0, clean(cellOf(l, 'Note'), 500), order]);
+          } else if (list === 'countdown step') {
+            const rule = cellOf(l, 'Status');
+            if (!['night_before', 'morning_of', 'hours_before'].includes(rule)) continue;
+            const at = cellOf(l, 'Also');
+            const hours = wholeOf(cellOf(l, 'Amount'));
+            await c.tx.run('INSERT INTO holiday_steps (plan_id, words, rule, at_time, hours, done, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+              [plan, label, rule, /^([01]\d|2[0-3]):[0-5]\d$/.test(at) ? at : null, hours !== null && hours >= 1 && hours <= 72 ? hours : null, yesOf(cellOf(l, 'Done')) ? 1 : 0, order]);
+          } else continue;
+          order += 1;
+        }
+      }
+    }
     return d;
   },
 
@@ -1800,7 +1925,7 @@ const importers: Record<string, Importer> = {
     return d;
   },
 };
-const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'manual', 'licenses', 'collection', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'budget', 'tags'];
+const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'manual', 'licenses', 'collection', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'budget', 'tags'];
 
 function rowsIn(files: Files, info: KindInfo): number {
   return tableOf(files, info.file)?.rows.length ?? 0;
@@ -1871,7 +1996,7 @@ export async function bringInDownload(db: Db, owner: number, files: Files, chose
   return { kinds, pending };
 }
 
-export type PictureIn = { as: Pending['as']; id: number; kind?: string; name?: string; bytes: Uint8Array };
+export type PictureIn = { as: Pending['as']; id: number; kind?: string; name?: string; spot?: string; bytes: Uint8Array };
 const PAPER_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
 /**
@@ -1905,7 +2030,7 @@ export async function bringInPictures(db: Db, owner: number, pictures: PictureIn
           'SELECT (SELECT MAX(x.sort_order) FROM plan_photos x WHERE x.plan_id = l.id) AS last FROM plans l WHERE l.id = ? AND l.owner_id = ? AND (SELECT COUNT(*) FROM plan_photos x WHERE x.plan_id = l.id) < 80 AND NOT EXISTS (SELECT 1 FROM plan_photos x WHERE x.plan_id = l.id AND x.bytes = ?)',
           [p.id, owner, p.bytes]);
         if (!ok || type === 'application/pdf' || p.bytes.length > 3_000_000) { left += 1; continue; }
-        await tx.run('INSERT INTO plan_photos (plan_id, source, type, bytes, caption, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [p.id, 'kept', type, p.bytes, clean(p.name, 300), (ok.last ?? 0) + 1, at]);
+        await tx.run('INSERT INTO plan_photos (plan_id, source, type, bytes, caption, sort_order, created_at, spot) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [p.id, 'kept', type, p.bytes, clean(p.name, 300), (ok.last ?? 0) + 1, at, clean(p.spot, 100)]);
       } else if (p.as === 'cover') {
         const ok = await tx.get('SELECT m.id FROM media m WHERE m.id = ? AND m.owner_id = ? AND NOT EXISTS (SELECT 1 FROM media_covers x WHERE x.media_id = m.id)', [p.id, owner]);
         if (!ok || type === 'application/pdf' || p.bytes.length > 8_000_000) { left += 1; continue; }

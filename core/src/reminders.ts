@@ -16,6 +16,7 @@
 import type { Fetcher, Sealer } from './connections.ts';
 import { calendar } from './calendar.ts';
 import type { Db } from './db.ts';
+import { holidays } from './holidays.ts';
 import { inventory } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
 import { mail, type Postbox } from './mail.ts';
@@ -202,6 +203,8 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
         'SELECT id, name, start_day FROM plans WHERE owner_id = ? AND start_day IN (?, ?) ORDER BY start_day, id', [owner, day, addDays(day, 1)])) {
         lines.push({ kind: 'dates', icon: '✨', title: p.name, detail: p.start_day === day ? 'starts today' : 'starts tomorrow', link: `/plans/${p.id}`, urgent: false });
       }
+      // A holiday: the day to start planning, to put the decorations up, to take them down.
+      for (const h of await holidays(db, owner, clock).digestLines()) lines.push({ kind: 'dates', icon: '✨', title: h.title, detail: h.detail, link: h.link, urgent: h.urgent });
     }
     if (s.covers.coupons) {
       for (const c of await db.all<{ id: number; label: string; store: string | null; expires_on: string }>(

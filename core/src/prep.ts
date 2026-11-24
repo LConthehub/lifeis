@@ -22,6 +22,7 @@
 import type { Db, Queries } from './db.ts';
 import { atomic } from './db.ts';
 import { Problem } from './problem.ts';
+import { holidays } from './holidays.ts';
 import { reminders, zoneNow, type Channel, type Digest, type ReminderTools } from './reminders.ts';
 import { addDays, clean, dayNumber, stamp, todayOf, type Clock } from './small.ts';
 
@@ -284,9 +285,17 @@ export async function prepDue(db: Db, now: Date, tools: ReminderTools): Promise<
     }
     // Remembering is only needed for a while: forget what went out over a week ago.
     await db.run('DELETE FROM prep_sent WHERE owner_id = ? AND sent_at < ?', [row.user_id, stamp(new Date(now.getTime() - 7 * 86_400_000))]);
-    if (!ready.length) continue;
-    const lines = ready.map((c) => ({
-      kind: 'dates' as const, icon: '📌', title: c.words, detail: `for ${c.what} at ${clockWords(c.eat_time)}`, link: '/week', urgent: false,
+    // A holiday's countdown (counted back from dinner) goes the same way, once each.
+    const holiday: { words: string; what: string; eat_time: string; link: string }[] = [];
+    for (const c of await holidays(db, row.user_id, Object.assign(() => now, { today: () => here.day })).countdownDue(here.day, here.day)) {
+      const late = nowMinutes - momentMinutes({ day: c.due_day, time: c.due_time });
+      if (late < 0 || late > GRACE_MINUTES) continue;
+      const made = await db.run('INSERT OR IGNORE INTO prep_sent (owner_id, key, sent_at) VALUES (?, ?, ?)', [row.user_id, c.key, stamp(now)]);
+      if (made.changes > 0) holiday.push(c);
+    }
+    if (!ready.length && !holiday.length) continue;
+    const lines = [...ready.map((c) => ({ words: c.words, what: c.what, eat_time: c.eat_time, link: '/week' })), ...holiday].map((c) => ({
+      kind: 'dates' as const, icon: '📌', title: c.words, detail: `for ${c.what} at ${clockWords(c.eat_time)}`, link: c.link, urgent: false,
     }));
     const digest: Digest = { day: here.day, lines, title: lines.length === 1 ? lines[0]!.title : `${lines.length} things to get ready`, text: '' };
     digest.text = lines.map((l) => `• ${l.title}: ${l.detail}`).join('\n') + (s.origin ? `\n\nSee the week: ${s.origin}/week` : '');
