@@ -11,6 +11,10 @@
  * Amounts are set aside while a project is planned, active or paused. Using a line, or finishing the project,
  * takes its amount out of what you keep, the way cooking a meal takes from the pantry.
  *
+ * Money: a cost line is planned, then paid. Paying it also writes a spending entry tagged with the project (money.ts),
+ * so what was spent is counted once, in the budget and here. A savings goal (budget.ts) can be for a project; paying a
+ * cost can draw from it, which takes that much out of the goal.
+ *
  * `projects(db, owner)` is one person's projects: everything it reads and writes is theirs.
  */
 import { atomic, type Db, type Queries, type Value } from './db.ts';
@@ -92,6 +96,8 @@ export type ProjectSummary = {
   /** How many of its lines are short of something. */
   short_count: number;
   tag_list: TagRef[];
+  /** Its money, so a list of projects can say which are over their plan. */
+  budget: Budget;
 };
 /** One thing a project costs: what was planned, and once paid, what it came to. */
 export type Cost = {
@@ -102,6 +108,8 @@ export type Cost = {
   actual_cents: number | null;
   paid_on: string | null;
   note: string | null;
+  /** How much of what it came to was taken from the project's savings. */
+  drawn_cents: number;
 };
 export type CostInput = { label?: string | null; planned_cents?: number | null; actual_cents?: number | null; note?: string | null };
 /**
@@ -109,14 +117,22 @@ export type CostInput = { label?: string | null; planned_cents?: number | null; 
  * `expected` is the best guess at the final cost: what was paid, plus the plan for what isn't paid yet.
  * `left` is the plan less what is expected, so it goes below zero when the project is running over.
  */
-export type Budget = { currency: string; planned: number; spent: number; expected: number; left: number; unpaid: number };
+export type Budget = {
+  currency: string; planned: number; spent: number; expected: number; left: number; unpaid: number;
+  /** How far over its plan the project is going to be (what is expected, less what was planned); 0 when it is not over, or nothing was planned. */
+  over: number;
+  /** What has been saved up for it, in the goals made for it; null when there are none. */
+  saved: { cents: number; target: number; goals: { id: number; name: string; saved: number; target: number }[] } | null;
+};
 export type Project = ProjectSummary & { lines: Line[]; sessions: Session[]; costs: Cost[]; budget: Budget };
 
-type ProjectRow = Omit<ProjectSummary, 'minutes' | 'sessions_count' | 'short_count' | 'tag_list'>;
+type ProjectRow = Omit<ProjectSummary, 'minutes' | 'sessions_count' | 'short_count' | 'tag_list' | 'budget'>;
 type LineRow = Omit<Line, 'amount' | 'have' | 'place' | 'short' | 'short_text'> & {
   item_quantity: number | null; item_unit: string | null; item_place: number | null; item_there: number | null;
 };
 
+/** What was taken out of a project's savings to pay a cost: the negative amounts put in a goal against it. */
+const DRAWN = 'COALESCE((SELECT -SUM(s.cents) FROM money_goal_saved s WHERE s.cost_id = c.id), 0)';
 const PROJECT_COLUMNS = 'id, name, activity, status, notes, due_on, started_on, finished_on, created_at, updated_at';
 
 export function projects(db: Db, owner: number, clock: Clock = () => new Date()) {
@@ -177,14 +193,21 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
     const row = await projectRow(q, id);
     const lines = await linesOf(q, row);
     const sessions = await sessionsOf(q, id);
-    const costs = await q.all<Cost>('SELECT id, project_id, label, planned_cents, actual_cents, paid_on, note FROM project_costs WHERE project_id = ? ORDER BY sort_order, id', [id]);
+    const costs = await q.all<Cost>(`SELECT c.id, c.project_id, c.label, c.planned_cents, c.actual_cents, c.paid_on, c.note, ${DRAWN} AS drawn_cents FROM project_costs c WHERE c.project_id = ? ORDER BY c.sort_order, c.id`, [id]);
+    const goals = await q.all<{ id: number; name: string; saved: number; target: number }>(
+      `SELECT g.id, g.name, g.target_cents AS target, COALESCE((SELECT SUM(s.cents) FROM money_goal_saved s WHERE s.goal_id = g.id), 0) AS saved
+       FROM money_goals g WHERE g.owner_id = ? AND g.project_id = ? ORDER BY g.id`, [owner, id]);
     const sign = await q.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'shopping_currency'", [owner]);
     const planned = costs.reduce((sum, c) => sum + (c.planned_cents ?? 0), 0);
     const spent = costs.reduce((sum, c) => sum + (c.paid_on ? c.actual_cents ?? 0 : 0), 0);
     const expected = costs.reduce((sum, c) => sum + (c.paid_on ? c.actual_cents ?? 0 : c.planned_cents ?? 0), 0);
     return {
       ...row, lines, sessions, costs,
-      budget: { currency: sign?.value ?? '$', planned, spent, expected, left: planned - expected, unpaid: costs.filter((c) => !c.paid_on).length },
+      budget: {
+        currency: sign?.value ?? '$', planned, spent, expected, left: planned - expected, unpaid: costs.filter((c) => !c.paid_on).length,
+        over: planned > 0 ? Math.max(0, expected - planned) : 0,
+        saved: goals.length ? { cents: goals.reduce((n, g) => n + g.saved, 0), target: goals.reduce((n, g) => n + g.target, 0), goals } : null,
+      },
       minutes: sessions.reduce((sum, s) => sum + (s.minutes ?? 0), 0),
       sessions_count: sessions.length,
       short_count: lines.filter((line) => line.short).length,
@@ -243,10 +266,38 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
   }
   async function costRow(q: Queries, id: number): Promise<Cost> {
     const row = await q.get<Cost>(
-      `SELECT c.id, c.project_id, c.label, c.planned_cents, c.actual_cents, c.paid_on, c.note FROM project_costs c JOIN projects p ON p.id = c.project_id
+      `SELECT c.id, c.project_id, c.label, c.planned_cents, c.actual_cents, c.paid_on, c.note, ${DRAWN} AS drawn_cents FROM project_costs c JOIN projects p ON p.id = c.project_id
        WHERE c.id = ? AND p.owner_id = ?`, [id, owner]);
     if (!row) throw new Problem(404, 'Not found');
     return row;
+  }
+
+  /** The spending entry for a paid cost: made, or changed to what the cost says now. An unpaid cost has none. */
+  async function syncEntry(q: Queries, costId: number, tripId: number | null = null): Promise<void> {
+    const c = await q.get<{ id: number; project_id: number; label: string; actual_cents: number | null; paid_on: string | null }>(
+      'SELECT id, project_id, label, actual_cents, paid_on FROM project_costs WHERE id = ?', [costId]);
+    if (!c || !c.paid_on || c.actual_cents === null) { await q.run('DELETE FROM money_entries WHERE project_cost_id = ?', [costId]); return; }
+    const have = await q.get<{ id: number }>('SELECT id FROM money_entries WHERE project_cost_id = ?', [costId]);
+    if (have) await q.run('UPDATE money_entries SET label = ?, cents = ?, day = ?, project_id = ? WHERE id = ?', [c.label, c.actual_cents, c.paid_on, c.project_id, have.id]);
+    else await q.run('INSERT INTO money_entries (owner_id, category_id, label, cents, day, note, created_at, project_id, project_cost_id, trip_id) VALUES (?, NULL, ?, ?, ?, NULL, ?, ?, ?, ?)',
+      [owner, c.label, c.actual_cents, c.paid_on, now(), c.project_id, costId, tripId]);
+  }
+  /** Take a cost's spending entry and the money it drew from savings away: the cost is no longer paid, or is gone. */
+  async function forgetPaid(q: Queries, costId: number): Promise<void> {
+    await q.run('DELETE FROM money_entries WHERE project_cost_id = ?', [costId]);
+    await q.run('DELETE FROM money_goal_saved WHERE cost_id = ?', [costId]);
+  }
+  /** Draw up to `cents` from the goals made for a project, the first goal first, against a cost. Gives how much was drawn. */
+  async function drawFromSavings(q: Queries, projectId: number, costId: number, cents: number): Promise<number> {
+    let left = cents;
+    for (const g of await q.all<{ id: number; saved: number }>(
+      `SELECT g.id, COALESCE((SELECT SUM(s.cents) FROM money_goal_saved s WHERE s.goal_id = g.id), 0) AS saved FROM money_goals g WHERE g.owner_id = ? AND g.project_id = ? ORDER BY g.id`, [owner, projectId])) {
+      const take = Math.min(left, g.saved);
+      if (take <= 0) continue;
+      await q.run('INSERT INTO money_goal_saved (goal_id, day, cents, cost_id, created_at) VALUES (?, ?, ?, ?, ?)', [g.id, today(), -take, costId, now()]);
+      left -= take;
+    }
+    return cents - left;
   }
 
   /**
@@ -335,8 +386,14 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
 
     /** Remove a project. What it had set aside is free again; what it had already used stays used. */
     async deleteProject(id: number): Promise<void> {
-      await db.run('DELETE FROM projects WHERE id = ? AND owner_id = ?', [id, owner]);
-      await unlink(db, 'project', id);
+      await atomic(db, async (tx) => {
+        if (!(await tx.get('SELECT 1 AS x FROM projects WHERE id = ? AND owner_id = ?', [id, owner]))) return;
+        for (const c of await tx.all<{ id: number }>('SELECT id FROM project_costs WHERE project_id = ?', [id])) await forgetPaid(tx, c.id);
+        await tx.run('DELETE FROM money_entries WHERE project_id = ? AND owner_id = ?', [id, owner]);
+        await tx.run('UPDATE money_goals SET project_id = NULL WHERE project_id = ? AND owner_id = ?', [id, owner]);
+        await tx.run('DELETE FROM projects WHERE id = ? AND owner_id = ?', [id, owner]);
+        await unlink(tx, 'project', id);
+      });
     },
 
     // ---------- what it uses ----------
@@ -395,6 +452,7 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
         const actual = input.actual_cents === undefined ? before.actual_cents : cents(input.actual_cents, 'What it came to');
         await tx.run('UPDATE project_costs SET label = ?, planned_cents = ?, actual_cents = ?, note = ? WHERE id = ?',
           [label, planned, before.paid_on ? actual ?? 0 : null, input.note === undefined ? before.note : clean(input.note, 1000), id]);
+        await syncEntry(tx, id);
         return project(tx, before.project_id);
       });
     },
@@ -402,19 +460,45 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
     async removeCost(id: number): Promise<Project> {
       return atomic(db, async (tx) => {
         const before = await costRow(tx, id);
+        await forgetPaid(tx, id);
         await tx.run('DELETE FROM project_costs WHERE id = ?', [id]);
         return project(tx, before.project_id);
       });
     },
 
-    /** It has been paid for. What it came to is what was planned, unless a different amount is given. */
-    async payCost(id: number, actualCents?: number | null): Promise<Project> {
+    /**
+     * It has been paid for. What it came to is what was planned, unless a different amount is given. It is written
+     * down as spending, tagged with the project. `fromSavings` takes what it can from the goals made for the project.
+     */
+    async payCost(id: number, actualCents?: number | null, fromSavings = false): Promise<Project> {
       return atomic(db, async (tx) => {
         const before = await costRow(tx, id);
         const actual = cents(actualCents, 'What it came to') ?? before.planned_cents ?? 0;
+        await forgetPaid(tx, id);
         await tx.run('UPDATE project_costs SET actual_cents = ?, paid_on = ? WHERE id = ?', [actual, today(), id]);
+        await syncEntry(tx, id);
+        if (fromSavings && actual > 0) await drawFromSavings(tx, before.project_id, id, actual);
         return project(tx, before.project_id);
       });
+    },
+
+    /**
+     * Something bought for a project that was not planned as a cost (a part of a receipt): a cost line that is
+     * already paid, with its entry. `trip` ties the entry to the trip to a store it came from. `within` is the
+     * change it is part of, when it is part of one.
+     */
+    async spend(projectId: number, input: { label: string; cents: number; day?: string | null; trip?: number | null }, within?: Queries): Promise<void> {
+      const work = async (tx: Queries) => {
+        await projectRow(tx, projectId);
+        const label = clean(input.label, 200);
+        if (!label) throw new Problem(400, 'Say what the money is for');
+        const next = (await tx.get<{ n: number }>('SELECT COALESCE(MAX(sort_order) + 1, 0) AS n FROM project_costs WHERE project_id = ?', [projectId]))!.n;
+        const made = await tx.run('INSERT INTO project_costs (project_id, label, planned_cents, actual_cents, paid_on, sort_order) VALUES (?, ?, NULL, ?, ?, ?)',
+          [projectId, label, cents(input.cents, 'The amount'), dayOrNull(input.day) ?? today(), next]);
+        await syncEntry(tx, made.lastId, input.trip ?? null);
+      };
+      // Inside a change already under way (a receipt split), it joins that one.
+      if (within) await work(within); else await atomic(db, work);
     },
 
     /** Not paid after all: back to only a plan. */
@@ -422,6 +506,7 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
       return atomic(db, async (tx) => {
         const before = await costRow(tx, id);
         await tx.run('UPDATE project_costs SET actual_cents = NULL, paid_on = NULL WHERE id = ?', [id]);
+        await forgetPaid(tx, id);
         return project(tx, before.project_id);
       });
     },
@@ -433,6 +518,19 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
         if (line.used_on) throw new Problem(409, "That's already been used");
         const taken = await useLineIn(tx, line);
         return { ...(await project(tx, line.project_id)), taken };
+      });
+    },
+
+    /** Save up for this project in a goal that is already made (budget.ts), or stop (a null goal takes every one off). */
+    async linkGoal(projectId: number, goalId: number | null): Promise<Project> {
+      return atomic(db, async (tx) => {
+        await projectRow(tx, projectId);
+        if (goalId === null) await tx.run('UPDATE money_goals SET project_id = NULL WHERE project_id = ? AND owner_id = ?', [projectId, owner]);
+        else {
+          if (!(await tx.get('SELECT 1 AS x FROM money_goals WHERE id = ? AND owner_id = ?', [goalId, owner]))) throw new Problem(404, 'Not found');
+          await tx.run('UPDATE money_goals SET project_id = ? WHERE id = ?', [projectId, goalId]);
+        }
+        return project(tx, projectId);
       });
     },
 

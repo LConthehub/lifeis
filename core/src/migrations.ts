@@ -1315,6 +1315,41 @@ export const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    // Budget with projects and grocery trips. A paid project cost is also a spending entry (project_id, project_cost_id),
+    // so the budget reads one place; paid costs already there get their entry here, once. A savings goal can be for a
+    // project (money_goals.project_id), and paying a cost can draw from it (money_goal_saved.cost_id). A grocery line can
+    // be moved to another store (grocery.store). A trip is one visit to a store, with the receipt total; the entries
+    // it made carry trip_id, and a bank charge that matches it is not counted again. No REFERENCES on the added
+    // columns: what they point at is cleaned up in code.
+    number: 44,
+    name: 'budget with projects and grocery trips',
+    statements: [
+      `ALTER TABLE money_entries ADD COLUMN project_id INTEGER`,
+      `ALTER TABLE money_entries ADD COLUMN project_cost_id INTEGER`,
+      `ALTER TABLE money_entries ADD COLUMN trip_id INTEGER`,
+      `CREATE UNIQUE INDEX idx_money_entries_cost ON money_entries(project_cost_id) WHERE project_cost_id IS NOT NULL`,
+      `INSERT INTO money_entries (owner_id, category_id, label, cents, day, note, created_at, project_id, project_cost_id)
+        SELECT p.owner_id, NULL, k.label, k.actual_cents, k.paid_on, NULL, strftime('%Y-%m-%dT%H:%M:%S', 'now') || '+00:00', p.id, k.id
+        FROM project_costs k JOIN projects p ON p.id = k.project_id WHERE k.paid_on IS NOT NULL AND k.actual_cents IS NOT NULL`,
+      `ALTER TABLE money_goals ADD COLUMN project_id INTEGER`,
+      `ALTER TABLE money_goal_saved ADD COLUMN cost_id INTEGER`,
+      `ALTER TABLE grocery ADD COLUMN store TEXT`,
+      `CREATE TABLE shopping_trips (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        store TEXT NOT NULL,
+        day TEXT NOT NULL,
+        estimate_cents INTEGER CHECK(estimate_cents IS NULL OR estimate_cents >= 0),
+        total_cents INTEGER NOT NULL CHECK(total_cents >= 0),
+        matched INTEGER NOT NULL DEFAULT 0 CHECK(matched IN (0, 1)),
+        bank_account TEXT,
+        bank_txn TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_shopping_trips ON shopping_trips(owner_id, day)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

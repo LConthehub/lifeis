@@ -550,9 +550,10 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   const sharedWith = await all('SELECT s.category_id, u.username FROM money_shares s JOIN users u ON u.id = s.user_id JOIN money_categories c ON c.id = s.category_id WHERE c.owner_id = ? ORDER BY u.username');
   out.csv('money-categories.csv', ['Category', 'Each month', 'Shared with'],
     categories.map((c) => [str(c.name), dollars(c.monthly_cents), sharedWith.filter((s) => s.category_id === c.id).map((s) => str(s.username)).join('; ')]));
+  // What was paid on a project is an entry too, but it is in project-costs.csv (with the project), so it is not listed twice.
   out.csv('money-entries.csv', ['What', 'Amount', 'Day', 'Category', 'Category shared with you by', 'Notes'],
     (await all(`SELECT e.label, e.cents, e.day, e.note, c.name AS category, c.owner_id AS category_owner, cu.username AS category_by
-      FROM money_entries e LEFT JOIN money_categories c ON c.id = e.category_id LEFT JOIN users cu ON cu.id = c.owner_id WHERE e.owner_id = ? ORDER BY e.day, e.id`))
+      FROM money_entries e LEFT JOIN money_categories c ON c.id = e.category_id LEFT JOIN users cu ON cu.id = c.owner_id WHERE e.owner_id = ? AND e.project_id IS NULL ORDER BY e.day, e.id`))
       .map((e) => [str(e.label), dollars(e.cents), str(e.day), str(e.category), e.category !== null && e.category_owner !== owner ? str(e.category_by) : '', str(e.note)]));
 
   // Income and savings goals (bills are upkeep jobs, in upkeep.csv).
@@ -560,9 +561,10 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     out.csv('money-income.csv', ['What', 'Amount', 'How often', 'First day', 'Last day'],
       (await all('SELECT name, cents, every, start_day, end_day FROM money_income WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id'))
         .map((i) => [str(i.name), dollars(i.cents), str(i.every).replace('_', ' '), str(i.start_day), str(i.end_day)]));
-    out.csv('money-goals.csv', ['Goal', 'Target', 'Reach it by', 'Saved so far'],
-      (await all(`SELECT g.name, g.target_cents, g.by_day, COALESCE((SELECT SUM(s.cents) FROM money_goal_saved s WHERE s.goal_id = g.id), 0) AS saved FROM money_goals g WHERE g.owner_id = ? ORDER BY g.id`))
-        .map((g) => [str(g.name), dollars(g.target_cents), str(g.by_day), signedDollars(g.saved)]));
+    out.csv('money-goals.csv', ['Goal', 'Target', 'Reach it by', 'Saved so far', 'For project'],
+      (await all(`SELECT g.name, g.target_cents, g.by_day, COALESCE((SELECT SUM(s.cents) FROM money_goal_saved s WHERE s.goal_id = g.id), 0) AS saved,
+          (SELECT p.name FROM projects p WHERE p.id = g.project_id AND p.owner_id = g.owner_id) AS project FROM money_goals g WHERE g.owner_id = ? ORDER BY g.id`))
+        .map((g) => [str(g.name), dollars(g.target_cents), str(g.by_day), signedDollars(g.saved), str(g.project)]));
     out.csv('money-goal-saved.csv', ['Goal', 'Day', 'Amount (below zero is taken out)'],
       (await all('SELECT g.name, s.day, s.cents FROM money_goal_saved s JOIN money_goals g ON g.id = s.goal_id WHERE g.owner_id = ? ORDER BY s.day, s.id'))
         .map((s) => [str(s.name), str(s.day), signedDollars(s.cents)]));
@@ -1632,8 +1634,15 @@ const importers: Record<string, Importer> = {
       for (const m of costs.filter(mine)) {
         const label = clean(cellOf(m, 'What'), 200);
         if (!label) continue;
-        await c.tx.run('INSERT INTO project_costs (project_id, label, planned_cents, actual_cents, paid_on, note, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [made.lastId, label, centsOf(cellOf(m, 'Planned')), centsOf(cellOf(m, 'Spent')), dayOf(cellOf(m, 'Paid on')), clean(m.notes, 1000), order]);
+        const spent = centsOf(cellOf(m, 'Spent'));
+        const paidOn = dayOf(cellOf(m, 'Paid on'));
+        const cost = await c.tx.run('INSERT INTO project_costs (project_id, label, planned_cents, actual_cents, paid_on, note, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [made.lastId, label, centsOf(cellOf(m, 'Planned')), spent, paidOn, clean(m.notes, 1000), order]);
+        // A paid cost is a spending entry too, tagged with the project, as when it was paid here.
+        if (paidOn && spent !== null) {
+          await c.tx.run('INSERT INTO money_entries (owner_id, category_id, label, cents, day, note, created_at, project_id, project_cost_id) VALUES (?, NULL, ?, ?, ?, NULL, ?, ?, ?)',
+            [c.owner, label, spent, paidOn, c.at, made.lastId, cost.lastId]);
+        }
         order += 1;
       }
     }
@@ -1725,7 +1734,9 @@ const importers: Record<string, Importer> = {
       d.found += 1;
       const key = labelKey(name);
       if (goalSeen.take(key)) { d.already += 1; continue; }
-      const made = await c.tx.run('INSERT INTO money_goals (owner_id, name, target_cents, by_day, created_at) VALUES (?, ?, ?, ?, ?)', [c.owner, name, target, dayOf(cellOf(row, 'Reach it by')), c.at]);
+      const forProject = cellOf(row, 'For project');
+      const project = forProject ? await c.tx.get<{ id: number }>('SELECT id FROM projects WHERE owner_id = ? AND name = ? COLLATE NOCASE ORDER BY id DESC LIMIT 1', [c.owner, forProject]) : undefined;
+      const made = await c.tx.run('INSERT INTO money_goals (owner_id, name, target_cents, by_day, project_id, created_at) VALUES (?, ?, ?, ?, ?, ?)', [c.owner, name, target, dayOf(cellOf(row, 'Reach it by')), project?.id ?? null, c.at]);
       d.fresh += 1;
       // Each put-toward is told apart by the goal's name: of two goals with one name, only the first is given them.
       if (filled.has(key)) continue;

@@ -27,10 +27,12 @@ export const INCOME_EVERY = ['weekly', 'biweekly', 'twice_monthly', 'monthly', '
 export type IncomeEvery = (typeof INCOME_EVERY)[number];
 export type IncomeInput = { name?: string | null; cents?: number | null; every?: string | null; start_day?: string | null; end_day?: string | null };
 export type IncomeLine = { id: number; name: string; cents: number; every: IncomeEvery; start_day: string | null; end_day: string | null; per_month: number };
-export type GoalInput = { name?: string | null; target_cents?: number | null; by_day?: string | null };
+export type GoalInput = { name?: string | null; target_cents?: number | null; by_day?: string | null; /** A project this is saved up for. Left out: unchanged. */ project_id?: number | null };
 export type Saved = { id: number; day: string; cents: number };
 export type Goal = {
   id: number; name: string; target_cents: number; by_day: string | null;
+  /** The project it is saved up for, when it is. */
+  project_id: number | null; project: string | null;
   saved: number; left: number; done: boolean;
   /** What it takes each month from now to the day, when there is a day. Null with no day, or once it has passed. */
   per_month: number | null;
@@ -48,6 +50,8 @@ export type Budget = {
   planned: { total: number; categories: { id: number; name: string; cents: number; spent: number }[] };
   /** What was spent this month (bills paid through spending and nothing else left out), projects included. */
   spent: number;
+  /** Of what was spent, what went on projects (entries tagged with a project), and what is planned on them and not yet paid ("coming", not counted). */
+  projects: { spent: number; coming: number };
   /** What the month is counted as spending: the larger of planned and spent, or only what was spent once the month is past. */
   spending: number;
   /** The month is before this one. */
@@ -56,10 +60,10 @@ export type Budget = {
   left_over: number;
   by_tag: TagSpend[];
 };
-export type YearMonth = { month: string; income: number; bills: number; planned: number; spent: number; spending: number; saved: number; left: number };
+export type YearMonth = { month: string; income: number; bills: number; planned: number; spent: number; /** Of spent: what went on projects. */ projects: number; /** Planned on projects, not yet paid. */ coming: number; spending: number; saved: number; left: number };
 export type Year = {
   year: string; currency: string; months: YearMonth[];
-  totals: { income: number; bills: number; planned: number; spent: number; spending: number; saved: number; left: number };
+  totals: { income: number; bills: number; planned: number; spent: number; projects: number; coming: number; spending: number; saved: number; left: number };
   by_tag: TagSpend[];
 };
 
@@ -172,8 +176,9 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
 
   // ---------- goals ----------
   async function goalList(q: Queries, only?: number): Promise<Goal[]> {
-    const rows = await q.all<{ id: number; name: string; target_cents: number; by_day: string | null }>(
-      `SELECT id, name, target_cents, by_day FROM money_goals WHERE owner_id = ? ${only !== undefined ? 'AND id = ?' : ''} ORDER BY by_day IS NULL, by_day, name COLLATE NOCASE, id`, only !== undefined ? [owner, only] : [owner]);
+    const rows = await q.all<{ id: number; name: string; target_cents: number; by_day: string | null; project_id: number | null; project: string | null }>(
+      `SELECT g.id, g.name, g.target_cents, g.by_day, g.project_id, p.name AS project FROM money_goals g LEFT JOIN projects p ON p.id = g.project_id AND p.owner_id = g.owner_id
+       WHERE g.owner_id = ? ${only !== undefined ? 'AND g.id = ?' : ''} ORDER BY g.by_day IS NULL, g.by_day, g.name COLLATE NOCASE, g.id`, only !== undefined ? [owner, only] : [owner]);
     const puts = await q.all<Saved & { goal_id: number }>(
       'SELECT s.id, s.goal_id, s.day, s.cents FROM money_goal_saved s JOIN money_goals g ON g.id = s.goal_id WHERE g.owner_id = ? ORDER BY s.day DESC, s.id DESC', [owner]);
     const here = today();
@@ -188,7 +193,7 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
         const months = Math.max(1, (Number(g.by_day.slice(0, 4)) - Number(here.slice(0, 4))) * 12 + Number(g.by_day.slice(5, 7)) - Number(here.slice(5, 7)) + 1);
         per = Math.ceil(left / months);
       }
-      return { id: g.id, name: g.name, target_cents: g.target_cents, by_day: g.by_day, saved, left, done: left === 0, per_month: per, late, puts: mine };
+      return { id: g.id, name: g.name, target_cents: g.target_cents, by_day: g.by_day, project_id: g.project_id, project: g.project, saved, left, done: left === 0, per_month: per, late, puts: mine };
     });
   }
   async function ownGoal(q: Queries, id: number) {
@@ -200,6 +205,12 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
     const target = cents(input.target_cents, 'The target');
     if (target <= 0) throw new Problem(422, 'The target should be more than zero');
     return { name, target, by: dayOrNull(input.by_day) };
+  }
+  /** A project of the person's own, or null for none. */
+  async function ownProject(q: Queries, id: number | null | undefined): Promise<number | null> {
+    if (id === null || id === undefined) return null;
+    if (!(await q.get('SELECT id FROM projects WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Not found');
+    return id;
   }
 
   // ---------- bills, read from upkeep ----------
@@ -217,16 +228,34 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
   async function categories(): Promise<{ id: number; name: string; monthly_cents: number }[]> {
     return db.all<{ id: number; name: string; monthly_cents: number }>(`SELECT c.id, c.name, c.monthly_cents FROM money_categories c WHERE c.id IN (${SEEN}) ORDER BY c.sort_order, c.id`, [owner, owner]);
   }
-  /** What was spent, by month, in a stretch of days: entries in categories seen and the person's own in none, and what was paid on projects. */
+  /** What was spent, by month, in a stretch of days: entries in categories seen and the person's own in none. What was paid on a project is an entry too. */
   async function spentByMonth(from: string, to: string): Promise<Map<string, number>> {
     const out = new Map<string, number>();
     const add = (rows: { m: string; n: number }[]) => { for (const r of rows) out.set(r.m, (out.get(r.m) ?? 0) + r.n); };
     add(await db.all<{ m: string; n: number }>(
       `SELECT SUBSTR(e.day, 1, 7) AS m, SUM(e.cents) AS n FROM money_entries e
        WHERE e.day BETWEEN ? AND ? AND ((e.category_id IS NULL AND e.owner_id = ?) OR e.category_id IN (${SEEN})) AND e.id NOT IN (${BILL_PAID}) GROUP BY m`, [from, to, owner, owner, owner]));
-    add(await db.all<{ m: string; n: number }>(
-      `SELECT SUBSTR(k.paid_on, 1, 7) AS m, SUM(k.actual_cents) AS n FROM project_costs k JOIN projects p ON p.id = k.project_id
-       WHERE p.owner_id = ? AND k.paid_on BETWEEN ? AND ? AND k.actual_cents IS NOT NULL GROUP BY m`, [owner, from, to]));
+    return out;
+  }
+  /** Of what was spent, by month, what went on projects. */
+  async function onProjectsByMonth(from: string, to: string): Promise<Map<string, number>> {
+    const rows = await db.all<{ m: string; n: number }>(
+      'SELECT SUBSTR(e.day, 1, 7) AS m, SUM(e.cents) AS n FROM money_entries e WHERE e.owner_id = ? AND e.project_id IS NOT NULL AND e.day BETWEEN ? AND ? GROUP BY m', [owner, from, to]);
+    return new Map(rows.map((r) => [r.m, r.n]));
+  }
+  /**
+   * What is planned on projects and not yet paid, by the month each project is due. A project with no day is counted
+   * in this month, and one whose day has passed too: it is still to be paid. Only projects still going.
+   */
+  async function comingByMonth(): Promise<Map<string, number>> {
+    const here = today().slice(0, 7);
+    const out = new Map<string, number>();
+    for (const r of await db.all<{ due_on: string | null; n: number }>(
+      `SELECT p.due_on, SUM(k.planned_cents) AS n FROM project_costs k JOIN projects p ON p.id = k.project_id
+       WHERE p.owner_id = ? AND k.paid_on IS NULL AND k.planned_cents > 0 AND p.status NOT IN ('done', 'dropped') GROUP BY p.due_on`, [owner])) {
+      const month = r.due_on && r.due_on.slice(0, 7) > here ? r.due_on.slice(0, 7) : here;
+      out.set(month, (out.get(month) ?? 0) + r.n);
+    }
     return out;
   }
   async function savedByGoal(from: string, to: string): Promise<{ id: number; name: string; cents: number; month: string }[]> {
@@ -263,12 +292,14 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
     },
     async addGoal(input: GoalInput): Promise<{ id: number }> {
       const g = checkedGoal(input);
-      return { id: (await db.run('INSERT INTO money_goals (owner_id, name, target_cents, by_day, created_at) VALUES (?, ?, ?, ?, ?)', [owner, g.name, g.target, g.by, now()])).lastId };
+      const project = await ownProject(db, input.project_id);
+      return { id: (await db.run('INSERT INTO money_goals (owner_id, name, target_cents, by_day, project_id, created_at) VALUES (?, ?, ?, ?, ?, ?)', [owner, g.name, g.target, g.by, project, now()])).lastId };
     },
     async updateGoal(id: number, input: GoalInput): Promise<void> {
       const g = checkedGoal(input);
       await ownGoal(db, id);
       await db.run('UPDATE money_goals SET name = ?, target_cents = ?, by_day = ? WHERE id = ?', [g.name, g.target, g.by, id]);
+      if (input.project_id !== undefined) await db.run('UPDATE money_goals SET project_id = ? WHERE id = ?', [await ownProject(db, input.project_id), id]);
     },
     /** Removing a goal removes what was put toward it from the record. Nothing is spent by it. */
     async removeGoal(id: number): Promise<void> {
@@ -326,6 +357,8 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
       lines.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : a.name.localeCompare(b.name)));
       const cats = await categories();
       const spentHere = (await spentByMonth(from, to)).get(month) ?? 0;
+      const onProjects = (await onProjectsByMonth(from, to)).get(month) ?? 0;
+      const coming = month >= today().slice(0, 7) ? (await comingByMonth()).get(month) ?? 0 : 0;
       const inCategory = await db.all<{ category_id: number; n: number }>(
         `SELECT category_id, SUM(cents) AS n FROM money_entries WHERE category_id IN (${SEEN}) AND day BETWEEN ? AND ? AND id NOT IN (${BILL_PAID}) GROUP BY category_id`, [owner, owner, from, to]);
       const planned = cats.reduce((n, c) => n + c.monthly_cents, 0);
@@ -341,7 +374,7 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
         income: { total: incomeTotal, lines: income },
         bills: { total: bills, lines, unscheduled },
         planned: { total: planned, categories: cats.map((c) => ({ id: c.id, name: c.name, cents: c.monthly_cents, spent: inCategory.find((x) => x.category_id === c.id)?.n ?? 0 })) },
-        spent: spentHere, spending, past,
+        spent: spentHere, projects: { spent: onProjects, coming }, spending, past,
         saved: { total: saved, goals: puts.map((g) => ({ id: g.id, name: g.name, cents: g.cents })) },
         left_over: incomeTotal - bills - spending - saved,
         by_tag: await spendingByTag(db, owner, from, to),
@@ -357,6 +390,8 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
       const planned = (await categories()).reduce((n, c) => n + c.monthly_cents, 0);
       const thisMonth = today().slice(0, 7);
       const spent = await spentByMonth(from, to);
+      const onProjects = await onProjectsByMonth(from, to);
+      const coming = await comingByMonth();
       const puts = await savedByGoal(from, to);
       const months = monthsOf(year).map((month): YearMonth => {
         const income = incs.reduce((n, i) => n + incomeIn(i, month), 0);
@@ -364,12 +399,12 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
         const s = spent.get(month) ?? 0;
         const saved = puts.filter((p) => p.month === month).reduce((n, p) => n + p.cents, 0);
         const spending = month < thisMonth ? s : Math.max(planned, s);
-        return { month, income, bills: owed, planned, spent: s, spending, saved, left: income - owed - spending - saved };
+        return { month, income, bills: owed, planned, spent: s, projects: onProjects.get(month) ?? 0, coming: month >= thisMonth ? coming.get(month) ?? 0 : 0, spending, saved, left: income - owed - spending - saved };
       });
       const sum = (key: keyof Omit<YearMonth, 'month'>) => months.reduce((n, m) => n + m[key], 0);
       return {
         year, currency: await currency(), months,
-        totals: { income: sum('income'), bills: sum('bills'), planned: sum('planned'), spent: sum('spent'), spending: sum('spending'), saved: sum('saved'), left: sum('left') },
+        totals: { income: sum('income'), bills: sum('bills'), planned: sum('planned'), spent: sum('spent'), projects: sum('projects'), coming: sum('coming'), spending: sum('spending'), saved: sum('saved'), left: sum('left') },
         by_tag: await spendingByTag(db, owner, from, to),
       };
     },

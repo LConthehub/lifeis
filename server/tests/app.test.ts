@@ -986,12 +986,13 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.
   for (const column of ['usual_store', 'usual_size_quantity', 'usual_size_unit']) await database.db.run(`ALTER TABLE ingredients DROP COLUMN ${column}`);
   await database.db.run('ALTER TABLE meal_plan DROP COLUMN eat_time');
+  await database.db.run('ALTER TABLE grocery DROP COLUMN store');
   await database.db.run('PRAGMA user_version = 2');
   await stop();
 
@@ -1099,8 +1100,40 @@ it('prices, the running total and coupons answer over the web, in whole cents', 
   await admin.post('/api/kitchen/grocery/clear-done');
   const again = (await admin.post('/api/kitchen/grocery', { label: 'coffee' })).json[0].id;
   expect((await admin.put(`/api/shopping/usual/${again}`, { store: 'Costco', size: '3 lb' })).json.lines).toEqual([{ id: again, price_cents: null, size: '', assumed: false,
-    last: expect.objectContaining({ cents: 899, amount: '30 oz', store: 'Aldi on Main St' }), coupons: [], usual_store: 'Costco', usual_size: '3 lb', likely_store: 'Costco' }]);
+    last: expect.objectContaining({ cents: 899, amount: '30 oz', store: 'Aldi on Main St' }), coupons: [], usual_store: 'Costco', usual_size: '3 lb', likely_store: 'Costco',
+    moved_to: null, store: 'Costco', estimate_cents: 899, cheaper: null }]);
   expect((await admin.put(`/api/shopping/usual/${again}`, { size: 'huge' })).status).toBe(400);
+});
+
+it('a trip to a store, a moved line and a paid project cost answer over the web, and the bank charge is not counted again', async () => {
+  const admin = await owner();
+  const groceries = (await admin.post('/api/money/categories', { name: 'Groceries', monthly_cents: 50000 })).json.id;
+  const id = (await admin.post('/api/kitchen/grocery', { label: 'milk' })).json[0].id;
+  expect((await admin.put(`/api/shopping/move/${id}`, { store: 'Aldi' })).json.lines[0]).toMatchObject({ moved_to: 'Aldi', likely_store: 'Aldi' });
+  await admin.post(`/api/kitchen/grocery/${id}/tick`, { done: true, put_away: false });
+  await admin.put('/api/shopping/settings', { store: 'Aldi' });
+  await admin.put(`/api/shopping/prices/${id}`, { cents: 229 });
+  const plan = (await admin.get('/api/shopping/trip?store=Aldi')).json;
+  expect([plan.estimate_cents, plan.parts.map((p: { key: string }) => p.key)]).toEqual([229, ['groceries']]);
+  expect((await admin.post('/api/shopping/trip', { store: 'Aldi', total_cents: 250, parts: [{ cents: 1 }] })).status).toBe(400);
+  expect((await admin.post('/api/shopping/trip', { store: '', total_cents: 250 })).status).toBe(400);
+  const done = await admin.post('/api/shopping/trip', { store: 'Aldi', total_cents: 250, day: '2046-03-05' });
+  expect([done.status, done.json.entries, done.json.got]).toEqual([201, 1, 1]);
+  const bank = await admin.post('/api/money/statement', { text: 'Date,Description,Amount\n03/06/2046,ALDI 72,-2.50\n' });
+  expect([bank.json.added, bank.json.already]).toEqual([0, 1]);
+  expect((await admin.get('/api/money?month=2046-03')).json.entries.map((e: { label: string; cents: number; category_id: number }) => [e.label, e.cents, e.category_id])).toEqual([['Groceries at Aldi', 250, groceries]]);
+
+  // A project cost, paid from savings, is one entry on the project, and its entry can only be changed there.
+  const project = (await admin.post('/api/projects', { name: 'Shelf' })).json;
+  const costed = (await admin.post(`/api/projects/${project.id}/costs`, { label: 'Boards', planned_cents: 1000 })).json;
+  const goal = (await admin.post('/api/money/goals', { name: 'Shelf fund', target_cents: 5000, project_id: project.id })).json.id;
+  await admin.post(`/api/money/goals/${goal}/saved`, { cents: 600, day: '2046-02-01' });
+  const paid = (await admin.post(`/api/projects/costs/${costed.costs[0].id}/pay`, { actual_cents: 1200, from_savings: true })).json;
+  expect([paid.costs[0].drawn_cents, paid.budget.saved.cents, paid.budget.over]).toEqual([600, 0, 200]);
+  const entry = (await admin.get(`/api/money?month=${paid.costs[0].paid_on.slice(0, 7)}`)).json;
+  expect([entry.projects.spent, entry.entries.filter((e: { label: string }) => e.label === 'Boards')]).toEqual([1200, []]);
+  const linked = (await admin.put(`/api/projects/${project.id}/goal`, { goal_id: null })).json;
+  expect(linked.budget.saved).toBeNull();
 });
 
 it('a bank statement is looked over, then brought in once, privately, over the web', async () => {

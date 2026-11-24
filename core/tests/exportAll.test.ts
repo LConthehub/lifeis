@@ -103,6 +103,8 @@ async function fill(owner: number, tag = '') {
   await db.run("INSERT INTO stores (owner_id, name, created_at) VALUES (?, 'Bakery', 'now')", [owner]);
   await db.run("INSERT INTO ingredient_barcodes (owner_id, barcode, ingredient_id, label, size_quantity, size_unit, created_at) VALUES (?, '0123456789012', ?, 'Mill flour', 5, 'lb', 'now')", [owner, flour.id]);
   await db.run("UPDATE project_costs SET actual_cents = 450, paid_on = '2046-03-02' WHERE project_id = ?", [project.id]);
+  // A paid cost is also a spending entry tagged with its project, as payCost makes it.
+  await db.run("INSERT INTO money_entries (owner_id, label, cents, day, created_at, project_id, project_cost_id) SELECT ?, label, 450, '2046-03-02', 'now', project_id, id FROM project_costs WHERE project_id = ?", [owner, project.id]);
   await db.run("UPDATE project_items SET used_on = '2046-03-01' WHERE project_id = ?", [project.id]);
   await plans(db, owner, clock).addItem(plan.id, { kind: 'thing', ref_id: thing.id, quantity: 2 });
   await plans(db, owner, clock).addItem(plan.id, { kind: 'recipe', ref_id: soup.id });

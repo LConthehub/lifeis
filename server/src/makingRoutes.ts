@@ -343,7 +343,9 @@ export function makingRoutes(db: Db): Route[] {
     ['POST', at('projects/:id/costs'), async (c) => ({ status: 201, json: await making(c).addCost(c.id, costFrom(c.body)) })],
     ['PUT', at('projects/costs/:id'), async (c) => ({ json: await making(c).updateCost(c.id, costFrom(c.body)) })],
     ['DELETE', at('projects/costs/:id'), async (c) => ({ json: await making(c).removeCost(c.id) })],
-    ['POST', at('projects/costs/:id/pay'), async (c) => ({ json: await making(c).payCost(c.id, read.maybeNumber(c.body, 'actual_cents')) })],
+    ['POST', at('projects/costs/:id/pay'), async (c) => ({ json: await making(c).payCost(c.id, read.maybeNumber(c.body, 'actual_cents'), read.yesNo(c.body, 'from_savings', false)) })],
+    // Saving up for a project: a goal from the budget linked to it (a null goal unlinks).
+    ['PUT', at('projects/:id/goal'), async (c) => ({ json: await making(c).linkGoal(c.id, read.maybeWhole(c.body, 'goal_id')) })],
     ['POST', at('projects/costs/:id/unpay'), async (c) => ({ json: await making(c).unpayCost(c.id) })],
     ['POST', at('projects/lines/:id/use'), async (c) => ({ json: await making(c).useLine(c.id) })],
 

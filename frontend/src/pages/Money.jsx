@@ -97,6 +97,11 @@ export default function Money() {
             {data.projects.spent > 0 && <>Paid on projects: <span className="tabular-nums">{money(data.projects.spent, sign)}</span>.</>}
           </p>
         )}
+        {data.coming.cents > 0 && (
+          <p className="mt-1 text-sm text-gray-600 dark:text-life-100" data-coming>
+            Coming on projects: <span className="tabular-nums">{money(data.coming.cents, sign)}</span>, planned and not paid yet ({[...new Set(data.coming.lines.map((l) => l.project))].join(', ')}). Not counted in the totals.
+          </p>
+        )}
       </section>
 
       <section className={cardClass}>

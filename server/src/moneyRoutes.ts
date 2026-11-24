@@ -19,7 +19,10 @@ const incomeFrom = (body: Body) => ({
   name: read.maybeText(body, 'name'), cents: read.maybeNumber(body, 'cents'), every: read.maybeText(body, 'every'),
   start_day: read.maybeText(body, 'start_day'), end_day: read.maybeText(body, 'end_day'),
 });
-const goalFrom = (body: Body) => ({ name: read.maybeText(body, 'name'), target_cents: read.maybeNumber(body, 'target_cents'), by_day: read.maybeText(body, 'by_day') });
+const goalFrom = (body: Body) => ({
+  name: read.maybeText(body, 'name'), target_cents: read.maybeNumber(body, 'target_cents'), by_day: read.maybeText(body, 'by_day'),
+  ...(sent(body, 'project_id') ? { project_id: read.maybeWhole(body, 'project_id') } : {}),
+});
 const billFrom = (body: Body) => ({
   name: read.maybeText(body, 'name'), cents: read.maybeNumber(body, 'cents'), every_n: read.maybeWhole(body, 'every_n'), every_unit: read.maybeText(body, 'every_unit'),
   first_due: read.maybeText(body, 'first_due'), autopay: read.yesNo(body, 'autopay', false),

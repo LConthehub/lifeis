@@ -44,7 +44,7 @@ export default function Groceries() {
   if (!items || !shop) return null;
 
   const sign = shop.currency;
-  const lineOf = (g) => shop.lines.find((l) => l.id === g.id) || { price_cents: null, size: '', assumed: false, last: null, coupons: [], usual_store: null, usual_size: '', likely_store: null };
+  const lineOf = (g) => shop.lines.find((l) => l.id === g.id) || { price_cents: null, size: '', assumed: false, last: null, coupons: [], usual_store: null, usual_size: '', likely_store: null, moved_to: null, store: null, estimate_cents: null, cheaper: null };
   const add = async (e) => {
     e.preventDefault();
     try {
@@ -75,6 +75,10 @@ export default function Groceries() {
     setMessage(data.added ? `Added ${data.added} thing${data.added === 1 ? '' : 's'} running low in the pantry.` : 'Nothing in the pantry is running low.');
   };
   const saveStore = async (e) => { if ((e.target.value.trim() || null) !== shop.store) setShop((await axios.put('/api/shopping/settings', { store: e.target.value.trim() || null })).data); };
+  // One tap moves a line to another store for this trip. Nothing moves unless this is tapped.
+  const move = async (g, store) => {
+    try { setShop((await axios.put(`/api/shopping/move/${g.id}`, { store })).data); } catch (err) { setMessage(errorMessage(err, "Couldn't move that")); }
+  };
   const use = async (c) => setShop((await axios.post(`/api/shopping/coupons/${c.id}/use`, { using: !c.used_on })).data);
 
   const open = items.filter((g) => !g.done);
@@ -92,6 +96,8 @@ export default function Groceries() {
   const shownGroups = canNarrow && justHere ? aisles.filter((a) => isHere(a) || a === 'Any store') : aisles;
   const elsewhere = open.filter((g) => !shownGroups.includes(groupOf(g))).length;
   const t = shop.totals;
+  const stops = shop.stops || [];
+  const stopFor = (group) => stops.find((s) => (s.store || 'Any store').toLowerCase() === group.toLowerCase());
   const anyMoney = t.trolley_cents > 0 || t.left_cents > 0 || shop.coupons.length > 0;
   return (
     <div className="space-y-4">
@@ -151,10 +157,37 @@ export default function Groceries() {
           {shop.aisle_order ? <span>In {shop.store}'s order.</span> : <span>The usual order.</span>}
         </div>
       )}
+      {items.length > 0 && stops.some((s) => s.store) && (
+        <section className={cardClass} data-trip-card aria-label="The list by store">
+          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">The list by store</h2>
+          <ul className="divide-y divide-life-50 dark:divide-life-700">
+            {stops.map((s) => (
+              <li key={s.store || 'none'} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm" data-stop={s.store || 'Any store'}>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-gray-800 dark:text-life-50">{s.store || 'Any store'}</span>
+                  <span className="block text-xs text-gray-500 dark:text-life-300" data-stop-estimate>
+                    {s.open > 0 ? `${s.open} to get` : 'all in the buggy'}{s.done > 0 && s.open > 0 ? `, ${s.done} in the buggy` : ''}
+                    {s.estimate_cents > 0 ? ` · about ${money(s.estimate_cents, sign)}` : ' · no prices yet'}
+                    {s.unknown > 0 && s.estimate_cents > 0 ? `, ${s.unknown} with no price` : ''}
+                  </span>
+                </span>
+                {s.done > 0 && <button type="button" onClick={() => setModal({ trip: s.store || '' })} className={`${quietButtonClass} min-h-[44px]`} data-done-at={s.store || ''}>Done at {s.store || 'this store'}</button>}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-sm text-gray-700 dark:text-life-100" data-list-total>
+            The whole list comes to about <span className="font-semibold tabular-nums">{money(stops.reduce((n, s) => n + s.estimate_cents, 0), sign)}</span>.
+            {shop.grocery_budget && (
+              <> {shop.grocery_budget.name} has <span className="tabular-nums">{money(Math.max(0, shop.grocery_budget.left_cents), sign)}</span> left this month
+              {shop.grocery_budget.after_cents >= 0 ? <>, and <span className="tabular-nums">{money(shop.grocery_budget.after_cents, sign)}</span> after this list.</> : <>, so this list goes over by <span className="font-semibold tabular-nums text-red-600" data-over>{money(-shop.grocery_budget.after_cents, sign)}</span>.</>}</>
+            )}
+          </p>
+        </section>
+      )}
       <div className={cardClass}>
         {open.length === 0 ? <p className="py-4 text-center text-sm text-gray-500 dark:text-life-200">Nothing to buy. Plan the week and press "Make the grocery list", or add things here.</p> : shownGroups.map((aisle) => (
           <div key={aisle} className="mb-3 last:mb-0">
-            {(aisles.length > 1 || by === 'shop') && <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-life-600 dark:text-life-300">{aisle}{by === 'shop' && aisle.toLowerCase() === here && <span className="ml-2 normal-case text-gray-500 dark:text-life-300">where you are</span>}</h2>}
+            {(aisles.length > 1 || by === 'shop') && <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-life-600 dark:text-life-300">{aisle}{by === 'shop' && aisle.toLowerCase() === here && <span className="ml-2 normal-case text-gray-500 dark:text-life-300">where you are</span>}{by === 'shop' && stopFor(aisle)?.estimate_cents > 0 && <span className="ml-2 normal-case text-gray-500 dark:text-life-300">about {money(stopFor(aisle).estimate_cents, sign)}</span>}</h2>}
             <ul className="divide-y divide-life-50 dark:divide-life-700">
               {open.filter((g) => groupOf(g) === aisle).map((g) => {
                 const l = lineOf(g);
@@ -169,6 +202,18 @@ export default function Groceries() {
                       {by !== 'shop' && l.usual_store && <span className="ml-2 rounded bg-life-50 px-1.5 text-[11px] text-life-700 dark:bg-life-700 dark:text-life-100">{l.usual_store}</span>}
                       {l.coupons.length > 0 && <span className="ml-2 rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">🎟 coupon</span>}
                       {g.note && <span className="block text-xs text-gray-400">{g.note}</span>}
+                      {l.cheaper && (
+                        <span className="flex flex-wrap items-center gap-x-2 text-xs text-life-700 dark:text-life-200" data-cheaper>
+                          {money(l.cheaper.saves_cents, sign)} less at {l.cheaper.store}
+                          <button type="button" onClick={() => move(g, l.cheaper.store)} className="min-h-[44px] underline" data-move>Move it there</button>
+                        </span>
+                      )}
+                      {l.moved_to && (
+                        <span className="flex flex-wrap items-center gap-x-2 text-xs text-gray-500 dark:text-life-300" data-moved>
+                          Moved to {l.moved_to} for this trip
+                          <button type="button" onClick={() => move(g, null)} className="min-h-[44px] underline">Put it back</button>
+                        </span>
+                      )}
                       {l.last && (
                         <button type="button" onClick={() => setModal({ history: g })} className="block text-xs text-gray-500 hover:underline dark:text-life-300">
                           last time {money(l.last.cents, sign)}{l.last.amount ? ` for ${l.last.amount}` : ''}{l.last.store ? ` · ${l.last.store}` : ''} · {shortDay(l.last.day)}
@@ -259,6 +304,11 @@ export default function Groceries() {
           <PriceForm line={lineOf(modal.price)} fixedSize={modal.price.amount} sign={sign} onSave={async (cents, size) => { await price(modal.price, cents, false, size); setModal(null); }} />
         </Modal>
       )}
+      {modal?.trip !== undefined && (
+        <Modal title={`Done at ${modal.trip || 'the store'}`} onClose={() => setModal(null)}>
+          <TripDone store={modal.trip} sign={sign} onDone={(text) => { setModal(null); setMessage(text); load(); }} />
+        </Modal>
+      )}
       {modal?.scan && (
         <Modal title="Scan a grocery" onClose={() => { setModal(null); load(); }}>
           <ScanGrocery open={open} sign={sign} putAway={putAway} onChanged={load} />
@@ -294,6 +344,109 @@ export default function Groceries() {
         </Modal>
       )}
     </div>
+  );
+}
+
+/** Whole cents scaled so a list of parts adds up to a total: in proportion, with what is left over going to the largest. */
+function scaled(parts, total) {
+  const sum = parts.reduce((n, p) => n + p.cents, 0);
+  if (parts.length === 0) return [];
+  const out = parts.map((p) => (sum > 0 ? Math.floor(p.cents * total / sum) : 0));
+  const rest = total - out.reduce((n, c) => n + c, 0);
+  out[sum > 0 ? out.indexOf(Math.max(...out)) : 0] += rest;
+  return out;
+}
+
+/**
+ * Done shopping at a store: what the receipt came to (the estimate from the prices is filled in), the prices on the way
+ * (change one and the estimate follows), and, if the receipt covers more than groceries, how it splits. The split is
+ * suggested from what each thing belongs to: the week's meals, a project's supplies, the household.
+ */
+function TripDone({ store, sign, onDone }) {
+  const [plan, setPlan] = useState(null);
+  const [name, setName] = useState(store);
+  const [total, setTotal] = useState('');
+  const [touched, setTouched] = useState(false);          // the total was typed: the estimate no longer overwrites it
+  const [split, setSplit] = useState(false);
+  const [amounts, setAmounts] = useState({});             // by part key, typed
+  const [places, setPlaces] = useState({});               // by part key: the category chosen
+  const [prices, setPrices] = useState({});
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    const { data } = await axios.get('/api/shopping/trip', { params: { store } });   // the lines are listed under the store they came with
+    setPlan(data);
+    return data;
+  }, [store]);
+  useEffect(() => { load().then((data) => { setTotal((data.estimate_cents / 100).toFixed(2)); setAmounts({}); }).catch(() => setPlan({ lines: [], parts: [], categories: [], projects: [], estimate_cents: 0, unpriced: 0 })); }, [load]);
+  if (!plan) return null;
+  const totalCents = centsOf(total);
+  const guess = totalCents === null ? [] : scaled(plan.parts, totalCents);
+  const cents = (p, i) => (amounts[p.key] !== undefined ? centsOf(amounts[p.key]) : guess[i]);
+  const placed = plan.parts.reduce((n, p, i) => n + (cents(p, i) ?? 0), 0);
+  const off = totalCents === null ? 0 : totalCents - placed;
+  const setPrice = async (line, typed) => {
+    const value = centsOf(typed);
+    if (value === null) return;
+    await axios.put(`/api/shopping/prices/${line.id}`, { cents: value, assumed: false });
+    setPrices((all) => ({ ...all, [line.id]: undefined }));
+    const data = await load();
+    if (!touched) setTotal((data.estimate_cents / 100).toFixed(2));
+  };
+  const save = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      const body = { store: name, from: store, total_cents: totalCents };
+      if (split && plan.parts.length > 0) body.parts = plan.parts.map((p, i) => ({ label: p.label, cents: cents(p, i), category_id: places[p.key] !== undefined ? (places[p.key] === '' ? null : Number(places[p.key])) : p.category_id, project_id: p.project_id }));
+      const { data } = await axios.post('/api/shopping/trip', body);
+      onDone(`Wrote ${money(data.total_cents, sign)} for ${data.store} as ${data.entries === 1 ? 'one spending entry' : `${data.entries} spending entries`}. If the bank brings in the same charge later, it won't be counted again.`);
+    } catch (err) { setError(errorMessage(err, "Couldn't save that")); }
+  };
+  return (
+    <form onSubmit={save} className="space-y-3" data-trip-modal>
+      {!store && <Field label="Which store *"><input required list="my-shops" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} /></Field>}
+      <ul className="divide-y divide-life-50 dark:divide-life-700" aria-label="What was got">
+        {plan.lines.length === 0 && <li className="py-2 text-sm text-gray-500 dark:text-life-300">Nothing from the list is in the buggy for this store. You can still write down what the receipt came to.</li>}
+        {plan.lines.map((l) => (
+          <li key={l.id} className="flex items-center gap-2 py-1 text-sm">
+            <span className="min-w-0 flex-1 text-gray-800 dark:text-life-50">{l.label}{l.assumed && <span className="ml-1 text-xs text-gray-500 dark:text-life-300">(last time's price)</span>}</span>
+            <input inputMode="decimal" aria-label={`Price of ${l.label}`} value={prices[l.id] ?? (l.cents === null ? '' : (l.cents / 100).toFixed(2))} placeholder="price"
+              onChange={(e) => setPrices({ ...prices, [l.id]: e.target.value })} onBlur={(e) => { if (prices[l.id] !== undefined) setPrice(l, e.target.value); }} className={`${inputClass} !w-24 text-right`} />
+          </li>
+        ))}
+      </ul>
+      <Field label={`What the receipt came to (${sign}) *`}>
+        <input required inputMode="decimal" autoFocus value={total} onChange={(e) => { setTotal(e.target.value); setTouched(true); }} aria-label="Receipt total" data-trip-total className={inputClass} />
+      </Field>
+      <p className="text-xs text-gray-500 dark:text-life-300" data-trip-estimate>
+        The prices come to {money(plan.estimate_cents, sign)}{plan.unpriced > 0 ? `, and ${plan.unpriced} ${plan.unpriced === 1 ? 'thing has' : 'things have'} no price` : ''}. Tax and anything not on the list are in the receipt, not here.
+      </p>
+      {plan.parts.length > 0 && (
+        <label className="flex min-h-[44px] items-center gap-2 text-sm text-gray-700 dark:text-life-100">
+          <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} data-split-toggle className="h-5 w-5 accent-life-600" /> Split this receipt{plan.parts.length > 1 ? ` (${plan.parts.map((p) => p.label.toLowerCase()).join(', ')})` : ''}
+        </label>
+      )}
+      {split && (
+        <div className="space-y-2" data-split>
+          <p className="text-xs text-gray-500 dark:text-life-300">Worked out from what each thing is for. Change an amount if the receipt says different.</p>
+          {plan.parts.map((p, i) => (
+            <div key={p.key} className="flex flex-wrap items-center gap-2 text-sm" data-part={p.key}>
+              <span className="min-w-0 flex-1 text-gray-800 dark:text-life-50">{p.label}<span className="block text-xs text-gray-500 dark:text-life-300">{p.lines} {p.lines === 1 ? 'thing' : 'things'}</span></span>
+              {p.project_id === null && (
+                <select aria-label={`Category for ${p.label}`} value={places[p.key] ?? (p.category_id ?? '')} onChange={(e) => setPlaces({ ...places, [p.key]: e.target.value })} className={`${inputClass} !w-32`}>
+                  <option value="">No category</option>
+                  {plan.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              )}
+              <input inputMode="decimal" aria-label={`Amount for ${p.label}`} value={amounts[p.key] ?? (guess[i] === undefined ? '' : (guess[i] / 100).toFixed(2))} onChange={(e) => setAmounts({ ...amounts, [p.key]: e.target.value })} className={`${inputClass} !w-24 text-right`} />
+            </div>
+          ))}
+          <p className={`text-sm ${off === 0 ? 'text-gray-600 dark:text-life-100' : 'text-red-600'}`} data-split-left>{off === 0 ? 'The parts add up to the receipt.' : `${money(Math.abs(off), sign)} ${off > 0 ? 'still to place' : 'too much'}.`}</p>
+        </div>
+      )}
+      {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+      <div className="text-right"><button type="submit" disabled={totalCents === null || !name.trim() || (split && off !== 0)} className={buttonClass} data-trip-save>Write it down</button></div>
+    </form>
   );
 }
 

@@ -303,7 +303,7 @@ it('each place has a sticker code that stays the same and finds it again', async
 
 it('a project has a budget: what each thing is planned to cost, and what it came to once paid', async () => {
   let dress = await making.createProject({ name: 'Shirt dress', activity: 'Sewing' });
-  expect(dress.budget).toEqual({ currency: '$', planned: 0, spent: 0, expected: 0, left: 0, unpaid: 0 });
+  expect(dress.budget).toEqual({ currency: '$', planned: 0, spent: 0, expected: 0, left: 0, unpaid: 0, over: 0, saved: null });
   dress = await making.addCost(dress.id, { label: 'Linen, 3 yd', planned_cents: 4500 });
   dress = await making.addCost(dress.id, { label: 'Buttons', planned_cents: 800, note: 'shell, 12' });
   dress = await making.addCost(dress.id, { label: 'Pattern' }); // no idea yet what it costs

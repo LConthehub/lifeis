@@ -46,7 +46,7 @@ it('prices add up as things go in the trolley, in whole cents', async () => {
   await k.tickGrocery(bread, { done: true, put_away: false });
   s = await shop.setPrice(bread, 20);
   expect([s.store, s.totals.trolley_cents, s.totals.to_pay_cents, s.totals.left_unknown]).toEqual(['Aldi', 728, 728, 0]);
-  expect(s.lines.find((l) => l.id === chicken)).toEqual({ id: chicken, price_cents: 698, size: '2 lb', assumed: false, last: null, coupons: [], usual_store: null, usual_size: '', likely_store: null });
+  expect(s.lines.find((l) => l.id === chicken)).toEqual({ id: chicken, price_cents: 698, size: '2 lb', assumed: false, last: null, coupons: [], usual_store: null, usual_size: '', likely_store: null, moved_to: null, store: 'Aldi', estimate_cents: 698, cheaper: null });
 
   // A price is replaced, not added to; and can be taken away again.
   s = await shop.setPrice(chicken, 649);

@@ -44,8 +44,10 @@ export type { Plan, PlanInput, PlanItem, PlanItemInput, PlanItemKind, PlanPhoto,
 export { photoLibrary, PHOTO_SERVICE } from './photos.ts';
 export type { LibraryPhoto, PhotoLibrary, Photos } from './photos.ts';
 export { shopping, sizeOf } from './shopping.ts';
+export { trips } from './trips.ts';
+export type { TripDone, TripInput, TripPart, TripPlan, TripTools } from './trips.ts';
 export type { Store } from './shopping.ts';
-export type { Coupon, CouponInput, LastPrice, MonthSpend, PlanCost, PricePoint, Scanned, Shopping, ShoppingLine, ShoppingOf, Trend } from './shopping.ts';
+export type { Coupon, CouponInput, GroceryBudget, LastPrice, MonthSpend, PlanCost, PricePoint, Scanned, Shopping, ShoppingLine, ShoppingOf, Stop, Trend } from './shopping.ts';
 export { calendarFeed, calendarFile, feedFor, FEED_KINDS } from './feed.ts';
 export type { CalendarFeed, FeedEvent, FeedStatus } from './feed.ts';
 export { followedCalendars, followedDue, readCalendar, FOLLOW_SERVICE, SHOWS } from './follow.ts';

@@ -2,7 +2,7 @@
  * The addresses for prices, the running total and coupons (/api/shopping). What they do is core/'s
  * shopping.ts; this reads what was sent and passes it on. Money is always whole cents.
  */
-import { shopping, type Db } from '../../core/src/index.ts';
+import { shopping, trips, type Db } from '../../core/src/index.ts';
 import { notUnderstood, read, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -35,6 +35,13 @@ export function shoppingRoutes(db: Db): Route[] {
       return { json: await mine(c).learn(read.text(c.body, 'code'), line, read.maybeText(c.body, 'product'), read.maybeText(c.body, 'size')) };
     }],
     ['DELETE', at('/scan'), async (c) => (await mine(c).forget(c.query.get('code') ?? ''), { status: 204 })],
+    // Moving a line to another store for this trip (only when the person asks), and done shopping at a store.
+    ['PUT', at('/move/:id'), async (c) => ({ json: await mine(c).moveLine(c.id, read.maybeText(c.body, 'store')) })],
+    ['GET', at('/trip'), async (c) => ({ json: await trips(db, c.user.id, c.clock).plan(c.query.get('store')) })],
+    ['POST', at('/trip'), async (c) => ({ status: 201, json: await trips(db, c.user.id, c.clock).finish({
+      store: read.maybeText(c.body, 'store'), ...(sent(c.body, 'from') ? { from: read.maybeText(c.body, 'from') } : {}), total_cents: read.maybeNumber(c.body, 'total_cents'), day: read.maybeText(c.body, 'day'),
+      parts: sent(c.body, 'parts') ? read.records(c.body, 'parts').map((p) => ({ label: read.maybeText(p, 'label'), cents: read.maybeNumber(p, 'cents'), category_id: read.maybeWhole(p, 'category_id'), project_id: read.maybeWhole(p, 'project_id') })) : undefined,
+    }) })],
     ['PUT', at('/usual/:id'), async (c) => ({ json: await mine(c).setUsual(c.id, { store: read.maybeText(c.body, 'store'), size: read.maybeText(c.body, 'size') }) })],
     // Your shops.
     ['GET', at('/stores'), async (c) => ({ json: await mine(c).stores() })],

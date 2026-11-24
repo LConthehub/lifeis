@@ -7,6 +7,7 @@ import { StartCard } from '../components/Start';
 import { RoutinesCard } from '../components/Routines';
 import Icon, { hasIcon } from '../components/Icon';
 import { whoText, whenText } from './Mail';
+import { money as moneyText } from '../components/Budget';
 import Modal, { buttonClass, quietButtonClass, cardClass, fromDateInput, minutesText, toDateInput } from '../components/ui';
 
 /** A weather mark from the server: an icon where there is one, else the mark as sent. */
@@ -294,6 +295,7 @@ export default function Home({ user }) {
                         <span className="block text-xs text-gray-500 dark:text-life-300">{[STATUS[p.status], p.due_on && `wanted by ${p.due_on}`, p.minutes > 0 && minutesText(p.minutes)].filter(Boolean).join(' · ')}</span>
                       </span>
                       {p.short_count > 0 && <Flag>short of {p.short_count}</Flag>}
+                      {p.budget?.over > 0 && <Flag>over by {moneyText(p.budget.over, p.budget.currency)}</Flag>}
                     </Link>
                   </li>
                 ))}

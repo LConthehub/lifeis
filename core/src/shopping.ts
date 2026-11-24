@@ -16,6 +16,11 @@
  * to be for unless another is typed. A line ticked off without a price takes last time's as a stand-in, marked as
  * assumed: it counts in the total, but isn't remembered as a price anyone actually saw.
  *
+ * Each line goes to a store: the one it was moved to (a tap on "$1.20 less at Aldi"; nothing is ever moved by itself),
+ * else its usual store, else where it was bought last. Each store's part of the list has an estimate from the last
+ * prices seen there, and the whole list is set against what is left of the month's grocery budget. Done at a store,
+ * the part becomes one spending entry (trips.ts).
+ *
  * A coupon is money or a percentage off, for one thing on the list or for the whole shop, perhaps only at one
  * store and until a day. Saying you're using it takes it off today's total, and it isn't offered again.
  */
@@ -41,8 +46,33 @@ export type ShoppingLine = {
   usual_store: string | null;
   /** The size it's usually bought in ("30 oz"); empty when none has been said. */
   usual_size: string;
-  /** Where it will most likely be bought: the usual store, or else where it was bought last. */
+  /** Where it will most likely be bought: where it was moved to, else the usual store, else where it was bought last. */
   likely_store: string | null;
+  /** Where it was moved to for this trip, when it was; kept on the line, not on the thing. */
+  moved_to: string | null;
+  /** The store its part of the list is under: where it was paid for when it is in the buggy, else `likely_store`. */
+  store: string | null;
+  /** What it comes to at its store: what was paid when it is in the buggy, else the last price seen there (or anywhere). Null when never priced. */
+  estimate_cents: number | null;
+  /** Another store where it cost less last time, and by how much, for the same amount. Only offered; nothing moves until it is tapped. */
+  cheaper: { store: string; saves_cents: number } | null;
+};
+/** One store's part of the list. `store` is null for lines that have no store yet. */
+export type Stop = {
+  store: string | null;
+  lines: number;
+  open: number;
+  done: number;
+  /** What the part comes to: prices paid for what is in the buggy, and estimates for the rest. */
+  estimate_cents: number;
+  /** How many of its lines have no price to go by. */
+  unknown: number;
+};
+/** The month's grocery category set against the whole list. Null when there is no category with "grocer" in its name. */
+export type GroceryBudget = {
+  category_id: number; name: string; planned_cents: number; spent_cents: number; left_cents: number;
+  /** What the whole list is estimated to come to, and what would be left of the month after it. */
+  estimate_cents: number; after_cents: number;
 };
 export type CouponInput = {
   label: string;
@@ -76,6 +106,9 @@ export type Shopping = {
   /** The order the aisles run in at today's shop; null when none has been set, and the list keeps its usual order. */
   aisle_order: string[] | null;
   lines: ShoppingLine[];
+  /** The list split by store, each part with its estimate. */
+  stops: Stop[];
+  grocery_budget: GroceryBudget | null;
   coupons: Coupon[];
   totals: {
     /** What's ticked off and priced. */
@@ -139,9 +172,11 @@ const STORE = 'shopping_store';
 const AISLES = (storeId: number) => `shopping_aisles_${storeId}`;
 const MAX_AISLES = 100;
 const MAX_CENTS = 100_000_000;
+/** The least that is worth saying another store is cheaper by, in cents. */
+const MIN_SAVING = 10;
 
 type CouponRow = Omit<Coupon, 'days_left' | 'worth_cents' | 'ingredient'> & { ingredient: string | null };
-type Line = { id: number; ingredient_id: number | null; label: string; quantity: number | null; unit: string | null; done: number };
+type Line = { id: number; ingredient_id: number | null; label: string; quantity: number | null; unit: string | null; done: number; store?: string | null };
 type Habit = { id: number; usual_store: string | null; usual_size_quantity: number | null; usual_size_unit: string | null };
 const valueOf = (p: { cents: number; per_cents: number | null }, basis: 'per' | 'line') => (basis === 'per' ? p.per_cents! : p.cents);
 
@@ -206,7 +241,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
 
   async function summary(): Promise<Shopping> {
     const day = today();
-    const lines = await db.all<Line>('SELECT id, ingredient_id, label, quantity, unit, done FROM grocery WHERE owner_id = ? ORDER BY id', [owner]);
+    const lines = await db.all<Line>('SELECT id, ingredient_id, label, quantity, unit, done, store FROM grocery WHERE owner_id = ? ORDER BY id', [owner]);
     const prices = await db.all<PriceRow>(
       'SELECT grocery_id, ingredient_id, label, cents, quantity, unit, store, day, assumed FROM prices WHERE owner_id = ? ORDER BY day DESC, id DESC', [owner]);
     const onLine = new Map(prices.filter((p) => p.grocery_id !== null).map((p) => [p.grocery_id!, p]));
@@ -215,6 +250,14 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       const found = prices.find((p) => p.assumed === 0 && p.grocery_id !== l.id && keyOf(p) === keyOf(l));
       return found ? { cents: found.cents, amount: units.amount(found.quantity, found.unit), store: found.store, day: found.day } : null;
     };
+
+    // The newest price somebody saw at each store, for each thing: what the same thing cost in other places.
+    const latestAt = new Map<string, Map<string, PriceRow>>();
+    for (const p of prices) {
+      if (p.assumed !== 0 || !p.store) continue;
+      const at = latestAt.get(keyOf(p)) ?? latestAt.set(keyOf(p), new Map()).get(keyOf(p))!;
+      if (!at.has(p.store.toLowerCase())) at.set(p.store.toLowerCase(), p);
+    }
 
     const rows = await db.all<CouponRow>(
       `SELECT c.id, c.label, c.ingredient_id, i.name AS ingredient, c.cents_off, c.percent_off, c.store, c.code, c.expires_on, c.note, c.used_on
@@ -240,6 +283,56 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
     const couponsCents = Math.min(trolley, coupons.filter((c) => c.used_on === day).reduce((sum, c) => sum + c.worth_cents, 0));
 
     const left = lines.filter((l) => l.done === 0);
+    const proper = (name: string) => storeNames.find((n) => n.toLowerCase() === name.toLowerCase()) ?? name;
+    // Where a line goes: where it was moved to, else its usual store, else where it was bought last. In the buggy, where it was paid for.
+    const storeOf = (l: Line): string | null => {
+      const paidAt = l.done === 1 ? onLine.get(l.id)?.store ?? null : null;
+      const name = paidAt ?? l.store ?? habitOf(l)?.usual_store ?? lastFor(l)?.store ?? null;
+      return name ? proper(name) : null;
+    };
+    const estimateOf = (l: Line, store: string | null): number | null => {
+      if (l.done === 1) return onLine.get(l.id)?.cents ?? null;
+      return (store ? latestAt.get(keyOf(l))?.get(store.toLowerCase())?.cents : undefined) ?? lastFor(l)?.cents ?? null;
+    };
+    // Another store where the same amount cost less: the price there, taken to the amount here when both have a size.
+    const cheaperFor = (l: Line, store: string | null): ShoppingLine['cheaper'] => {
+      if (l.done === 1 || !store) return null;
+      const seen = latestAt.get(keyOf(l));
+      const mine = seen?.get(store.toLowerCase());
+      if (!seen || !mine) return null;
+      let best: { store: string; saves_cents: number } | null = null;
+      for (const [other, p] of seen) {
+        if (other === store.toLowerCase()) continue;
+        let theirs: number | null = null;
+        if (mine.quantity !== null && p.quantity !== null && mine.quantity > 0 && p.quantity > 0) {
+          const same = p.unit === mine.unit ? p.quantity : p.unit === null || mine.unit === null || family(p.unit) !== family(mine.unit) ? null : units.convert(p.quantity, p.unit, mine.unit);
+          if (same !== null && same > 0) theirs = Math.round(p.cents * mine.quantity / same);
+        } else if (mine.quantity === null && p.quantity === null) theirs = p.cents;
+        if (theirs === null) continue;
+        const saves = mine.cents - theirs;
+        if (saves >= MIN_SAVING && (!best || saves > best.saves_cents)) best = { store: proper(p.store!), saves_cents: saves };
+      }
+      return best;
+    };
+    const stopMap = new Map<string, Stop>();
+    const placed = lines.map((l) => {
+      const store = storeOf(l);
+      const estimate = estimateOf(l, store);
+      const stop = stopMap.get((store ?? '').toLowerCase()) ?? stopMap.set((store ?? '').toLowerCase(), { store, lines: 0, open: 0, done: 0, estimate_cents: 0, unknown: 0 }).get((store ?? '').toLowerCase())!;
+      stop.lines += 1;
+      if (l.done === 1) stop.done += 1; else stop.open += 1;
+      stop.estimate_cents += estimate ?? 0;
+      if (estimate === null) stop.unknown += 1;
+      return { l, store, estimate };
+    });
+    const stops = [...stopMap.values()].sort((a, b) => (a.store === null ? 1 : 0) - (b.store === null ? 1 : 0) || (a.store ?? '').localeCompare(b.store ?? '', undefined, { sensitivity: 'base' }));
+    const month = day.slice(0, 7);
+    const category = await db.get<{ id: number; name: string; monthly_cents: number }>(
+      `SELECT c.id, c.name, c.monthly_cents FROM money_categories c
+       WHERE (c.owner_id = ? OR EXISTS (SELECT 1 FROM money_shares s WHERE s.category_id = c.id AND s.user_id = ?)) AND LOWER(c.name) LIKE '%grocer%'
+       ORDER BY c.owner_id = ? DESC, c.sort_order, c.id LIMIT 1`, [owner, owner, owner]);
+    const spentOn = category ? (await db.get<{ n: number | null }>('SELECT SUM(cents) AS n FROM money_entries WHERE category_id = ? AND day BETWEEN ? AND ?', [category.id, `${month}-01`, `${month}-31`]))?.n ?? 0 : 0;
+    const wholeList = stops.reduce((sum, s) => sum + s.estimate_cents, 0);
     const here = await setting(STORE);
     const hereRow = here ? await db.get<{ id: number }>('SELECT id FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE', [owner, here]) : undefined;
     return {
@@ -253,8 +346,14 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
         assumed: onLine.get(l.id)?.assumed === 1, last: lastFor(l),
         coupons: coupons.filter((c) => c.used_on === null && (c.days_left === null || c.days_left >= 0) && c.ingredient_id !== null && c.ingredient_id === l.ingredient_id).map((c) => c.id),
         usual_store: habitOf(l)?.usual_store ?? null, usual_size: units.amount(habitOf(l)?.usual_size_quantity, habitOf(l)?.usual_size_unit),
-        likely_store: habitOf(l)?.usual_store ?? lastFor(l)?.store ?? null,
+        likely_store: l.store ? proper(l.store) : habitOf(l)?.usual_store ?? lastFor(l)?.store ?? null, moved_to: l.store ? proper(l.store) : null, store: storeOf(l),
+        estimate_cents: placed.find((p) => p.l.id === l.id)!.estimate, cheaper: cheaperFor(l, placed.find((p) => p.l.id === l.id)!.store),
       })),
+      stops,
+      grocery_budget: category ? {
+        category_id: category.id, name: category.name, planned_cents: category.monthly_cents, spent_cents: spentOn, left_cents: category.monthly_cents - spentOn,
+        estimate_cents: wholeList, after_cents: category.monthly_cents - spentOn - wholeList,
+      } : null,
       coupons,
       totals: {
         trolley_cents: trolley, trolley_unpriced: done.filter((l) => !onLine.has(l.id)).length,
@@ -294,6 +393,19 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       const size = sizeOf(input.size);
       await db.run('UPDATE ingredients SET usual_store = ?, usual_size_quantity = ?, usual_size_unit = ? WHERE id = ? AND owner_id = ?',
         [listed?.name ?? store, size?.quantity ?? null, size?.unit ?? null, l.ingredient_id, owner]);
+      return summary();
+    },
+
+    /**
+     * Move a line to another store for this trip (null puts it back where it usually goes). It is kept on the line, so
+     * the thing's usual store is not changed. Only ever done when the person says so.
+     */
+    async moveLine(groceryId: number, store: string | null): Promise<Shopping> {
+      await line(db, groceryId);
+      const name = clean(store, 100);
+      if (name) await db.run('INSERT OR IGNORE INTO stores (owner_id, name, created_at) VALUES (?, ?, ?)', [owner, name, stamp(clock())]);
+      const listed = name ? await db.get<{ name: string }>('SELECT name FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE', [owner, name]) : undefined;
+      await db.run('UPDATE grocery SET store = ? WHERE id = ? AND owner_id = ?', [listed?.name ?? name, groceryId, owner]);
       return summary();
     },
 

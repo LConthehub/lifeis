@@ -57,6 +57,12 @@ export function MonthBudget({ month }) {
         {row('Income', b.income.total, '+ ')}
         {row('Bills due', b.bills.total, '− ')}
         {row(b.past ? 'Spent' : 'Planned spending', b.spending, '− ')}
+        {(b.projects.spent > 0 || b.projects.coming > 0) && (
+          <div className="flex items-baseline justify-between gap-2 py-1.5 pl-4" data-projects-line>
+            <dt className="text-sm text-gray-600 dark:text-life-100">Projects <span className="text-xs text-gray-500 dark:text-life-300">paid, already in the spending{b.projects.coming > 0 ? `; ${money(b.projects.coming, sign)} coming` : ''}</span></dt>
+            <dd className="tabular-nums text-sm text-gray-800 dark:text-life-50">{money(b.projects.spent, sign)}</dd>
+          </div>
+        )}
         {row('Put into goals', b.saved.total, '− ')}
         <div className="flex items-baseline justify-between gap-2 py-2"><dt className="text-sm font-semibold text-life-800 dark:text-life-50">{b.left_over < 0 ? 'Short by' : 'Left over'}</dt><dd className="tabular-nums" data-left-over><Left cents={b.left_over} sign={sign} /></dd></div>
       </dl>
@@ -96,7 +102,7 @@ export function YearPage() {
   if (!data) return null;
   const sign = data.currency;
   const nowMonth = today().slice(0, 7);
-  const rows = [['Income', 'income'], ['Bills', 'bills'], ['Spending', 'spending'], ['Saving', 'saved'], ['Left over', 'left']];
+  const rows = [['Income', 'income'], ['Bills', 'bills'], ['Spending', 'spending'], ['Projects (in spending)', 'projects'], ['Projects coming', 'coming'], ['Saving', 'saved'], ['Left over', 'left']];
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">The year</h1>
@@ -142,7 +148,7 @@ export function YearPage() {
         ))}
       </ul>
 
-      <dl className={`${cardClass} grid grid-cols-2 gap-x-3 text-sm sm:grid-cols-5`} data-year-totals>
+      <dl className={`${cardClass} grid grid-cols-2 gap-x-3 text-sm sm:grid-cols-4`} data-year-totals>
         {rows.map(([label, key]) => (
           <div key={key} className="py-1"><dt className="text-xs text-gray-500 dark:text-life-300">{label}, whole year</dt><dd className={`font-semibold tabular-nums ${key === 'left' && data.totals.left < 0 ? 'text-red-600' : 'text-gray-800 dark:text-life-50'}`}>{money(data.totals[key], sign)}</dd></div>
         ))}
@@ -194,7 +200,7 @@ export function GoalsPage() {
       {goals.map((g) => (
         <section key={g.id} className={cardClass} data-goal={g.name}>
           <div className="flex flex-wrap items-baseline gap-x-2">
-            <h2 className="mr-auto font-semibold text-life-800 dark:text-life-50">{g.name}</h2>
+            <h2 className="mr-auto font-semibold text-life-800 dark:text-life-50">{g.name}{g.project && <Link to={`/projects/${g.project_id}`} className="ml-2 text-xs font-normal text-life-600 underline dark:text-life-200">for {g.project}</Link>}</h2>
             <span className="text-sm tabular-nums text-gray-600 dark:text-life-100">{money(g.saved, sign)} of {money(g.target_cents, sign)}</span>
           </div>
           <Progress part={g.saved} whole={g.target_cents} done={g.done} />
