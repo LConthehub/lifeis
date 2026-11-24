@@ -46,7 +46,7 @@ it('prices add up as things go in the trolley, in whole cents', async () => {
   await k.tickGrocery(bread, { done: true, put_away: false });
   s = await shop.setPrice(bread, 20);
   expect([s.store, s.totals.trolley_cents, s.totals.to_pay_cents, s.totals.left_unknown]).toEqual(['Aldi', 728, 728, 0]);
-  expect(s.lines.find((l) => l.id === chicken)).toEqual({ id: chicken, price_cents: 698, size: '2 lb', assumed: false, last: null, coupons: [], usual_store: null, usual_size: '', likely_store: null, moved_to: null, store: 'Aldi', estimate_cents: 698, cheaper: null });
+  expect(s.lines.find((l) => l.id === chicken)).toEqual({ id: chicken, price_cents: 698, saved_cents: 0, deal: null, size: '2 lb', assumed: false, last: null, coupons: [], usual_store: null, usual_size: '', likely_store: null, moved_to: null, store: 'Aldi', estimate_cents: 698, cheaper: null });
 
   // A price is replaced, not added to; and can be taken away again.
   s = await shop.setPrice(chicken, 649);
@@ -82,7 +82,7 @@ it('next time, the list knows what things cost last time and guesses the trip', 
   await k.addGrocery({ label: 'saffron' });
   const [chicken, milk] = [await idOf('chicken'), await idOf('milk')];
   let s = await shop.summary();
-  expect(s.lines.find((l) => l.id === chicken)!.last).toEqual({ cents: 698, amount: '2 lb', store: 'Aldi', day: '2046-03-05' });
+  expect(s.lines.find((l) => l.id === chicken)!.last).toEqual({ cents: 698, saved_cents: 0, amount: '2 lb', store: 'Aldi', day: '2046-03-05' });
   expect(s.totals).toMatchObject({ trolley_cents: 0, left_cents: 1027, left_unknown: 1 }); // a guess for two, and saffron unknown
 
   // Ticked off without typing a price: last time's stands in, and says so.
@@ -92,7 +92,7 @@ it('next time, the list knows what things cost last time and guesses the trip', 
   // The real price is dearer here.
   await k.tickGrocery(chicken, { done: true, put_away: false });
   s = await shop.setPrice(chicken, 799);
-  expect(await shop.history(chicken)).toEqual([{ cents: 799, amount: '2 lb', store: 'Hy-Vee', day: '2046-03-12' }, { cents: 698, amount: '2 lb', store: 'Aldi', day: '2046-03-05' }]);
+  expect(await shop.history(chicken)).toEqual([{ cents: 799, saved_cents: 0, amount: '2 lb', store: 'Hy-Vee', day: '2046-03-12' }, { cents: 698, saved_cents: 0, amount: '2 lb', store: 'Aldi', day: '2046-03-05' }]);
   await k.clearDone();
 
   // A stand-in was never a price anyone saw: it isn't history. The chicken's real one is.
@@ -190,7 +190,7 @@ it('a product is taught once by its barcode, and found on the list ever after', 
   // Next week it isn't on the list, but the scan still knows what it is and what it cost.
   await k.clearDone();
   seen = await shop.scan('025500000276');
-  expect([seen.ingredient!.product, seen.line, seen.last]).toEqual(['Folgers Classic Roast 30 oz', null, { cents: 899, amount: '', store: 'Aldi', day: '2046-03-05' }]);
+  expect([seen.ingredient!.product, seen.line, seen.last]).toEqual(['Folgers Classic Roast 30 oz', null, { cents: 899, saved_cents: 0, amount: '', store: 'Aldi', day: '2046-03-05' }]);
   await k.addGrocery({ label: 'coffee' });
   expect((await shop.scan('025500000276')).line).toMatchObject({ done: false });
 

@@ -1350,6 +1350,32 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_shopping_trips ON shopping_trips(owner_id, day)`,
     ],
   },
+  {
+    // Receipt photos and savings. A price keeps what was paid (cents) and what was saved on it (saved_cents), so the full price
+    // is the two together and a sale never looks like the usual price; it also says which trip it came from, and when it was
+    // asked back (claimed_on). A trip keeps what the receipt saved, and its photo (shrunk on the device) in its own table. A store
+    // can have a price adjustment window in days. A coupon can be a line from a store's monthly savings book: the thing as the
+    // book calls it (item), the day it starts (starts_on), and book = 1. No REFERENCES on the added columns, as in 44.
+    number: 45,
+    name: 'receipt photos, savings and price drops',
+    statements: [
+      `CREATE TABLE trip_receipts (
+        trip_id INTEGER PRIMARY KEY,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        bytes BLOB NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `ALTER TABLE prices ADD COLUMN saved_cents INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE prices ADD COLUMN trip_id INTEGER`,
+      `ALTER TABLE prices ADD COLUMN claimed_on TEXT`,
+      `ALTER TABLE shopping_trips ADD COLUMN saved_cents INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE stores ADD COLUMN adjust_days INTEGER`,
+      `ALTER TABLE coupons ADD COLUMN book INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE coupons ADD COLUMN item TEXT`,
+      `ALTER TABLE coupons ADD COLUMN starts_on TEXT`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

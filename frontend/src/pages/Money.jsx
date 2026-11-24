@@ -4,7 +4,8 @@ import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { money, toCents } from '../components/Budget';
 import Statement from '../components/Statement';
-import { MonthBudget } from './Budgeting';
+import { MonthBudget, SavingsCard } from './Budgeting';
+import Icon from '../components/Icon';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -68,6 +69,8 @@ export default function Money() {
 
       <MonthBudget month={month} key={`${month}-${data.entries.length}-${data.total.spent}`} />
 
+      <SavingsCard month={month} key={`saved-${month}-${data.entries.length}`} />
+
       <section className={cardClass}>
         <div className="mb-1 flex items-center gap-2">
           <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">Categories</h2>
@@ -122,6 +125,7 @@ export default function Money() {
                 <span className="text-xs text-gray-500 dark:text-life-300">{e.category ? ` · ${e.category}` : ''}{e.mine ? '' : ` · ${e.by}`}</span>
               </span>
               <span className="tabular-nums text-gray-800 dark:text-life-50">{money(e.cents, sign)}</span>
+              {e.receipt_trip && <button type="button" aria-label={`Receipt for ${e.label}`} onClick={() => setModal({ receipt: e })} className="flex h-11 w-11 items-center justify-center text-life-600 hover:text-life-800 dark:text-life-200" data-receipt-photo><Icon of="receipt" size={20} /></button>}
               {e.mine && <button type="button" aria-label={`Remove ${e.label}`} onClick={() => remove(e)} className="flex h-11 w-11 items-center justify-center text-gray-400 hover:text-red-600">✕</button>}
               <TagChips tags={e.tag_list} className="basis-full pb-1 pl-14" />
             </li>
@@ -136,6 +140,7 @@ export default function Money() {
         </ul>
         {error && <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>}
       </section>
+      {modal?.receipt && <Modal title={`Receipt: ${modal.receipt.label}`} onClose={() => setModal(null)}><img src={`/api/shopping/trips/${modal.receipt.receipt_trip}/receipt`} alt={`The receipt for ${modal.receipt.label}`} className="mx-auto max-h-[70vh] w-auto max-w-full rounded-lg" data-receipt-image /></Modal>}
       {modal?.entry && <Modal title={modal.entry.id ? modal.entry.label : 'Something spent'} onClose={() => setModal(null)}><EntryForm entry={modal.entry} categories={data.categories} onDone={done} /></Modal>}
       {modal?.statement && <Modal title="Import a statement" wide onClose={() => { setModal(null); load(); }}><Statement categories={data.categories} currency={sign} onDone={broughtIn} /></Modal>}
       {modal?.category && <Modal title={modal.category.id ? modal.category.name : 'A category'} onClose={() => setModal(null)}><CategoryForm category={modal.category} people={data.people} onDone={done} /></Modal>}

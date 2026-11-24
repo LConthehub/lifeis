@@ -46,6 +46,8 @@ export type Entry = {
   by: string;
   mine: boolean;
   tag_list: TagRef[];
+  /** The grocery trip it was written from, when its receipt has a photo; the photo is at /api/shopping/trips/:id/receipt. */
+  receipt_trip: number | null;
 };
 export type ProjectSpend = { project_id: number; project: string; label: string; cents: number; day: string };
 /** A cost on a project that is planned and not yet paid, with the month it is due (the project's day), if it has one. */
@@ -229,7 +231,7 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
         shared_with: shares.filter((s) => s.category_id === c.id).map((s) => ({ id: s.id, username: s.username, name: s.name })),
       }));
       const entries = await db.all<Omit<Entry, 'mine' | 'tag_list'> & { owner_id: number }>(
-        `SELECT e.id, e.label, e.cents, e.day, e.note, e.category_id, c.name AS category, ${shown('u')} AS by, e.owner_id
+        `SELECT e.id, e.label, e.cents, e.day, e.note, e.category_id, c.name AS category, ${shown('u')} AS by, e.owner_id, (SELECT r.trip_id FROM trip_receipts r WHERE r.trip_id = e.trip_id) AS receipt_trip
          FROM money_entries e LEFT JOIN money_categories c ON c.id = e.category_id JOIN users u ON u.id = e.owner_id
          WHERE e.day BETWEEN ? AND ? AND e.project_id IS NULL AND ((e.category_id IS NULL AND e.owner_id = ?) OR e.category_id IN (${SEEN}))
          ORDER BY e.day DESC, e.id DESC`, [...within, owner, ...seen]);
@@ -314,7 +316,7 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
         await tx.run('DELETE FROM money_entries WHERE id = ?', [id]);
         await unlink(tx, 'spending', id);
         // The last entry of a trip gone, the trip is gone too, and a charge for it would be new again.
-        if (trip !== null && !(await tx.get('SELECT 1 AS x FROM money_entries WHERE trip_id = ?', [trip]))) await tx.run('DELETE FROM shopping_trips WHERE id = ?', [trip]);
+        if (trip !== null && !(await tx.get('SELECT 1 AS x FROM money_entries WHERE trip_id = ?', [trip]))) { await tx.run('DELETE FROM trip_receipts WHERE trip_id = ?', [trip]); await tx.run('DELETE FROM shopping_trips WHERE id = ?', [trip]); }
       });
     },
   };

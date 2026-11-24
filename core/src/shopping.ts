@@ -27,14 +27,19 @@
 import type { Db, Queries } from './db.ts';
 import { barcodeKey } from './media.ts';
 import { Problem } from './problem.ts';
-import { clean, dayNumber, dayOrNull, stamp, todayOf, type Clock } from './small.ts';
+import { readBook, sameThing, savingsSentence } from './receipt.ts';
+import { addDays, clean, dayNumber, dayOrNull, stamp, todayOf, type Clock } from './small.ts';
 import * as units from './units.ts';
 
-export type LastPrice = { cents: number; /** "2 lb", as it was bought. */ amount: string; store: string | null; day: string };
+export type LastPrice = { /** The full price: what was paid and what was saved on it. */ cents: number; /** What was saved on it, when something was; shown beside the full price. */ saved_cents: number; /** "2 lb", as it was bought. */ amount: string; store: string | null; day: string };
 export type ShoppingLine = {
   /** The grocery line's id. */
   id: number;
   price_cents: number | null;
+  /** What was saved on that price (the full price is the two together); 0 when nothing was. */
+  saved_cents: number;
+  /** A saving from a store's savings book that is on now for this thing, when there is one. Nothing is used by itself. */
+  deal: Deal | null;
   /** The size that price was for ("30 oz"); empty when none is known. */
   size: string;
   /** True when the price is last time's, standing in until the real one is typed. */
@@ -56,6 +61,28 @@ export type ShoppingLine = {
   estimate_cents: number | null;
   /** Another store where it cost less last time, and by how much, for the same amount. Only offered; nothing moves until it is tapped. */
   cheaper: { store: string; saves_cents: number } | null;
+};
+/** A line from a store's monthly savings book (a coupon marked as from the book), typed in by the person. */
+export type BookItem = {
+  id: number; item: string; cents_off: number | null; percent_off: number | null; store: string | null;
+  starts_on: string | null; expires_on: string | null;
+  /** On now, still to come, or over (shown for a few weeks). */
+  state: 'now' | 'soon' | 'over';
+};
+export type Deal = { id: number; cents_off: number | null; percent_off: number | null; store: string | null; until: string | null };
+/** Something bought at a store that has a price adjustment window: how much to ask back, because the same thing was cheaper later in the window. */
+export type Drop = {
+  /** The price (the purchase) it is about. */
+  id: number; item: string; store: string; bought_on: string; paid_cents: number; now_cents: number; ask_cents: number;
+  /** The day the cheaper price was seen (or, for the savings book, today). */
+  seen_on: string; because: 'receipt' | 'book';
+  /** The last day the store will take it back, and the days left to then (0 is today). */
+  claim_by: string; days_left: number;
+};
+/** What was saved, by store, in a month and in that month's year. */
+export type Savings = {
+  currency: string; month: string; year: string; month_cents: number; year_cents: number;
+  stores: { store: string; month_cents: number; year_cents: number }[];
 };
 /** One store's part of the list. `store` is null for lines that have no store yet. */
 export type Stop = {
@@ -110,6 +137,8 @@ export type Shopping = {
   stops: Stop[];
   grocery_budget: GroceryBudget | null;
   coupons: Coupon[];
+  /** The savings book: lines typed in from a store's monthly book. Not coupons to use; they show on a list line they match. */
+  book: BookItem[];
   totals: {
     /** What's ticked off and priced. */
     trolley_cents: number;
@@ -142,8 +171,10 @@ export type Trend = {
   highest: PricePoint;
   /** The latest less the one before, on the basis above; null with only one price. */
   change_cents: number | null;
+  /** When it was on savings: how often, and in words ("$4 off in March, July and November"). Empty when never. */
+  savings: { times: number; text: string; last_on: string | null };
 };
-export type Store = { id: number; name: string; note: string | null; /** How many prices were seen there, and when last. */ prices: number; last_on: string | null };
+export type Store = { id: number; name: string; note: string | null; /** The days after buying that the store gives a price adjustment, when it does. */ adjust_days: number | null; /** How many prices were seen there, and when last. */ prices: number; last_on: string | null };
 /** A rough cost for a plan's food, going by the last price seen for each ingredient its recipes call for. */
 export type PlanCost = {
   currency: string;
@@ -192,7 +223,7 @@ export function sizeOf(text: string | null | undefined): { quantity: number; uni
 const family = (unit: string | null) => (unit === null ? 'count' : units.kindOf(unit));
 /** What one "per" is for a unit: a pound, an ounce, each; but 100 g and 100 ml, since one gram costs next to nothing. */
 const perOf = (unit: string | null): { label: string; of: number } => (unit === null ? { label: 'each', of: 1 } : ['g', 'ml'].includes(unit) ? { label: `100 ${unit}`, of: 100 } : { label: unit, of: 1 });
-type PriceRow = { grocery_id: number | null; ingredient_id: number | null; label: string; cents: number; quantity: number | null; unit: string | null; store: string | null; day: string; assumed: number };
+type PriceRow = { grocery_id: number | null; ingredient_id: number | null; label: string; cents: number; quantity: number | null; unit: string | null; store: string | null; day: string; assumed: number; saved_cents: number };
 
 const keyOf = (line: { ingredient_id: number | null; label: string }) => (line.ingredient_id !== null ? `#${line.ingredient_id}` : `~${line.label.trim().toLowerCase()}`);
 
@@ -243,12 +274,12 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
     const day = today();
     const lines = await db.all<Line>('SELECT id, ingredient_id, label, quantity, unit, done, store FROM grocery WHERE owner_id = ? ORDER BY id', [owner]);
     const prices = await db.all<PriceRow>(
-      'SELECT grocery_id, ingredient_id, label, cents, quantity, unit, store, day, assumed FROM prices WHERE owner_id = ? ORDER BY day DESC, id DESC', [owner]);
+      'SELECT grocery_id, ingredient_id, label, cents, quantity, unit, store, day, assumed, saved_cents FROM prices WHERE owner_id = ? ORDER BY day DESC, id DESC', [owner]);
     const onLine = new Map(prices.filter((p) => p.grocery_id !== null).map((p) => [p.grocery_id!, p]));
     // Last time's price: the newest one somebody actually saw, for the same ingredient, on some other line.
     const lastFor = (l: Line): LastPrice | null => {
       const found = prices.find((p) => p.assumed === 0 && p.grocery_id !== l.id && keyOf(p) === keyOf(l));
-      return found ? { cents: found.cents, amount: units.amount(found.quantity, found.unit), store: found.store, day: found.day } : null;
+      return found ? { cents: found.cents + found.saved_cents, saved_cents: found.saved_cents, amount: units.amount(found.quantity, found.unit), store: found.store, day: found.day } : null;
     };
 
     // The newest price somebody saw at each store, for each thing: what the same thing cost in other places.
@@ -256,13 +287,14 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
     for (const p of prices) {
       if (p.assumed !== 0 || !p.store) continue;
       const at = latestAt.get(keyOf(p)) ?? latestAt.set(keyOf(p), new Map()).get(keyOf(p))!;
-      if (!at.has(p.store.toLowerCase())) at.set(p.store.toLowerCase(), p);
+      // The full price: a sale price is not what the thing usually costs there.
+      if (!at.has(p.store.toLowerCase())) at.set(p.store.toLowerCase(), { ...p, cents: p.cents + p.saved_cents });
     }
 
     const rows = await db.all<CouponRow>(
       `SELECT c.id, c.label, c.ingredient_id, i.name AS ingredient, c.cents_off, c.percent_off, c.store, c.code, c.expires_on, c.note, c.used_on
        FROM coupons c LEFT JOIN ingredients i ON i.id = c.ingredient_id
-       WHERE c.owner_id = ? AND (c.used_on IS NULL OR c.used_on = ?) ORDER BY COALESCE(c.expires_on, '9999'), c.id`, [owner, day]);
+       WHERE c.owner_id = ? AND c.book = 0 AND (c.used_on IS NULL OR c.used_on = ?) ORDER BY COALESCE(c.expires_on, '9999'), c.id`, [owner, day]);
     const habits = new Map((await db.all<Habit>(
       'SELECT id, usual_store, usual_size_quantity, usual_size_unit FROM ingredients WHERE owner_id = ? AND (usual_store IS NOT NULL OR usual_size_quantity IS NOT NULL)', [owner])).map((h) => [h.id, h]));
     const habitOf = (l: Line) => (l.ingredient_id !== null ? habits.get(l.ingredient_id) : undefined);
@@ -282,6 +314,20 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       .filter((c) => c.used_on !== null || c.days_left === null || c.days_left >= -14);
     const couponsCents = Math.min(trolley, coupons.filter((c) => c.used_on === day).reduce((sum, c) => sum + c.worth_cents, 0));
 
+    const bookRows = await db.all<{ id: number; item: string; cents_off: number | null; percent_off: number | null; store: string | null; starts_on: string | null; expires_on: string | null }>(
+      `SELECT id, COALESCE(item, label) AS item, cents_off, percent_off, store, starts_on, expires_on FROM coupons
+       WHERE owner_id = ? AND book = 1 AND (expires_on IS NULL OR expires_on >= ?) ORDER BY COALESCE(starts_on, '0000'), id`, [owner, addDays(day, -30)]);
+    const book = bookRows.map((b): BookItem => ({ ...b, state: b.expires_on !== null && b.expires_on < day ? 'over' : b.starts_on !== null && b.starts_on > day ? 'soon' : 'now' }));
+    // A saving from the book that is on now for a thing still to get, at the store it is going to (or any, when the book names none).
+    const dealFor = (l: Line, store: string | null): Deal | null => {
+      let best: BookItem | null = null;
+      for (const b of book) {
+        if (b.state !== 'now' || !sameThing(l.label, b.item)) continue;
+        if (b.store && store && b.store.toLowerCase() !== store.toLowerCase()) continue;
+        if (!best || (b.cents_off ?? 0) > (best.cents_off ?? 0)) best = b;
+      }
+      return best ? { id: best.id, cents_off: best.cents_off, percent_off: best.percent_off, store: best.store, until: best.expires_on } : null;
+    };
     const proper = (name: string) => storeNames.find((n) => n.toLowerCase() === name.toLowerCase()) ?? name;
     // Where a line goes: where it was moved to, else its usual store, else where it was bought last. In the buggy, where it was paid for.
     const storeOf = (l: Line): string | null => {
@@ -341,7 +387,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       store_id: hereRow?.id ?? null,
       aisle_order: hereRow ? await aisleOrder(hereRow.id) : null,
       lines: lines.map((l) => ({
-        id: l.id, price_cents: onLine.get(l.id)?.cents ?? null, size: onLine.has(l.id) ? units.amount(onLine.get(l.id)!.quantity, onLine.get(l.id)!.unit) : '',
+        id: l.id, price_cents: onLine.get(l.id)?.cents ?? null, saved_cents: onLine.get(l.id)?.saved_cents ?? 0, deal: l.done === 1 ? null : dealFor(l, storeOf(l)), size: onLine.has(l.id) ? units.amount(onLine.get(l.id)!.quantity, onLine.get(l.id)!.unit) : '',
         assumed: onLine.get(l.id)?.assumed === 1, last: lastFor(l),
         coupons: coupons.filter((c) => c.used_on === null && (c.days_left === null || c.days_left >= 0) && c.ingredient_id !== null && c.ingredient_id === l.ingredient_id).map((c) => c.id),
         usual_store: habitOf(l)?.usual_store ?? null, usual_size: units.amount(habitOf(l)?.usual_size_quantity, habitOf(l)?.usual_size_unit),
@@ -354,6 +400,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
         estimate_cents: wholeList, after_cents: category.monthly_cents - spentOn - wholeList,
       } : null,
       coupons,
+      book,
       totals: {
         trolley_cents: trolley, trolley_unpriced: done.filter((l) => !onLine.has(l.id)).length,
         // The same estimate as the store card (each line's price at the store it is going to), for what is not yet in the buggy.
@@ -363,6 +410,13 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       },
     };
   }
+
+  /** A price adjustment window, in days: whole, 1 to 365; none when left empty. */
+  const windowOf = (days: number | null | undefined): number | null => {
+    if (days === null || days === undefined) return null;
+    if (!Number.isInteger(days) || days < 0 || days > 365) throw new Problem(400, 'A price adjustment window is a number of days, up to 365');
+    return days === 0 ? null : days;
+  };
 
   const coupon = async (id: number) => {
     if (!(await db.get('SELECT id FROM coupons WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Not found');
@@ -415,28 +469,28 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
     /** Your stores, with how many prices were seen at each. */
     stores(): Promise<Store[]> {
       return db.all<Store>(
-        `SELECT s.id, s.name, s.note,
+        `SELECT s.id, s.name, s.note, s.adjust_days,
            (SELECT COUNT(*) FROM prices p WHERE p.owner_id = s.owner_id AND p.store = s.name COLLATE NOCASE AND p.assumed = 0) AS prices,
            (SELECT MAX(p.day) FROM prices p WHERE p.owner_id = s.owner_id AND p.store = s.name COLLATE NOCASE) AS last_on
          FROM stores s WHERE s.owner_id = ? ORDER BY s.name COLLATE NOCASE`, [owner]);
     },
 
-    async addStore(input: { name: string; note?: string | null }): Promise<Store[]> {
+    async addStore(input: { name: string; note?: string | null; adjust_days?: number | null }): Promise<Store[]> {
       const name = clean(input.name, 100);
       if (!name) throw new Problem(400, 'Give the store a name');
       if (await db.get('SELECT id FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE', [owner, name])) throw new Problem(409, "That store is already on your list");
-      await db.run('INSERT INTO stores (owner_id, name, note, created_at) VALUES (?, ?, ?, ?)', [owner, name, clean(input.note, 300), stamp(clock())]);
+      await db.run('INSERT INTO stores (owner_id, name, note, adjust_days, created_at) VALUES (?, ?, ?, ?, ?)', [owner, name, clean(input.note, 300), windowOf(input.adjust_days), stamp(clock())]);
       return this.stores();
     },
 
     /** Rename a store, or change its note. Its prices and coupons follow the new name. */
-    async updateStore(id: number, input: { name: string; note?: string | null }): Promise<Store[]> {
+    async updateStore(id: number, input: { name: string; note?: string | null; adjust_days?: number | null }): Promise<Store[]> {
       const name = clean(input.name, 100);
       if (!name) throw new Problem(400, 'Give the store a name');
       const old = await db.get<{ name: string }>('SELECT name FROM stores WHERE id = ? AND owner_id = ?', [id, owner]);
       if (!old) throw new Problem(404, 'Not found');
       if (await db.get('SELECT id FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE AND id != ?', [owner, name, id])) throw new Problem(409, "Another store already has that name");
-      await db.run('UPDATE stores SET name = ?, note = ? WHERE id = ?', [name, clean(input.note, 300), id]);
+      await db.run('UPDATE stores SET name = ?, note = ?, adjust_days = ? WHERE id = ?', [name, clean(input.note, 300), windowOf(input.adjust_days), id]);
       await db.run('UPDATE prices SET store = ? WHERE owner_id = ? AND store = ? COLLATE NOCASE', [name, owner, old.name]);
       await db.run('UPDATE coupons SET store = ? WHERE owner_id = ? AND store = ? COLLATE NOCASE', [name, owner, old.name]);
       await db.run('UPDATE ingredients SET usual_store = ? WHERE owner_id = ? AND usual_store = ? COLLATE NOCASE', [name, owner, old.name]);
@@ -486,7 +540,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
      * What a line on the list cost, in cents; null takes the price away again. `assumed` marks last time's
      * price standing in. The line's price is replaced, never added to.
      */
-    async setPrice(groceryId: number, price: number | null, assumed = false, barcode?: string | null, size?: string | null): Promise<Shopping> {
+    async setPrice(groceryId: number, price: number | null, assumed = false, barcode?: string | null, size?: string | null, saved = 0): Promise<Shopping> {
       const l = await line(db, groceryId);
       // The size bought: what was typed; else the amount on the list; else the packet's own; else the usual size; else what it was last time.
       const habit = l.ingredient_id !== null ? await db.get<Habit>('SELECT id, usual_store, usual_size_quantity, usual_size_unit FROM ingredients WHERE id = ? AND owner_id = ?', [l.ingredient_id, owner]) : undefined;
@@ -506,8 +560,8 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       await db.run('DELETE FROM prices WHERE owner_id = ? AND grocery_id = ?', [owner, groceryId]);
       if (price !== null) {
         await db.run(
-          'INSERT INTO prices (owner_id, ingredient_id, grocery_id, label, cents, quantity, unit, store, day, assumed, barcode, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [owner, l.ingredient_id, groceryId, l.label, cents(price, 'A price'), l.quantity, l.unit, await setting(STORE), today(), assumed ? 1 : 0, barcode ? barcodeKey(barcode) : null, stamp(clock())]);
+          'INSERT INTO prices (owner_id, ingredient_id, grocery_id, label, cents, saved_cents, quantity, unit, store, day, assumed, barcode, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [owner, l.ingredient_id, groceryId, l.label, cents(price, 'A price'), assumed ? 0 : cents(saved, 'A saving'), l.quantity, l.unit, await setting(STORE), today(), assumed ? 1 : 0, barcode ? barcodeKey(barcode) : null, stamp(clock())]);
       }
       return summary();
     },
@@ -526,12 +580,12 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       // On the list: the line still to get if there is one, else the one already in the cart.
       const onList = await db.get<Line>('SELECT id, ingredient_id, label, quantity, unit, done FROM grocery WHERE owner_id = ? AND ingredient_id = ? ORDER BY done, id LIMIT 1', [owner, known.id]);
       const before = await db.get<PriceRow>(
-        `SELECT grocery_id, ingredient_id, label, cents, quantity, unit, store, day, assumed FROM prices
+        `SELECT grocery_id, ingredient_id, label, cents, quantity, unit, store, day, assumed, saved_cents FROM prices
          WHERE owner_id = ? AND ingredient_id = ? AND assumed = 0 AND (grocery_id IS NULL OR grocery_id != ?) ORDER BY day DESC, id DESC LIMIT 1`, [owner, known.id, onList?.id ?? 0]);
       return {
         barcode, ingredient: known,
         line: onList ? { id: onList.id, label: onList.label, amount: units.amount(onList.quantity, onList.unit), done: onList.done === 1 } : null,
-        last: before ? { cents: before.cents, amount: units.amount(before.quantity, before.unit), store: before.store, day: before.day } : null,
+        last: before ? { cents: before.cents + before.saved_cents, saved_cents: before.saved_cents, amount: units.amount(before.quantity, before.unit), store: before.store, day: before.day } : null,
       };
     },
 
@@ -564,8 +618,9 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
      */
     async trends(): Promise<Trend[]> {
       const rows = await db.all<PriceRow & { name: string | null }>(
-        `SELECT p.grocery_id, p.ingredient_id, p.label, p.cents, p.quantity, p.unit, p.store, p.day, p.assumed, i.name
+        `SELECT p.grocery_id, p.ingredient_id, p.label, p.cents, p.quantity, p.unit, p.store, p.day, p.assumed, p.saved_cents, i.name
          FROM prices p LEFT JOIN ingredients i ON i.id = p.ingredient_id WHERE p.owner_id = ? AND p.assumed = 0 ORDER BY p.day, p.id`, [owner]);
+      const sign = (await setting(CURRENCY)) ?? '$';
       const groups = new Map<string, { name: string; rows: typeof rows }>();
       for (const p of rows) (groups.get(keyOf(p)) ?? groups.set(keyOf(p), { name: p.name ?? p.label, rows: [] }).get(keyOf(p))!).rows.push(p);
       return [...groups.values()].map(({ name, rows: bought }): Trend => {
@@ -577,8 +632,9 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
         const per = perOf(newest.unit);
         const points = bought.map((p): PricePoint => {
           const inNewest = basis !== 'per' ? null : p.unit === newest.unit ? p.quantity : p.unit === null || newest.unit === null ? null : units.convert(p.quantity!, p.unit, newest.unit);
-          return { cents: p.cents, amount: units.amount(p.quantity, p.unit), store: p.store, day: p.day,
-            per_cents: inNewest ? Math.round(p.cents / inNewest * per.of) : null, per: inNewest ? per.label : null };
+          // The full price, with what was saved beside it: a sale never stands as what the thing usually costs.
+          return { cents: p.cents + p.saved_cents, saved_cents: p.saved_cents, amount: units.amount(p.quantity, p.unit), store: p.store, day: p.day,
+            per_cents: inNewest ? Math.round((p.cents + p.saved_cents) / inNewest * per.of) : null, per: inNewest ? per.label : null };
         });
         const usable = basis === 'per' && points.every((p) => p.per_cents !== null) ? 'per' : 'line';
         const by = (pick: (a: number, b: number) => boolean) => points.reduce((best, p) => (pick(valueOf(p, usable), valueOf(best, usable)) ? p : best));
@@ -589,6 +645,10 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
           name, times: points.length, basis: usable, per: usable === 'per' ? per.label : null, points, latest, lowest: by((a, b) => a < b), highest: by((a, b) => a > b),
           shops: [...atShop.values()].sort((a, b) => valueOf(a, usable) - valueOf(b, usable)),
           change_cents: points.length > 1 ? valueOf(latest, usable) - valueOf(points[points.length - 2]!, usable) : null,
+          savings: (() => {
+            const times = bought.filter((p) => p.saved_cents > 0).map((p) => ({ day: p.day, cents: p.saved_cents }));
+            return { times: times.length, text: savingsSentence(sign, times), last_on: times.length > 0 ? times[times.length - 1]!.day : null };
+          })(),
         };
       }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     },
@@ -605,7 +665,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
          WHERE p.plan_id = ? AND p.kind = 'recipe' AND i.owner_id = ? ORDER BY i.name COLLATE NOCASE`, [planId, owner]);
       const last = new Map<number, number>();
       for (const p of await db.all<{ ingredient_id: number; cents: number }>(
-        'SELECT ingredient_id, cents FROM prices WHERE owner_id = ? AND assumed = 0 AND ingredient_id IS NOT NULL ORDER BY day DESC, id DESC', [owner])) {
+        'SELECT ingredient_id, cents + saved_cents AS cents FROM prices WHERE owner_id = ? AND assumed = 0 AND ingredient_id IS NOT NULL ORDER BY day DESC, id DESC', [owner])) {
         if (!last.has(p.ingredient_id)) last.set(p.ingredient_id, p.cents);
       }
       const known = needed.filter((i) => last.has(i.id));
@@ -626,10 +686,105 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
     async history(groceryId: number): Promise<LastPrice[]> {
       const l = await line(db, groceryId);
       const rows = await db.all<PriceRow>(
-        `SELECT grocery_id, ingredient_id, label, cents, quantity, unit, store, day, assumed FROM prices
+        `SELECT grocery_id, ingredient_id, label, cents, quantity, unit, store, day, assumed, saved_cents FROM prices
          WHERE owner_id = ? AND assumed = 0 AND ${l.ingredient_id !== null ? 'ingredient_id = ?' : 'ingredient_id IS NULL AND LOWER(TRIM(label)) = ?'}
          ORDER BY day DESC, id DESC LIMIT 50`, [owner, l.ingredient_id ?? l.label.trim().toLowerCase()]);
-      return rows.map((p) => ({ cents: p.cents, amount: units.amount(p.quantity, p.unit), store: p.store, day: p.day }));
+      return rows.map((p) => ({ cents: p.cents + p.saved_cents, saved_cents: p.saved_cents, amount: units.amount(p.quantity, p.unit), store: p.store, day: p.day }));
+    },
+
+    // ---------- savings ----------
+
+    /** What was saved (on what was paid, by receipt or by hand), by store, in a month and in that month's year. */
+    async savings(month?: string | null): Promise<Savings> {
+      const m = month && /^\d{4}-\d{2}$/.test(month) ? month : today().slice(0, 7);
+      const rows = await db.all<{ store: string | null; month: string; cents: number }>(
+        `SELECT store, SUBSTR(day, 1, 7) AS month, SUM(saved_cents) AS cents FROM prices
+         WHERE owner_id = ? AND assumed = 0 AND saved_cents > 0 AND SUBSTR(day, 1, 4) = ? GROUP BY store COLLATE NOCASE, SUBSTR(day, 1, 7)`, [owner, m.slice(0, 4)]);
+      const by = new Map<string, { store: string; month_cents: number; year_cents: number }>();
+      for (const r of rows) {
+        const key = (r.store ?? '').toLowerCase();
+        const one = by.get(key) ?? by.set(key, { store: r.store ?? 'No store named', month_cents: 0, year_cents: 0 }).get(key)!;
+        one.year_cents += r.cents;
+        if (r.month === m) one.month_cents += r.cents;
+      }
+      const stores = [...by.values()].sort((a, b) => b.year_cents - a.year_cents);
+      return { currency: (await setting(CURRENCY)) ?? '$', month: m, year: m.slice(0, 4), month_cents: stores.reduce((n, s) => n + s.month_cents, 0), year_cents: stores.reduce((n, s) => n + s.year_cents, 0), stores };
+    },
+
+    /**
+     * Money to ask a store for: something bought where there is a price adjustment window, still inside it, and then seen cheaper
+     * at the same store (on a later receipt or typed in) or on savings in the store's savings book now. Only what the person has
+     * written down is looked at; nothing is looked up. Each is about one purchase, until it is marked as asked.
+     */
+    async drops(): Promise<Drop[]> {
+      const day = today();
+      const windows = new Map((await db.all<{ name: string; adjust_days: number }>('SELECT name, adjust_days FROM stores WHERE owner_id = ? AND adjust_days > 0', [owner])).map((s) => [s.name.toLowerCase(), s.adjust_days]));
+      if (windows.size === 0) return [];
+      const rows = await db.all<PriceRow & { id: number; trip_id: number | null; claimed_on: string | null }>(
+        `SELECT id, grocery_id, ingredient_id, label, cents, saved_cents, quantity, unit, store, day, assumed, trip_id, claimed_on FROM prices
+         WHERE owner_id = ? AND assumed = 0 AND store IS NOT NULL ORDER BY day, id`, [owner]);
+      const book = (await summary()).book.filter((b) => b.state === 'now' && b.store);
+      const sameSize = (a: PriceRow, b: PriceRow) => a.quantity === null || b.quantity === null || (a.unit === b.unit && Math.abs(a.quantity - b.quantity) < 1e-9);
+      const found: Drop[] = [];
+      for (const p of rows) {
+        const days = windows.get(p.store!.toLowerCase());
+        if (!days || p.claimed_on) continue;
+        const claimBy = addDays(p.day, days);
+        if (claimBy < day) continue;
+        let best: Drop | null = null;
+        const consider = (ask: number, now: number, seen: string, because: Drop['because']) => {
+          if (ask > 0 && (!best || ask > best.ask_cents)) {
+            best = { id: p.id, item: p.label, store: p.store!, bought_on: p.day, paid_cents: p.cents, now_cents: now, ask_cents: ask, seen_on: seen, because, claim_by: claimBy, days_left: dayNumber(claimBy) - dayNumber(day) };
+          }
+        };
+        for (const q of rows) {
+          if (q.id <= p.id || q.day < p.day || q.day > claimBy || (q.trip_id !== null && q.trip_id === p.trip_id)) continue;
+          if (q.store!.toLowerCase() !== p.store!.toLowerCase() || keyOf(q) !== keyOf(p) || !sameSize(p, q)) continue;
+          consider(p.cents - q.cents, q.cents, q.day, 'receipt');
+        }
+        for (const b of book) {
+          if (b.store!.toLowerCase() !== p.store!.toLowerCase() || !sameThing(p.label, b.item)) continue;
+          const off = b.cents_off ?? Math.round(p.cents * (b.percent_off ?? 0) / 100);
+          consider(off - p.saved_cents, p.cents - (off - p.saved_cents), day, 'book');
+        }
+        if (best) found.push(best);
+      }
+      return found.sort((a, b) => a.days_left - b.days_left || b.ask_cents - a.ask_cents);
+    },
+
+    /** Say a price was asked back (or is not going to be), so it is not offered again. */
+    async claimDrop(id: number): Promise<Drop[]> {
+      if (!(await db.get('SELECT 1 AS x FROM prices WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Not found');
+      await db.run('UPDATE prices SET claimed_on = ? WHERE id = ? AND owner_id = ?', [today(), id, owner]);
+      return this.drops();
+    },
+
+    // ---------- the savings book ----------
+
+    /**
+     * Type in a store's monthly savings book: one thing to a line ("Coffee 4.00", "Eggs 1.00", "Cereal 20%"), with the days it runs.
+     * They are kept as coupons marked as from the book. A thing typed again for the same store and start day is changed, not doubled.
+     */
+    async addBook(input: { store?: string | null; text?: string | null; starts_on?: string | null; expires_on?: string | null }): Promise<{ added: number; skipped: string[]; summary: Shopping }> {
+      const read = readBook(input.text ?? '');
+      if (read.lines.length === 0) throw new Problem(400, 'Nothing could be read. Type one thing to a line, with what comes off: Coffee 4.00, or Cereal 20%.');
+      const store = clean(input.store, 100);
+      const starts = dayOrNull(input.starts_on);
+      const expires = dayOrNull(input.expires_on);
+      if (starts && expires && expires < starts) throw new Problem(400, 'The book should end after it starts');
+      if (store) await db.run('INSERT OR IGNORE INTO stores (owner_id, name, created_at) VALUES (?, ?, ?)', [owner, store, stamp(clock())]);
+      const listed = store ? (await db.get<{ name: string }>('SELECT name FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE', [owner, store]))?.name ?? store : null;
+      for (const b of read.lines) {
+        const same = await db.get<{ id: number }>(
+          `SELECT id FROM coupons WHERE owner_id = ? AND book = 1 AND LOWER(COALESCE(item, label)) = ? AND COALESCE(store, '') = COALESCE(?, '') AND COALESCE(starts_on, '') = COALESCE(?, '')`,
+          [owner, b.item.toLowerCase(), listed, starts]);
+        if (same) await db.run('UPDATE coupons SET cents_off = ?, percent_off = ?, expires_on = ? WHERE id = ?', [b.cents_off, b.percent_off, expires, same.id]);
+        else {
+          await db.run('INSERT INTO coupons (owner_id, label, cents_off, percent_off, store, expires_on, created_at, book, item, starts_on) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)',
+            [owner, b.item, b.cents_off, b.percent_off, listed, expires, stamp(clock()), b.item, starts]);
+        }
+      }
+      return { added: read.lines.length, skipped: read.skipped, summary: await summary() };
     },
 
     // ---------- coupons ----------

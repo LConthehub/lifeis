@@ -8,6 +8,10 @@
  * week's menu, a project's supplies, the household) and the person changes the amounts. A part that belongs to a
  * project is a paid cost on that project (projects.ts), so it is counted there and in the budget's Projects line.
  *
+ * The receipt can be a photo, read on the device (receipt.ts finds the lines; the person checks them). What a line saved is kept apart
+ * from what was paid (prices.saved_cents), the receipt's photo, made small on the device, stays with the trip (trip_receipts) and so with
+ * the spending entry, and the lines are tied to the trip so a later, cheaper price can say what to ask the store for (shopping.ts drops).
+ *
  * The trip is kept (shopping_trips) so that a charge the bank brings in later for the same store and amount, on a
  * close day, is recognized as it and not counted again (money.ts). The lines that were got are then taken off the
  * list; their prices stay, with the store, as price history.
@@ -18,10 +22,12 @@ import { atomic, type Db } from './db.ts';
 import { Problem } from './problem.ts';
 import { projects } from './projects.ts';
 import { shopping } from './shopping.ts';
-import { clean, dayOrNull, labelKey, stamp, todayOf, type Clock } from './small.ts';
+import { MAX_THING_PHOTO } from './inventory.ts';
+import { readReceipt, tieToList, type Receipt, type Tie } from './receipt.ts';
+import { clean, dayOrNull, labelKey, pictureType, stamp, todayOf, type Clock } from './small.ts';
 
 export type Belongs = 'menu' | 'project' | 'household' | 'groceries';
-export type TripLine = { id: number; label: string; cents: number | null; assumed: boolean; belongs: Belongs; project_id: number | null; project: string | null };
+export type TripLine = { id: number; label: string; cents: number | null; /** What was saved on it; the full price is the two together. */ saved_cents: number; assumed: boolean; belongs: Belongs; project_id: number | null; project: string | null };
 export type TripPart = { key: string; label: string; cents: number; lines: number; category_id: number | null; project_id: number | null };
 export type TripPlan = {
   currency: string;
@@ -31,6 +37,8 @@ export type TripPlan = {
   lines: TripLine[];
   /** What the lines come to (prices paid, and last prices standing in). */
   estimate_cents: number;
+  /** What the lines saved, in all. */
+  saved_cents: number;
   /** Lines in the buggy with no price at all. */
   unpriced: number;
   /** The suggested split of the receipt. One part when everything belongs together. */
@@ -44,11 +52,15 @@ export type TripInput = {
   /** The store the lines are listed under, when that is not `store`: lines with no store yet (null or empty), done at the store named. */
   from?: string | null;
   total_cents?: number | null;
+  /** What the receipt saved in all (the lines' savings and any not tied to a line). Left out: what the lines saved. */
+  saved_cents?: number | null;
+  /** The receipt's photo, already made small, to keep with the spending. */
+  photo?: Uint8Array | null;
   day?: string | null;
   /** Left out: the whole receipt is one entry. Otherwise the amounts must add up to the total. */
   parts?: { label?: string | null; cents?: number | null; category_id?: number | null; project_id?: number | null }[];
 };
-export type TripDone = { id: number; store: string; day: string; total_cents: number; estimate_cents: number | null; entries: number; got: number };
+export type TripDone = { id: number; store: string; day: string; total_cents: number; estimate_cents: number | null; saved_cents: number; entries: number; got: number; receipt: boolean };
 
 const MOST = 100_000_000_00;
 const HOUSEHOLD_AISLE = /household|cleaning|paper|laundry|pet|health|beauty|toiletr|personal|baby|pharmacy/i;
@@ -72,7 +84,7 @@ export function trips(db: Db, owner: number, clock: Clock = () => new Date()) {
       const a = labelKey(r.label);
       const supply = r.from_plan ? undefined : supplies.find((s) => { const b = labelKey(s.label); return b.length >= 3 && (a === b || a.includes(b) || b.includes(a)); });
       const belongs: Belongs = r.from_plan ? 'menu' : supply ? 'project' : r.aisle && HOUSEHOLD_AISLE.test(r.aisle) ? 'household' : 'groceries';
-      lines.push({ id: r.id, label: r.label, cents: l.price_cents, assumed: l.assumed, belongs, project_id: supply?.project_id ?? null, project: supply?.project ?? null });
+      lines.push({ id: r.id, label: r.label, cents: l.price_cents, saved_cents: l.saved_cents, assumed: l.assumed, belongs, project_id: supply?.project_id ?? null, project: supply?.project ?? null });
     }
     const categories = await db.all<{ id: number; name: string }>(`${SEEN} ORDER BY c.owner_id = ? DESC, c.sort_order, c.id`, [owner, owner, owner]);
     const groceries = shop.grocery_budget?.category_id ?? null;
@@ -94,7 +106,7 @@ export function trips(db: Db, owner: number, clock: Clock = () => new Date()) {
     const parts = [...groups.values()].sort((a, b) => order(a) - order(b));
     return {
       currency: shop.currency, store: store ? clean(store, 100) : null, day: today(), lines,
-      estimate_cents: lines.reduce((n, l) => n + (l.cents ?? 0), 0), unpriced: lines.filter((l) => l.cents === null).length,
+      estimate_cents: lines.reduce((n, l) => n + (l.cents ?? 0), 0), saved_cents: lines.reduce((n, l) => n + l.saved_cents, 0), unpriced: lines.filter((l) => l.cents === null).length,
       parts, categories, projects: await db.all<{ id: number; name: string }>(
         `SELECT id, name FROM projects WHERE owner_id = ? AND status IN ('idea', 'planned', 'active', 'paused') ORDER BY name COLLATE NOCASE`, [owner]),
     };
@@ -103,6 +115,19 @@ export function trips(db: Db, owner: number, clock: Clock = () => new Date()) {
   return {
     /** What done shopping at this store would do: its lines, their estimate, and how the receipt might be split. */
     plan,
+
+    /** The photo of a trip's receipt, or null when it has none. */
+    async receipt(tripId: number): Promise<{ type: string; bytes: Uint8Array } | null> {
+      if (!(await db.get('SELECT 1 AS x FROM shopping_trips WHERE id = ? AND owner_id = ?', [tripId, owner]))) throw new Problem(404, 'Not found');
+      return (await db.get<{ type: string; bytes: Uint8Array }>('SELECT type, bytes FROM trip_receipts WHERE trip_id = ? AND owner_id = ?', [tripId, owner])) ?? null;
+    },
+
+    /** A receipt read from a photo's words: what it says, and which line in the buggy for this store each thing on it is. Nothing is changed. */
+    async readReceipt(text: string, from: string | null): Promise<{ receipt: Receipt; ties: Tie[]; lines: TripLine[] }> {
+      const receipt = readReceipt(text);
+      const mine = await plan(from);
+      return { receipt, ties: tieToList(receipt.items, mine.lines), lines: mine.lines };
+    },
 
     /**
      * Done at a store. Writes the receipt as spending (one entry, or one for each part), keeps the trip so a later bank
@@ -121,14 +146,18 @@ export function trips(db: Db, owner: number, clock: Clock = () => new Date()) {
         if (typeof cents !== 'number' || !Number.isInteger(cents) || cents < 0 || cents > MOST) throw new Problem(422, 'Each part should be an amount of money, not below zero');
         return { label: clean(p.label, 100), cents, category_id: p.category_id ?? null, project_id: p.project_id ?? null };
       });
+      const saved = input.saved_cents ?? mine.lines.reduce((n, l) => n + l.saved_cents, 0);
+      if (!Number.isInteger(saved) || saved < 0 || saved > MOST) throw new Problem(422, 'What the receipt saved should be an amount of money, not below zero');
+      if (input.photo && (input.photo.length > MAX_THING_PHOTO || pictureType(input.photo) === null)) throw new Problem(400, "That isn't a picture Life Is can keep (JPEG, PNG or WebP), or it is too large");
       const added = parts.reduce((n, p) => n + p.cents, 0);
       if (added !== total) throw new Problem(400, `The parts add up to ${(added / 100).toFixed(2)}, and the receipt total is ${(total / 100).toFixed(2)}. They should match.`);
       return atomic(db, async (tx) => {
         await tx.run('INSERT OR IGNORE INTO stores (owner_id, name, created_at) VALUES (?, ?, ?)', [owner, store, stamp(clock())]);
         const name = (await tx.get<{ name: string }>('SELECT name FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE', [owner, store]))?.name ?? store;
-        const made = await tx.run('INSERT INTO shopping_trips (owner_id, store, day, estimate_cents, total_cents, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-          [owner, name, day, mine.lines.length > 0 ? mine.estimate_cents : null, total, stamp(clock())]);
+        const made = await tx.run('INSERT INTO shopping_trips (owner_id, store, day, estimate_cents, total_cents, saved_cents, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [owner, name, day, mine.lines.length > 0 ? mine.estimate_cents : null, total, saved, stamp(clock())]);
         const tripId = made.lastId;
+        if (input.photo) await tx.run('INSERT INTO trip_receipts (trip_id, owner_id, type, bytes, created_at) VALUES (?, ?, ?, ?, ?)', [tripId, owner, pictureType(input.photo)!, input.photo, stamp(clock())]);
         const kept = parts.length > 1 ? parts.filter((p) => p.cents > 0) : parts;
         let entries = 0;
         for (const p of kept) {
@@ -146,10 +175,10 @@ export function trips(db: Db, owner: number, clock: Clock = () => new Date()) {
         const ids = mine.lines.map((l) => l.id);
         if (ids.length > 0) {
           const marks = ids.map(() => '?').join(',');
-          await tx.run(`UPDATE prices SET store = ? WHERE owner_id = ? AND grocery_id IN (${marks})`, [name, owner, ...ids]);
+          await tx.run(`UPDATE prices SET store = ?, trip_id = ?, day = ? WHERE owner_id = ? AND grocery_id IN (${marks})`, [name, tripId, day, owner, ...ids]);
           await tx.run(`DELETE FROM grocery WHERE owner_id = ? AND id IN (${marks})`, [owner, ...ids]);
         }
-        return { id: tripId, store: name, day, total_cents: total, estimate_cents: mine.lines.length > 0 ? mine.estimate_cents : null, entries, got: ids.length };
+        return { id: tripId, store: name, day, total_cents: total, estimate_cents: mine.lines.length > 0 ? mine.estimate_cents : null, saved_cents: saved, entries, got: ids.length, receipt: Boolean(input.photo) };
       });
     },
   };

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import AskBack from '../components/AskBack';
+import Icon from '../components/Icon';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, fromDateInput } from '../components/ui';
 
 const money = (cents, sign) => `${cents < 0 ? '−' : ''}${sign}${(Math.abs(cents) / 100).toFixed(2)}`;
@@ -22,6 +24,7 @@ export default function Prices() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">Prices</h1>
+      <AskBack />
       {data.trends.length === 0 ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
           Nothing yet. On the <Link to="/groceries" className="underline">grocery list</Link>, type what each thing costs as it goes in the buggy. This page then shows how its price moves, where it was cheapest, and what you spend each month.
@@ -60,9 +63,10 @@ export default function Prices() {
                     <th scope="row" className="px-4 py-2 text-left font-normal">
                       <button type="button" onClick={() => setOpen(t)} className="text-left text-gray-800 hover:underline dark:text-life-50">
                         {t.name} <span className="text-xs text-gray-500 dark:text-life-300">{t.times} {t.times === 1 ? 'price' : 'prices'}</span>
+                        {t.savings.times > 0 && <span className="block text-xs text-life-700 dark:text-life-200" data-item-savings={t.name}><Icon of="coupon" size={14} /> {t.savings.text}</span>}
                       </button>
                     </th>
-                    <td className="px-2 py-2 text-right tabular-nums text-gray-800 dark:text-life-50">{priced(t.latest, t, sign)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-gray-800 dark:text-life-50">{priced(t.latest, t, sign)}{t.latest.saved_cents > 0 && <span className="block text-xs text-life-700 dark:text-life-200" data-latest-saving>{money(t.latest.saved_cents, sign)} off</span>}</td>
                     <td className="hidden px-2 py-2 text-right tabular-nums sm:table-cell"><Change cents={t.change_cents} sign={sign} /></td>
                     <td className="hidden px-4 py-2 text-gray-600 dark:text-life-200 md:table-cell">{t.times > 1 ? `${priced(t.lowest, t, sign)}${t.lowest.store ? ` at ${t.lowest.store}` : ''}` : ''}</td>
                   </tr>
@@ -82,8 +86,8 @@ export default function Prices() {
           <ul className="divide-y divide-life-50 dark:divide-life-700">
             {shops.map((s) => (
               <li key={s.id}>
-                <button type="button" onClick={() => setShop(s)} className="flex w-full items-baseline gap-2 py-1.5 text-left text-sm hover:underline">
-                  <span className="flex-1 text-gray-800 dark:text-life-50">{s.name}{s.note && <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{s.note}</span>}</span>
+                <button type="button" onClick={() => setShop(s)} className="flex min-h-[44px] w-full items-center gap-2 text-left text-sm hover:underline">
+                  <span className="flex-1 text-gray-800 dark:text-life-50">{s.name}{s.note && <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{s.note}</span>}{s.adjust_days && <span className="block text-xs text-gray-500 dark:text-life-300">Price adjustment: {s.adjust_days} days</span>}</span>
                   <span className="text-xs text-gray-500 dark:text-life-300">{s.prices === 0 ? 'no prices yet' : `${s.prices} ${s.prices === 1 ? 'price' : 'prices'}, last ${dayText(s.last_on, false)}`}</span>
                 </button>
               </li>
@@ -110,6 +114,11 @@ function TrendView({ trend: t, sign }) {
       <p className="text-sm text-gray-600 dark:text-life-100">
         {t.basis === 'per' ? `Price for one ${t.per}.` : 'Price as bought.'} {t.times > 1 && <>Cheapest was {priced(t.lowest, t, sign)}{t.lowest.store ? ` at ${t.lowest.store}` : ''} on {dayText(t.lowest.day)}.</>}
       </p>
+      {t.savings.times > 0 && (
+        <p className="rounded-lg bg-life-50/70 px-3 py-2 text-sm text-gray-800 dark:bg-life-700/60 dark:text-life-50" data-savings-says>
+          <Icon of="coupon" size={16} /> {t.name}: {t.savings.text}. It was last on savings {dayText(t.savings.last_on)}. The prices here are the full price, with the saving beside each.
+        </p>
+      )}
       {t.points.length > 1 && <PriceChart trend={t} sign={sign} />}
       {t.shops.length > 1 && (
         <div>
@@ -127,13 +136,13 @@ function TrendView({ trend: t, sign }) {
       )}
       <table className="w-full text-sm">
         <caption className="sr-only">Every price, newest first</caption>
-        <thead><tr className="text-left text-xs text-gray-500 dark:text-life-300"><th scope="col" className="py-1 font-medium">Day</th><th scope="col" className="py-1 font-medium">Where</th><th scope="col" className="py-1 text-right font-medium">Paid</th>{t.basis === 'per' && <th scope="col" className="py-1 text-right font-medium">For one {t.per}</th>}</tr></thead>
+        <thead><tr className="text-left text-xs text-gray-500 dark:text-life-300"><th scope="col" className="py-1 font-medium">Day</th><th scope="col" className="py-1 font-medium">Where</th><th scope="col" className="py-1 text-right font-medium">Price</th>{t.basis === 'per' && <th scope="col" className="py-1 text-right font-medium">For one {t.per}</th>}</tr></thead>
         <tbody className="divide-y divide-life-50 dark:divide-life-700">
           {[...t.points].reverse().map((p, i) => (
             <tr key={`${p.day}-${i}`}>
               <td className="py-1.5 text-gray-800 dark:text-life-50">{dayText(p.day)}</td>
               <td className="py-1.5 text-gray-600 dark:text-life-200">{p.store || ''}</td>
-              <td className="py-1.5 text-right tabular-nums text-gray-800 dark:text-life-50">{money(p.cents, sign)}{p.amount && <span className="text-gray-500 dark:text-life-300"> for {p.amount}</span>}</td>
+              <td className="py-1.5 text-right tabular-nums text-gray-800 dark:text-life-50">{money(p.cents, sign)}{p.amount && <span className="text-gray-500 dark:text-life-300"> for {p.amount}</span>}{p.saved_cents > 0 && <span className="block text-xs text-life-700 dark:text-life-200">{money(p.saved_cents, sign)} off, paid {money(p.cents - p.saved_cents, sign)}</span>}</td>
               {t.basis === 'per' && <td className="py-1.5 text-right tabular-nums text-gray-800 dark:text-life-50">{money(p.per_cents, sign)}</td>}
             </tr>
           ))}
@@ -204,11 +213,11 @@ function PriceChart({ trend: t, sign }) {
 }
 
 function ShopForm({ shop, onDone }) {
-  const [form, setForm] = useState({ name: shop.name || '', note: shop.note || '' });
+  const [form, setForm] = useState({ name: shop.name || '', note: shop.note || '', adjust_days: shop.adjust_days ? String(shop.adjust_days) : '' });
   const [error, setError] = useState('');
   const submit = async (e) => {
     e.preventDefault();
-    const body = { name: form.name, note: form.note || null };
+    const body = { name: form.name, note: form.note || null, adjust_days: form.adjust_days.trim() === '' ? null : Number(form.adjust_days) };
     try { onDone((shop.id ? await axios.put(`/api/shopping/stores/${shop.id}`, body) : await axios.post('/api/shopping/stores', body)).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   const remove = async () => onDone((await axios.delete(`/api/shopping/stores/${shop.id}`)).data);
@@ -216,6 +225,10 @@ function ShopForm({ shop, onDone }) {
     <form onSubmit={submit} className="space-y-3">
       <Field label="Its name *"><input required autoFocus={!shop.id} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Aldi on Main St" className={inputClass} /></Field>
       <Field label="A note"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="needs the card, closes at 8…" className={inputClass} /></Field>
+      <Field label="Price adjustment window, in days">
+        <input inputMode="numeric" value={form.adjust_days} onChange={(e) => setForm({ ...form, adjust_days: e.target.value.replace(/\D/g, '') })} placeholder="30 at some stores; empty for none" aria-label="Price adjustment days" className={inputClass} />
+      </Field>
+      <p className="text-xs text-gray-500 dark:text-life-300">Some stores give the difference back if the price drops soon after you buy. Say how long, and Life Is tells you when something you bought was later cheaper there. Only what you have written down is looked at.</p>
       {shop.id && <p className="text-xs text-gray-500 dark:text-life-300">Renaming it renames it on every price and coupon. Removing it only takes it off this list: what you paid there stays.</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex items-center justify-between">

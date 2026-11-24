@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { onDevice } from '../where';
 import { AskCard } from '../components/Assistant';
+import AskBack from '../components/AskBack';
 import { StartCard } from '../components/Start';
 import { RoutinesCard } from '../components/Routines';
 import Icon, { hasIcon } from '../components/Icon';
@@ -91,6 +92,7 @@ export default function Home({ user }) {
       <StartCard onChanged={load} />
 
       <AskCard />
+      <AskBack />
 
       {s.cards.length === 0 && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Every card is out of sight. Use "Choose what shows" to bring some back.</div>}
 

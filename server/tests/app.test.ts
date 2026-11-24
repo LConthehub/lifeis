@@ -986,7 +986,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.
@@ -1060,7 +1060,7 @@ it('prices, the running total and coupons answer over the web, in whole cents', 
   expect((await admin.put(`/api/shopping/prices/${coffee}`, { cents: 899 })).json.totals.trolley_cents).toBe(899);
   expect((await admin.put(`/api/shopping/prices/${coffee}`, { cents: 8.99 })).status).toBe(422); // pounds, not pence
   expect((await admin.put(`/api/shopping/prices/${coffee}`, {})).status).toBe(422);
-  expect((await admin.get(`/api/shopping/prices/${coffee}/history`)).json).toEqual([{ cents: 899, amount: '', store: 'Aldi', day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }]);
+  expect((await admin.get(`/api/shopping/prices/${coffee}/history`)).json).toEqual([{ cents: 899, saved_cents: 0, amount: '', store: 'Aldi', day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }]);
 
   const made = await admin.post('/api/shopping/coupons', { label: '£2 off coffee', grocery_id: coffee, cents_off: 200, expires_on: '2099-01-01' });
   expect([made.status, made.json.coupons[0].ingredient.toLowerCase(), made.json.totals.to_pay_cents]).toEqual([201, 'coffee', 899]);
@@ -1099,7 +1099,7 @@ it('prices, the running total and coupons answer over the web, in whole cents', 
   // Clearing the list keeps what things cost.
   await admin.post('/api/kitchen/grocery/clear-done');
   const again = (await admin.post('/api/kitchen/grocery', { label: 'coffee' })).json[0].id;
-  expect((await admin.put(`/api/shopping/usual/${again}`, { store: 'Costco', size: '3 lb' })).json.lines).toEqual([{ id: again, price_cents: null, size: '', assumed: false,
+  expect((await admin.put(`/api/shopping/usual/${again}`, { store: 'Costco', size: '3 lb' })).json.lines).toEqual([{ id: again, price_cents: null, saved_cents: 0, deal: null, size: '', assumed: false,
     last: expect.objectContaining({ cents: 899, amount: '30 oz', store: 'Aldi on Main St' }), coupons: [], usual_store: 'Costco', usual_size: '3 lb', likely_store: 'Costco',
     moved_to: null, store: 'Costco', estimate_cents: 899, cheaper: null }]);
   expect((await admin.put(`/api/shopping/usual/${again}`, { size: 'huge' })).status).toBe(400);

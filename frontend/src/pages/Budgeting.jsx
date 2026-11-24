@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import Icon from '../components/Icon';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { money, toCents } from '../components/Budget';
 
@@ -35,6 +36,33 @@ export function ByTag({ tags, sign, empty }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** What was saved on groceries this month and this year, by store: a full price less what came off it, by receipt or by hand. Shows nothing until something was saved. */
+export function SavingsCard({ month }) {
+  const [s, setS] = useState(null);
+  useEffect(() => { setS(null); axios.get('/api/shopping/savings', { params: { month } }).then(({ data }) => setS(data)).catch(() => {}); }, [month]);
+  if (!s || s.year_cents === 0) return null;
+  const sign = s.currency;
+  return (
+    <section className={cardClass} data-savings aria-label="Saved with sales and coupons">
+      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50"><Icon of="coupon" size={18} /> Saved at the store</h2>
+      <dl className="grid grid-cols-2 gap-2 rounded-xl bg-life-50 px-3 py-3 text-center dark:bg-life-800">
+        <div><dt className="text-xs text-gray-500 dark:text-life-300">{monthLong(month)}</dt><dd className="font-semibold tabular-nums text-gray-800 dark:text-life-50" data-saved-month>{money(s.month_cents, sign)}</dd></div>
+        <div><dt className="text-xs text-gray-500 dark:text-life-300">All of {s.year}</dt><dd className="font-semibold tabular-nums text-gray-800 dark:text-life-50" data-saved-year>{money(s.year_cents, sign)}</dd></div>
+      </dl>
+      <table className="mt-2 w-full text-sm">
+        <caption className="sr-only">Saved at each store</caption>
+        <thead><tr className="text-left text-xs text-gray-500 dark:text-life-300"><th scope="col" className="py-1 font-medium">Store</th><th scope="col" className="py-1 text-right font-medium">This month</th><th scope="col" className="py-1 text-right font-medium">This year</th></tr></thead>
+        <tbody className="divide-y divide-life-100 dark:divide-life-800">
+          {s.stores.map((r) => (
+            <tr key={r.store}><th scope="row" className="py-1.5 text-left font-normal text-gray-800 dark:text-life-50">{r.store}</th><td className="py-1.5 text-right tabular-nums text-gray-800 dark:text-life-50">{money(r.month_cents, sign)}</td><td className="py-1.5 text-right tabular-nums text-gray-800 dark:text-life-50">{money(r.year_cents, sign)}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-1 text-xs text-gray-500 dark:text-life-300">Already taken off what you paid, so it is not in the spending. It comes from receipts and from savings typed on the grocery list.</p>
+    </section>
   );
 }
 

@@ -360,14 +360,21 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('pantry.csv', ['What', 'Amount', 'Unit', 'Where', 'Use by', 'Running low at'],
     (await all('SELECT i.name, p.quantity, p.unit, p.location, p.expires_on, p.low_at FROM pantry p JOIN ingredients i ON i.id = p.ingredient_id WHERE p.owner_id = ? ORDER BY i.name COLLATE NOCASE'))
       .map((p) => [str(p.name), str(p.quantity), str(p.unit), str(p.location), str(p.expires_on), str(p.low_at)]));
-  out.csv('prices.csv', ['What', 'Price', 'Amount', 'Unit', 'Shop', 'Day', 'A guess, not a receipt', 'Barcode'],
-    (await all('SELECT label, cents, quantity, unit, store, day, assumed, barcode FROM prices WHERE owner_id = ? ORDER BY day, id'))
-      .map((p) => [str(p.label), dollars(p.cents), str(p.quantity), str(p.unit), str(p.store), str(p.day), yes(p.assumed), str(p.barcode)]));
-  out.csv('coupons.csv', ['Coupon', 'What it is for', 'Dollars off', 'Percent off', 'Shop', 'Code', 'Runs out on', 'Used on', 'Notes'],
-    (await all('SELECT c.label, i.name AS what, c.cents_off, c.percent_off, c.store, c.code, c.expires_on, c.used_on, c.note FROM coupons c LEFT JOIN ingredients i ON i.id = c.ingredient_id WHERE c.owner_id = ? ORDER BY c.id'))
-      .map((c) => [str(c.label), str(c.what), dollars(c.cents_off), str(c.percent_off), str(c.store), str(c.code), str(c.expires_on), str(c.used_on), str(c.note)]));
-  out.csv('stores.csv', ['Store', 'Notes'],
-    (await all('SELECT name, note FROM stores WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id')).map((s) => [str(s.name), str(s.note)]));
+  // "Price" is what was paid; "Saved" is what was taken off it (the full price is the two together).
+  out.csv('prices.csv', ['What', 'Price', 'Amount', 'Unit', 'Shop', 'Day', 'A guess, not a receipt', 'Barcode', 'Saved'],
+    (await all('SELECT label, cents, quantity, unit, store, day, assumed, barcode, saved_cents FROM prices WHERE owner_id = ? ORDER BY day, id'))
+      .map((p) => [str(p.label), dollars(p.cents), str(p.quantity), str(p.unit), str(p.store), str(p.day), yes(p.assumed), str(p.barcode), num(p.saved_cents) ? dollars(p.saved_cents) : '']));
+  out.csv('coupons.csv', ['Coupon', 'What it is for', 'Dollars off', 'Percent off', 'Shop', 'Code', 'Runs out on', 'Used on', 'Notes', 'From the shop’s savings book', 'Starts on'],
+    (await all('SELECT c.label, i.name AS what, c.cents_off, c.percent_off, c.store, c.code, c.expires_on, c.used_on, c.note, c.book, c.starts_on FROM coupons c LEFT JOIN ingredients i ON i.id = c.ingredient_id WHERE c.owner_id = ? ORDER BY c.id'))
+      .map((c) => [str(c.label), str(c.what), dollars(c.cents_off), str(c.percent_off), str(c.store), str(c.code), str(c.expires_on), str(c.used_on), str(c.note), yes(c.book), str(c.starts_on)]));
+  out.csv('stores.csv', ['Store', 'Notes', 'Price adjustment days'],
+    (await all('SELECT name, note, adjust_days FROM stores WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id')).map((s) => [str(s.name), str(s.note), str(s.adjust_days)]));
+  if (await hasTable(q, 'trip_receipts')) {
+    for (const p of await all('SELECT t.id, t.store, t.day, r.type, r.bytes FROM trip_receipts r JOIN shopping_trips t ON t.id = r.trip_id WHERE t.owner_id = ? ORDER BY t.day, t.id')) {
+      const bytes = bytesOf(p.bytes);
+      if (bytes) out.binary('pictures/receipts', slug(`${str(p.store)} ${str(p.day)}`, p.id as number), str(p.type), bytes);
+    }
+  }
   out.csv('barcodes.csv', ['Barcode', 'What it is', 'Product name', 'Size amount', 'Size unit'],
     (await all('SELECT b.barcode, i.name, b.label, b.size_quantity, b.size_unit FROM ingredient_barcodes b JOIN ingredients i ON i.id = b.ingredient_id WHERE b.owner_id = ? ORDER BY b.barcode'))
       .map((b) => [str(b.barcode), str(b.name), str(b.label), str(b.size_quantity), str(b.size_unit)]));
@@ -621,6 +628,7 @@ export async function exportEverything(db: Db, owner: number, clock: Clock = () 
       'SELECT COALESCE(SUM(LENGTH(p.bytes)), 0) AS n FROM plan_photos p JOIN plans l ON l.id = p.plan_id WHERE l.owner_id = ?',
       'SELECT COALESCE(SUM(LENGTH(c.bytes)), 0) AS n FROM media_covers c JOIN media m ON m.id = c.media_id WHERE m.owner_id = ?',
     ]) weight += (await tx.get<{ n: number }>(sql, [owner]))?.n ?? 0;
+    if (await hasTable(tx, 'trip_receipts')) weight += (await tx.get<{ n: number }>('SELECT COALESCE(SUM(LENGTH(bytes)), 0) AS n FROM trip_receipts WHERE owner_id = ?', [owner]))?.n ?? 0;
     if (await hasTable(tx, 'recipe_photos')) weight += (await tx.get<{ n: number }>('SELECT COALESCE(SUM(LENGTH(p.bytes)), 0) AS n FROM recipe_photos p JOIN recipes r ON r.id = p.recipe_id WHERE r.owner_id = ?', [owner]))?.n ?? 0;
     if (weight > most) {
       const mb = (n: number) => (n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) / 1024 : Math.round(n / (1024 * 1024))).toLocaleString('en-US');
@@ -1501,7 +1509,8 @@ const importers: Record<string, Importer> = {
       if (!name) { skip(d, at, 'it has no name'); continue; }
       d.found += 1;
       if (have.has(labelKey(name))) { d.already += 1; continue; }
-      await c.tx.run('INSERT OR IGNORE INTO stores (owner_id, name, note, created_at) VALUES (?, ?, ?, ?)', [c.owner, name, clean(row.notes, 300), c.at]);
+      const days = numberOf(cellOf(row, 'Price adjustment days'));
+      await c.tx.run('INSERT OR IGNORE INTO stores (owner_id, name, note, adjust_days, created_at) VALUES (?, ?, ?, ?, ?)', [c.owner, name, clean(row.notes, 300), days !== null && Number.isInteger(days) && days > 0 && days <= 365 ? days : null, c.at]);
       have.add(labelKey(name));
       d.fresh += 1;
     }
@@ -1549,8 +1558,9 @@ const importers: Record<string, Importer> = {
       if (seen.take(`${day}\n${cents}\n${labelKey(label)}\n${labelKey(store ?? '')}`)) { d.already += 1; continue; }
       if (store) storesMade += (await c.tx.run('INSERT OR IGNORE INTO stores (owner_id, name, created_at) VALUES (?, ?, ?)', [c.owner, store, c.at])).changes;
       const quantity = numberOf(cellOf(row, 'Amount'));
-      await c.tx.run('INSERT INTO prices (owner_id, ingredient_id, grocery_id, label, cents, quantity, unit, store, day, assumed, barcode, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [c.owner, await ingredientFor(c.tx, c.owner, label), label, cents, quantity !== null && quantity > 0 ? quantity : null, units.canonical(clean(cellOf(row, 'Unit'), 20)), store, day,
+      const saved = centsOf(cellOf(row, 'Saved'));
+      await c.tx.run('INSERT INTO prices (owner_id, ingredient_id, grocery_id, label, cents, saved_cents, quantity, unit, store, day, assumed, barcode, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, await ingredientFor(c.tx, c.owner, label), label, cents, saved !== null && saved > 0 ? saved : 0, quantity !== null && quantity > 0 ? quantity : null, units.canonical(clean(cellOf(row, 'Unit'), 20)), store, day,
           yesOf(cellOf(row, 'A guess, not a receipt')) ? 1 : 0, barcodeOf(cellOf(row, 'Barcode')), c.at]);
       d.fresh += 1;
     }
@@ -1580,8 +1590,10 @@ const importers: Record<string, Importer> = {
       if (seen.take(`${labelKey(label)}\n${labelKey(store ?? '')}\n${labelKey(code ?? '')}`)) { d.already += 1; continue; }
       if (store) storesMade += (await c.tx.run('INSERT OR IGNORE INTO stores (owner_id, name, created_at) VALUES (?, ?, ?)', [c.owner, store, c.at])).changes;
       const what = clean(cellOf(row, 'What it is for'), 120);
-      await c.tx.run('INSERT INTO coupons (owner_id, label, ingredient_id, cents_off, percent_off, store, code, expires_on, used_on, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [c.owner, label, what ? await ingredientFor(c.tx, c.owner, what) : null, money, part, store, code, dayOf(cellOf(row, 'Runs out on')), dayOf(cellOf(row, 'Used on')), clean(row.notes, 500), c.at]);
+      const fromBook = yesOf(cellOf(row, 'From the shop’s savings book'));
+      await c.tx.run('INSERT INTO coupons (owner_id, label, ingredient_id, cents_off, percent_off, store, code, expires_on, used_on, note, created_at, book, item, starts_on) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, label, what ? await ingredientFor(c.tx, c.owner, what) : null, money, part, store, code, dayOf(cellOf(row, 'Runs out on')), dayOf(cellOf(row, 'Used on')), clean(row.notes, 500), c.at,
+          fromBook ? 1 : 0, fromBook ? label : null, fromBook ? dayOf(cellOf(row, 'Starts on')) : null]);
       d.fresh += 1;
     }
     if (storesMade) d.note = `${storesMade} store${storesMade === 1 ? '' : 's'} added to your list from the coupons`;

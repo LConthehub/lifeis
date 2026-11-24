@@ -42,6 +42,18 @@ export async function readPhotos(files, say = () => {}) {
   }
 }
 
+/** A receipt photo made small enough to keep with the spending: at most 1400 across, as a JPEG, base64. Done here, on the device. */
+export async function receiptPicture(file) {
+  const picture = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const scale = Math.min(1, 1400 / Math.max(picture.width, picture.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(picture.width * scale);
+  canvas.height = Math.round(picture.height * scale);
+  canvas.getContext('2d').drawImage(picture, 0, 0, canvas.width, canvas.height);
+  picture.close?.();
+  return canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+}
+
 /**
  * A photo made ready to hand to a model you chose, for handwriting: a JPEG no larger than a model needs,
  * as the letters and digits a request carries. Nothing is sent here; this only prepares it.

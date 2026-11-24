@@ -19,6 +19,7 @@ const centsOf = (typed) => {
 };
 const shortDay = (day) => fromDateInput(day).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 const couponWorth = (c, sign) => (c.percent_off !== null ? `${c.percent_off}% off` : `${money(c.cents_off, sign)} off`);
+const dealWorth = (d, sign) => (d.percent_off !== null ? `${d.percent_off}% off` : `${money(d.cents_off, sign)} off`);
 const runsOut = (c) => (c.days_left === null ? null : c.days_left < 0 ? 'ran out' : c.days_left === 0 ? 'last day today' : c.days_left === 1 ? 'runs out tomorrow' : `until ${shortDay(c.expires_on)}`);
 
 /** The grocery list, by aisle, with what things cost as you shop. Ticking something off puts it in the pantry. */
@@ -45,7 +46,7 @@ export default function Groceries() {
   if (!items || !shop) return null;
 
   const sign = shop.currency;
-  const lineOf = (g) => shop.lines.find((l) => l.id === g.id) || { price_cents: null, size: '', assumed: false, last: null, coupons: [], usual_store: null, usual_size: '', likely_store: null, moved_to: null, store: null, estimate_cents: null, cheaper: null };
+  const lineOf = (g) => shop.lines.find((l) => l.id === g.id) || { price_cents: null, saved_cents: 0, deal: null, size: '', assumed: false, last: null, coupons: [], usual_store: null, usual_size: '', likely_store: null, moved_to: null, store: null, estimate_cents: null, cheaper: null };
   const add = async (e) => {
     e.preventDefault();
     try {
@@ -215,9 +216,14 @@ export default function Groceries() {
                           <button type="button" onClick={() => move(g, null)} className="min-h-[44px] underline">Put it back</button>
                         </span>
                       )}
+                      {l.deal && (
+                        <span className="block text-xs text-life-700 dark:text-life-200" data-deal>
+                          <Icon of="coupon" size={14} /> On savings: {dealWorth(l.deal, sign)}{l.deal.store ? ` at ${l.deal.store}` : ''}{l.deal.until ? ` until ${shortDay(l.deal.until)}` : ''}
+                        </span>
+                      )}
                       {l.last && (
                         <button type="button" onClick={() => setModal({ history: g })} className="block text-xs text-gray-500 hover:underline dark:text-life-300">
-                          last time {money(l.last.cents, sign)}{l.last.amount ? ` for ${l.last.amount}` : ''}{l.last.store ? ` · ${l.last.store}` : ''} · {shortDay(l.last.day)}
+                          last time {money(l.last.cents, sign)}{l.last.saved_cents > 0 ? `, ${money(l.last.saved_cents, sign)} off` : ''}{l.last.amount ? ` for ${l.last.amount}` : ''}{l.last.store ? ` · ${l.last.store}` : ''} · {shortDay(l.last.day)}
                         </button>
                       )}
                     </span>
@@ -292,6 +298,29 @@ export default function Groceries() {
         {shop.coupons.length > 0 && <p className="mt-1 text-xs text-gray-500 dark:text-life-300">Check one to use it on today's trip.</p>}
       </div>
 
+      <div className={cardClass} data-book>
+        <div className="mb-2 flex items-baseline gap-2">
+          <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">Savings book</h2>
+          <button type="button" onClick={() => setModal({ book: true })} className="min-h-[44px] text-sm text-life-600 hover:underline dark:text-life-200" data-book-add>+ Type in a book</button>
+        </div>
+        {shop.book.length === 0 ? <p className="text-sm text-gray-400 dark:text-life-400">None. Type in a store's monthly savings book and the list says which things on it have a saving now.</p> : (
+          <ul className="divide-y divide-life-50 dark:divide-life-700">
+            {shop.book.map((b) => (
+              <li key={b.id} className="flex items-center gap-2 py-1" data-book-item={b.item}>
+                <span className="min-w-0 flex-1 text-sm">
+                  <span className={b.state === 'over' ? 'text-gray-400 line-through' : 'text-gray-800 dark:text-life-50'}>{b.item}</span>
+                  <span className="ml-2 font-medium text-life-700 dark:text-life-200">{dealWorth(b, sign)}</span>
+                  <span className="block text-xs text-gray-500 dark:text-life-300">
+                    {[b.store && `at ${b.store}`, b.state === 'soon' ? `from ${shortDay(b.starts_on)}` : b.state === 'over' ? 'ended' : b.expires_on ? `until ${shortDay(b.expires_on)}` : 'on now'].filter(Boolean).join(' · ')}
+                  </span>
+                </span>
+                <button type="button" onClick={async () => setShop((await axios.delete(`/api/shopping/coupons/${b.id}`)).data)} aria-label={`Take ${b.item} out of the book`} className="flex h-11 w-11 items-center justify-center text-gray-400 hover:text-red-600">✕</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {anyMoney && (
         <label className="flex items-center gap-2 text-xs text-gray-500 dark:text-life-300">Prices are shown in
           <select value={sign} onChange={async (e) => setShop((await axios.put('/api/shopping/settings', { currency: e.target.value })).data)} aria-label="Money sign" className="rounded border border-life-200 bg-card px-1 py-0.5 text-gray-800 dark:border-life-700 dark:bg-life-800 dark:text-life-50">
@@ -339,6 +368,11 @@ export default function Groceries() {
         </Modal>
       )}
       {modal?.history && <Modal title={`${modal.history.label}: what it has cost`} onClose={() => setModal(null)}><History line={modal.history} sign={sign} /></Modal>}
+      {modal?.book && (
+        <Modal title="A store's savings book" onClose={() => setModal(null)}>
+          <BookForm shop={shop} onDone={(data, text) => { setShop(data); setModal(null); setMessage(text); }} />
+        </Modal>
+      )}
       {modal?.coupon && (
         <Modal title={modal.coupon.id ? modal.coupon.label : 'A coupon'} onClose={() => setModal(null)}>
           <CouponForm coupon={modal.coupon} sign={sign} lines={open.filter((g) => g.ingredient_id)} store={shop.store} onDone={(data) => { setShop(data); setModal(null); }} />
@@ -372,7 +406,14 @@ function TripDone({ store, sign, onDone }) {
   const [amounts, setAmounts] = useState({});             // by part key, typed
   const [places, setPlaces] = useState({});               // by part key: the category chosen
   const [prices, setPrices] = useState({});
+  const [saves, setSaves] = useState({});                 // savings being typed, by line
   const [error, setError] = useState('');
+  const [progress, setProgress] = useState(null);         // while a receipt photo is being read
+  const [read, setRead] = useState(null);                 // what was read, to be checked: { receipt, lines, fix: [{ id, full, saved }] }
+  const [pasting, setPasting] = useState('');
+  const [photo, setPhoto] = useState(null);               // the receipt photo, made small, as base64
+  const [keepPhoto, setKeepPhoto] = useState(true);
+  const [seen, setSeen] = useState({ day: null, loose: 0, note: '' });
   const load = useCallback(async () => {
     const { data } = await axios.get('/api/shopping/trip', { params: { store } });   // the lines are listed under the store they came with
     setPlan(data);
@@ -385,34 +426,139 @@ function TripDone({ store, sign, onDone }) {
   const cents = (p, i) => (amounts[p.key] !== undefined ? centsOf(amounts[p.key]) : guess[i]);
   const placed = plan.parts.reduce((n, p, i) => n + (cents(p, i) ?? 0), 0);
   const off = totalCents === null ? 0 : totalCents - placed;
-  const setPrice = async (line, typed) => {
-    const value = centsOf(typed);
+  const setPrice = async (line, typed, savedTyped) => {
+    const value = centsOf(typed ?? (line.cents === null ? '' : (line.cents / 100).toFixed(2)));
     if (value === null) return;
-    await axios.put(`/api/shopping/prices/${line.id}`, { cents: value, assumed: false });
+    const saved = savedTyped === undefined ? line.saved_cents : (centsOf(savedTyped) ?? 0);
+    await axios.put(`/api/shopping/prices/${line.id}`, { cents: value, saved_cents: saved, assumed: false });
     setPrices((all) => ({ ...all, [line.id]: undefined }));
+    setSaves((all) => ({ ...all, [line.id]: undefined }));
     const data = await load();
     if (!touched) setTotal((data.estimate_cents / 100).toFixed(2));
+  };
+  // The photo of a receipt: read on this device into words, then the words are sent to Life Is to find the lines. The photo itself goes nowhere until it is saved.
+  const useWords = async (words) => {
+    const { data } = await axios.post('/api/shopping/receipt', { text: words, from: store });
+    if (data.receipt.items.length === 0) { setError("Couldn't find any lines on that. A sharper photo, straight on and in good light, reads best. You can also type the prices in by hand."); return; }
+    setRead({
+      ...data,
+      fix: data.receipt.items.map((it, i) => ({ id: data.ties[i].id === null ? '' : String(data.ties[i].id), full: (it.cents / 100).toFixed(2), saved: it.saved_cents ? (it.saved_cents / 100).toFixed(2) : '' })),
+    });
+  };
+  const chooseReceipt = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setError('');
+    setProgress('Getting the reader ready…');
+    try {
+      const { readPhotos, receiptPicture } = await import('../components/readPhoto');
+      const words = await readPhotos([file], setProgress);
+      if (!words.trim()) { setError('No words could be read from that. A sharper photo, straight on and in good light, reads best.'); return; }
+      setPhoto(await receiptPicture(file).catch(() => null));
+      await useWords(words);
+    } catch (err) { setError(err?.response ? errorMessage(err, "Couldn't use that receipt") : "The photo couldn't be read on this device."); } finally { setProgress(null); }
+  };
+  const mend = (i, change) => setRead((r) => ({ ...r, fix: r.fix.map((f, j) => (j === i ? { ...f, ...change } : f)) }));
+  const useRead = async () => {
+    setError('');
+    try {
+      const { receipt } = read;
+      let used = 0;
+      for (const f of read.fix) {
+        const full = centsOf(f.full);
+        const saved = f.saved === '' ? 0 : centsOf(f.saved);
+        if (f.id === '' || full === null || saved === null || saved > full) continue;
+        await axios.put(`/api/shopping/prices/${f.id}`, { cents: full - saved, saved_cents: saved, assumed: false });
+        used += 1;
+      }
+      const data = await load();
+      if (receipt.total_cents !== null) { setTotal((receipt.total_cents / 100).toFixed(2)); setTouched(true); } else if (!touched) setTotal((data.estimate_cents / 100).toFixed(2));
+      if (!name.trim() && receipt.store) setName(receipt.store);
+      setSeen({ day: receipt.day, loose: receipt.loose_saved_cents, note: `Prices updated for ${used} ${used === 1 ? 'thing' : 'things'} from the receipt${read.fix.some((f) => f.id === '') ? `. Lines not on the list were left out` : ''}.` });
+      setRead(null);
+    } catch (err) { setError(errorMessage(err, "Couldn't use those")); }
   };
   const save = async (e) => {
     e.preventDefault();
     setError('');
     try {
       const body = { store: name, from: store, total_cents: totalCents };
+      body.saved_cents = plan.saved_cents + seen.loose;
+      if (seen.day) body.day = seen.day;
+      if (photo && keepPhoto) body.photo = photo;
       if (split && plan.parts.length > 0) body.parts = plan.parts.map((p, i) => ({ label: p.label, cents: cents(p, i), category_id: places[p.key] !== undefined ? (places[p.key] === '' ? null : Number(places[p.key])) : p.category_id, project_id: p.project_id }));
       const { data } = await axios.post('/api/shopping/trip', body);
-      onDone(`Wrote ${money(data.total_cents, sign)} for ${data.store} as ${data.entries === 1 ? 'one spending entry' : `${data.entries} spending entries`}. If the bank brings in the same charge later, it won't be counted again.`);
+      let ask = '';
+      try {
+        const { data: d } = await axios.get('/api/shopping/drops');
+        const mine = d.drops.filter((x) => x.store.toLowerCase() === data.store.toLowerCase());
+        if (mine.length > 0) ask = ` Ask ${data.store} for ${mine.map((x) => `${money(x.ask_cents, sign)} back on ${x.item}`).join(', ')}.`;
+      } catch { /* the note is only a help */ }
+      onDone(`Wrote ${money(data.total_cents, sign)} for ${data.store} as ${data.entries === 1 ? 'one spending entry' : `${data.entries} spending entries`}.${data.saved_cents > 0 ? ` You saved ${money(data.saved_cents, sign)}.` : ''}${data.receipt ? ' The receipt photo is kept with it.' : ''} If the bank brings in the same charge later, it won't be counted again.${ask}`);
     } catch (err) { setError(errorMessage(err, "Couldn't save that")); }
   };
   return (
     <form onSubmit={save} className="space-y-3" data-trip-modal>
       {!store && <Field label="Which store *"><input required list="my-shops" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} /></Field>}
+      <div className="space-y-1" data-receipt-reader>
+        <label className={`${quietButtonClass} inline-flex min-h-[44px] cursor-pointer items-center gap-2`}>
+          <Icon of="receipt" size={18} /> {progress ? progress : photo ? 'Read another photo' : 'Read a receipt photo'}
+          <input type="file" accept="image/*" onChange={chooseReceipt} disabled={progress !== null} className="sr-only" aria-label="Choose or take a photo of the receipt" data-receipt-file />
+        </label>
+        <p className="text-xs text-gray-500 dark:text-life-300">The words are read <span className="font-medium">here on this device</span>. Nothing is sent to anyone. Tick what you got first, so each line on the receipt can be matched to the list. You check everything before it is saved.</p>
+        <details>
+          <summary className="flex min-h-[44px] cursor-pointer items-center text-xs text-life-700 dark:text-life-200">Or paste or type the receipt's words</summary>
+          <textarea rows={5} value={pasting} onChange={(e) => setPasting(e.target.value)} aria-label="The receipt's words" className={inputClass} data-receipt-words />
+          <button type="button" disabled={!pasting.trim()} onClick={async () => { setError(''); try { await useWords(pasting); } catch (err) { setError(errorMessage(err, "Couldn't use that")); } }} className={`${quietButtonClass} mt-1 min-h-[44px]`} data-receipt-read>Read these words</button>
+        </details>
+      </div>
+      {read && (
+        <section className="space-y-2 rounded-xl bg-life-50/70 p-3 dark:bg-life-700/60" data-receipt-check aria-label="Check what was read">
+          <h3 className="font-semibold text-life-800 dark:text-life-50">Check what was read</h3>
+          <p className="text-xs text-gray-600 dark:text-life-100" data-receipt-says>
+            {[read.receipt.store && `From ${read.receipt.store}`, read.receipt.total_cents !== null && `total ${money(read.receipt.total_cents, sign)}`, read.receipt.tax_cents && `tax ${money(read.receipt.tax_cents, sign)}`,
+              read.receipt.said_saved_cents !== null && `it says you saved ${money(read.receipt.said_saved_cents, sign)}`].filter(Boolean).join(', ') || 'No total was found'}.
+            {read.receipt.adds_up === true && ' The lines add up to its subtotal.'}{read.receipt.adds_up === false && ' The lines do not add up to its subtotal, so look closely.'}
+          </p>
+          <ul className="divide-y divide-life-100 dark:divide-life-700">
+            {read.receipt.items.map((it, i) => (
+              <li key={i} className="space-y-1 py-2 text-sm" data-receipt-line={it.text}>
+                <span className="block text-gray-800 dark:text-life-50">{it.text}{it.saving_notes.length > 0 && <span className="block text-xs text-life-700 dark:text-life-200">{it.saving_notes.join(', ')}</span>}</span>
+                <span className="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] items-center gap-2">
+                  <select value={read.fix[i].id} onChange={(e) => mend(i, { id: e.target.value })} aria-label={`Which thing on the list is ${it.text}`} className={`${inputClass} min-h-[44px]`}>
+                    <option value="">Not on the list</option>
+                    {read.lines.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+                  </select>
+                  <input inputMode="decimal" value={read.fix[i].full} onChange={(e) => mend(i, { full: e.target.value })} aria-label={`Full price of ${it.text}`} className={`${inputClass} min-h-[44px] text-right`} />
+                  <input inputMode="decimal" value={read.fix[i].saved} onChange={(e) => mend(i, { saved: e.target.value })} placeholder="off" aria-label={`Saving on ${it.text}`} className={`${inputClass} min-h-[44px] text-right`} />
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-gray-500 dark:text-life-300">The first price is the full price, the second is what came off. A line that is not on the list is left out.</p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => setRead(null)} className={`${quietButtonClass} min-h-[44px]`}>Not now</button>
+            <button type="button" onClick={useRead} className={`${buttonClass} min-h-[44px]`} data-receipt-use>Use these</button>
+          </div>
+        </section>
+      )}
+      {seen.note && <p className="text-xs text-life-700 dark:text-life-200" data-receipt-note>{seen.note}</p>}
+      {photo && (
+        <label className="flex min-h-[44px] items-center gap-2 text-sm text-gray-700 dark:text-life-100">
+          <input type="checkbox" checked={keepPhoto} onChange={(e) => setKeepPhoto(e.target.checked)} className="h-5 w-5 accent-life-600" data-keep-photo /> Keep the photo with the spending
+        </label>
+      )}
       <ul className="divide-y divide-life-50 dark:divide-life-700" aria-label="What was got">
         {plan.lines.length === 0 && <li className="py-2 text-sm text-gray-500 dark:text-life-300">Nothing from the list is in the buggy for this store. You can still write down what the receipt came to.</li>}
         {plan.lines.map((l) => (
           <li key={l.id} className="flex items-center gap-2 py-1 text-sm">
-            <span className="min-w-0 flex-1 text-gray-800 dark:text-life-50">{l.label}{l.assumed && <span className="ml-1 text-xs text-gray-500 dark:text-life-300">(last time's price)</span>}</span>
-            <input inputMode="decimal" aria-label={`Price of ${l.label}`} value={prices[l.id] ?? (l.cents === null ? '' : (l.cents / 100).toFixed(2))} placeholder="price"
-              onChange={(e) => setPrices({ ...prices, [l.id]: e.target.value })} onBlur={(e) => { if (prices[l.id] !== undefined) setPrice(l, e.target.value); }} className={`${inputClass} !w-24 text-right`} />
+            <span className="min-w-0 flex-1 text-gray-800 dark:text-life-50">{l.label}{l.assumed && <span className="ml-1 text-xs text-gray-500 dark:text-life-300">(last time's price)</span>}
+              {l.saved_cents > 0 && <span className="block text-xs text-life-700 dark:text-life-200" data-saved-note>{money(l.cents + l.saved_cents, sign)}, {money(l.saved_cents, sign)} off, paid {money(l.cents, sign)}</span>}</span>
+            <input inputMode="decimal" aria-label={`Price of ${l.label}`} value={prices[l.id] ?? (l.cents === null ? '' : (l.cents / 100).toFixed(2))} placeholder="paid"
+              onChange={(e) => setPrices({ ...prices, [l.id]: e.target.value })} onBlur={(e) => { if (prices[l.id] !== undefined) setPrice(l, e.target.value); }} className={`${inputClass} min-h-[44px] !w-20 text-right`} />
+            <input inputMode="decimal" aria-label={`Saved on ${l.label}`} value={saves[l.id] ?? (l.saved_cents > 0 ? (l.saved_cents / 100).toFixed(2) : '')} placeholder="off"
+              onChange={(e) => setSaves({ ...saves, [l.id]: e.target.value })} onBlur={(e) => { if (saves[l.id] !== undefined) setPrice(l, prices[l.id], e.target.value); }} className={`${inputClass} min-h-[44px] !w-16 text-right`} />
           </li>
         ))}
       </ul>
@@ -420,7 +566,7 @@ function TripDone({ store, sign, onDone }) {
         <input required inputMode="decimal" autoFocus value={total} onChange={(e) => { setTotal(e.target.value); setTouched(true); }} aria-label="Receipt total" data-trip-total className={inputClass} />
       </Field>
       <p className="text-xs text-gray-500 dark:text-life-300" data-trip-estimate>
-        The prices come to {money(plan.estimate_cents, sign)}{plan.unpriced > 0 ? `, and ${plan.unpriced} ${plan.unpriced === 1 ? 'thing has' : 'things have'} no price` : ''}. Tax and anything not on the list are in the receipt, not here.
+        The prices paid come to {money(plan.estimate_cents, sign)}{plan.saved_cents > 0 ? ` (${money(plan.saved_cents, sign)} saved)` : ''}{plan.unpriced > 0 ? `, and ${plan.unpriced} ${plan.unpriced === 1 ? 'thing has' : 'things have'} no price` : ''}. Tax and anything not on the list are in the receipt, not here.
       </p>
       {plan.parts.length > 0 && (
         <label className="flex min-h-[44px] items-center gap-2 text-sm text-gray-700 dark:text-life-100">
@@ -483,12 +629,44 @@ function History({ line, sign }) {
       {rows.map((r, i) => (
         <li key={`${r.day}-${i}`} className="flex items-baseline gap-2 py-1.5 text-sm">
           <span className="w-20 font-medium text-gray-800 dark:text-life-50">{money(r.cents, sign)}</span>
-          <span className="flex-1 text-gray-600 dark:text-life-200">{[r.amount && `for ${r.amount}`, r.store].filter(Boolean).join(' · ')}</span>
+          <span className="flex-1 text-gray-600 dark:text-life-200">{[r.saved_cents > 0 && `${money(r.saved_cents, sign)} off, paid ${money(r.cents - r.saved_cents, sign)}`, r.amount && `for ${r.amount}`, r.store].filter(Boolean).join(' · ')}</span>
           {rows.length > 1 && r.cents === lowest && <span className="rounded bg-life-100 px-1.5 text-[11px] text-life-700">lowest</span>}
           <span className="text-xs text-gray-500 dark:text-life-300">{fromDateInput(r.day).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A store's monthly savings book, typed in a line to a thing: "Coffee 4.00", "Cereal 20%". */
+function BookForm({ shop, onDone }) {
+  const [store, setStore] = useState(shop.store || shop.stores[0] || '');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
+  const submit = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      const { data } = await axios.post('/api/shopping/book', { store: store || null, text, starts_on: from || null, expires_on: to || null });
+      onDone(data.summary, `Put ${data.added} ${data.added === 1 ? 'thing' : 'things'} in the savings book${data.skipped.length ? `. Couldn't read: ${data.skipped.join('; ')}` : ''}.`);
+    } catch (err) { setError(errorMessage(err, "Couldn't save that")); }
+  };
+  return (
+    <form onSubmit={submit} className="space-y-3" data-book-form>
+      <Field label="Which store *"><input required list="my-shops" value={store} onChange={(e) => setStore(e.target.value)} aria-label="Store for the book" className={`${inputClass} min-h-[44px]`} /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Starts"><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Book starts" className={`${inputClass} min-h-[44px]`} /></Field>
+        <Field label="Ends"><input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="Book ends" className={`${inputClass} min-h-[44px]`} /></Field>
+      </div>
+      <Field label="One thing to a line, with what comes off *">
+        <textarea required rows={7} value={text} onChange={(e) => setText(e.target.value)} aria-label="The book's savings" placeholder={'Coffee 4.00\nEggs 1.00\nCereal 20%'} className={inputClass} />
+      </Field>
+      <p className="text-xs text-gray-500 dark:text-life-300">Dollars off (4.00) or a percent (20%). The list then says which things on it have a saving now. Nothing is used by itself.</p>
+      {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+      <div className="text-right"><button type="submit" disabled={!store.trim() || !text.trim()} className={`${buttonClass} min-h-[44px]`} data-book-save>Put them in the book</button></div>
+    </form>
   );
 }
 
