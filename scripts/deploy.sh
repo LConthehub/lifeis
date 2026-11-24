@@ -5,8 +5,12 @@
 #   bash scripts/deploy.sh --check   run every test first, and stop if any fails
 #
 # Order matters, and is why this is a script: the new image is built BEFORE the running copy is stopped (so a build
-# that fails leaves Life Is running), a backup is taken while it is stopped, and if the new version does not come
-# up healthy the previous version is put back. Run only when the owner has said to deploy.
+# that fails leaves Life Is running). While it is stopped, the data is only COPIED (a plain .tar, no compression,
+# so the downtime is short) and the copy's size is checked. Then the new version starts. The copy is squeezed into
+# the final private/backups/before-<branch>-<stamp>.tgz AFTER the health check (or after the previous version is
+# back, if the new one failed), and the .tar is removed only once the .tgz is written and its size checked. If the
+# new version does not come up healthy the previous version is put back. Existing backups are never deleted.
+# Run only when the owner has said to deploy.
 set -euo pipefail
 export MSYS_NO_PATHCONV=1
 cd "$(dirname "$0")/.."
@@ -15,6 +19,15 @@ say() { printf '\n== %s\n' "$*"; }
 fail() { printf '\nSTOPPED: %s\n' "$*" >&2; exit 1; }
 healthy() { # $1 = port; waits up to about 80 seconds
   for _ in $(seq 1 40); do curl -s -m 3 "http://localhost:$1/api/health" | grep -q ok && return 0; sleep 2; done; return 1
+}
+compress_backup() { # squeezes $raw into $backup (the app is running again); removes $raw only after $backup is checked
+  say "Compressing the backup"
+  if gzip -c "$raw" > "$backup.partial" && [ "$(wc -c < "$backup.partial")" -gt 100000 ]; then
+    mv "$backup.partial" "$backup" && rm -f "$raw" && echo "backup: $backup ($(( $(wc -c < "$backup") / 1048576 )) MB)" && return 0
+  fi
+  rm -f "$backup.partial" # only our own half-written file; $raw is kept
+  echo "warning: the backup could not be compressed; the uncompressed copy is kept at $raw" >&2
+  backup="$raw"; return 1
 }
 
 branch=$(git branch --show-current)
@@ -47,11 +60,12 @@ git checkout -- docs/site
 say "Backing up"
 stamp=$(date +%Y%m%d-%H%M)
 backup="private/backups/before-$branch-$stamp.tgz"
+raw="private/backups/before-$branch-$stamp.tar" # a quick uncompressed copy, made while stopped; squeezed into $backup later
+[ ! -e "$backup" ] && [ ! -e "$raw" ] && [ ! -e "$backup.partial" ] || fail "a backup named before-$branch-$stamp already exists; wait a minute and try again (nothing was changed)"
 docker compose stop
-docker run --rm -v lifeis_lifeis_data:/data:ro -v lifeis_lifeis_keys:/keys:ro --entrypoint tar lifeis-lifeis czf - /data /keys > "$backup"
-size=$(wc -c < "$backup")
-[ "$size" -gt 100000 ] || { docker compose up -d; fail "the backup looks too small ($size bytes); Life Is was started again unchanged"; }
-echo "backup: $backup ($((size / 1048576)) MB)"
+docker run --rm -v lifeis_lifeis_data:/data:ro -v lifeis_lifeis_keys:/keys:ro --entrypoint tar lifeis-lifeis cf - /data /keys > "$raw" && size=$(wc -c < "$raw") || size=0
+[ "$size" -gt 100000 ] || { docker compose up -d; fail "the backup copy looks too small ($size bytes, kept at $raw); Life Is was started again unchanged"; }
+echo "copy of the data: $raw ($((size / 1048576)) MB); it is compressed after the new version is up"
 
 say "Starting the new version"
 docker compose up -d
@@ -60,10 +74,15 @@ if ! healthy 8020; then
   git checkout -q "$previous"
   docker compose up -d --build
   git checkout -q "$branch"
-  healthy 8020 && fail "the new version did not start; the previous one is running again (backup: $backup)" \
-               || fail "the new version did not start, and neither did the previous one; restore from $backup"
+  if healthy 8020; then
+    compress_backup || true
+    fail "the new version did not start; the previous one is running again (backup: $backup)"
+  fi
+  compress_backup || true
+  fail "the new version did not start, and neither did the previous one; restore from $backup"
 fi
 docker logs lifeis-lifeis-1 2>&1 | grep -i "upgrad" | tail -1 || true
+compress_backup || echo "warning: the new version is running, but the backup is only the uncompressed copy: $backup" >&2
 
 say "Merging and pushing"
 if [ "$branch" != "main" ]; then
