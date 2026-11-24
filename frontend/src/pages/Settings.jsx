@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import CopyButton from '../components/Copy';
+import Icon from '../components/Icon';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
@@ -23,7 +24,7 @@ const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 h
 const server = () => !onDevice();
 const GROUPS = [
   {
-    id: 'home', label: 'Your home', icon: '🏠',
+    id: 'home', label: 'Your home', icon: 'home',
     sections: [
       { id: 'your-name', title: 'Your name', words: 'name call display nickname greeting called', render: () => <YourName /> },
       { id: 'life', title: 'What Life Is looks after', words: 'sections areas sewing garden cookware clothing money spending show hide', render: ({ onLifeChanged }) => <Titled title="What Life Is looks after" hint="Decides which sections show. Nothing is removed by unchecking."><LifeAreasPicker onSaved={onLifeChanged} /></Titled> },
@@ -32,20 +33,20 @@ const GROUPS = [
     ],
   },
   {
-    id: 'reminders', label: 'Reminders', icon: '🔔',
+    id: 'reminders', label: 'Reminders', icon: 'reminder',
     sections: [
       { id: 'reminders', title: 'Reminders that reach you', words: 'notify notification notifications push ntfy email digest morning alert remind phone browser', render: () => <Titled title="Reminders that reach you"><RemindersSettings /></Titled> },
     ],
   },
   {
-    id: 'calendars', label: 'Calendars', icon: '📅',
+    id: 'calendars', label: 'Calendars', icon: 'date',
     sections: [
       { id: 'calendar-link', title: 'Your phone’s calendar', words: 'apple google ical ics subscribe link feed outlook', when: server, render: () => <CalendarLink /> },
       { id: 'other-calendars', title: 'Other calendars', words: 'follow ical ics sworkr busy google apple work', render: () => <Plain><OtherCalendarsService /></Plain> },
     ],
   },
   {
-    id: 'connections', label: 'Connections', icon: '🔗',
+    id: 'connections', label: 'Connections', icon: 'link',
     hint: 'Life Is keeps what you write on this computer and works without any of these. Each one is off until you turn it on, says exactly what it sends, and can be turned off again. This list is all of them.',
     sections: [
       { id: 'assistant', title: 'AI assistant', words: 'ai llm ollama lm studio chatgpt claude gemini model ask question', render: () => <Plain><AssistantService /></Plain> },
@@ -60,7 +61,7 @@ const GROUPS = [
     ],
   },
   {
-    id: 'account', label: onDevice() ? 'This device' : 'Account & sign-in', icon: '🔒',
+    id: 'account', label: onDevice() ? 'This device' : 'Account & sign-in', icon: 'lock',
     sections: [
       { id: 'kept-here', title: 'Kept on this device', words: 'phone device server connect host', when: onDevice, render: () => <KeptHere /> },
       { id: 'linked', title: 'Connected to your Life Is', words: 'server disconnect host', when: () => Boolean(linkedServer()), render: () => <Linked /> },
@@ -72,7 +73,7 @@ const GROUPS = [
     ],
   },
   {
-    id: 'data', label: 'Your data', icon: '🗄',
+    id: 'data', label: 'Your data', icon: 'data',
     sections: [
       { id: 'unlock', title: 'Unlocking Life Is', words: 'trial pay price purchase buy free', when: onDevice, render: () => <Unlock /> },
       { id: 'last-copy', title: 'Your copy', words: 'last copy made backup download how long ago lost phone remind digest', render: () => <CopyNotice hasBackup={onDevice()} /> },
@@ -83,10 +84,10 @@ const GROUPS = [
   },
 ];
 
-function Titled({ title, hint, children }) {
+function Titled({ icon, title, hint, children }) {
   return (
     <section className={cardClass}>
-      <h2 className="font-semibold text-life-800 dark:text-life-50">{title}</h2>
+      <h2 className="font-semibold text-life-800 dark:text-life-50">{icon && <><Icon of={icon} /> </>}{title}</h2>
       {hint && <p className="mt-1 text-sm text-gray-600 dark:text-life-100">{hint}</p>}
       <div className="mt-3">{children}</div>
     </section>
@@ -200,7 +201,7 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
               {groups.map((g) => (
                 <li key={g.id}>
                   <Link to={`/settings/${g.id}`} className="flex items-center gap-3 px-1 py-3 text-gray-800 dark:text-life-50">
-                    <span aria-hidden="true" className="text-xl">{g.icon}</span>
+                    <Icon of={g.icon} size={22} />
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium">{g.label}</span>
                       <span className="block truncate text-xs text-gray-500 dark:text-life-300">{g.sections.map((s) => s.title).join(', ')}</span>
@@ -224,7 +225,7 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
                 <li key={g.id}>
                   <Link to={`/settings/${g.id}`} aria-current={g.id === shown.id ? 'page' : undefined}
                     className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${g.id === shown.id ? 'bg-life-50 font-semibold text-life-800 dark:bg-life-700 dark:text-life-50' : 'text-gray-700 hover:bg-life-50 dark:text-life-100 dark:hover:bg-life-800'}`}>
-                    <span aria-hidden="true">{g.icon}</span>{g.label}
+                    <Icon of={g.icon} />{g.label}
                   </Link>
                 </li>
               ))}
@@ -234,7 +235,7 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
 
         <div className="min-w-0 max-w-2xl space-y-4" data-settings-group={shown.id}>
           <Link to="/settings" className="inline-flex items-center gap-1 text-sm text-life-600 hover:underline dark:text-life-200 md:hidden">‹ All settings</Link>
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-life-800 dark:text-life-50"><span aria-hidden="true">{shown.icon}</span>{shown.label}</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-life-800 dark:text-life-50"><Icon of={shown.icon} size={20} />{shown.label}</h2>
           {shown.hint && <p className="text-sm text-gray-600 dark:text-life-100">{shown.hint}</p>}
           {shown.sections.map((s) => (
             <div key={s.id} id={s.id} className="scroll-mt-24">{s.render({ user, onLogout, onLifeChanged })}</div>
@@ -274,7 +275,7 @@ function RecipesOut() {
 
 function TagsSetting() {
   return (
-    <Titled title="🏷 Tags" hint="One list of tags for your household, put on things, recipes, projects, plans, spending, titles, pets, upkeep and dates. Rename them, put one inside another, merge two, or delete one.">
+    <Titled icon="tag" title="Tags" hint="One list of tags for your household, put on things, recipes, projects, plans, spending, titles, pets, upkeep and dates. Rename them, put one inside another, merge two, or delete one.">
       <Link to="/tags" className="text-sm text-life-600 hover:underline dark:text-life-200">See and change your tags →</Link>
     </Titled>
   );
@@ -282,7 +283,7 @@ function TagsSetting() {
 
 function MediaServers() {
   return (
-    <Titled title="📺 Your Jellyfin or Emby" hint="Brings the films, shows, music and books on a media server you name into your collection. Life Is only reads from that server, using the key you give it, and talks to nowhere else.">
+    <Titled icon="show" title="Your Jellyfin or Emby" hint="Brings the films, shows, music and books on a media server you name into your collection. Life Is only reads from that server, using the key you give it, and talks to nowhere else.">
       <Link to="/media/servers" className="text-sm text-life-600 hover:underline dark:text-life-200">Media servers →</Link>
     </Titled>
   );
@@ -290,7 +291,7 @@ function MediaServers() {
 
 function RecipesFromWeb() {
   return (
-    <Titled title="🍳 Recipes from a website" hint='Nothing to turn on. Only when you paste an address under Recipes → "Import one", Life Is fetches that one page from that site, as a browser would; nothing about you or your recipes is sent. Reading a recipe off a photo happens on your own device and reaches nowhere.' />
+    <Titled icon="recipe" title="Recipes from a website" hint='Nothing to turn on. Only when you paste an address under Recipes → "Import one", Life Is fetches that one page from that site, as a browser would; nothing about you or your recipes is sent. Reading a recipe off a photo happens on your own device and reaches nowhere.' />
   );
 }
 
@@ -602,7 +603,7 @@ function WeatherService() {
   return (
     <div className="py-3">
       <div className="flex items-baseline gap-2">
-        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🌤 Weather on the front page</h3>
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="weather" /> Weather on the front page</h3>
         <span className={`rounded px-1.5 text-[11px] ${w.place ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{w.place ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
@@ -688,7 +689,7 @@ function MailService() {
   return (
     <div className="py-3">
       <div className="flex items-baseline gap-2">
-        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">✉️ Email: read and answer your inbox</h3>
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="email" /> Email: read and answer your inbox</h3>
         <span className={`rounded px-1.5 text-[11px] ${setup.accounts.length ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{setup.accounts.length ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Works with any provider that lets mail programs in (IMAP and SMTP). <span className="font-medium">What it does:</span> {setup.service.sends}</p>
@@ -759,7 +760,7 @@ function OtherCalendarsService() {
   return (
     <div className="py-3" id="other-calendars">
       <div className="flex items-baseline gap-2">
-        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🗓 Other calendars, on yours</h3>
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="date" /> Other calendars, on yours</h3>
         <span className={`rounded px-1.5 text-[11px] ${on ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{on ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
@@ -820,7 +821,7 @@ function BookLookupService() {
     <>
     <div className="py-3">
       <div className="flex items-baseline gap-2">
-        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🛒 Look up groceries when you scan them</h3>
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="cart" /> Look up groceries when you scan them</h3>
         <span className={`rounded px-1.5 text-[11px] ${l.groceries ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.groceries ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
@@ -832,7 +833,7 @@ function BookLookupService() {
     </div>
     <div className="py-3">
       <div className="flex items-baseline gap-2">
-        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">📚 Look up books when you scan them</h3>
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="book" /> Look up books when you scan them</h3>
         <span className={`rounded px-1.5 text-[11px] ${l.books ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.books ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
@@ -844,7 +845,7 @@ function BookLookupService() {
     </div>
     <div className="py-3">
       <div className="flex items-baseline gap-2">
-        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🎬 Look up films, music and games when you scan them</h3>
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="film" /> Look up films, music and games when you scan them</h3>
         <span className={`rounded px-1.5 text-[11px] ${l.titles ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.titles ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
@@ -882,7 +883,7 @@ function FilmLookupService({ l, setL }) {
   return (
     <div className="py-3" data-tmdb>
       <div className="flex items-baseline gap-2">
-        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🎞 {s.name}</h3>
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="media" /> {s.name}</h3>
         <span className={`rounded px-1.5 text-[11px] ${l.films ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.films ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
@@ -931,7 +932,7 @@ function PhotoLibraryService() {
   return (
     <div className="py-3">
       <div className="flex items-baseline gap-2">
-        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🖼 Photos from your Immich, on plans and memories</h3>
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="photo" /> Photos from your Immich, on plans and memories</h3>
         <span className={`rounded px-1.5 text-[11px] ${l.connected ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.connected ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">

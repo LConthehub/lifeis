@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Icon from './Icon';
 
 /** Keeps the screen on while this is open (Screen Wake Lock). Returns false where the browser has no such thing. */
 function useScreenOn() {
@@ -62,7 +63,7 @@ export default function CookingView({ recipe, servings, onDone }) {
       <li key={key} data-key={key}>
         <button type="button" role="checkbox" aria-checked={done} onClick={() => toggle(key, isStep)}
           className={`flex min-h-[64px] w-full items-start gap-4 rounded-2xl px-3 py-3 text-left transition-opacity hover:bg-life-50 dark:hover:bg-life-700 ${done ? 'opacity-40' : ''}`}>
-          <span aria-hidden="true" className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 text-xl font-bold ${done ? 'border-life-600 bg-life-600 text-white' : 'border-life-400 text-transparent dark:border-life-300'}`}>✓</span>
+          <span aria-hidden="true" className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 text-xl font-bold ${done ? 'border-life-600 bg-life-600 text-white' : 'border-life-400 text-transparent dark:border-life-300'}`}><Icon of="done" size={22} /></span>
           <span className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-xl leading-snug text-gray-900 dark:text-life-50 ${done ? 'line-through' : ''}`}>
             {children}
             <span className="sr-only">{label}</span>

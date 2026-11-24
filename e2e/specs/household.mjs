@@ -41,7 +41,7 @@ check('a bill asks for no tools or steps', !(await form.getByLabel('Add a tool')
 await form.getByRole('button', { name: 'Save' }).click(); await page.waitForTimeout(1500);
 const top = await page.locator('main').innerText();
 check('it shows its amount and that it is late', top.includes('$84.50 each time') && (await page.locator('[data-state]').first().innerText()).includes('late by 3 days'), (await page.locator('[data-state]').first().innerText()));
-await page.getByRole('button', { name: '✓ Paid' }).click(); await page.waitForTimeout(600);
+await page.getByRole('button', { name: 'Paid', exact: true }).click(); await page.waitForTimeout(600);
 const pay = page.getByRole('dialog');
 check('paying starts with its amount, going into spending', (await pay.getByLabel('How much').inputValue()) === '84.50' && await pay.getByLabel("Put it in this month's spending").isChecked());
 await pay.getByRole('button', { name: 'Paid', exact: true }).click(); await page.waitForTimeout(1500);

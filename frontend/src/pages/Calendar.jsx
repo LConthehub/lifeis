@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import Icon from '../components/Icon';
 import axios from 'axios';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput } from '../components/ui';
 
-const ICONS = { plan: '✨', event: '📌', outside: '🗓', meal: '🍽', session: '🧵', due: '⏳', upkeep: '🔧', use_by: '🥫', media: '🎞' };
 
 function startOfWeek(d) {
   const day = new Date(d);
@@ -75,7 +75,7 @@ export default function Calendar() {
                   {here.map((e, i) => {
                     const body = (
                       <>
-                        <span aria-hidden="true">{ICONS[e.kind]}</span>
+                        <Icon of={e.kind} />
                         <span className="flex-1">
                           <span className="block text-sm text-gray-800 dark:text-life-50">{e.time && <span className="mr-1 font-medium">{e.time}</span>}{e.title}</span>
                           {e.detail && <span className="block text-xs text-gray-500 dark:text-life-300">{e.detail}</span>}

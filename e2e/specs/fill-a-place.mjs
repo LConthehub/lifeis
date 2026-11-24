@@ -33,7 +33,7 @@ const setup = await page.evaluate(async () => {
 });
 
 await page.goto(`${base}/things/places/${setup.shelf}`); await page.waitForTimeout(800);
-await page.getByRole('link', { name: '📷 Fill this place' }).click(); await page.waitForTimeout(1200);
+await page.getByRole('link', { name: 'Fill this place' }).click(); await page.waitForTimeout(1200);
 check('the fill page opens for the shelf', await page.getByRole('heading', { name: 'Filling Bookshelf' }).isVisible());
 const offer = page.getByRole('button', { name: 'Turn look-ups on' });
 if (await offer.isVisible().catch(() => false)) { await offer.click(); await page.waitForTimeout(800); check('look-ups turned on from the page', !(await offer.isVisible().catch(() => false))); }
@@ -80,7 +80,7 @@ check('the sticker now finds the kite', kiteSticker.kind === 'thing' && kiteStic
 await page.goto(`${base}/things/${setup.lamp}`); await page.waitForTimeout(1000);
 const history = await page.getByRole('list', { name: 'History' }).innerText();
 check("the lamp's history shows the move", history.includes("Moved from Living room to Son's room › Bookshelf") && history.includes('Added, in Living room'), history.replace(/\s+/g, ' '));
-await page.getByRole('button', { name: '🛠 I used it' }).click(); await page.waitForTimeout(500);
+await page.getByRole('button', { name: 'I used it' }).click(); await page.waitForTimeout(500);
 await page.getByRole('dialog').getByLabel('A note').fill('bedtime story');
 await page.getByRole('dialog').getByRole('button', { name: 'Keep it' }).click(); await page.waitForTimeout(1000);
 const after = await page.getByRole('list', { name: 'History' }).innerText();

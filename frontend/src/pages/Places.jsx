@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import Icon from '../components/Icon';
 import axios from 'axios';
 import Scanner from '../components/Scanner';
 import { buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { serverOrigin } from '../where';
 
-const TYPE_ICONS = { film: '🎬', show: '📺', music: '🎵', book: '📚', game: '🎮', other: '🗃' };
 /** The code out of a scanned sticker: the code itself, or an address ending in /p/ and the code. */
 export const stickerCode = (read) => (/(?:^|\/p\/)([2-9A-HJ-NP-Za-hj-np-z]{10})\/?$/.exec(String(read).trim()) || [])[1]?.toUpperCase() || null;
 const stickerAddress = (code) => `${serverOrigin()}/p/${code}`;
@@ -33,11 +33,11 @@ export function PlacePage() {
       <Link to={above ? `/things/places/${above.id}` : '/things/places'} className="text-sm text-life-600 hover:underline dark:text-life-200">← {above ? above.name : 'Places'}</Link>
       <div className="flex flex-wrap items-center gap-2">
         <div className="mr-auto">
-          <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">📍 {place.name}</h1>
+          <h1 className="text-xl font-semibold text-life-800 dark:text-life-50"><Icon of="place" /> {place.name}</h1>
           {above && <p className="text-xs text-gray-500 dark:text-life-300">{place.path}</p>}
           {place.note && <p className="text-sm text-gray-600 dark:text-life-100">{place.note}</p>}
         </div>
-        <Link to={`/things/places/${id}/fill`} className={buttonClass}>📷 Fill this place</Link>
+        <Link to={`/things/places/${id}/fill`} className={buttonClass}><Icon of="scan" /> Fill this place</Link>
         <Link to={`/things/places/${id}/walk`} className={quietButtonClass}>Walk through this room</Link>
         <Link to={`/things/places/stickers?only=${id}`} className={quietButtonClass}>Print its sticker</Link>
         {things.length > 0 && <Link to={`/things/stickers?place=${id}`} className={quietButtonClass}>Stickers for what's here</Link>}
@@ -71,7 +71,7 @@ export function PlacePage() {
             {titles.map((m) => (
               <li key={m.id}>
                 <Link to={`/media/${m.id}`} className="flex items-baseline gap-2 py-1.5 text-sm hover:underline">
-                  <span aria-hidden="true">{TYPE_ICONS[m.type]}</span>
+                  <Icon of={m.type} />
                   <span className="flex-1 text-gray-800 dark:text-life-50">{m.title}{m.year ? <span className="text-gray-500 dark:text-life-300"> ({m.year})</span> : null}</span>
                   <span className="text-xs text-gray-500 dark:text-life-300">{m.formats.join(', ')}</span>
                 </Link>

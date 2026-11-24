@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import Icon from '../components/Icon';
 import axios from 'axios';
 import PlacePicker from '../components/PlacePicker';
 import CopyButton from '../components/Copy';
@@ -7,7 +8,7 @@ import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, err
 import { onDevice, serverOrigin } from '../where';
 import { contactPicker } from '../device/phoneContacts';
 
-const ICONS = { emergency: '🚨', contacts: '📞', house: '🏠', routines: '🗓' };
+const ICONS = { emergency: 'emergency', contacts: 'contacts', house: 'home', routines: 'date' };
 const telHref = (phone) => `tel:${phone.replace(/[^0-9+]/g, '')}`;
 
 /**
@@ -43,7 +44,7 @@ export default function ManualPage() {
         {manual.sections.map((s) => (
           <section key={s.id} className={`${cardClass} break-inside-avoid-page print:bg-white print:p-0 print:shadow-none print:ring-0`} aria-label={s.title}>
             <div className="mb-1 flex items-baseline gap-2">
-              <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50 print:text-black"><span aria-hidden="true">{ICONS[s.id]} </span>{s.title}</h2>
+              <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50 print:text-black"><Icon of={ICONS[s.id]} /> {s.title}</h2>
               <button type="button" onClick={() => setEditing({ section: s.id, title: '' })} className="text-sm text-life-600 hover:underline dark:text-life-200 print:hidden">+ Add</button>
             </div>
             {s.entries.length === 0 && <p className="text-sm text-gray-500 dark:text-life-300 print:hidden">{s.hint}</p>}
@@ -55,7 +56,7 @@ export default function ManualPage() {
                       {e.private && <span className="ml-2 rounded bg-gray-100 px-1.5 text-[11px] font-normal text-gray-600 print:hidden">private: not on the shared link</span>}</h3>
                     <button type="button" onClick={() => setEditing(e)} className="text-xs text-life-600 hover:underline dark:text-life-200 print:hidden">Change</button>
                   </div>
-                  {e.place && <p className="text-xs text-life-700 dark:text-life-200 print:text-black">📍 {e.place_id ? <Link to={`/things/places/${e.place_id}`} className="hover:underline print:no-underline">{e.place}</Link> : e.place}</p>}
+                  {e.place && <p className="text-xs text-life-700 dark:text-life-200 print:text-black"><Icon of="place" /> {e.place_id ? <Link to={`/things/places/${e.place_id}`} className="hover:underline print:no-underline">{e.place}</Link> : e.place}</p>}
                   {e.phone && <p className="text-sm"><a href={telHref(e.phone)} className="font-semibold text-life-700 underline dark:text-life-100 print:text-black print:no-underline">{e.phone}</a></p>}
                   {e.body && <p className="whitespace-pre-line text-sm text-gray-700 dark:text-life-100 print:text-black">{e.body}</p>}
                 </li>
@@ -70,7 +71,7 @@ export default function ManualPage() {
         ))}
 
         <section className={`${cardClass} break-inside-avoid-page print:bg-white print:p-0 print:shadow-none print:ring-0`} aria-label="Pets">
-          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50 print:text-black"><span aria-hidden="true">🐾 </span>Pets</h2>
+          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50 print:text-black"><Icon of="pet" /> Pets</h2>
           {manual.pets.length === 0 ? <p className="text-sm text-gray-500 dark:text-life-300 print:hidden">Pets you add under keeping show here by themselves, with their food and vet. <Link to="/things/pets" className="underline">Add a pet</Link></p> : (
             <ul className="divide-y divide-life-50 dark:divide-life-700">
               {manual.pets.map((p) => (

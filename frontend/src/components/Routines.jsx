@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Icon from './Icon';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { buttonClass, cardClass, quietButtonClass, errorMessage } from './ui';
@@ -63,7 +64,7 @@ export function TimeChecklist({ time, onChange, onGo }) {
           <li key={s.id}>
             <button type="button" role="checkbox" aria-checked={s.ticked} disabled={busy} onClick={() => run(() => tickStep(s, !s.ticked))}
               className="flex min-h-[44px] w-full items-center gap-3 rounded-xl py-1 text-left hover:bg-life-50 dark:hover:bg-life-700">
-              <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 text-sm font-bold ${s.ticked ? 'border-life-600 bg-life-600 text-white' : 'border-life-400 text-transparent dark:border-life-300'}`}>✓</span>
+              <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 text-sm font-bold ${s.ticked ? 'border-life-600 bg-life-600 text-white' : 'border-life-400 text-transparent dark:border-life-300'}`}><Icon of="done" size={16} /></span>
               <span className={`min-w-0 flex-1 break-words text-sm text-gray-800 dark:text-life-50 ${s.ticked ? 'text-gray-500 line-through dark:text-life-300' : ''}`}>{s.words}</span>
               {s.wait_seconds && <span className="shrink-0 text-xs text-gray-500 dark:text-life-300">wait {waitText(s.wait_seconds)}</span>}
             </button>

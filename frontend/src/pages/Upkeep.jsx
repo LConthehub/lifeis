@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import Icon from '../components/Icon';
 import axios from 'axios';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
 const UNITS = [['day', 'days'], ['week', 'weeks'], ['month', 'months'], ['year', 'years']];
-export const KINDS = { job: ['Jobs', '🔧', 'Done'], bill: ['Bills', '💵', 'Paid'], renewal: ['Renewals', '📄', 'Renewed'], chore: ['Chores', '🧹', 'Done'] };
+export const KINDS = { job: ['Jobs', 'upkeep', 'Done'], bill: ['Bills', 'bill', 'Paid'], renewal: ['Renewals', 'renewal', 'Renewed'], chore: ['Chores', 'chore', 'Done'] };
 const KIND_ONE = { job: 'A job around the home', bill: 'A bill', renewal: 'A renewal (insurance, registration, a passport)', chore: 'A chore' };
 const doneWord = (job) => KINDS[job.kind][2];
 /** What all the bills and renewals come to in a month, each spread over its own round. */
@@ -105,7 +106,7 @@ function ReadySets({ sets, jobs, onAdded }) {
                       <label className="flex min-h-[44px] cursor-pointer items-start gap-3 py-2">
                         <input type="checkbox" checked={mine.includes(j.name)} onChange={() => toggle(set, j.name)} className="mt-0.5 h-5 w-5 shrink-0 accent-life-600" />
                         <span className="min-w-0 flex-1 break-words">
-                          <span className="block text-sm text-gray-800 dark:text-life-50"><span aria-hidden="true">{j.kind !== 'job' ? `${KINDS[j.kind][1]} ` : ''}</span>{j.name}{have.has(nameKey(j.name)) && <span className="ml-1 text-xs text-life-600 dark:text-life-200">(you have this)</span>}</span>
+                          <span className="block text-sm text-gray-800 dark:text-life-50">{j.kind !== 'job' && <><Icon of={KINDS[j.kind][1]} /> </>}{j.name}{have.has(nameKey(j.name)) && <span className="ml-1 text-xs text-life-600 dark:text-life-200">(you have this)</span>}</span>
                           <span className="block text-xs text-gray-500 dark:text-life-300">{scheduleText({ every: j.every_n ? { n: j.every_n, unit: j.every_unit } : null, every_reading: j.every_reading, reading_unit: j.reading_unit })} · {firstText(j)}</span>
                           {j.note && <span className="block text-xs text-gray-500 dark:text-life-300">{j.note}</span>}
                         </span>
@@ -166,7 +167,7 @@ export default function UpkeepPage() {
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="What to show">
         <button type="button" onClick={() => setKind('')} aria-pressed={!kind} className={chip(!kind)}>Everything <span className="opacity-80">{jobs.length || ''}</span></button>
         {Object.entries(KINDS).map(([k, [label, icon]]) => (
-          <button key={k} type="button" onClick={() => setKind(k)} aria-pressed={kind === k} className={chip(kind === k)}>{icon} {label} <span className="opacity-80">{jobs.filter((j) => j.kind === k).length || ''}</span></button>
+          <button key={k} type="button" onClick={() => setKind(k)} aria-pressed={kind === k} className={chip(kind === k)}><Icon of={icon} /> {label} <span className="opacity-80">{jobs.filter((j) => j.kind === k).length || ''}</span></button>
         ))}
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -184,7 +185,7 @@ export default function UpkeepPage() {
           <ul className="space-y-1">
             {scores.people.map((p, i) => (
               <li key={p.name} className="flex items-baseline gap-2 text-sm">
-                <span className="flex-1 text-gray-800 dark:text-life-50">{i === 0 && p.this_week > (scores.people[1]?.this_week ?? 0) ? '🏆 ' : ''}{p.name} <span className="text-xs text-gray-500 dark:text-life-300">{p.done} done{p.last_week ? ` · ${p.last_week} points last week` : ''}</span></span>
+                <span className="flex-1 text-gray-800 dark:text-life-50">{i === 0 && p.this_week > (scores.people[1]?.this_week ?? 0) ? <><Icon of="trophy" /> </> : ''}{p.name} <span className="text-xs text-gray-500 dark:text-life-300">{p.done} done{p.last_week ? ` · ${p.last_week} points last week` : ''}</span></span>
                 <span className="font-semibold text-life-700 dark:text-life-100">{p.this_week} point{p.this_week === 1 ? '' : 's'}{scores.point_cents ? <span className="font-normal text-gray-600 dark:text-life-200"> · {money(p.this_week * scores.point_cents)}</span> : null}</span>
               </li>
             ))}
@@ -212,13 +213,13 @@ export default function UpkeepPage() {
                 <li key={j.id} className="flex flex-wrap items-center gap-2 py-2">
                   <PickBox sel={sel} id={j.id} name={j.name} />
                   <Link to={`/things/upkeep/${j.id}`} className="min-w-0 flex-1">
-                    <span className="block text-sm text-gray-800 hover:underline dark:text-life-50"><span aria-hidden="true">{j.kind !== 'job' ? `${KINDS[j.kind][1]} ` : ''}</span>{j.name}</span>
+                    <span className="block text-sm text-gray-800 hover:underline dark:text-life-50">{j.kind !== 'job' && <><Icon of={KINDS[j.kind][1]} /> </>}{j.name}</span>
                     <span className="block text-xs text-gray-500 dark:text-life-300">
                       {[j.amount_cents != null && money(j.amount_cents), j.autopay && 'pays itself', j.points != null && `${j.points} point${j.points === 1 ? '' : 's'}`, j.item?.name, j.activity, (j.member ?? j.assigned_to) && `${(j.member ?? j.assigned_to).name} does it`, !j.mine && `${j.owner}'s`].filter(Boolean).join(' · ') || scheduleText(j)}
                     </span>
                   </Link>
                   <DueBadge job={j} />
-                  <button type="button" onClick={() => setModal({ done: j })} aria-label={`${j.name} ${doneWord(j).toLowerCase()}`} className="shrink-0 rounded-full border border-life-200 px-2.5 py-1 text-xs text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100">✓ {doneWord(j)}</button>
+                  <button type="button" onClick={() => setModal({ done: j })} aria-label={`${j.name} ${doneWord(j).toLowerCase()}`} className="shrink-0 rounded-full border border-life-200 px-2.5 py-1 text-xs text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100"><Icon of="done" size={14} /> {doneWord(j)}</button>
                   <TagChips tags={j.tag_list} className="basis-full" />
                 </li>
               ))}
@@ -240,7 +241,7 @@ export default function UpkeepPage() {
           <ul className="grid gap-1.5 sm:grid-cols-2">
             {offered.map((s) => (
               <li key={s.name} className="flex items-center gap-2 text-sm">
-                <span className="min-w-0 flex-1 text-gray-800 dark:text-life-50"><span aria-hidden="true">{KINDS[s.kind ?? 'job'][1]} </span>{s.name} <span className="text-xs text-gray-500 dark:text-life-300">{scheduleText({ every: s.every_n ? { n: s.every_n, unit: s.every_unit } : null, every_reading: s.every_reading, reading_unit: s.reading_unit })}</span></span>
+                <span className="min-w-0 flex-1 text-gray-800 dark:text-life-50"><Icon of={KINDS[s.kind ?? 'job'][1]} /> {s.name} <span className="text-xs text-gray-500 dark:text-life-300">{scheduleText({ every: s.every_n ? { n: s.every_n, unit: s.every_unit } : null, every_reading: s.every_reading, reading_unit: s.reading_unit })}</span></span>
                 <button type="button" onClick={() => addStarter(s)} className="text-xs text-life-600 hover:underline dark:text-life-200">Add</button>
               </li>
             ))}
@@ -292,7 +293,7 @@ export function JobPage() {
           <DueBadge job={job} />
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setModal('done')} className={buttonClass}>✓ {doneWord(job)}</button>
+          <button type="button" onClick={() => setModal('done')} className={buttonClass}><Icon of="done" /> {doneWord(job)}</button>
           {job.every_reading && <button type="button" onClick={() => setModal('reading')} className={quietButtonClass}>Note the {job.reading_unit || 'reading'}</button>}
           {job.mine && <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Change</button>}
         </div>
@@ -307,15 +308,15 @@ export function JobPage() {
               {job.tools.map((t) => (
                 <li key={`t${t.id}`} className="py-1.5 text-sm">
                   <Link to={`/things/${t.id}`} className="flex items-baseline gap-2 hover:underline">
-                    <span aria-hidden="true">🔧</span><span className="flex-1 text-gray-800 dark:text-life-50">{t.name}</span>
-                    <span className="text-xs text-gray-500 dark:text-life-300">{t.place ? `📍 ${t.place}` : 'no place'}</span>
+                    <Icon of="upkeep" /><span className="flex-1 text-gray-800 dark:text-life-50">{t.name}</span>
+                    <span className="text-xs text-gray-500 dark:text-life-300">{t.place ? <><Icon of="place" /> {t.place}</> : 'no place'}</span>
                   </Link>
                 </li>
               ))}
               {job.supplies.map((s) => (
                 <li key={`s${s.id}`} className="py-1.5 text-sm">
                   <Link to={`/things/${s.item_id}`} className="flex items-baseline gap-2 hover:underline">
-                    <span aria-hidden="true">📦</span>
+                    <Icon of="thing" />
                     <span className="flex-1 text-gray-800 dark:text-life-50">{s.name} <span className="text-xs text-gray-500 dark:text-life-300">uses {s.amount}</span></span>
                     <span className={`text-xs ${s.low ? 'text-honey-700' : 'text-gray-500 dark:text-life-300'}`}>have {s.have}{s.low ? ', low' : ''}</span>
                   </Link>
@@ -416,7 +417,7 @@ function JobForm({ job, onDone }) {
     <form onSubmit={submit} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="What it is">
-          <select value={form.kind} onChange={set('kind')} className={inputClass}>{Object.entries(KIND_ONE).map(([k, label]) => <option key={k} value={k}>{KINDS[k][1]} {label}</option>)}</select>
+          <select value={form.kind} onChange={set('kind')} className={inputClass}>{Object.entries(KIND_ONE).map(([k, label]) => <option key={k} value={k}>{label}</option>)}</select>
         </Field>
         <Field label="Its name *"><input required autoFocus={making} value={form.name} onChange={set('name')} placeholder={example} className={inputClass} /></Field>
         {dated && <Field label={form.kind === 'bill' ? 'Next due on' : 'Runs out on'}><input type="date" value={form.first_due} onChange={set('first_due')} className={inputClass} /></Field>}

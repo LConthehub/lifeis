@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import Icon from '../components/Icon';
 import axios from 'axios';
 import Picture from '../components/Picture';
 import { shrink } from '../components/shrink';
@@ -75,7 +76,7 @@ export default function WalkThrough() {
               : <p className="text-sm text-gray-700 dark:text-life-100">Every room is done. <Link to="/things/report" className="underline">See the home inventory</Link></p>}
           </div>
         )}
-        <Link to={`/things/places/${placeId}/fill`} className={`${quietButtonClass} inline-flex min-h-11 items-center`}>📷 Add something else in this room</Link>
+        <Link to={`/things/places/${placeId}/fill`} className={`${quietButtonClass} inline-flex min-h-11 items-center`}><Icon of="scan" /> Add something else in this room</Link>
       </section>
 
       {total > 0 && (
@@ -148,7 +149,7 @@ function Thing({ thing, place, onChange }) {
         <div>
           <input ref={picker} type="file" accept="image/*" capture="environment" className="hidden" aria-label={`Photo file for ${thing.name}`} onChange={(e) => photo(e.target.files?.[0])} />
           <button type="button" disabled={busy} onClick={() => picker.current?.click()} aria-label={`${thing.photo ? 'Take a new photo of' : 'Take or choose a photo of'} ${thing.name}`} className={`${quietButtonClass} min-h-11 w-full`}>
-            {busy ? 'Keeping it…' : thing.photo ? '📷 New photo' : '📷 Take a photo'}
+            {busy ? 'Keeping it…' : <><Icon of="scan" /> {thing.photo ? 'New photo' : 'Take a photo'}</>}
           </button>
         </div>
         <label className="block text-xs font-medium text-gray-600 dark:text-life-200">Worth now ($)

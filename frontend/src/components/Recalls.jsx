@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import Icon from './Icon';
 import axios from 'axios';
 import { quietButtonClass, cardClass, errorMessage } from './ui';
 
@@ -44,7 +45,7 @@ export function RecallAlertsService() {
   return (
     <div className="py-3">
       <div className="flex items-baseline gap-2">
-        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">🚗 Recall alerts for your cars</h3>
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="car" /> Recall alerts for your cars</h3>
         <span className={`rounded px-1.5 text-[11px] ${s.on ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{s.on ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">

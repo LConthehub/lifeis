@@ -3,7 +3,7 @@ import axios from 'axios';
 import PlacePicker from './PlacePicker';
 import { Field, inputClass, buttonClass, quietButtonClass, errorMessage } from './ui';
 
-const TYPE_CHOICES = [['film', '🎬 Film'], ['show', '📺 Show'], ['music', '🎵 Music'], ['book', '📚 Book'], ['game', '🎮 Game'], ['other', '🗃 Something else']];
+const TYPE_CHOICES = [['film', 'Film'], ['show', 'Show'], ['music', 'Music'], ['book', 'Book'], ['game', 'Game'], ['other', 'Something else']];
 const SLOW_AFTER_MS = 4000;     // after this long a lookup is called slow
 const PAUSE_MS = 500;           // a breath between lookups: the free services are asked kindly, one at a time
 

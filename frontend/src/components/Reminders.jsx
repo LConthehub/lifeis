@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import Icon from './Icon';
 import axios from 'axios';
 import { inputClass, quietButtonClass, errorMessage } from './ui';
 import { inApp, onDevice } from '../where';
 import { CopyLine } from './Copy';
 
-const COVERS = [['upkeep', '🔧 Upkeep due'], ['low', '📦 Running low, or food to use soon'], ['dates', '🎂 Birthdays, plans and today’s events'], ['coupons', '🏷 Coupons running out, things lent a long time'], ['copy', '💾 A reminder to make a copy']];
+const COVERS = [['upkeep', 'upkeep', 'Upkeep due'], ['low', 'thing', 'Running low, or food to use soon'], ['dates', 'birthday', 'Birthdays, plans and today’s events'], ['coupons', 'tag', 'Coupons running out, things lent a long time'], ['copy', 'data', 'A reminder to make a copy']];
 const zone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
 const bytesOf = (base64) => {
   const padded = (base64 + '='.repeat((4 - (base64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/');
@@ -81,9 +82,9 @@ export function RemindersSettings() {
       </div>
       <fieldset className="grid gap-1 sm:grid-cols-2">
         <legend className="mb-1 text-xs font-medium text-gray-600 dark:text-life-200">What it covers</legend>
-        {COVERS.map(([key, label]) => (
+        {COVERS.map(([key, icon, label]) => (
           <label key={key} className="flex items-center gap-2 text-sm text-gray-700 dark:text-life-100">
-            <input type="checkbox" checked={s.covers[key]} onChange={(e) => save({ covers: { [key]: e.target.checked } })} className="accent-life-600" /> {label}
+            <input type="checkbox" checked={s.covers[key]} onChange={(e) => save({ covers: { [key]: e.target.checked } })} className="accent-life-600" /> <Icon of={icon} /> {label}
           </label>
         ))}
       </fieldset>
@@ -100,12 +101,12 @@ export function RemindersSettings() {
 
       <div className="divide-y divide-life-50 dark:divide-life-700">
         {inApp() && (
-          <Way icon="📱" title="On this phone" on={s.phone} said={said.phone}
+          <Way icon="phone" title="On this phone" on={s.phone} said={said.phone}
             sends="Made on this phone from what’s kept on it, at your time each morning. Nothing leaves the phone."
             actions={<button type="button" disabled={busy === 'phone'} onClick={async () => { await save({ phone: !s.phone }, 'phone'); window.dispatchEvent(new Event('lifeis-reminders')); }} className={quietButtonClass}>{s.phone ? 'Turn off' : 'Turn on'}</button>} />
         )}
         {!onDevice() && state.can.mail_available && (
-          <Way icon="✉️" title={state.services.email.name} on={s.email} said={said.email} sends={state.services.email.sends}
+          <Way icon="email" title={state.services.email.name} on={s.email} said={said.email} sends={state.services.email.sends}
             actions={state.can.email ? (
               <>
                 <button type="button" disabled={busy === 'email'} onClick={() => save({ email: !s.email }, 'email')} className={quietButtonClass}>{s.email ? 'Turn off' : 'Turn on'}</button>
@@ -114,7 +115,7 @@ export function RemindersSettings() {
             ) : <Link to="/settings/connections#mail" className="text-sm text-life-600 underline dark:text-life-200">Connect your email first</Link>} />
         )}
         {!onDevice() && state.can.push && (
-          <Way icon="🔔" title="This browser, and others you allow" on={s.push} said={said.push} sends={state.services.push.sends}
+          <Way icon="reminder" title="This browser, and others you allow" on={s.push} said={said.push} sends={state.services.push.sends}
             actions={!window.isSecureContext ? <span className="text-sm text-gray-500 dark:text-life-300">Open Life Is at its https address to allow these.</span> : (
               <>
                 <button type="button" disabled={busy === 'push'} onClick={allowHere} className={quietButtonClass}>Allow on this browser</button>
@@ -141,7 +142,7 @@ function Way({ icon, title, on, sends, actions, said, children }) {
   return (
     <section className="space-y-1.5 py-3" aria-label={title}>
       <div className="flex items-baseline gap-2">
-        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">{icon} {title}</h3>
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of={icon} /> {title}</h3>
         <span className={`rounded px-1.5 text-[11px] ${on ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{on ? 'On' : 'Off'}</span>
       </div>
       <p className="text-sm text-gray-600 dark:text-life-100"><span className="font-medium">What it sends:</span> {sends}</p>
@@ -156,7 +157,7 @@ function NtfyWay({ s, services, busy, said, save, tryIt }) {
   const [server, setServer] = useState(s.ntfy?.server ?? 'https://ntfy.sh');
   const [full, setFull] = useState(s.ntfy?.detail === 'full');
   return (
-    <Way icon="📣" title="ntfy" on={Boolean(s.ntfy)} said={said} sends={services.ntfy.sends}
+    <Way icon="announce" title="ntfy" on={Boolean(s.ntfy)} said={said} sends={services.ntfy.sends}
       actions={s.ntfy ? (
         <>
           <button type="button" disabled={busy === 'ntfy'} onClick={() => tryIt('ntfy')} className={quietButtonClass}>Send one now</button>

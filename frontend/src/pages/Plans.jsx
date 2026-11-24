@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import Icon from '../components/Icon';
 import axios from 'axios';
 import { shrink } from '../components/shrink';
 import Picture from '../components/Picture';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, fromDateInput } from '../components/ui';
 
-const ENTRY_ICONS = { meal: '🍽', session: '🧵', media: '🎞' };
+const ENTRY_ICONS = { meal: 'meal', session: 'session', media: 'media' };
 // What a plan can hold besides its checklist, where each is listed, and how one of them is named.
 const HOLDS = {
-  recipe: { title: 'Food', add: 'a recipe', icon: '🍽', from: '/api/kitchen/recipes', name: (r) => r.title },
-  thing: { title: 'Things to have ready', add: 'one of your things', icon: '📦', from: '/api/things/items', name: (t) => `${t.name} (${t.amount}${t.place ? `, ${t.place}` : ''})` },
-  media: { title: 'To watch, hear or read', add: 'something from the collection', icon: '🎞', from: '/api/media', name: (m) => `${m.title}${m.year ? ` (${m.year})` : ''}` },
-  project: { title: 'Projects', add: 'a project', icon: '🧵', from: '/api/projects', name: (p) => p.name },
+  recipe: { title: 'Food', add: 'a recipe', icon: 'meal', from: '/api/kitchen/recipes', name: (r) => r.title },
+  thing: { title: 'Things to have ready', add: 'one of your things', icon: 'thing', from: '/api/things/items', name: (t) => `${t.name} (${t.amount}${t.place ? `, ${t.place}` : ''})` },
+  media: { title: 'To watch, hear or read', add: 'something from the collection', icon: 'media', from: '/api/media', name: (m) => `${m.title}${m.year ? ` (${m.year})` : ''}` },
+  project: { title: 'Projects', add: 'a project', icon: 'project', from: '/api/projects', name: (p) => p.name },
 };
 
 const dayText = (day, long = false) => fromDateInput(day).toLocaleDateString(undefined, long ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'short', year: 'numeric' });
@@ -80,7 +81,7 @@ export default function PlansPage() {
       <PickBox sel={sel} id={p.id} name={p.name} />
       <Link to={`/plans/${p.id}`} className="flex min-w-0 flex-1 gap-3">
         {p.cover_photo ? <Picture src={photoAddress(p.cover_photo)} alt="" loading="lazy" className="h-16 w-16 flex-none rounded-lg object-cover" />
-          : <span aria-hidden="true" className="flex h-16 w-16 flex-none items-center justify-center rounded-lg bg-life-50 text-2xl dark:bg-life-700">✨</span>}
+          : <span aria-hidden="true" className="flex h-16 w-16 flex-none items-center justify-center rounded-lg bg-life-50 text-2xl dark:bg-life-700"><Icon of="plan" size={28} /></span>}
         <span className="min-w-0 flex-1">
           <span className="block font-medium text-life-800 dark:text-life-50">{p.name}</span>
           <span className="block text-xs text-gray-500 dark:text-life-300">{daysText(p)}</span>
@@ -241,14 +242,14 @@ export function PlanPage() {
                 <ul className="space-y-1.5">
                   {mine.map((i) => (
                     <li key={i.id} className="flex items-start gap-2 text-sm">
-                      <span aria-hidden="true">{hold.icon}</span>
+                      <Icon of={hold.icon} />
                       <span className="flex-1">
                         {i.link ? <Link to={i.link} className="text-gray-800 hover:underline dark:text-life-50">{i.label}</Link> : <span className="text-gray-500 dark:text-life-300">{i.label}</span>}
                         {i.quantity !== null && <span className="ml-1 text-gray-500 dark:text-life-300">× {i.quantity}</span>}
                         {[i.detail, i.note].filter(Boolean).length > 0 && <span className="block text-xs text-gray-500 dark:text-life-300">{[i.detail, i.note].filter(Boolean).join(' · ')}</span>}
                         {kind === 'recipe' && i.link && (
                           <button type="button" onClick={() => setModal({ eaten: i })} className="block text-xs text-life-600 hover:underline dark:text-life-200">
-                            {i.on_week ? `🗓 ${onWeekText(i.on_week)}` : 'Not on the week yet: put it on'}
+                            {i.on_week ? <><Icon of="date" /> {onWeekText(i.on_week)}</> : 'Not on the week yet: put it on'}
                           </button>
                         )}
                         {i.short && <span className="block text-xs text-honey-700">{i.short}</span>}
@@ -272,7 +273,7 @@ export function PlanPage() {
               {plan.happened.map((e, i) => (
                 <li key={`${e.kind}-${i}`}>
                   <Link to={e.link || '/calendar'} className="flex items-baseline gap-2 text-sm hover:underline">
-                    <span aria-hidden="true">{ENTRY_ICONS[e.kind]}</span>
+                    <Icon of={ENTRY_ICONS[e.kind]} />
                     <span className="flex-1 text-gray-800 dark:text-life-50">{e.title}{e.detail && <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{e.detail}</span>}</span>
                     {plan.end_day !== plan.start_day && <span className="text-xs text-gray-500 dark:text-life-300">{fromDateInput(e.day).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })}</span>}
                   </Link>

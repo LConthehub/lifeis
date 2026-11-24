@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import Icon from './components/Icon';
 import axios from 'axios';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -55,13 +56,13 @@ axios.interceptors.request.use((config) => {
 // In this order: what a household needs first, then what it plans, makes and enjoys.
 const SECTIONS = [
   { word: 'eating', shown: 'tasty', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
-    tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫'], ['/prices', 'Prices', '💲']] },
+    tabs: [['/recipes', 'Recipes'], ['/week', 'Week'], ['/groceries', 'Groceries'], ['/pantry', 'Pantry'], ['/prices', 'Prices']] },
   { word: 'keeping', shown: 'organized', home: '/things', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || ['/manual', '/calendar', '/mail', '/tags', '/routines'].some((p) => path.startsWith(p)),
-    tabs: [['/calendar', 'Calendar', '📅'], ['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/upkeep', 'Upkeep', '🔧'], ['/routines', 'Routines', '✅'], ['/things/licenses', 'Licenses', '🪪'], ['/things/pets', 'Pets', '🐾'], ['/manual', 'House Manual', '📒'], ['/tags', 'Tags', '🏷'], ['/mail', 'Mail', '✉️']] },
-  { word: 'spending', shown: 'budgeted', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month', '💵'], ['/money/year', 'Year', '📆'], ['/money/goals', 'Goals', '🎯'], ['/money/income', 'Income and bills', '💼']] },
+    tabs: [['/calendar', 'Calendar'], ['/things', 'Things'], ['/things/places', 'Places'], ['/things/upkeep', 'Upkeep'], ['/routines', 'Routines'], ['/things/licenses', 'Licenses'], ['/things/pets', 'Pets'], ['/manual', 'House Manual'], ['/tags', 'Tags'], ['/mail', 'Mail']] },
+  { word: 'spending', shown: 'budgeted', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month'], ['/money/year', 'Year'], ['/money/goals', 'Goals'], ['/money/income', 'Income and bills']] },
   { word: 'making', shown: 'doing', home: '/projects', owns: (path) => path.startsWith('/projects') || path.startsWith('/plans') || path.startsWith('/things/activities'),
-    tabs: [['/projects', 'Projects', '🧵'], ['/plans', 'Plans', '✨'], ['/things/activities', 'Activities', '🛠']] },
-  { word: 'enjoying', shown: 'entertaining', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection', '🎞'], ['/media/books', 'Books', '📚'], ['/media/ebooks', 'eBooks', '📱'], ['/media/audiobooks', 'Audiobooks', '🎧'], ['/media/servers', 'Servers', '🖥']] },
+    tabs: [['/projects', 'Projects'], ['/plans', 'Plans'], ['/things/activities', 'Activities']] },
+  { word: 'enjoying', shown: 'entertaining', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection'], ['/media/books', 'Books'], ['/media/ebooks', 'eBooks'], ['/media/audiobooks', 'Audiobooks'], ['/media/servers', 'Servers']] },
 ];
 
 export default function App() {
@@ -131,7 +132,7 @@ function Shell({ user, demo = false, onLogout }) {
             ))}
           </nav>
           <div className="order-2 ml-auto sm:order-3"><Search /></div>
-          <NavLink to="/settings" aria-label="Settings" className="order-2 text-sm text-white/90 hover:text-white hover:underline sm:order-3"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="text-lg sm:hidden">⚙</span></NavLink>
+          <NavLink to="/settings" aria-label="Settings" className="order-2 text-sm text-white/90 hover:text-white hover:underline sm:order-3"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="sm:hidden"><Icon of="settings" size={22} /></span></NavLink>
           {tabs.length > 1 && (
             <nav ref={tabsRef} className="order-4 flex w-full min-w-0 flex-nowrap gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pr-8 [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] sm:flex-wrap sm:overflow-visible sm:pr-0 sm:[mask-image:none]" aria-label={`Life is ${section.shown ?? section.word}`}>
               {tabs.map(([to, label]) => (

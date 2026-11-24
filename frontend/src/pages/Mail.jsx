@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import Icon from '../components/Icon';
 import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 
@@ -65,7 +66,7 @@ export default function Mail() {
                 <span aria-hidden="true" className={`h-2 w-2 shrink-0 self-center rounded-full ${m.unread ? 'bg-coral' : 'bg-transparent'}`} />
                 <span className="min-w-0 flex-1">
                   <span className={`block truncate text-sm ${m.unread ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-700 dark:text-life-100'}`}>{whoText(m.from)}{m.unread && <span className="sr-only"> (unread)</span>}</span>
-                  <span className={`block truncate text-sm ${m.unread ? 'text-gray-800 dark:text-life-50' : 'text-gray-500 dark:text-life-300'}`}>{m.flagged && '⚑ '}{m.subject}</span>
+                  <span className={`block truncate text-sm ${m.unread ? 'text-gray-800 dark:text-life-50' : 'text-gray-500 dark:text-life-300'}`}>{m.flagged && <><Icon of="flag" size={14} /> </>}{m.subject}</span>
                 </span>
                 <span className="shrink-0 text-xs text-gray-500 dark:text-life-300">{whenText(m.date)}</span>
               </button>
@@ -116,7 +117,7 @@ function Message({ accountId, uid, onChanged }) {
         <p className="text-xs text-gray-500 dark:text-life-300">To {list(m.to) || 'nobody named'}{m.cc.length > 0 && ` · Cc ${list(m.cc)}`}{m.date && ` · ${new Date(m.date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`}</p>
       </div>
       <div className="max-h-[45vh] overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-life-50/60 p-3 text-sm text-gray-800 dark:bg-life-800 dark:text-life-50">{m.text || 'This message has no words in it.'}</div>
-      {m.attachments.length > 0 && <p className="text-xs text-gray-500 dark:text-life-300">📎 {m.attachments.join(', ')}. Attachments stay with your mail provider; open them in your mail program.</p>}
+      {m.attachments.length > 0 && <p className="text-xs text-gray-500 dark:text-life-300"><Icon of="attachment" size={14} /> {m.attachments.join(', ')}. Attachments stay with your mail provider; open them in your mail program.</p>}
       {sent && <p className="rounded-lg bg-life-100 px-3 py-2 text-sm text-life-800">Sent to {list([...sent.to, ...sent.cc])}.</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       {replying ? (

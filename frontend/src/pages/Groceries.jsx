@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import Icon from '../components/Icon';
 import axios from 'axios';
 import ArrangeAisles from '../components/ArrangeAisles';
 import PasteList from '../components/PasteList';
@@ -103,7 +104,7 @@ export default function Groceries() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Groceries</h1>
-        <button type="button" onClick={() => setModal({ scan: true })} className={quietButtonClass}>📷 Scan</button>
+        <button type="button" onClick={() => setModal({ scan: true })} className={quietButtonClass}><Icon of="scan" /> Scan</button>
         <button type="button" onClick={low} className={quietButtonClass}>Add what's running low</button>
         {items.length > 0 && <button type="button" onClick={() => setModal({ share: true })} className={`${quietButtonClass} min-h-[44px]`}>Share the list</button>}
       </div>
@@ -200,7 +201,7 @@ export default function Groceries() {
                         : <span className="text-gray-800 dark:text-life-50">{g.label}</span>}
                       {(g.amount || l.usual_size) && <span className="ml-2 text-gray-500 dark:text-life-300">{g.amount || l.usual_size}</span>}
                       {by !== 'shop' && l.usual_store && <span className="ml-2 rounded bg-life-50 px-1.5 text-[11px] text-life-700 dark:bg-life-700 dark:text-life-100">{l.usual_store}</span>}
-                      {l.coupons.length > 0 && <span className="ml-2 rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">🎟 coupon</span>}
+                      {l.coupons.length > 0 && <span className="ml-2 rounded bg-honey-100 px-1.5 text-[11px] text-honey-700"><Icon of="coupon" size={14} /> coupon</span>}
                       {g.note && <span className="block text-xs text-gray-400">{g.note}</span>}
                       {l.cheaper && (
                         <span className="flex flex-wrap items-center gap-x-2 text-xs text-life-700 dark:text-life-200" data-cheaper>

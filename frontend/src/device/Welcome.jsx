@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Field, inputClass, buttonClass, quietButtonClass } from '../components/ui';
+import Icon from '../components/Icon';
 import { findLifeIs, tidyAddress, unlocked } from './remote.js';
 
 /**
@@ -38,11 +39,11 @@ export default function Welcome({ onChosen }) {
         {!linking ? (
           <div className="space-y-3">
             <button type="button" onClick={() => onChosen({ kind: 'device' })} className="block w-full rounded-xl p-4 text-left ring-1 ring-life-100 hover:bg-life-50 dark:ring-life-700 dark:hover:bg-life-800">
-              <span className="block font-medium text-life-800 dark:text-life-50">📱 On this phone</span>
+              <span className="block font-medium text-life-800 dark:text-life-50"><Icon of="phone" /> On this phone</span>
               <span className="mt-1 block text-sm text-gray-600 dark:text-life-100">Everything stays here, locked with a key only this phone holds. No account, no password, and nothing sent anywhere.</span>
             </button>
             <button type="button" onClick={() => setLinking(true)} className="block w-full rounded-xl p-4 text-left ring-1 ring-life-100 hover:bg-life-50 dark:ring-life-700 dark:hover:bg-life-800">
-              <span className="block font-medium text-life-800 dark:text-life-50">🏠 On a Life Is I host</span>
+              <span className="block font-medium text-life-800 dark:text-life-50"><Icon of="home" /> On a Life Is I host</span>
               <span className="mt-1 block text-sm text-gray-600 dark:text-life-100">You run Life Is on a computer of your own. This phone signs in to it and shows what it holds, the same as its web page does.</span>
             </button>
             <p className="text-xs text-gray-500 dark:text-life-300">You can change this later in Settings. Changing it moves nothing: what is on the phone stays on the phone, and what is on your server stays there.</p>
