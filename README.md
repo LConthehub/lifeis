@@ -184,7 +184,8 @@ Your records are kept by Docker, encrypted. **Never run `docker compose down -v`
   places it ever reaches out to are the media servers a person connects (`connectionRoutes.ts`), whose keys it
   stores locked (`vault.ts`), the weather service if a person turns it on (core's `weather.ts`), and a person's own mail provider if they add
   an account (`postbox.ts`; the rules are core's `mail.ts`).
-- `frontend/`: the pages. React, Vite and Tailwind.
+- `frontend/`: the pages. React, Vite and Tailwind. The small icons are from Lucide (ISC license; the notice is in
+  `docs/site-src/lucide-ISC.txt`), used by name through `frontend/src/components/Icon.jsx`.
 - `backend/`: the first version of the program, in Python. Docker no longer runs it. It is kept for now as the
   reference `core/` is checked against: `python core/tests/golden.py` writes its answers down, and the tests
   hold the TypeScript to them. The database file, its encryption and the passwords are the same in both.

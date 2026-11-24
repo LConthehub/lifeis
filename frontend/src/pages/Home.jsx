@@ -5,11 +5,12 @@ import { onDevice } from '../where';
 import { AskCard } from '../components/Assistant';
 import { StartCard } from '../components/Start';
 import { RoutinesCard } from '../components/Routines';
+import Icon, { hasIcon } from '../components/Icon';
 import { whoText, whenText } from './Mail';
 import Modal, { buttonClass, quietButtonClass, cardClass, fromDateInput, minutesText, toDateInput } from '../components/ui';
 
-const ICONS = { plan: '✨', event: '📌', outside: '🗓', meal: '🍽', session: '🧵', due: '⏳', upkeep: '🔧', use_by: '🥫', media: '🎞' };
-const TYPE_ICONS = { film: '🎬', show: '📺', music: '🎵', book: '📚', game: '🎮', other: '🗃' };
+/** A weather mark from the server: an icon where there is one, else the mark as sent. */
+const Weather = ({ mark, size }) => (hasIcon(mark) ? <Icon of={mark} size={size} /> : <span aria-hidden="true">{mark}</span>);
 const STATUS = { active: 'working on it', paused: 'paused', planned: 'planned' };
 
 function greeting() {
@@ -114,7 +115,7 @@ export default function Home({ user }) {
                       {d.entries.map((e, i) => {
                         const body = (
                           <>
-                            <span aria-hidden="true">{ICONS[e.kind]}</span>
+                            <span className="mt-0.5"><Icon of={e.kind} /></span>
                             <span className="flex-1 text-sm text-gray-800 dark:text-life-50">{e.time && <span className="mr-1 font-medium">{e.time}</span>}{e.title}
                               {e.detail && <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{e.detail}</span>}</span>
                           </>
@@ -136,7 +137,7 @@ export default function Home({ user }) {
             {!s.weather.forecast ? <Quiet>The forecast couldn't be fetched just now.</Quiet> : (
               <div className="space-y-3">
                 <p className="flex items-center gap-3 text-gray-800 dark:text-life-50">
-                  <span aria-hidden="true" className="text-4xl">{s.weather.forecast.now.icon}</span>
+                  <span className="text-4xl"><Weather mark={s.weather.forecast.now.icon} size={36} /></span>
                   <span className="text-3xl font-semibold">{s.weather.forecast.now.temperature}°</span>
                   <span className="text-sm">{s.weather.forecast.now.words}</span>
                 </p>
@@ -144,7 +145,7 @@ export default function Home({ user }) {
                   {s.weather.forecast.days.map((d) => (
                     <li key={d.day} className="rounded-lg bg-life-50/70 px-2 py-1.5 dark:bg-life-700/60">
                       <span className="block text-xs font-semibold uppercase tracking-wide text-life-600 dark:text-life-300">{dayName(d.day, today)}</span>
-                      <span className="block text-gray-800 dark:text-life-50"><span aria-hidden="true">{d.icon}</span> {d.high}° <span className="text-gray-500 dark:text-life-300">{d.low}°</span></span>
+                      <span className="block text-gray-800 dark:text-life-50"><Weather mark={d.icon} /> {d.high}° <span className="text-gray-500 dark:text-life-300">{d.low}°</span></span>
                       <span className="block text-xs text-gray-500 dark:text-life-300">{d.words}{d.wet !== null && d.wet >= 20 ? ` · ${d.wet}%` : ''}</span>
                     </li>
                   ))}
@@ -189,7 +190,7 @@ export default function Home({ user }) {
               <ul className="space-y-1 text-sm">
                 {s.dates.map((d) => (
                   <li key={`${d.id}-${d.day}`} className="flex items-baseline gap-2">
-                    <span aria-hidden="true">🎂</span>
+                    <span className="self-start"><Icon of="birthday" /></span>
                     <span className="flex-1 text-gray-800 dark:text-life-50">{d.title}{d.years > 0 && <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{d.years} {d.years === 1 ? 'year' : 'years'}</span>}</span>
                     <span className="text-xs text-gray-500 dark:text-life-300">{inDays(d.day, today)}</span>
                   </li>
@@ -240,7 +241,7 @@ export default function Home({ user }) {
                 {s.plans.map((p) => (
                   <li key={p.id}>
                     <Link to={`/plans/${p.id}`} className="flex items-baseline gap-2 hover:underline">
-                      <span aria-hidden="true">✨</span>
+                      <span className="self-start"><Icon of="plan" /></span>
                       <span className="flex-1 text-gray-800 dark:text-life-50">{p.name}</span>
                       <span className="text-xs text-gray-500 dark:text-life-300">{p.days_until === 0 ? (p.end_day === today ? 'today' : 'now') : inDays(p.start_day, today)}</span>
                     </Link>
@@ -257,7 +258,7 @@ export default function Home({ user }) {
               <ul className="space-y-1 text-sm">
                 {s.coupons.soon.map((c) => (
                   <li key={c.id} className="flex items-baseline gap-2">
-                    <span aria-hidden="true">🎟</span>
+                    <span className="self-start"><Icon of="coupon" /></span>
                     <span className="flex-1 text-gray-800 dark:text-life-50">{c.label}
                       <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{c.percent_off !== null ? `${c.percent_off}% off` : `${s.coupons.currency}${(c.cents_off / 100).toFixed(2)} off`}{c.store ? ` · ${c.store}` : ''}</span></span>
                     {c.days_left <= 1 ? <Flag>{c.days_left === 0 ? 'last day' : 'tomorrow'}</Flag> : <span className="text-xs text-gray-500 dark:text-life-300">{c.days_left} days left</span>}
@@ -345,7 +346,7 @@ export default function Home({ user }) {
                 {s.collection.lately.length > 0 && (
                   <ul className="space-y-1">
                     {s.collection.lately.map((t) => (
-                      <li key={t.id}><Link to={`/media/${t.id}`} className="hover:underline">{TYPE_ICONS[t.type]} {t.title}</Link> <span className="text-xs text-gray-500 dark:text-life-300">{t.day}</span></li>
+                      <li key={t.id}><Link to={`/media/${t.id}`} className="hover:underline"><Icon of={t.type} /> {t.title}</Link> <span className="text-xs text-gray-500 dark:text-life-300">{t.day}</span></li>
                     ))}
                   </ul>
                 )}

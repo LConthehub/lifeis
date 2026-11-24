@@ -22,6 +22,8 @@ if (ART.wave) { mkdirSync(path.join(out, 'art'), { recursive: true }); copyFileS
 const HEADER_BROWN = 'linear-gradient(100deg, #4a2f1a 0%, #5f361b 55%, #933f1d 100%)';
 copyFileSync(path.join(here, 'site-src', 'fraunces-soft.woff2'), path.join(out, 'fraunces-soft.woff2'));
 copyFileSync(path.join(here, 'site-src', 'fraunces-OFL.txt'), path.join(out, 'fraunces-OFL.txt'));
+// The small icons in the pages are Lucide's (ISC license); its notice is kept with the site like Fraunces'.
+copyFileSync(path.join(here, 'site-src', 'lucide-ISC.txt'), path.join(out, 'lucide-ISC.txt'));
 
 const safe = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 // A bit of code in a sentence gets a Copy button only when it is a whole command or address to type or paste on its own.
