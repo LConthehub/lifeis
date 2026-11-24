@@ -99,7 +99,7 @@ export default function Budget({ project, onChange }) {
             ) : c.paid_on ? (
               <>
                 <span className="tabular-nums text-gray-800 dark:text-life-50">{money(c.actual_cents, sign)} <span className="text-xs text-gray-500 dark:text-life-300">paid{c.planned_cents !== null && c.planned_cents !== c.actual_cents ? `, planned ${money(c.planned_cents, sign)}` : ''}{c.drawn_cents > 0 ? `, ${money(c.drawn_cents, sign)} from the savings` : ''}</span></span>
-                <button type="button" onClick={() => act(axios.post(`/api/projects/costs/${c.id}/unpay`))} className="text-xs text-gray-500 hover:underline">Not paid</button>
+                <button type="button" onClick={() => act(axios.post(`/api/projects/costs/${c.id}/unpay`))} className="text-xs text-gray-500 hover:underline">Mark not paid</button>
               </>
             ) : (
               <>

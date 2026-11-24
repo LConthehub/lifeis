@@ -282,7 +282,6 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       .filter((c) => c.used_on !== null || c.days_left === null || c.days_left >= -14);
     const couponsCents = Math.min(trolley, coupons.filter((c) => c.used_on === day).reduce((sum, c) => sum + c.worth_cents, 0));
 
-    const left = lines.filter((l) => l.done === 0);
     const proper = (name: string) => storeNames.find((n) => n.toLowerCase() === name.toLowerCase()) ?? name;
     // Where a line goes: where it was moved to, else its usual store, else where it was bought last. In the buggy, where it was paid for.
     const storeOf = (l: Line): string | null => {
@@ -357,7 +356,9 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       coupons,
       totals: {
         trolley_cents: trolley, trolley_unpriced: done.filter((l) => !onLine.has(l.id)).length,
-        left_cents: left.reduce((sum, l) => sum + (lastFor(l)?.cents ?? 0), 0), left_unknown: left.filter((l) => !lastFor(l)).length,
+        // The same estimate as the store card (each line's price at the store it is going to), for what is not yet in the buggy.
+        left_cents: placed.reduce((sum, p) => sum + (p.l.done === 1 ? 0 : p.estimate ?? 0), 0),
+        left_unknown: placed.filter((p) => p.l.done !== 1 && p.estimate === null).length,
         coupons_cents: couponsCents, to_pay_cents: trolley - couponsCents,
       },
     };
