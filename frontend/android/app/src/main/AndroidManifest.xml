@@ -7,6 +7,10 @@
          usesCleartextTraffic lets the app reach a Life Is on the home network at an http:// address, which
          is how most people run one at home. The app says so plainly before connecting to one. -->
 
+    <!-- The camera reads barcodes and QR codes in the app (Scanner, Scan many). Not required: a phone with no camera still works by typing the number. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/no_copies"
