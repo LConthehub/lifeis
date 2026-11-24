@@ -24,7 +24,7 @@ if (await dialog.isVisible().catch(() => false)) {
 // Something to show: a date with a time, a birthday, a meal.
 const post = (address, body) => page.evaluate(async ([a, b]) => (await fetch(a, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) })).status, [address, body]);
 await post('/api/calendar/events', { title: 'Book club', day: day(3), time: '19:00' });
-await post('/api/calendar/events', { title: "Mum's birthday", day: '1958-03-07', yearly: true });
+await post('/api/calendar/events', { title: "Mom's birthday", day: '1958-03-07', yearly: true });
 await post('/api/kitchen/plan', { day: day(1), meal: 'dinner', title: 'Stew' });
 
 await page.goto(base + '/calendar'); await wait(900);

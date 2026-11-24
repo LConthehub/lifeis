@@ -50,7 +50,7 @@ await page.getByRole('button', { name: 'Start cooking' }).click(); await wait(80
 const view = page.locator('[data-cooking]');
 check('"Start cooking" opens the cooking view', await view.isVisible());
 const text = await view.innerText();
-check('the view shows the ingredients and the steps', text.includes('onion, chopped') && text.includes('Warm the oil') && text.includes('For the base'));
+check('the view shows the ingredients and the steps', /onions?, chopped/.test(text) && text.includes('Warm the oil') && /for the base/i.test(text), text.replace(/\s+/g, ' ').slice(0, 200));
 check('it uses the servings chosen on the recipe (for 8, tomatoes doubled)', /for 8/.test(text) && /4/.test(text.split('2 cups diced tomatoes')[1] || ''), text.slice(0, 300));
 check('nothing is ticked at first', (await tickedCount()) === 0 && (await checks().count()) === 8);
 

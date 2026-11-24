@@ -37,7 +37,7 @@ say('the front page has the yearly dates and the week in numbers, and no weather
 // A birthday, every year.
 await page.goto(base + '/calendar'); await wait(900);
 await page.getByRole('button', { name: '+ Add' }).first().click();
-await field('What').fill("Mum's birthday");
+await field('What').fill("Mom's birthday");
 const soon = new Date(); soon.setDate(soon.getDate() + 2);
 const iso = `1958-${String(soon.getMonth() + 1).padStart(2, '0')}-${String(soon.getDate()).padStart(2, '0')}`;
 await field('Day').fill(iso);
@@ -47,7 +47,7 @@ await page.getByRole('button', { name: 'Save' }).click(); await wait(900);
 await page.goto(base + '/'); await wait(1200);
 t = await text();
 const years = soon.getFullYear() - 1958;
-say(`the birthday shows as coming round, counting ${years} years: ` + flat(t).match(/Mum's birthday[^|]{0,60}/)?.[0], new RegExp(`Mum's birthday\\s*${years} years`).test(flat(t)) && /in 2 days/.test(t));
+say(`the birthday shows as coming round, counting ${years} years: ` + flat(t).match(/Mom's birthday[^|]{0,60}/)?.[0], new RegExp(`Mom's birthday\\s*${years} years`).test(flat(t)) && /in 2 days/.test(t));
 
 // Something going off in the pantry, and a recipe that uses it: the kitchen card says so, and the line opens the pantry.
 await send('POST', '/api/kitchen/recipes', { title: 'Yogurt flatbread', servings: 4, ingredients_text: '2 cups flour\n1 cup yogurt', steps_text: 'Bake.' });

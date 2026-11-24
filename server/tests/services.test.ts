@@ -137,10 +137,10 @@ it('a copy of Life Is that cannot reach outside says so, and refuses to turn the
 
 it('a yearly date is saved and shown through the calendar addresses', async () => {
   const admin = await start(false);
-  const made = await admin.post('/api/calendar/events', { title: "Mum's birthday", day: '1958-03-07', yearly: true });
+  const made = await admin.post('/api/calendar/events', { title: "Mom's birthday", day: '1958-03-07', yearly: true });
   expect([made.status, made.json.yearly]).toEqual([201, true]);
   const week = (await admin.get('/api/calendar?start=2046-03-05&days=7')).json;
-  expect(week.map((e: { day: string; title: string; detail: string }) => [e.day, e.title, e.detail])).toEqual([['2046-03-07', "Mum's birthday", '88 years']]);
+  expect(week.map((e: { day: string; title: string; detail: string }) => [e.day, e.title, e.detail])).toEqual([['2046-03-07', "Mom's birthday", '88 years']]);
   expect((await admin.post('/api/calendar/events', { title: 'x', day: '2046-03-07', yearly: 'yes' })).status).toBe(422);
 });
 
