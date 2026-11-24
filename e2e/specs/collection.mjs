@@ -277,6 +277,7 @@ await page.goto(base + '/media'); await wait(700);
 
 // Watched while sewing.
 await page.getByRole('link', { name: 'busy', exact: true }).click(); await wait();
+await page.getByRole('navigation', { name: 'Life is busy' }).getByRole('link', { name: 'Projects' }).click(); await wait();
 await page.getByRole('button', { name: '+ New project' }).click();
 await field('What it is').fill('Shirt dress'); await field('Where it').selectOption('active');
 await page.getByRole('button', { name: 'Save' }).click(); await wait(1000);
