@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 /** Keeps the screen on while this is open (Screen Wake Lock). Returns false where the browser has no such thing. */
 function useScreenOn() {
@@ -72,7 +73,8 @@ export default function CookingView({ recipe, servings, onDone }) {
   };
 
   let n = 0;
-  return (
+  // Drawn on the page itself, not inside the app, so the sticky header cannot cover it.
+  return createPortal(
     <div ref={box} role="dialog" aria-modal="true" aria-label={`Cooking ${recipe.title}`} data-cooking
       className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-card text-gray-900 dark:bg-life-800 dark:text-life-50">
       <div className="mx-auto max-w-2xl space-y-6 px-4 pb-24 pt-4">
@@ -104,5 +106,5 @@ export default function CookingView({ recipe, servings, onDone }) {
         </div>
       </div>
     </div>
-  );
+  , document.body);
 }
