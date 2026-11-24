@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { Checklists } from '../components/Routines';
 import { buttonClass, cardClass } from '../components/ui';
 
 const START_KEY = 'lifeis.weekStartsOn';
@@ -74,6 +75,9 @@ export default function ChoreChart() {
   const [chart, setChart] = useState(null);
   const [off, setOff] = useState([]);            // the people left out
   const [layout, setLayout] = useState('all');   // 'all' on one page, or 'each' on a page of their own
+  // The routines made for the household's children, to tick today. They are not on the printed sheet.
+  const [routines, setRoutines] = useState([]);
+  useEffect(() => { axios.get('/api/routines/members').then(({ data }) => setRoutines(data)).catch(() => setRoutines([])); }, []);
   useEffect(() => {
     let live = true;
     axios.get('/api/things/upkeep/chart', { params: { week, start_on: startOn } }).then(({ data }) => { if (live) setChart(data); }).catch(() => { if (live) setChart(false); });
@@ -137,6 +141,12 @@ export default function ChoreChart() {
           </div>
         )}
         {!nothing && sheets.length === 0 && <p className="text-sm text-gray-600 dark:text-life-100">Pick at least one person to print.</p>}
+        {routines.length > 0 && (
+          <div className="space-y-3" data-section="member-routines">
+            <h2 className="text-lg font-semibold text-life-800 dark:text-life-50">Routines to tick today</h2>
+            <div className="grid gap-3 md:grid-cols-2"><Checklists times={routines} setTimes={setRoutines} /></div>
+          </div>
+        )}
       </div>
 
       {sheets.map((groups, i) => (

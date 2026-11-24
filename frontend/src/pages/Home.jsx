@@ -4,6 +4,7 @@ import axios from 'axios';
 import { onDevice } from '../where';
 import { AskCard } from '../components/Assistant';
 import { StartCard } from '../components/Start';
+import { RoutinesCard } from '../components/Routines';
 import { whoText, whenText } from './Mail';
 import Modal, { buttonClass, quietButtonClass, cardClass, fromDateInput, minutesText, toDateInput } from '../components/ui';
 
@@ -127,6 +128,8 @@ export default function Home({ user }) {
             </div>
           </Card>
         )}
+
+        {shows('routines') && <RoutinesCard />}
 
         {shows('weather') && s.weather && (
           <Card title={s.weather.place.name} to="/settings" link="Weather settings">

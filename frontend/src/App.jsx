@@ -29,6 +29,7 @@ import LicensesPage from './pages/Licenses';
 import ManualPage from './pages/Manual';
 import PackingPage from './pages/Packing';
 import UpkeepPage, { JobPage } from './pages/Upkeep';
+import RoutinesPage from './pages/Routines';
 import ChoreChart from './pages/ChoreChart';
 import CollectionPrint from './pages/CollectionPrint';
 import { ThingStickersPage, ThingStickerLanding } from './pages/ThingStickers';
@@ -55,8 +56,8 @@ axios.interceptors.request.use((config) => {
 const SECTIONS = [
   { word: 'eating', shown: 'tasty', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
     tabs: [['/recipes', 'Recipes', '📖'], ['/week', 'Week', '🗓'], ['/groceries', 'Groceries', '🛒'], ['/pantry', 'Pantry', '🥫'], ['/prices', 'Prices', '💲']] },
-  { word: 'keeping', shown: 'organized', home: '/things', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || ['/manual', '/calendar', '/mail', '/tags'].some((p) => path.startsWith(p)),
-    tabs: [['/calendar', 'Calendar', '📅'], ['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/upkeep', 'Upkeep', '🔧'], ['/things/licenses', 'Licenses', '🪪'], ['/things/pets', 'Pets', '🐾'], ['/manual', 'House Manual', '📒'], ['/tags', 'Tags', '🏷'], ['/mail', 'Mail', '✉️']] },
+  { word: 'keeping', shown: 'organized', home: '/things', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || ['/manual', '/calendar', '/mail', '/tags', '/routines'].some((p) => path.startsWith(p)),
+    tabs: [['/calendar', 'Calendar', '📅'], ['/things', 'Things', '📦'], ['/things/places', 'Places', '🗄'], ['/things/upkeep', 'Upkeep', '🔧'], ['/routines', 'Routines', '✅'], ['/things/licenses', 'Licenses', '🪪'], ['/things/pets', 'Pets', '🐾'], ['/manual', 'House Manual', '📒'], ['/tags', 'Tags', '🏷'], ['/mail', 'Mail', '✉️']] },
   { word: 'spending', shown: 'budgeted', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month', '💵'], ['/money/year', 'Year', '📆'], ['/money/goals', 'Goals', '🎯'], ['/money/income', 'Income and bills', '💼']] },
   { word: 'making', shown: 'doing', home: '/projects', owns: (path) => path.startsWith('/projects') || path.startsWith('/plans') || path.startsWith('/things/activities'),
     tabs: [['/projects', 'Projects', '🧵'], ['/plans', 'Plans', '✨'], ['/things/activities', 'Activities', '🛠']] },
@@ -168,6 +169,7 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/things/places/:id/fill" element={<FillPlace />} />
           <Route path="/things/places/:id/walk" element={<WalkThrough />} />
           <Route path="/things/activities" element={<Activities />} />
+          <Route path="/routines" element={<RoutinesPage />} />
           <Route path="/things/upkeep" element={<UpkeepPage />} />
           <Route path="/things/upkeep/chart" element={<ChoreChart />} />
           <Route path="/things/upkeep/:id" element={<JobPage />} />

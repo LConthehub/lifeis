@@ -57,6 +57,7 @@ export default function Thing() {
   const [places, setPlaces] = useState([]);
   const [modal, setModal] = useState(null);       // 'edit' or 'use'
   const [jobs, setJobs] = useState([]);
+  const [routines, setRoutines] = useState([]);
   const [error, setError] = useState('');
   const picker = useRef(null);
 
@@ -68,6 +69,7 @@ export default function Thing() {
     load();
     axios.get('/api/things/kinds').then(({ data }) => setKinds(data)).catch(() => {});
     axios.get('/api/things/places').then(({ data }) => setPlaces(data)).catch(() => {});
+    axios.get(`/api/routines/for-thing/${id}`).then(({ data }) => setRoutines(data)).catch(() => setRoutines([]));
     axios.get('/api/things/upkeep').then(({ data }) => setJobs(data.filter((j) => j.item?.id === id || j.tools.some((x) => x.id === id) || j.supplies.some((x) => x.item_id === id)))).catch(() => {});
   }, [load, id]);
 
@@ -148,6 +150,17 @@ export default function Thing() {
                   <span className="text-xs text-gray-500 dark:text-life-300"> · {j.item?.id === id ? 'for this' : 'needs this'}</span></Link>
                 <DueBadge job={j} />
               </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {routines.length > 0 && (
+        <section className={cardClass} aria-label="Used in" data-section="used-in">
+          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Used in</h2>
+          <ul className="divide-y divide-life-50 dark:divide-life-700">
+            {routines.map((r) => (
+              <li key={`${r.routine_id}-${r.time}`}><Link to="/routines" className="flex min-h-[44px] items-center text-sm text-gray-800 hover:underline dark:text-life-50">{r.title}</Link></li>
             ))}
           </ul>
         </section>

@@ -22,11 +22,12 @@ import { weather, type Forecast, type WeatherPlace } from './weather.ts';
 /**
  * The cards, in the order they show, and the section each belongs to. A card with no section is for everyone.
  * The weather and email are only offered once they have been turned on (in Settings, under "Outside services"),
- * and plans and coupons only once there is one, so a card never sits there about something a person doesn't use.
+ * and plans, coupons and routines only once there is one, so a card never sits there about something a person doesn't use.
  * The email card's messages aren't in the summary: the page asks for those apart (they come from the provider).
  */
 export const CARDS = [
   { key: 'days', label: 'Today and the next two days', section: 'planning' },
+  { key: 'routines', label: 'Routines: today’s checklists to tick', section: null },
   { key: 'weather', label: 'The weather', section: null },
   { key: 'mail', label: 'Email: what’s unread', section: null },
   { key: 'dates', label: 'Birthdays and other yearly dates coming up', section: 'planning' },
@@ -103,7 +104,9 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
       const any = async (sql: string) => Boolean(await db.get(sql, [owner]));
       const hasPlans = await any('SELECT 1 AS n FROM plans WHERE owner_id = ? LIMIT 1');
       const hasCoupons = await any('SELECT 1 AS n FROM coupons WHERE owner_id = ? AND used_on IS NULL LIMIT 1');
-      const offered = CARDS.filter((card) => (card.key === 'weather' ? place !== null : card.key === 'mail' ? hasMail
+      // Routines for this person (or for everyone); a household member's show on the chore chart instead.
+      const hasRoutines = Boolean(await db.get('SELECT 1 AS n FROM routines WHERE for_member IS NULL AND (for_user = ? OR for_user IS NULL) AND (owner_id = ? OR for_user = ? OR for_user IS NULL) LIMIT 1', [owner, owner, owner]));
+      const offered = CARDS.filter((card) => (card.key === 'weather' ? place !== null : card.key === 'mail' ? hasMail : card.key === 'routines' ? hasRoutines
         : (card.section === null || sections.includes(card.section)) && (card.key !== 'plans' || hasPlans) && (card.key !== 'coupons' || hasCoupons)));
       const cards = offered.map((card) => card.key).filter((key) => !out.includes(key));
       const shows = (key: CardKey) => cards.includes(key);

@@ -17,7 +17,7 @@ const lineText = (l) => `${l.title}${l.detail ? ` — ${l.detail}` : ''}`;
 
 export async function scheduleReminders() {
   const { data } = await axios.get('/api/reminders');
-  await LocalNotifications.cancel({ notifications: [{ id: TODAY }, { id: TOMORROW }, ...PREP_IDS] }).catch(() => {});
+  await LocalNotifications.cancel({ notifications: [{ id: TODAY }, { id: TOMORROW }, ...PREP_IDS, ...ROUTINE_IDS] }).catch(() => {});
   if (!data.settings.phone) return;
   let allowed = (await LocalNotifications.checkPermissions()).display;
   if (allowed !== 'granted') allowed = (await LocalNotifications.requestPermissions()).display;
@@ -40,6 +40,7 @@ export async function scheduleReminders() {
   }
   if (waiting.length) await LocalNotifications.schedule({ notifications: waiting });
   await schedulePrep();
+  await scheduleRoutines();
 }
 
 // Prep steps ("Thaw the chicken") are kept apart from the morning ones: each waits for its own time. A run of
@@ -61,6 +62,29 @@ async function schedulePrep() {
     waiting.push({
       id: PREP_FIRST + waiting.length, title: `Life Is: ${step.words}`, body: `For ${step.what} at ${step.eat_time}`,
       schedule: { at, allowWhileIdle: true }, extra: { url: '/week' },
+    });
+  }
+  if (waiting.length) await LocalNotifications.schedule({ notifications: waiting });
+}
+
+// A time of a routine that has a clock time ("Evening, 9 pm") is kept apart the same way: its own run of ids, replaced
+// on every schedule, and one that is already finished (or whose time has gone) is left out by the server or here.
+const ROUTINE_FIRST = 2100;
+const ROUTINE_MOST = 20;
+const ROUTINE_IDS = Array.from({ length: ROUTINE_MOST }, (_, i) => ({ id: ROUTINE_FIRST + i }));
+
+async function scheduleRoutines() {
+  const { data: coming } = await axios.get('/api/routines/coming', { params: { days: 2 } });
+  const now = new Date();
+  const waiting = [];
+  for (const one of coming) {
+    const [y, m, d] = one.day.split('-').map(Number);
+    const [hour, minute] = one.at.split(':').map(Number);
+    const at = new Date(y, m - 1, d, hour, minute);
+    if (at <= now || waiting.length >= ROUTINE_MOST) continue;
+    waiting.push({
+      id: ROUTINE_FIRST + waiting.length, title: `Life Is: ${one.title}`, body: `${one.steps} ${one.steps === 1 ? 'step' : 'steps'} to do`,
+      schedule: { at, allowWhileIdle: true }, extra: { url: '/' },
     });
   }
   if (waiting.length) await LocalNotifications.schedule({ notifications: waiting });

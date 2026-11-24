@@ -73,7 +73,7 @@ export function TagPicker({ value, onChange, label = 'Tags' }) {
           ))}
         </ul>
       )}
-      <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} placeholder="Type to find or make a tag" aria-label={`Add to ${label.toLowerCase()}`} autoComplete="off" className={inputClass} />
+      <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} placeholder="Type to find or make a tag" aria-label={`Add to ${label.toLowerCase()}`} autoComplete="off" className={`${inputClass} min-h-[44px]`} />
       {(options.length > 0 || (word && !exact)) && (
         <ul className="divide-y divide-life-50 overflow-hidden rounded-xl ring-1 ring-life-100 dark:divide-life-700 dark:ring-life-700" aria-label="Tag choices">
           {options.map((t) => (
