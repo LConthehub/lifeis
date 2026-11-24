@@ -1,47 +1,64 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Icon from './components/Icon';
 import axios from 'axios';
 import Login from './pages/Login';
 import Home from './pages/Home';
-import Recipes, { RecipePage } from './pages/Recipes';
-import Week from './pages/Week';
-import Groceries from './pages/Groceries';
-import Pantry from './pages/Pantry';
-import Settings from './pages/Settings';
-import Things, { KindsPage, PlacesPage } from './pages/Things';
-import Projects, { ProjectPage } from './pages/Projects';
+const Recipes = lazy(() => import('./pages/Recipes'));
+const RecipePage = lazy(() => import('./pages/Recipes').then((m) => ({ default: m.RecipePage })));
+const Week = lazy(() => import('./pages/Week'));
+const Groceries = lazy(() => import('./pages/Groceries'));
+const Pantry = lazy(() => import('./pages/Pantry'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Things = lazy(() => import('./pages/Things'));
+const KindsPage = lazy(() => import('./pages/Things').then((m) => ({ default: m.KindsPage })));
+const PlacesPage = lazy(() => import('./pages/Things').then((m) => ({ default: m.PlacesPage })));
+const Projects = lazy(() => import('./pages/Projects'));
+const ProjectPage = lazy(() => import('./pages/Projects').then((m) => ({ default: m.ProjectPage })));
+const Calendar = lazy(() => import('./pages/Calendar'));
+const MediaPage = lazy(() => import('./pages/Media'));
+const MediaTitlePage = lazy(() => import('./pages/Media').then((m) => ({ default: m.MediaTitlePage })));
+const Servers = lazy(() => import('./pages/Servers'));
+const Mail = lazy(() => import('./pages/Mail'));
+const Prices = lazy(() => import('./pages/Prices'));
+const PlansPage = lazy(() => import('./pages/Plans'));
+const PlanPage = lazy(() => import('./pages/Plans').then((m) => ({ default: m.PlanPage })));
+const HolidaysPage = lazy(() => import('./pages/Holidays'));
+const HolidayPage = lazy(() => import('./pages/Holidays').then((m) => ({ default: m.HolidayPage })));
+const TripsPage = lazy(() => import('./pages/Trips'));
+const TripPage = lazy(() => import('./pages/Trips').then((m) => ({ default: m.TripPage })));
+const PlacePage = lazy(() => import('./pages/Places').then((m) => ({ default: m.PlacePage })));
+const StickerLanding = lazy(() => import('./pages/Places').then((m) => ({ default: m.StickerLanding })));
+const StickersPage = lazy(() => import('./pages/Places').then((m) => ({ default: m.StickersPage })));
+const FillPlace = lazy(() => import('./pages/FillPlace'));
+const Thing = lazy(() => import('./pages/Thing'));
+const Activities = lazy(() => import('./pages/Activities'));
+const HomeReport = lazy(() => import('./pages/HomeReport'));
+const WalkThrough = lazy(() => import('./pages/WalkThrough'));
+const PetsPage = lazy(() => import('./pages/Pets'));
+const PetPage = lazy(() => import('./pages/Pets').then((m) => ({ default: m.PetPage })));
+const LicensesPage = lazy(() => import('./pages/Licenses'));
+const ManualPage = lazy(() => import('./pages/Manual'));
+const PackingPage = lazy(() => import('./pages/Packing'));
+const UpkeepPage = lazy(() => import('./pages/Upkeep'));
+const JobPage = lazy(() => import('./pages/Upkeep').then((m) => ({ default: m.JobPage })));
+const RoutinesPage = lazy(() => import('./pages/Routines'));
+const ChoreChart = lazy(() => import('./pages/ChoreChart'));
+const CollectionPrint = lazy(() => import('./pages/CollectionPrint'));
+const ThingStickersPage = lazy(() => import('./pages/ThingStickers').then((m) => ({ default: m.ThingStickersPage })));
+const ThingStickerLanding = lazy(() => import('./pages/ThingStickers').then((m) => ({ default: m.ThingStickerLanding })));
+const Money = lazy(() => import('./pages/Money'));
+const GoalsPage = lazy(() => import('./pages/Budgeting').then((m) => ({ default: m.GoalsPage })));
+const IncomePage = lazy(() => import('./pages/Budgeting').then((m) => ({ default: m.IncomePage })));
+const YearPage = lazy(() => import('./pages/Budgeting').then((m) => ({ default: m.YearPage })));
+const TagsPage = lazy(() => import('./pages/Tags'));
+const TagPage = lazy(() => import('./pages/Tags').then((m) => ({ default: m.TagPage })));
+const DoAction = lazy(() => import('./pages/DoAction'));
 import { LifeFirstRun } from './components/LifeAreas';
-import Calendar from './pages/Calendar';
-import MediaPage, { MediaTitlePage } from './pages/Media';
-import Servers from './pages/Servers';
-import Mail from './pages/Mail';
-import Prices from './pages/Prices';
-import PlansPage, { PlanPage } from './pages/Plans';
-import HolidaysPage, { HolidayPage } from './pages/Holidays';
-import TripsPage, { TripPage } from './pages/Trips';
-import { PlacePage, StickerLanding, StickersPage } from './pages/Places';
-import FillPlace from './pages/FillPlace';
-import Thing from './pages/Thing';
-import Activities from './pages/Activities';
 import Search from './components/Search';
-import HomeReport from './pages/HomeReport';
-import WalkThrough from './pages/WalkThrough';
-import PetsPage, { PetPage } from './pages/Pets';
-import LicensesPage from './pages/Licenses';
-import ManualPage from './pages/Manual';
-import PackingPage from './pages/Packing';
-import UpkeepPage, { JobPage } from './pages/Upkeep';
-import RoutinesPage from './pages/Routines';
-import ChoreChart from './pages/ChoreChart';
-import CollectionPrint from './pages/CollectionPrint';
-import { ThingStickersPage, ThingStickerLanding } from './pages/ThingStickers';
 import AccessNote from './components/AccessNote';
-import Money from './pages/Money';
-import { GoalsPage, IncomePage, YearPage } from './pages/Budgeting';
-import TagsPage, { TagPage } from './pages/Tags';
-import DoAction from './pages/DoAction';
 import Art, { Stripe } from './components/Art';
+import PageLoading from './components/PageLoading';
 
 axios.defaults.withCredentials = true;
 // The server keeps time in UTC, so each request says what day it is here. Without it, something finished at
@@ -147,6 +164,7 @@ function Shell({ user, demo = false, onLogout }) {
           </p>
         )}
         <AccessNote show={Boolean(section) && section.word !== 'eating' && pathname !== '/' && !pathname.startsWith('/settings')} pathname={pathname} />
+        <Suspense fallback={<PageLoading />}>
         <Routes>
           <Route path="/" element={<Home user={user} />} />
           <Route path="/recipes" element={<Recipes />} />
@@ -207,6 +225,7 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/settings/:group" element={<Settings user={user} onLogout={onLogout} onLifeChanged={setLife} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
         </div>
       </main>
       {/* Phones: the heart and "Life is" (Home) and the sections along the bottom, an icon over each word, always
