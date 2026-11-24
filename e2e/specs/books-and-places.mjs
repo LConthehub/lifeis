@@ -91,7 +91,7 @@ const other = await page.locator('main').innerText();
 check('Other holds the kind the person made', /Wooden train/.test(other) && !/Lodge skillet/.test(other));
 check('a group with one kind has no second row of chips', (await page.getByRole('group', { name: /Kind of thing in/ }).count()) === 0);
 await page.getByRole('link', { name: 'Manage kinds' }).click(); await page.waitForTimeout(800);
-check('Manage kinds opens the kinds page, still in the organized section', /\/things\/kinds$/.test(page.url()) && await page.getByRole('heading', { name: 'Kinds of things' }).isVisible() && await page.getByRole('link', { name: /Things/ }).first().isVisible());
+check('Manage kinds opens the kinds page, still in the tidy section', /\/things\/kinds$/.test(page.url()) && await page.getByRole('heading', { name: 'Kinds of things' }).isVisible() && await page.getByRole('link', { name: /Things/ }).first().isVisible());
 await page.getByRole('link', { name: '← Things' }).click(); await page.waitForTimeout(800);
 check('and there is a way back to Things', /\/things$/.test(page.url()));
 

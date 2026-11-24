@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Icon from './components/Icon';
 import axios from 'axios';
@@ -53,17 +53,19 @@ axios.interceptors.request.use((config) => {
 });
 
 // Life is… each section finishes the sentence, and has its own few pages.
-// `word` is what Life Is calls the section inside; `shown` is the word people see, where that differs.
+// `word` is what Life Is calls the section inside (it is what people's choices are saved under, so it never
+// changes); `shown` is the word people see; `icon` sits over the word in the bar along the bottom of a phone.
 // In this order: what a household needs first, then what it plans, makes and enjoys.
 const SECTIONS = [
-  { word: 'eating', shown: 'tasty', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
+  { word: 'eating', shown: 'tasty', icon: 'recipe', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
     tabs: [['/recipes', 'Recipes'], ['/week', 'Week'], ['/groceries', 'Groceries'], ['/pantry', 'Pantry'], ['/prices', 'Prices']] },
-  { word: 'keeping', shown: 'organized', home: '/things', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || ['/manual', '/calendar', '/mail', '/tags', '/routines'].some((p) => path.startsWith(p)),
-    tabs: [['/calendar', 'Calendar'], ['/things', 'Things'], ['/things/places', 'Places'], ['/things/upkeep', 'Upkeep'], ['/routines', 'Routines'], ['/things/licenses', 'Licenses'], ['/things/pets', 'Pets'], ['/manual', 'House Manual'], ['/tags', 'Tags'], ['/mail', 'Mail']] },
-  { word: 'spending', shown: 'budgeted', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month'], ['/money/year', 'Year'], ['/money/goals', 'Goals'], ['/money/income', 'Income and bills']] },
-  { word: 'making', shown: 'doing', home: '/projects', owns: (path) => path.startsWith('/projects') || path.startsWith('/plans') || path.startsWith('/things/activities'),
-    tabs: [['/projects', 'Projects'], ['/plans', 'Plans'], ['/plans/holidays', 'Holidays'], ['/things/activities', 'Activities']] },
-  { word: 'enjoying', shown: 'entertaining', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection'], ['/media/books', 'Books'], ['/media/ebooks', 'eBooks'], ['/media/audiobooks', 'Audiobooks'], ['/media/servers', 'Servers']] },
+  { word: 'keeping', shown: 'tidy', icon: 'thing', home: '/things', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || path.startsWith('/manual'),
+    tabs: [['/things', 'Things'], ['/things/places', 'Places'], ['/things/upkeep', 'Upkeep'], ['/things/pets', 'Pets'], ['/things/licenses', 'Licenses'], ['/manual', 'House Manual']] },
+  { word: 'spending', shown: 'balanced', icon: 'bill', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month'], ['/money/year', 'Year'], ['/money/goals', 'Goals'], ['/money/income', 'Income and bills']] },
+  // Everything with a date or a time to it. Trips join these tabs when they are built.
+  { word: 'making', shown: 'busy', icon: 'date', home: '/calendar', owns: (path) => ['/calendar', '/routines', '/projects', '/plans', '/things/activities'].some((p) => path.startsWith(p)),
+    tabs: [['/calendar', 'Calendar'], ['/routines', 'Routines'], ['/projects', 'Projects'], ['/plans', 'Plans'], ['/plans/holidays', 'Holidays'], ['/things/activities', 'Activities']] },
+  { word: 'enjoying', shown: 'fun', icon: 'media', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection'], ['/media/books', 'Books'], ['/media/ebooks', 'eBooks'], ['/media/audiobooks', 'Audiobooks'], ['/media/servers', 'Servers']] },
 ];
 
 export default function App() {
@@ -106,16 +108,10 @@ function Shell({ user, demo = false, onLogout }) {
   const loadLife = useCallback(() => { axios.get('/api/life').then(({ data }) => setLife(data)).catch(() => {}); }, []);
   useEffect(() => { loadLife(); }, [loadLife]);
   const section = SECTIONS.find((s) => s.owns(pathname));
-  const showing = SECTIONS.filter((s) => !life || life.sections.includes(s.word) || (s.word === 'making' && life.sections.includes('planning')) || (s.word === 'keeping' && life.sections.includes('planning')) || s === section);
-  // On a phone the words scroll sideways, so bring the current one into view when the page or section changes.
-  const navRef = useRef(null);
-  const tabsRef = useRef(null);
-  useEffect(() => {
-    navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
-    tabsRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
-  }, [pathname]);
+  // The calendar ("planning") lives in busy, so choosing it shows busy.
+  const showing = SECTIONS.filter((s) => !life || life.sections.includes(s.word) || (s.word === 'making' && life.sections.includes('planning')) || s === section);
   const tabs = section ? section.tabs : [];
-  const exact = (to) => ['/recipes', '/things', '/projects', '/media', '/calendar', '/plans', '/mail', '/manual'].includes(to);
+  const exact = (to) => ['/recipes', '/things', '/projects', '/media', '/calendar', '/plans', '/manual'].includes(to);
   return (
     <div className="safe-sides min-h-screen">
       <header className="safe-top sticky top-0 z-30 bg-life-bar text-white shadow-sm print:hidden">
@@ -123,10 +119,9 @@ function Shell({ user, demo = false, onLogout }) {
           <Link to="/" className="flex items-center gap-2 font-semibold text-white">
             <img src="/mark-192.png" alt="" className="h-9 w-9" /> <span className="font-display text-lg font-bold leading-none">Life is</span> <Art slot="mark" className="-ml-0.5 h-6 w-6" />
           </Link>
-          {/* Six words don't fit across a phone. There, Settings stays up beside the name and the words take
-              the row below, on one line that scrolls sideways with no visible scrollbar; the current word is
-              scrolled into view. From the sm breakpoint up it sits in the row with the name, as before. */}
-          <nav ref={navRef} className="order-3 flex w-full min-w-0 flex-nowrap gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pr-8 [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] sm:order-2 sm:w-auto sm:flex-wrap sm:overflow-visible sm:pr-0 sm:[mask-image:none]" aria-label="Sections">
+          {/* Computers and tablets: the words sit in the row with the name. A phone has them in the bar along
+              the bottom instead (below), so nothing up here scrolls sideways. */}
+          <nav className="order-2 hidden flex-wrap gap-1 sm:flex" aria-label="Sections">
             {showing.map((s) => (
               <Link key={s.word} to={s.home} aria-current={s === section ? 'page' : undefined}
                 className={`shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-sm font-semibold sm:px-2.5 ${s === section ? 'bg-avocado-100 text-avocado-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.shown ?? s.word}</Link>
@@ -135,7 +130,7 @@ function Shell({ user, demo = false, onLogout }) {
           <div className="order-2 ml-auto sm:order-3"><Search /></div>
           <NavLink to="/settings" aria-label="Settings" className="order-2 text-sm text-white/90 hover:text-white hover:underline sm:order-3"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="sm:hidden"><Icon of="settings" size={22} /></span></NavLink>
           {tabs.length > 1 && (
-            <nav ref={tabsRef} className="order-4 flex w-full min-w-0 flex-nowrap gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pr-8 [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] sm:flex-wrap sm:overflow-visible sm:pr-0 sm:[mask-image:none]" aria-label={`Life is ${section.shown ?? section.word}`}>
+            <nav className="order-4 flex w-full min-w-0 flex-wrap gap-1" aria-label={`Life is ${section.shown ?? section.word}`}>
               {tabs.map(([to, label]) => (
                 <NavLink key={to} to={to} end={exact(to)} className={({ isActive }) => `flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium sm:min-h-0 ${isActive ? 'bg-white/25 text-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}>{label}</NavLink>
               ))}
@@ -145,7 +140,7 @@ function Shell({ user, demo = false, onLogout }) {
         {/* The bands of a 1970s kitchen (gold, orange, rust, brown), as a stripe under the bar. */}
         <Stripe />
       </header>
-      <main className="mx-auto max-w-5xl px-3 py-4 sm:px-4 xl:max-w-6xl">
+      <main className="mx-auto max-w-5xl px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 sm:pb-4 xl:max-w-6xl print:pb-4">
         {/* The page is a sheet of frosted glass over the cream (or coffee), so everything on it reads clearly. */}
         <div className="rounded-3xl bg-card/70 p-4 shadow-xl shadow-life-800/10 ring-1 ring-life-200/70 backdrop-blur-md dark:bg-life-900/75 dark:shadow-black/30 dark:ring-life-700 sm:p-6">
         {demo && (
@@ -214,7 +209,26 @@ function Shell({ user, demo = false, onLogout }) {
         </Routes>
         </div>
       </main>
+      {/* Phones: Home and the sections along the bottom, an icon over each word, always on screen and in
+          reach of a thumb. Hidden from the sm breakpoint up, where the words sit at the top. */}
+      <nav aria-label="Home and sections" className="safe-bottom fixed inset-x-0 bottom-0 z-30 bg-life-bar text-white shadow-[0_-2px_8px_rgba(0,0,0,0.15)] sm:hidden print:hidden">
+        <div className="safe-sides flex">
+          <BarLink to="/" icon="home" word="Home" current={pathname === '/'} />
+          {showing.map((s) => <BarLink key={s.word} to={s.home} icon={s.icon} word={s.shown ?? s.word} current={s === section} />)}
+        </div>
+      </nav>
       <LifeFirstRun open={!!life && life.areas === null} onDone={(data) => (data ? setLife(data) : loadLife())} />
     </div>
+  );
+}
+
+/** One place in the bar along the bottom of a phone: an icon over its word, at least 56px tall. */
+function BarLink({ to, icon, word, current }) {
+  return (
+    <Link to={to} aria-current={current ? 'page' : undefined}
+      className={`flex min-h-[56px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-0.5 pt-1.5 pb-1 text-[11px] font-semibold leading-tight ${current ? 'text-avocado-100' : 'text-white/80 hover:text-white'}`}>
+      <span className={`flex h-7 w-11 items-center justify-center rounded-full ${current ? 'bg-avocado-100 text-avocado-800' : ''}`}><Icon of={icon} size={20} /></span>
+      <span className="max-w-full truncate">{word}</span>
+    </Link>
   );
 }
