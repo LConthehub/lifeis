@@ -506,7 +506,7 @@ function TripDone({ store, sign, onDone }) {
           <Icon of="receipt" size={18} /> {progress ? progress : photo ? 'Read another photo' : 'Read a receipt photo'}
           <input type="file" accept="image/*" onChange={chooseReceipt} disabled={progress !== null} className="sr-only" aria-label="Choose or take a photo of the receipt" data-receipt-file />
         </label>
-        <p className="text-xs text-gray-500 dark:text-life-300">The words are read <span className="font-medium">here on this device</span>. Nothing is sent to anyone. Tick what you got first, so each line on the receipt can be matched to the list. You check everything before it is saved.</p>
+        <p className="text-xs text-gray-500 dark:text-life-300">The words are read <span className="font-medium">here on this device</span>. Nothing is sent to anyone. Check off what you got first, so each line on the receipt can be matched to the list. You check everything before it is saved.</p>
         <details>
           <summary className="flex min-h-[44px] cursor-pointer items-center text-xs text-life-700 dark:text-life-200">Or paste or type the receipt's words</summary>
           <textarea rows={5} value={pasting} onChange={(e) => setPasting(e.target.value)} aria-label="The receipt's words" className={inputClass} data-receipt-words />
