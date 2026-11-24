@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Icon from './components/Icon';
 import axios from 'axios';
@@ -116,19 +116,15 @@ function Shell({ user, demo = false, onLogout }) {
     <div className="safe-sides min-h-screen">
       <header className="safe-top sticky top-0 z-30 bg-life-bar text-white shadow-sm print:hidden">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 xl:max-w-6xl">
-          <Link to="/" className="flex items-center gap-2 font-semibold text-white">
-            <img src="/mark-192.png" alt="" className="h-9 w-9" /> <span className="font-display text-lg font-bold leading-none">Life is</span> <Art slot="mark" className="-ml-0.5 h-6 w-6" />
-          </Link>
-          {/* Computers and tablets: the words sit in the row with the name. A phone has them in the bar along
-              the bottom instead (below), so nothing up here scrolls sideways. */}
-          <nav className="order-2 hidden flex-wrap gap-1 sm:flex" aria-label="Sections">
-            {showing.map((s) => (
-              <Link key={s.word} to={s.home} aria-current={s === section ? 'page' : undefined}
-                className={`shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-sm font-semibold sm:px-2.5 ${s === section ? 'bg-avocado-100 text-avocado-800 shadow-sm' : 'text-white/85 hover:bg-white/15 hover:text-white'}`}>{s.shown ?? s.word}</Link>
-            ))}
-          </nav>
-          <div className="order-2 ml-auto sm:order-3"><Search /></div>
-          <NavLink to="/settings" aria-label="Settings" className="order-2 text-sm text-white/90 hover:text-white hover:underline sm:order-3"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="sm:hidden"><Icon of="settings" size={22} /></span></NavLink>
+          {/* The header reads as a sentence: "Life is busy". The last word is a button that drops the others down. */}
+          <div className="flex items-center gap-x-2" data-life-sentence>
+            <Link to="/" className="flex items-center gap-2 font-semibold text-white">
+              <img src="/mark-192.png" alt="" className="h-9 w-9" /> <span className="font-display text-lg font-bold leading-none">Life is</span> <Art slot="mark" className="-ml-0.5 h-6 w-6" />
+            </Link>
+            <SectionMenu showing={showing} section={section} atHome={pathname === '/'} />
+          </div>
+          <div className="order-2 ml-auto"><Search /></div>
+          <NavLink to="/settings" aria-label="Settings" className="order-2 text-sm text-white/90 hover:text-white hover:underline"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="sm:hidden"><Icon of="settings" size={22} /></span></NavLink>
           {tabs.length > 1 && (
             <nav className="order-4 flex w-full min-w-0 flex-wrap gap-1" aria-label={`Life is ${section.shown ?? section.word}`}>
               {tabs.map(([to, label]) => (
@@ -209,11 +205,11 @@ function Shell({ user, demo = false, onLogout }) {
         </Routes>
         </div>
       </main>
-      {/* Phones: Home and the sections along the bottom, an icon over each word, always on screen and in
-          reach of a thumb. Hidden from the sm breakpoint up, where the words sit at the top. */}
+      {/* Phones: the heart and "Life is" (Home) and the sections along the bottom, an icon over each word, always
+          on screen and in reach of a thumb. Hidden from the sm breakpoint up, where the drop-down in the header does it. */}
       <nav aria-label="Home and sections" className="safe-bottom fixed inset-x-0 bottom-0 z-30 bg-life-bar text-white shadow-[0_-2px_8px_rgba(0,0,0,0.15)] sm:hidden print:hidden">
         <div className="safe-sides flex">
-          <BarLink to="/" icon="home" word="Home" current={pathname === '/'} />
+          <BarLink to="/" mark word="Life is" current={pathname === '/'} />
           {showing.map((s) => <BarLink key={s.word} to={s.home} icon={s.icon} word={s.shown ?? s.word} current={s === section} />)}
         </div>
       </nav>
@@ -222,12 +218,49 @@ function Shell({ user, demo = false, onLogout }) {
   );
 }
 
-/** One place in the bar along the bottom of a phone: an icon over its word, at least 56px tall. */
-function BarLink({ to, icon, word, current }) {
+/** "Life is ..." as a drop-down: the current section's word, and under it Home and the five sections. */
+function SectionMenu({ showing, section, atHome }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef(null);
+  const { pathname } = useLocation();
+  useEffect(() => { setOpen(false); }, [pathname]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const away = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') { setOpen(false); box.current?.querySelector('button')?.focus(); } };
+    document.addEventListener('pointerdown', away); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', esc); };
+  }, [open]);
+  const word = section ? (section.shown ?? section.word) : atHome ? 'home' : '';
+  const row = (current) => `flex min-h-[44px] items-center gap-3 rounded-xl px-3 py-1 font-display text-lg font-bold ${current ? 'bg-avocado-100 text-avocado-800' : 'text-white hover:bg-white/15'}`;
+  return (
+    <div ref={box} className="relative">
+      <button type="button" aria-haspopup="true" aria-expanded={open} aria-label={word ? undefined : 'Choose a section'} onClick={() => setOpen((o) => !o)}
+        className="flex min-h-[44px] items-center gap-1 rounded-lg px-1 font-display text-lg font-bold leading-none text-avocado-100 hover:text-white">
+        {word && <span className="underline decoration-dotted decoration-2 underline-offset-4">{word}</span>}
+        <svg aria-hidden="true" viewBox="0 0 10 6" className={`h-2 w-3 fill-current transition-transform ${open ? 'rotate-180' : ''}`}><path d="M0 0h10L5 6z" /></svg>
+      </button>
+      {open && (
+        <nav aria-label="Sections" className="absolute left-0 top-full z-40 mt-1 w-56 max-w-[calc(100vw-2rem)] rounded-2xl bg-life-bar p-2 text-white shadow-xl ring-1 ring-white/20">
+          <p className="px-3 pb-1 pt-1 text-sm text-white/70">Life is ...</p>
+          <Link to="/" aria-current={atHome ? 'page' : undefined} className={row(atHome)}><Icon of="home" size={22} /><span>home</span></Link>
+          {showing.map((s) => (
+            <Link key={s.word} to={s.home} aria-current={s === section ? 'page' : undefined} className={row(s === section)}><Icon of={s.icon} size={22} /><span>{s.shown ?? s.word}</span></Link>
+          ))}
+        </nav>
+      )}
+    </div>
+  );
+}
+
+/** One place in the bar along the bottom of a phone: an icon (or the heart) over its word, at least 56px tall. */
+function BarLink({ to, icon, mark = false, word, current }) {
   return (
     <Link to={to} aria-current={current ? 'page' : undefined}
       className={`flex min-h-[56px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-0.5 pt-1.5 pb-1 text-[11px] font-semibold leading-tight ${current ? 'text-avocado-100' : 'text-white/80 hover:text-white'}`}>
-      <span className={`flex h-7 w-11 items-center justify-center rounded-full ${current ? 'bg-avocado-100 text-avocado-800' : ''}`}><Icon of={icon} size={20} /></span>
+      <span className={`flex h-7 w-11 items-center justify-center rounded-full ${current ? 'bg-avocado-100 text-avocado-800' : ''}`}>
+        {mark ? <img src="/mark-192.png" alt="" className="h-6 w-6" /> : <Icon of={icon} size={20} />}
+      </span>
       <span className="max-w-full truncate">{word}</span>
     </Link>
   );
