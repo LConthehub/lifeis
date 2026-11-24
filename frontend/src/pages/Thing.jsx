@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import Icon from '../components/Icon';
 import axios from 'axios';
 import Picture from '../components/Picture';
 import PlacePicker from '../components/PlacePicker';
@@ -22,7 +23,7 @@ export function historyLine(h) {
   const what = [h.project && `for ${h.project}`, h.activity && !h.project?.includes(h.activity) && `(${h.activity})`].filter(Boolean).join(' ');
   return `Used${what ? ` ${what}` : ''}`;
 }
-const HISTORY_ICONS = { added: '✨', moved: '↪', used: '🛠' };
+const HISTORY_ICONS = { added: 'plan', moved: 'moved', used: 'session' };
 
 export function HistoryList({ history }) {
   if (!history.length) return <p className="text-sm text-gray-500 dark:text-life-300">Nothing yet.</p>;
@@ -30,7 +31,7 @@ export function HistoryList({ history }) {
     <ol className="space-y-2" aria-label="History">
       {history.map((h) => (
         <li key={h.id} className="flex gap-2 text-sm">
-          <span aria-hidden="true" className="w-5 text-center">{HISTORY_ICONS[h.what]}</span>
+          <span aria-hidden="true" className="w-5 text-center"><Icon of={HISTORY_ICONS[h.what]} size={16} /></span>
           <span className="flex-1 text-gray-800 dark:text-life-50">
             {h.what === 'used' && h.project_id ? <>Used for <Link to={`/projects/${h.project_id}`} className="underline">{h.project}</Link></>
               : h.what === 'used' && h.job ? <>Used for {h.job_id ? <Link to={`/things/upkeep/${h.job_id}`} className="underline">{h.job}</Link> : h.job}</>
@@ -96,7 +97,7 @@ export default function Thing() {
             <Picture src={`/api/things/items/${id}/photo?v=${encodeURIComponent(item.updated_at)}${history.length}`} alt={item.name} className="max-h-80 w-full rounded-xl object-contain" />
           ) : (
             <button type="button" onClick={() => picker.current?.click()} className="flex h-36 w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed md:aspect-[4/3] md:h-auto border-life-200 text-sm text-life-600 dark:border-life-700 dark:text-life-200">
-              <span className="text-3xl" aria-hidden="true">{item.icon || '📷'}</span>Add a photo
+              {item.icon ? <span className="text-3xl" aria-hidden="true">{item.icon}</span> : <Icon of="scan" size={32} />}Add a photo
             </button>
           )}
           <input ref={picker} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => photo(e.target.files?.[0])} />
@@ -114,7 +115,7 @@ export default function Thing() {
               <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">{item.name}</h1>
               <p className="text-xs text-gray-500 dark:text-life-300">{[item.icon && `${item.icon} ${item.kind}`, item.amount !== 'some' && item.amount].filter(Boolean).join(' · ') || item.kind}</p>
             </div>
-            <button type="button" onClick={() => setModal('use')} className={buttonClass}>🛠 I used it</button>
+            <button type="button" onClick={() => setModal('use')} className={buttonClass}><Icon of="session" /> I used it</button>
             <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Change</button>
           </div>
           <Field label="Where it is">

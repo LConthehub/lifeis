@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
+import Icon from '../components/Icon';
 import ScanToPantry from '../components/ScanToPantry';
 import UseItUp from '../components/UseItUp';
 import Art from '../components/Art';
@@ -24,7 +25,7 @@ export default function Pantry() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Pantry</h1>
-        <button type="button" onClick={() => setScanning(true)} className={`${quietButtonClass} min-h-[44px]`}>📷 Scan to add</button>
+        <button type="button" onClick={() => setScanning(true)} className={`${quietButtonClass} min-h-[44px]`}><Icon of="scan" /> Scan to add</button>
         <button type="button" onClick={() => setEditing({ ...BLANK })} className={`${buttonClass} min-h-[44px]`}>+ Add</button>
       </div>
       {(data.low.length > 0 || data.expiring.length > 0) && (

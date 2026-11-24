@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import Icon, { Dots } from '../components/Icon';
 import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { ScanSticker } from './Places';
@@ -125,7 +126,7 @@ export default function Things() {
                       <span className="flex-1">
                         <span className="block text-sm text-gray-800 dark:text-life-50">{item.name}</span>
                         {(details.length > 0 || item.place) && (
-                          <span className="block text-xs text-gray-500 dark:text-life-300">{[...details, item.place && `📍 ${item.place}`].filter(Boolean).join(' · ')}</span>
+                          <span className="block text-xs text-gray-500 dark:text-life-300"><Dots parts={[...details, item.place && <><Icon of="place" /> {item.place}</>]} /></span>
                         )}
                         {item.set_aside > 0 && <span className="block text-xs text-life-600 dark:text-life-200">{item.set_aside} {item.unit || ''} set aside for projects</span>}
                       </span>
@@ -153,7 +154,7 @@ export default function Things() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Things</h1>
-        {items.length > 0 && <Link to="/things/report" className={quietButtonClass}>🏠 Home inventory</Link>}
+        {items.length > 0 && <Link to="/things/report" className={quietButtonClass}><Icon of="home" /> Home inventory</Link>}
         <Link to="/things/kinds" className="px-1 py-2 text-sm text-life-600 underline dark:text-life-200">Manage kinds</Link>
         <button type="button" onClick={() => setEditing({ kind_id: chosenKind ?? inGroup[0].id })} className={buttonClass}>+ Add</button>
       </div>
@@ -455,10 +456,10 @@ export function PlacesPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Places</h1>
-        {places.length > 0 && <button type="button" onClick={() => setScanning(true)} className={quietButtonClass}>📷 Scan a sticker</button>}
+        {places.length > 0 && <button type="button" onClick={() => setScanning(true)} className={quietButtonClass}><Icon of="scan" /> Scan a sticker</button>}
         {places.length > 0 && <Link to="/things/places/stickers" className={quietButtonClass}>Print stickers</Link>}
         <Link to="/things/stickers?blank=40" className={quietButtonClass}>Blank stickers for things</Link>
-        <Link to="/things/packing" className={quietButtonClass}>📦 Packing</Link>
+        <Link to="/things/packing" className={quietButtonClass}><Icon of="thing" /> Packing</Link>
         <button type="button" onClick={() => setEditing({})} className={buttonClass}>+ New place</button>
       </div>
       {places.length === 0 ? (

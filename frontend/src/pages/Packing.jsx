@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import Icon from '../components/Icon';
 import axios from 'axios';
 import PlacePicker from '../components/PlacePicker';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 
-const STATES = [['packing', 'Being packed', '📦'], ['packed', 'Packed', '✅'], ['moved', 'Moved', '🚚'], ['unpacked', 'Unpacked', '🏠']];
+const STATES = [['packing', 'Being packed', 'thing'], ['packed', 'Packed', 'packed'], ['moved', 'Moved', 'moving'], ['unpacked', 'Unpacked', 'home']];
 const stateOf = (id) => STATES.find(([s]) => s === id);
 const TONES = { packing: 'bg-honey-100 text-honey-700', packed: 'bg-life-100 text-life-700', moved: 'bg-life-100 text-life-700', unpacked: 'bg-gray-100 text-gray-600' };
 
@@ -79,10 +80,10 @@ export default function PackingPage() {
                     <span className="block text-sm font-medium text-gray-800 dark:text-life-50">{b.name}</span>
                     <span className="block text-xs text-gray-500 dark:text-life-300">{b.contents.length ? `${b.contents.length} thing${b.contents.length === 1 ? '' : 's'}: ${b.contents.slice(0, 3).map((c) => c.name).join(', ')}${b.contents.length > 3 ? '…' : ''}` : 'empty'}</span>
                   </button>
-                  <span className={`rounded px-1.5 py-0.5 text-[11px] ${TONES[b.state]}`} data-box-state={b.state}>{stateOf(b.state)[2]} {stateOf(b.state)[1]}</span>
+                  <span className={`rounded px-1.5 py-0.5 text-[11px] ${TONES[b.state]}`} data-box-state={b.state}><Icon of={stateOf(b.state)[2]} size={14} /> {stateOf(b.state)[1]}</span>
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {b.state === 'packing' && <Link to={`/things/places/${b.id}/fill`} className={quietButtonClass}>📷 Pack it</Link>}
+                  {b.state === 'packing' && <Link to={`/things/places/${b.id}/fill`} className={quietButtonClass}><Icon of="scan" /> Pack it</Link>}
                   {b.state !== 'unpacked' && b.state !== 'moved' && <button type="button" onClick={() => set(b, next(b.state)[0])} className={quietButtonClass}>Mark {next(b.state)[1].toLowerCase()}</button>}
                   {b.state !== 'unpacked' && b.state !== 'packing' && <button type="button" onClick={() => setUnpacking(b)} className={quietButtonClass}>Unpack it…</button>}
                   {b.state !== 'packing' && <button type="button" onClick={() => set(b, 'packing')} className="px-1 text-xs text-gray-500 hover:underline dark:text-life-300">open it again</button>}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import Icon from './Icon';
 import { Field, inputClass, buttonClass, quietButtonClass, errorMessage } from './ui';
 
 const AREAS = [
@@ -45,7 +46,7 @@ export function AssistantService() {
   return (
     <div className="py-3" data-assistant-settings>
       <div className="flex items-baseline gap-2">
-        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50">💬 An AI assistant</h3>
+        <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="assistant" /> An AI assistant</h3>
         <span className={`rounded px-1.5 text-[11px] ${a.enabled ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{a.enabled ? (a.source === 'phone' ? 'On, this device' : a.local ? 'On, at home' : 'On, cloud') : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">

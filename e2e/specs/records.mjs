@@ -56,7 +56,7 @@ check('and comes back as it was sent', paper[0] === 200 && paper[1] === 'applica
 await page.screenshot({ path: `${shots}/records-thing.png`, fullPage: true });
 
 await page.goto(`${base}/things`); await page.waitForTimeout(1000);
-await page.getByRole('link', { name: '🏠 Home inventory' }).click(); await page.waitForTimeout(1500);
+await page.getByRole('link', { name: 'Home inventory' }).click(); await page.waitForTimeout(1500);
 const sheet = (await page.getByLabel('The inventory').innerText()).replace(/\s+/g, ' ');
 check('the inventory totals what is kept and what has proof', sheet.includes('2 things · worth $500.00 in all · 0 with a photo · 1 with a receipt'), (await page.locator('[data-totals]').innerText()));
 check('it goes room by room, with the serial number', /Living room 1 thing · cost \$799\.00 · worth now \$500\.00/.test(sheet) && sheet.includes('S/N SN-12345') && sheet.includes('No place yet'), sheet.slice(0, 360));

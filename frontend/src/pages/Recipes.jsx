@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import Icon from '../components/Icon';
 import axios from 'axios';
 import { inApp } from '../where';
 import CookingView from '../components/CookingView';
@@ -198,7 +199,7 @@ function FromPhoto({ onDraft }) {
       {canWrite ? (
         <div className="space-y-1 rounded-lg bg-life-50 p-3 dark:bg-life-700">
           <label className={`${quietButtonClass} inline-block cursor-pointer`}>
-            ✍️ It's handwritten
+            <Icon of="handwritten" /> It's handwritten
             <input type="file" accept="image/*" multiple onChange={handwritten} disabled={progress !== null} className="sr-only" aria-label="Choose or take a photo of a handwritten recipe" />
           </label>
           <p className="text-xs text-gray-600 dark:text-life-200">
@@ -419,7 +420,7 @@ export function RecipePage() {
                   <li key={e.id} className="flex flex-wrap items-baseline gap-x-2">
                     <span className="text-gray-800 dark:text-life-50">{e.quantity !== 1 ? `${e.quantity} × ` : ''}{e.label}</span>
                     {e.note && <span className="text-xs text-gray-500 dark:text-life-300">{e.note}</span>}
-                    {e.place && <span className="text-xs text-gray-500 dark:text-life-300">📍 {e.place}</span>}
+                    {e.place && <span className="text-xs text-gray-500 dark:text-life-300"><Icon of="place" /> {e.place}</span>}
                     {e.have === null ? <span className="rounded bg-gray-100 px-1.5 text-[11px] text-gray-600">not in your things</span>
                       : e.have < e.quantity && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">you have {e.have}</span>}
                   </li>

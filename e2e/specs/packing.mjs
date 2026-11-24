@@ -20,7 +20,7 @@ if (await first.isVisible().catch(() => false)) { await first.getByRole('button'
 await page.evaluate(() => fetch('/api/things/kinds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Household', icon: '🏠' }) }));
 
 await page.goto(`${base}/things/places`); await page.waitForTimeout(1000);
-await page.getByRole('link', { name: '📦 Packing' }).click(); await page.waitForTimeout(1000);
+await page.getByRole('link', { name: 'Packing', exact: true }).click(); await page.waitForTimeout(1000);
 const make = page.getByRole('form', { name: 'Make boxes' });
 await make.getByLabel('How many boxes').fill('3');
 await make.getByLabel('Going to (a room)').fill('Kitchen');
@@ -30,7 +30,7 @@ check('three numbered boxes are made for the kitchen', ['Box 1', 'Box 2', 'Box 3
 check('the page says how far along things are', (await page.locator('[data-progress]').innerText()).includes('3 boxes, 0 things in them: 3 being packed'), await page.locator('[data-progress]').innerText());
 
 // Pack the first box: type two things in.
-await kitchen.getByRole('link', { name: '📷 Pack it' }).first().click(); await page.waitForTimeout(1200);
+await kitchen.getByRole('link', { name: 'Pack it' }).first().click(); await page.waitForTimeout(1200);
 check('packing a box opens the fill page for it', await page.getByRole('heading', { name: 'Filling Box 1' }).isVisible());
 for (const thing of ['Kettle', 'Toaster']) {
   await page.getByLabel('Something with no barcode').fill(thing);

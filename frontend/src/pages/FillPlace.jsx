@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import Icon, { Mark, hasIcon } from '../components/Icon';
 import axios from 'axios';
 import Scanner from '../components/Scanner';
 import PlacePicker from '../components/PlacePicker';
 import { shrink } from '../components/shrink';
 import { inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 
-const ICONS = { film: '🎬', show: '📺', music: '🎵', book: '📚', game: '🎮', other: '🗃' };
+const iconFor = (type) => (hasIcon(type) ? type : 'other');
 // What a copy is on when the look-up didn't say.
 const USUAL_FORMAT = { film: 'DVD', show: 'DVD', music: 'CD', game: 'Game', other: 'Other' };
 const SAME_SCAN_MS = 3000;
@@ -69,33 +70,33 @@ export default function FillPlace() {
   const handle = async (code) => {
     const { data } = await axios.get('/api/things/scan', { params: { code } });
     if (data.kind === 'place') {
-      note({ icon: '📍', text: `Now filling ${data.place.path}`, tone: 'quiet' });
+      note({ icon: 'place', text: `Now filling ${data.place.path}`, tone: 'quiet' });
       navigate(`/things/places/${data.place.id}/fill`, { replace: true });
       return;
     }
     if (data.kind === 'thing') {
       const it = data.item;
-      if (it.place_id === placeId) { note({ icon: it.icon || '📦', text: it.name, note: 'already here', tone: 'quiet', item_id: it.id }); return; }
+      if (it.place_id === placeId) { note({ icon: it.icon || 'thing', text: it.name, note: 'already here', tone: 'quiet', item_id: it.id }); return; }
       await axios.post(`/api/things/items/${it.id}/move`, { place_id: placeId });
-      note({ icon: it.icon || '📦', text: it.name, note: it.place ? `moved here from ${it.place}` : 'put here', tone: 'moved', item_id: it.id });
+      note({ icon: it.icon || 'thing', text: it.name, note: it.place ? `moved here from ${it.place}` : 'put here', tone: 'moved', item_id: it.id });
       return;
     }
     if (data.kind === 'copies') {
       const away = data.copies.find((c) => c.place_id !== placeId);
       const shown = data.copies[0];
-      if (!away) { note({ icon: ICONS[shown.type] ?? '🗃', text: shown.title, note: 'already here', tone: 'quiet', media_id: shown.media_id }); return; }
+      if (!away) { note({ icon: iconFor(shown.type), text: shown.title, note: 'already here', tone: 'quiet', media_id: shown.media_id }); return; }
       await axios.post(`/api/media/copies/${away.copy_id}/move`, { place_id: placeId });
-      note({ icon: ICONS[away.type] ?? '🗃', text: away.title, note: away.place ? `moved here from ${away.place}` : 'put here', tone: 'moved', media_id: away.media_id });
+      note({ icon: iconFor(away.type), text: away.title, note: away.place ? `moved here from ${away.place}` : 'put here', tone: 'moved', media_id: away.media_id });
       return;
     }
     if (data.kind === 'new-sticker') {
-      note({ icon: '🏷', text: 'A new sticker', note: 'what is it on?', tone: 'ask', ask: { code: data.code } });
+      note({ icon: 'tag', text: 'A new sticker', note: 'what is it on?', tone: 'ask', ask: { code: data.code } });
       return;
     }
     // Not yours yet: looked up if that's turned on, else a name is asked for, keeping the barcode.
     // A look-up can take a while, so the scan shows at once and its line is filled in when the answer comes.
     const looking = (data.isbn ? can?.books : can?.titles) && true;
-    const line = looking ? note({ icon: '🔎', text: `Barcode ${data.barcode}`, note: 'looking it up…', tone: 'quiet' }) : null;
+    const line = looking ? note({ icon: 'search', text: `Barcode ${data.barcode}`, note: 'looking it up…', tone: 'quiet' }) : null;
     const say = (entry) => (line ? change(line, entry) : note(entry));
     let found = null;
     let trouble = null;
@@ -105,20 +106,20 @@ export default function FillPlace() {
         const format = found.type === 'book' ? bookFormat : (found.format || USUAL_FORMAT[found.type]);
         const { format: _f, ...start } = found;
         const made = await addTitle(start, format, data.barcode);
-        say({ icon: ICONS[found.type], text: found.title, note: `added · ${format}`, tone: 'added', media_id: made.id });
+        say({ icon: iconFor(found.type), text: found.title, note: `added · ${format}`, tone: 'added', media_id: made.id });
         return;
       }
       if (found) {
         const made = await addThing(found.title, { barcode: data.barcode });
-        say({ icon: made.icon || '📦', text: made.name, note: 'added', tone: 'added', item_id: made.id, photo: true });
+        say({ icon: made.icon || 'thing', text: made.name, note: 'added', tone: 'added', item_id: made.id, photo: true });
         return;
       }
     } catch (err) {
-      say({ icon: '⚠️', text: `Barcode ${data.barcode}`, note: errorMessage(err, "Couldn't put that here"), tone: 'trouble' });
+      say({ icon: 'warning', text: `Barcode ${data.barcode}`, note: errorMessage(err, "Couldn't put that here"), tone: 'trouble' });
       return;
     }
     // Not looked up is not the same as not known: say which, and ask its name either way.
-    say({ icon: '❔', text: `Barcode ${data.barcode}`, note: trouble ? `${trouble.replace(/\.$/, '')}. What is it?` : 'not known: what is it?', tone: 'ask', ask: { barcode: data.barcode, isbn: data.isbn } });
+    say({ icon: 'unknown', text: `Barcode ${data.barcode}`, note: trouble ? `${trouble.replace(/\.$/, '')}. What is it?` : 'not known: what is it?', tone: 'ask', ask: { barcode: data.barcode, isbn: data.isbn } });
   };
 
   // One at a time, in the order they were scanned, and the same code twice in a moment only once.
@@ -128,7 +129,7 @@ export default function FillPlace() {
     last.current = { code, at: now };
     setTimeout(() => setRound((r) => r + 1), 900);
     if (same) return;
-    busy.current = busy.current.then(() => handle(code)).catch((err) => note({ icon: '⚠️', text: code, note: errorMessage(err, "Couldn't put that here"), tone: 'trouble' }));
+    busy.current = busy.current.then(() => handle(code)).catch((err) => note({ icon: 'warning', text: code, note: errorMessage(err, "Couldn't put that here"), tone: 'trouble' }));
   }, [placeId, kindId, bookFormat, can]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const typedIn = (e) => {
@@ -138,8 +139,8 @@ export default function FillPlace() {
     setTyped('');
     busy.current = busy.current.then(async () => {
       const made = await addThing(name);
-      note({ icon: made.icon || '📦', text: made.name, note: 'added', tone: 'added', item_id: made.id, photo: true });
-    }).catch((err) => note({ icon: '⚠️', text: name, note: errorMessage(err, "Couldn't add that"), tone: 'trouble' }));
+      note({ icon: made.icon || 'thing', text: made.name, note: 'added', tone: 'added', item_id: made.id, photo: true });
+    }).catch((err) => note({ icon: 'warning', text: name, note: errorMessage(err, "Couldn't add that"), tone: 'trouble' }));
   };
 
   const turnOnLookups = async () => {
@@ -232,11 +233,11 @@ function Row({ entry, onChange, addThing, addTitle, bookFormat }) {
     try {
       if (as === 'thing') {
         const made = await addThing(name.trim(), entry.ask.code ? { code: entry.ask.code } : { barcode: entry.ask.barcode });
-        onChange({ icon: made.icon || '📦', text: made.name, note: 'added', tone: 'added', item_id: made.id, ask: null, photo: true });
+        onChange({ icon: made.icon || 'thing', text: made.name, note: 'added', tone: 'added', item_id: made.id, ask: null, photo: true });
       } else {
         const format = as === 'book' ? bookFormat : USUAL_FORMAT[as];
         const made = await addTitle({ type: as, title: name.trim() }, format, entry.ask.barcode ?? null);
-        onChange({ icon: ICONS[as], text: made.title, note: `added · ${format}`, tone: 'added', media_id: made.id, ask: null });
+        onChange({ icon: iconFor(as), text: made.title, note: `added · ${format}`, tone: 'added', media_id: made.id, ask: null });
       }
     } catch (err) { setError(errorMessage(err, "Couldn't add that")); }
   };
@@ -249,14 +250,14 @@ function Row({ entry, onChange, addThing, addTitle, bookFormat }) {
   return (
     <li className="space-y-1.5 py-2 text-sm" data-tone={entry.tone}>
       <div className="flex items-baseline gap-2">
-        <span aria-hidden="true">{entry.icon}</span>
+        <Mark of={entry.icon} />
         <span className="flex-1 text-gray-800 dark:text-life-50">{link ? <Link to={link} className="hover:underline">{entry.text}</Link> : entry.text}
           {entry.note && <span className={`ml-1.5 text-xs ${TONES[entry.tone] ?? ''}`}>{entry.note}</span>}
         </span>
         {entry.item_id && entry.photo && (
           <>
             <input ref={picker} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => photo(e.target.files?.[0])} />
-            <button type="button" onClick={() => picker.current?.click()} aria-label={`A photo of ${entry.text}`} className="rounded px-1.5 text-base">{entry.photo === 'kept' ? '🖼' : '📷'}</button>
+            <button type="button" onClick={() => picker.current?.click()} aria-label={`A photo of ${entry.text}`} className="flex min-h-11 min-w-11 items-center justify-center rounded px-1.5 text-base"><Icon of={entry.photo === 'kept' ? 'photo' : 'scan'} size={22} /></button>
           </>
         )}
       </div>

@@ -45,10 +45,10 @@ await form.getByLabel('Add a tool').selectOption({ label: 'Step ladder' });
 await form.getByLabel('Add a supply').selectOption({ label: 'Furnace filter 16x25 (2)' });
 await form.getByRole('button', { name: 'Save' }).click(); await page.waitForTimeout(1200);
 const needs = await page.getByRole('region', { name: 'What it needs' }).innerText();
-check('the job lists its tools and supplies, and where they are', needs.includes('Step ladder') && needs.includes('📍 Garage') && needs.includes('uses 1') && needs.includes('have 2'), needs.replace(/\s+/g, ' '));
+check('the job lists its tools and supplies, and where they are', needs.includes('Step ladder') && needs.includes('Garage') && needs.includes('uses 1') && needs.includes('have 2'), needs.replace(/\s+/g, ' '));
 check('the steps came with the starter', await page.getByRole('region', { name: 'Steps' }).isVisible());
 
-await page.getByRole('button', { name: '✓ Done' }).click(); await page.waitForTimeout(700);
+await page.getByRole('button', { name: 'Done', exact: true }).click(); await page.waitForTimeout(700);
 const done = page.getByRole('dialog');
 await done.getByLabel('What it cost').fill('18.99');
 await done.getByLabel("Put it in this month's spending").check();

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import Icon, { Dots } from '../components/Icon';
 import axios from 'axios';
 import { hintsFor, kindChoices } from '../projectKinds';
 import Budget from '../components/Budget';
@@ -185,8 +186,8 @@ export function ProjectPage() {
                   <span className="flex-1">
                     <span className={`block text-sm ${line.used_on ? 'text-gray-400 line-through' : 'text-gray-800 dark:text-life-50'}`}>{line.amount ? `${line.amount} · ` : ''}{line.item_id ? <Link to={`/things/${line.item_id}`} className="hover:underline">{line.label}</Link> : line.label}</span>
                     <span className="block text-xs text-gray-500 dark:text-life-300">
-                      {[line.used_on ? `used ${line.used_on}` : line.have === null ? (line.item_id === null && line.quantity === null ? null : "not one of your things yet") : `you have ${line.have}`,
-                        line.place && `📍 ${line.place}`, line.note].filter(Boolean).join(' · ')}
+                      <Dots parts={[line.used_on ? `used ${line.used_on}` : line.have === null ? (line.item_id === null && line.quantity === null ? null : "not one of your things yet") : `you have ${line.have}`,
+                        line.place && <><Icon of="place" /> {line.place}</>, line.note]} />
                     </span>
                   </span>
                   {line.short > 0 && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">short {line.short_text}</span>}
@@ -239,7 +240,7 @@ export function ProjectPage() {
                 <Link to={`/things/${t.id}`} className="flex items-baseline gap-2 hover:underline">
                   <span aria-hidden="true">{t.icon}</span>
                   <span className="flex-1 text-gray-800 dark:text-life-50">{t.name}</span>
-                  <span className="text-xs text-gray-500 dark:text-life-300">{t.place ? `📍 ${t.place}` : 'no place'}</span>
+                  <span className="text-xs text-gray-500 dark:text-life-300">{t.place ? <><Icon of="place" /> {t.place}</> : 'no place'}</span>
                 </Link>
               </li>
             ))}

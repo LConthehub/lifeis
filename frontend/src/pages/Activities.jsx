@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Icon from '../components/Icon';
 import { Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { cardClass } from '../components/ui';
@@ -65,7 +66,7 @@ export default function Activities() {
                     <Link to={`/things/${t.id}`} className="flex items-baseline gap-2 hover:underline">
                       <span aria-hidden="true">{t.icon}</span>
                       <span className="flex-1 text-gray-800 dark:text-life-50">{t.name}</span>
-                      <span className="text-xs text-gray-500 dark:text-life-300">{t.place ? `📍 ${t.place}` : 'no place'}</span>
+                      <span className="text-xs text-gray-500 dark:text-life-300">{t.place ? <><Icon of="place" /> {t.place}</> : 'no place'}</span>
                     </Link>
                   </li>
                 ))}

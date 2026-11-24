@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import Icon, { Dots } from '../components/Icon';
 import axios from 'axios';
 import Scanner from '../components/Scanner';
 import PlacePicker from '../components/PlacePicker';
@@ -15,7 +16,7 @@ import { HistoryList } from './Thing';
 import { stickerCode } from './Places';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
-export const TYPES = [['film', 'Films', '🎬', 'Film'], ['show', 'Shows', '📺', 'Show'], ['music', 'Music', '🎵', 'Music'], ['book', 'Books', '📚', 'Book'], ['game', 'Games', '🎮', 'Game'], ['other', 'Other', '🗃', 'Something else']];
+export const TYPES = [['film', 'Films', 'film', 'Film'], ['show', 'Shows', 'show', 'Show'], ['music', 'Music', 'music', 'Music'], ['book', 'Books', 'book', 'Book'], ['game', 'Games', 'game', 'Game'], ['other', 'Other', 'other', 'Something else']];
 const typeOf = (type) => TYPES.find(([id]) => id === type) || TYPES[5];
 const CREATOR = { film: 'Director', show: 'Made by', music: 'Artist', book: 'Author', game: 'Made by', other: 'Made by' };
 const DID = { film: 'Watched', show: 'Watched', music: 'Listened', book: 'Read', game: 'Played', other: 'Enjoyed' };
@@ -127,8 +128,8 @@ export default function MediaPage({ library = null }) {
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">{lib ? lib.title : 'Collection'}</h1>
         {mine.length > 0 && <Link to={printAddress} className={`${quietButtonClass} ${control} inline-flex items-center`}>Print or save a list</Link>}
         <button type="button" onClick={() => setListing(true)} className={`${quietButtonClass} ${control}`}>Import a list</button>
-        <button type="button" onClick={() => setScanning(true)} className={`${quietButtonClass} ${control}`}>📷 Scan a barcode</button>
-        <button type="button" onClick={() => setScanMany(true)} className={`${quietButtonClass} ${control}`}>📷 Scan many</button>
+        <button type="button" onClick={() => setScanning(true)} className={`${quietButtonClass} ${control}`}><Icon of="scan" /> Scan a barcode</button>
+        <button type="button" onClick={() => setScanMany(true)} className={`${quietButtonClass} ${control}`}><Icon of="scan" /> Scan many</button>
         <button type="button" onClick={() => setAdding({ type: type || 'film', format: lib?.format || '' })} className={`${buttonClass} ${control}`}>+ Add</button>
       </div>
       {mine.length === 0 && tag ? (
@@ -149,7 +150,7 @@ export default function MediaPage({ library = null }) {
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="What to show">
             {!lib && <button type="button" onClick={() => setType('')} aria-pressed={!type} className={chip(!type)}>Everything <span className="opacity-80">{titles.length}</span></button>}
             {TYPES.filter(([id]) => !lib && count(id) > 0).map(([id, label, icon]) => (
-              <button key={id} type="button" onClick={() => setType(id)} aria-pressed={type === id} className={chip(type === id)}>{icon} {label} <span className="opacity-80">{count(id)}</span></button>
+              <button key={id} type="button" onClick={() => setType(id)} aria-pressed={type === id} className={chip(type === id)}><Icon of={icon} /> {label} <span className="opacity-80">{count(id)}</span></button>
             ))}
             {mine.some((m) => m.wanted) && <button type="button" onClick={() => setShow(show === 'wanted' ? '' : 'wanted')} aria-pressed={show === 'wanted'} className={chip(show === 'wanted')}>Wanted</button>}
             {mine.some((m) => m.lent_to.length) && <button type="button" onClick={() => setShow(show === 'lent' ? '' : 'lent')} aria-pressed={show === 'lent'} className={chip(show === 'lent')}>Lent out</button>}
@@ -210,7 +211,7 @@ export default function MediaPage({ library = null }) {
                   <PickBox sel={sel} id={m.id} name={m.title} />
                   <Link to={`/media/${m.id}`} className="flex min-w-0 flex-1 gap-3">
                     {localCover(m.cover) ? <img src={m.cover} alt="" loading="lazy" className="h-20 w-14 flex-none rounded object-cover" />
-                      : <span aria-hidden="true" className="flex h-20 w-14 flex-none items-center justify-center rounded bg-life-50 text-2xl dark:bg-life-700">{typeOf(m.type)[2]}</span>}
+                      : <span aria-hidden="true" className="flex h-20 w-14 flex-none items-center justify-center rounded bg-life-50 text-2xl dark:bg-life-700"><Icon of={typeOf(m.type)[2]} size={28} /></span>}
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium text-life-800 dark:text-life-50">{m.title}{m.year ? <span className="font-normal text-gray-500 dark:text-life-300"> ({m.year})</span> : null}</span>
                       {m.creator && <span className="block truncate text-xs text-gray-500 dark:text-life-300">{m.creator}</span>}
@@ -328,7 +329,7 @@ function ScanToFind({ onAdd }) {
         {found.start && (
           <div className="rounded-lg bg-life-50 px-3 py-2 text-sm text-gray-800 dark:bg-life-700 dark:text-life-50" data-found>
             <p className="text-xs text-gray-500 dark:text-life-300">{found.from} says it's</p>
-            <p className="font-medium">{typeOf(found.start.type)[2]} {found.start.title}</p>
+            <p className="font-medium"><Icon of={typeOf(found.start.type)[2]} /> {found.start.title}</p>
             <p className="text-xs text-gray-600 dark:text-life-200">{found.detail.filter(Boolean).join(' · ')}</p>
           </div>
         )}
@@ -351,7 +352,7 @@ function ScanToFind({ onAdd }) {
     <div className="space-y-3">
       <p className="text-sm text-gray-800 dark:text-life-50">More than one copy has the barcode <span className="font-mono">{found.code}</span>:</p>
       <ul className="space-y-1">
-        {found.matches.map((m, i) => <li key={`${m.id}-${i}`}><Link to={`/media/${m.id}`} className="text-sm text-life-700 hover:underline dark:text-life-100">{typeOf(m.type)[2]} {m.title}{m.year ? ` (${m.year})` : ''} · {m.format}</Link></li>)}
+        {found.matches.map((m, i) => <li key={`${m.id}-${i}`}><Link to={`/media/${m.id}`} className="text-sm text-life-700 hover:underline dark:text-life-100"><Icon of={typeOf(m.type)[2]} /> {m.title}{m.year ? ` (${m.year})` : ''} · {m.format}</Link></li>)}
       </ul>
       {again}
     </div>
@@ -483,7 +484,7 @@ function TitleForm({ title, withCopy = false, known = [], onDone }) {
     <form onSubmit={submit} className="space-y-3">
       <div className="grid grid-cols-3 gap-3">
         <Field label="What it is">
-          <select value={form.type} onChange={set('type')} className={inputClass}>{TYPES.map(([id, , icon, one]) => <option key={id} value={id}>{icon} {one}</option>)}</select>
+          <select value={form.type} onChange={set('type')} className={inputClass}>{TYPES.map(([id, , , one]) => <option key={id} value={id}>{one}</option>)}</select>
         </Field>
         <div className="col-span-2"><Field label="Title *"><input required autoFocus={!title.id} value={form.title} onChange={set('title')} className={inputClass} /></Field></div>
       </div>
@@ -585,7 +586,7 @@ export function MediaTitlePage() {
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-semibold text-life-800 dark:text-life-50">{title.title}</h1>
             <p className="text-sm text-gray-500 dark:text-life-300">
-              {[`${typeOf(title.type)[2]} ${typeOf(title.type)[3]}`, title.creator, title.year, title.minutes != null && minutesText(title.minutes), title.genres.join(', ')].filter(Boolean).join(' · ')}
+              <Dots parts={[<><Icon of={typeOf(title.type)[2]} /> {typeOf(title.type)[3]}</>, title.creator, title.year, title.minutes != null && minutesText(title.minutes), title.genres.join(', ')]} />
             </p>
             {title.wanted && <p className="mt-1"><span className="rounded bg-honey-100 px-1.5 text-xs text-honey-700">wanted</span></p>}
             {title.summary && <p className="mt-2 text-sm text-gray-700 dark:text-life-100">{title.summary}</p>}
@@ -614,7 +615,7 @@ export function MediaTitlePage() {
                     <span className="flex-1">
                       <span className="block text-sm text-gray-800 dark:text-life-50">{[copy.format, piecesText(copy.format, copy.pieces)].filter(Boolean).join(' · ')}</span>
                       <span className="block text-xs text-gray-500 dark:text-life-300">
-                        {[copy.place && `📍 ${copy.place}`, copy.source && `from ${sourceName(copy.source)}`, copy.barcode && `barcode ${copy.barcode}`, copy.note].filter(Boolean).join(' · ') || 'no place'}
+                        {(copy.place || copy.source || copy.barcode || copy.note) ? <Dots parts={[copy.place && <><Icon of="place" /> {copy.place}</>, copy.source && `from ${sourceName(copy.source)}`, copy.barcode && `barcode ${copy.barcode}`, copy.note]} /> : 'no place'}
                       </span>
                       <span className="block text-xs text-gray-500 dark:text-life-300">
                         {[copy.cost_cents != null && `cost ${dollarsText(copy.cost_cents)}${copy.bought_on ? ` on ${copy.bought_on}` : ''}`, copy.value_cents != null && `worth ${dollarsText(copy.value_cents)}${copy.valued_on ? ` on ${copy.valued_on}` : ''}`].filter(Boolean).join(' · ')}
@@ -720,7 +721,7 @@ function CopyForm({ title, copy, onDone }) {
         <Field label="Barcode">
           <span className="flex gap-2">
             <input inputMode="numeric" value={form.barcode} onChange={set('barcode')} className={inputClass} />
-            <button type="button" onClick={() => setScanning(!scanning)} aria-label="Scan the barcode with the camera" className={quietButtonClass}>📷</button>
+            <button type="button" onClick={() => setScanning(!scanning)} aria-label="Scan the barcode with the camera" className={quietButtonClass}><Icon of="scan" /></button>
           </span>
         </Field>
         {scanning && <div className="col-span-2"><Scanner onCode={(code) => { setForm((f) => ({ ...f, barcode: code })); setScanning(false); }} /></div>}

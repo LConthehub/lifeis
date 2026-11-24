@@ -19,7 +19,7 @@ if (await dialog.isVisible().catch(() => false)) { await dialog.getByRole('butto
 
 const scan = async (code) => {
   await page.goto(base + '/media'); await page.waitForTimeout(700);
-  await page.getByRole('button', { name: '📷 Scan a barcode' }).click(); await page.waitForTimeout(600);
+  await page.getByRole('button', { name: 'Scan a barcode' }).click(); await page.waitForTimeout(600);
   const box = page.getByRole('dialog');
   await box.getByLabel('Or type the number under the bars').fill(code);
   await box.getByRole('button', { name: 'Find' }).click(); await page.waitForTimeout(2500);

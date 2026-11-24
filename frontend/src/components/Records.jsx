@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import Icon from './Icon';
 import { shrink } from './shrink';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from './ui';
 import { inApp } from '../where';
@@ -7,7 +8,7 @@ import { inApp } from '../where';
 export const money = (cents) => (cents == null ? '' : (cents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' }));
 const dayText = (day) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 const centsOf = (text) => (String(text).trim() === '' ? null : Math.round(Number(String(text).replace(/[^0-9.]/g, '')) * 100));
-const KINDS = [['receipt', '🧾 Receipt'], ['manual', '📖 Manual'], ['warranty', '🛡 Warranty'], ['other', '📄 Something else']];
+const KINDS = [['receipt', 'Receipt', 'receipt'], ['manual', 'Manual', 'book'], ['warranty', 'Warranty', 'warranty'], ['other', 'Something else', 'paper']];
 const base64 = (buffer) => { let s = ''; const b = new Uint8Array(buffer); for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(s); };
 
 /** How long a warranty has left, in words, and whether that's pressing. */
@@ -72,7 +73,7 @@ export default function Records({ item, onChanged }) {
             ['Model', r.model], ['Serial number', r.serial]].filter(([, v]) => v).map(([label, value]) => (
             <div key={label}><dt className="text-xs text-gray-500 dark:text-life-300">{label}</dt><dd className="break-words text-gray-800 dark:text-life-50">{value}</dd></div>
           ))}
-          {warranty && <div className="col-span-2 sm:col-span-3"><dd className={`text-sm ${warranty.tone}`}>🛡 {warranty.text}</dd></div>}
+          {warranty && <div className="col-span-2 sm:col-span-3"><dd className={`text-sm ${warranty.tone}`}><Icon of="warranty" /> {warranty.text}</dd></div>}
         </dl>
       ) : <p className="text-sm text-gray-500 dark:text-life-300">What it cost, its serial number and its warranty: what an insurer or a repair shop asks for.</p>}
 
@@ -82,7 +83,7 @@ export default function Records({ item, onChanged }) {
           <ul className="space-y-1" aria-label="Papers">
             {papers.map((p) => (
               <li key={p.id} className="flex items-baseline gap-2 text-sm">
-                <button type="button" onClick={() => open(p)} className="min-w-0 flex-1 truncate text-left text-life-700 hover:underline dark:text-life-100">{KINDS.find(([k]) => k === p.kind)[1].split(' ')[0]} {p.name}</button>
+                <button type="button" onClick={() => open(p)} className="min-w-0 flex-1 truncate text-left text-life-700 hover:underline dark:text-life-100"><Icon of={KINDS.find(([k]) => k === p.kind)[2]} /> {p.name}</button>
                 <span className="text-xs text-gray-500 dark:text-life-300">{p.size > 1e6 ? `${(p.size / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(p.size / 1000))} KB`}</span>
                 <button type="button" onClick={() => remove(p)} aria-label={`Remove ${p.name}`} className="text-xs text-gray-400 hover:text-red-600">✕</button>
               </li>

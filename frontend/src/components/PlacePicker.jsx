@@ -57,7 +57,7 @@ export default function PlacePicker({ value, places, onChange, onPlaces }) {
     <select value={value ?? ''} onChange={(e) => (e.target.value === NEW ? setTyping('') : onChange(e.target.value === '' ? '' : Number(e.target.value)))} className={inputClass}>
       <option value="">No place</option>
       {places.map((p) => <option key={p.id} value={p.id}>{p.path}</option>)}
-      <option value={NEW}>➕ A new place…</option>
+      <option value={NEW}>A new place…</option>
     </select>
   );
 }

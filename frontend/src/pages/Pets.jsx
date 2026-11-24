@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import Icon from '../components/Icon';
 import axios from 'axios';
 import Picture from '../components/Picture';
 import { shrink } from '../components/shrink';
@@ -7,8 +8,8 @@ import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, err
 import { DueBadge, scheduleText } from './Upkeep';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 
-const ICONS = { dog: '🐕', cat: '🐈', rabbit: '🐇', bird: '🐦', fish: '🐟', hamster: '🐹', 'guinea pig': '🐹', horse: '🐎', reptile: '🦎', ferret: '🦦' };
-const iconOf = (pet) => ICONS[pet.species] ?? '🐾';
+const ICONS = { dog: 'dog', cat: 'cat', rabbit: 'rabbit', bird: 'bird', fish: 'fish' };
+const iconOf = (pet) => ICONS[pet.species] ?? 'pet';
 const SPECIES = ['Dog', 'Cat', 'Rabbit', 'Bird', 'Fish', 'Hamster', 'Guinea pig', 'Horse', 'Reptile', 'Ferret'];
 
 /** How old, in words: "4 years", "7 months", "3 weeks". */
@@ -61,7 +62,7 @@ export default function PetsPage() {
               <PickBox sel={sel} id={p.id} name={p.name} />
               <Link to={`/things/pets/${p.id}`} className="flex min-w-0 flex-1 items-center gap-3">
                 {p.photo ? <Picture src={`/api/things/pets/${p.id}/photo`} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover" />
-                  : <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-life-50 text-3xl dark:bg-life-700" aria-hidden="true">{iconOf(p)}</span>}
+                  : <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-life-50 text-3xl dark:bg-life-700" aria-hidden="true"><Icon of={iconOf(p)} size={32} /></span>}
                 <span className="min-w-0 flex-1">
                   <span className="block font-semibold text-life-800 dark:text-life-50">{p.name}</span>
                   <span className="block text-xs text-gray-500 dark:text-life-300">{[p.breed ?? (p.species && p.species[0].toUpperCase() + p.species.slice(1)), ageText(p.born_on)].filter(Boolean).join(' · ')}</span>
@@ -117,7 +118,7 @@ export function PetPage() {
         <input ref={picker} type="file" accept="image/*" className="hidden" onChange={(e) => photo(e.target.files?.[0])} />
         <button type="button" onClick={() => picker.current?.click()} aria-label={pet.photo ? `Another photo of ${pet.name}` : `Add a photo of ${pet.name}`} className="shrink-0">
           {pet.photo ? <Picture src={`/api/things/pets/${id}/photo?v=${pet.weights.length}${pet.care.length}`} alt={pet.name} className="h-24 w-24 rounded-full object-cover" />
-            : <span className="flex h-24 w-24 flex-col items-center justify-center rounded-full border-2 border-dashed border-life-200 text-xs text-life-600 dark:border-life-700 dark:text-life-200"><span className="text-3xl" aria-hidden="true">{iconOf(pet)}</span>photo</span>}
+            : <span className="flex h-24 w-24 flex-col items-center justify-center rounded-full border-2 border-dashed border-life-200 text-xs text-life-600 dark:border-life-700 dark:text-life-200"><Icon of={iconOf(pet)} size={32} />photo</span>}
         </button>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-start gap-2">
@@ -150,7 +151,7 @@ export function PetPage() {
                   <span className="block text-xs text-gray-500 dark:text-life-300">{scheduleText(j)}{j.last_done && j.last_done.day ? ` · last ${j.last_done.day}` : ''}</span>
                 </Link>
                 <DueBadge job={j} />
-                <button type="button" onClick={() => done(j)} aria-label={`${careName(j, pet)} done`} className="shrink-0 rounded-full border border-life-200 px-2.5 py-1 text-xs text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100">✓ Done</button>
+                <button type="button" onClick={() => done(j)} aria-label={`${careName(j, pet)} done`} className="shrink-0 rounded-full border border-life-200 px-2.5 py-1 text-xs text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100"><Icon of="done" size={14} /> Done</button>
               </li>
             ))}
           </ul>
