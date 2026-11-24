@@ -1,0 +1,51 @@
+name: Release image
+
+# A tag like v0.2.0 builds the Life Is image for Intel and ARM computers (ARM covers newer Synology models and the
+# Raspberry Pi) and publishes it to GitHub's container registry as ghcr.io/lconthehub/lifeis. It signs in with the
+# repository's own short-lived token, so no password or key is stored anywhere.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/lconthehub/lifeis
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=Life Is
+            org.opencontainers.image.description=A private home organizer you host yourself
+            org.opencontainers.image.licenses=AGPL-3.0-only
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

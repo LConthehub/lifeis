@@ -1,6 +1,6 @@
 # Life Is
 
-Life is chaotic, unorganised and overwhelming sometimes. Life Is helps put it back on track: a planner for everyday
+Life is chaotic, disorganized and overwhelming sometimes. Life Is helps put it back on track: a planner for everyday
 life that runs on your own computer, with your records kept there, encrypted.
 
 So far: the kitchen, the calendar, the things you keep, the projects that use them, and what you watch, read and hear.
@@ -8,7 +8,7 @@ So far: the kitchen, the calendar, the things you keep, the projects that use th
 ## The kitchen
 
 - **Recipes kept exactly as you wrote them.** Every ingredient line and every step is stored word for word, with
-  your section headings ("For the sauce"). Nothing shortens, summarises or rewrites a recipe. When you paste or
+  your section headings ("For the sauce"). Nothing shortens, summarizes or rewrites a recipe. When you paste or
   import one, the original is kept beside it too.
 - **One list of ingredients behind everything.** "Flour" in a recipe, in the pantry and on the grocery list is the
   same thing, so the three stay connected.
@@ -18,24 +18,24 @@ So far: the kitchen, the calendar, the things you keep, the projects that use th
   what you already have. Grams and pounds add up, and so do cups and spoons; weight and volume never get mixed
   (a cup of flour and a cup of honey weigh different amounts), so those are listed in full and marked.
 - **The pantry.** What you have, how much, where (fridge, freezer, cupboard), when to use it by, and when it's
-  running low. Ticking something off the grocery list puts it in the pantry; marking a meal as cooked takes out
+  running low. Checking something off the grocery list puts it in the pantry; marking a meal as cooked takes out
   what it used.
-- **What it costs, as you shop.** Type the price as each thing goes in the trolley and the total keeps up, in
+- **What it costs, as you shop.** Type the price as each thing goes in the buggy and the total keeps up, in
   sight while the list scrolls. Next time the list says what each thing cost last time and where, guesses the trip
-  before you start, and keeps a price history for each ingredient. Tick something off without a price and last
+  before you start, and keeps a price history for each ingredient. Check something off without a price and last
   time's stands in, marked as a guess.
 - **Prices over time.** A page of what each thing has cost: its latest price, how it changed, where it was cheapest,
   and a chart. Things always bought by the same measure are compared for one of it, so 2 lb and 5 lb sit side by
   side. Spending is totalled by the month.
-- **Shops and sizes.** Your shops are a list to pick from, and each price keeps the size you bought: the amount on
-  the list, or the size on the packet (a 30 oz tin, a 12 oz bag). So a thing's price is shown for one ounce, pound
-  or each, whatever size it came in, and set side by side for each shop, cheapest first.
-- **A usual shop and a usual size for each thing.** "Coffee: Costco, 3 lb." The list can be laid out by shop, with the
+- **Stores and sizes.** Your stores are a list to pick from, and each price keeps the size you bought: the amount on
+  the list, or the size on the package (a 30 oz can, a 12 oz bag). So a thing's price is shown for one ounce, pound
+  or each, whatever size it came in, and set side by side for each store, cheapest first.
+- **A usual store and a usual size for each thing.** "Coffee: Costco, 3 lb." The list can be laid out by store, with the
   one you're standing in first; the usual size shows on a line that gives no amount, and is what a price is taken
   to be for unless you type another.
-- **Scan it in the shop.** Point the camera at a packet. The first time, say which thing on the list it is; after
-  that a scan finds its line, shows last time's price, and puts it in the trolley with what you type.
-- **Coupons.** Money or a percentage off, for one thing or the whole shop, perhaps at one shop and until a day. The
+- **Scan it in the store.** Point the camera at a package. The first time, say which thing on the list it is; after
+  that a scan finds its line, shows last time's price, and puts it in the buggy with what you type.
+- **Coupons.** Money or a percentage off, for one thing or the whole trip, perhaps at one store and until a day. The
   list flags the line a coupon is for; using it takes it off the total.
 - **A recipe knows what it's cooked in.** Pans, dishes and tools from the things you keep (the cast iron skillet,
   the 8x8 baking dishes), or just by name. The week then tells you when one meal needs more of something than you
@@ -47,7 +47,7 @@ So far: the kitchen, the calendar, the things you keep, the projects that use th
 
 What today holds and what wants attention, gathered from every section you use: the next three days, today's
 meals and any pan you're short of, what's running low or about to go off, the projects in hand, what's lent out.
-Also the birthdays and anniversaries coming round, and the week in numbers. Each card leads to its page, and you
+Also the birthdays and anniversaries coming up, and the week in numbers. Each card leads to its page, and you
 choose which cards show.
 
 ## Outside services, only if you turn them on
@@ -56,7 +56,7 @@ Life Is works without reaching outside your computer. The few things that do are
 each off until you turn it on, each saying exactly what it sends:
 
 - **Weather on the front page**, from [Open-Meteo](https://open-meteo.com) (no account, no key). It is sent the
-  town you look up, then that place's position rounded to about a kilometre. Turning it off forgets the place.
+  town you look up, then that place's position rounded to about half a mile. Turning it off forgets the place.
 - **Email, to read and answer your inbox**, with any provider that lets mail programs in (IMAP and SMTP): Gmail,
   iCloud, Fastmail, Yahoo, your own server, Proton through its Bridge. Life Is signs in from your computer with
   the password you give (for most providers an "app password"), stored locked. No message is ever kept: the inbox
@@ -75,7 +75,7 @@ each off until you turn it on, each saying exactly what it sends:
 
 The first time you sign in, Life Is asks what life needs looking after: cooking, what you own, projects, sewing,
 the garden. It shows the parts that fit and adds ready-made kinds of things to start from. Change the answer any
-time in Settings; unticking something only puts it out of sight.
+time in Settings; unchecking something only puts it out of sight.
 
 ## The things you keep
 
@@ -92,7 +92,7 @@ time in Settings; unticking something only puts it out of sight.
 
 ## Projects
 
-- **Anything made or done over more than a day**: a dress, a jumper, a bookshelf, the spring planting.
+- **Anything made or done over more than a day**: a dress, a sweater, a bookshelf, the spring planting.
 - **A list of what it uses**, drawn from your things. An amount ("3 yd of the blue linen") is set aside, so two
   projects can't count on the same cloth, and each says what it's short of. Using it, or finishing, takes it
   out of what you keep.
@@ -100,8 +100,8 @@ time in Settings; unticking something only puts it out of sight.
 
 ## Plans, and the memories they become
 
-- **Anything with a day and things that belong to it**: a holiday with its menu, dishes and films, or one afternoon's
-  sewing. Make it ahead, or write it down afterwards.
+- **Anything with a day and things that belong to it**: a vacation with its menu, dishes and films, or one afternoon's
+  sewing. Make it ahead, or write it down afterward.
 - **It points at what you already have**: recipes, things (with how many are needed, so it says what you're short
   of), titles from the collection, a project, and a checklist of its own. Nothing is copied.
 - **Its food goes on the week.** Say which day and meal a plan's recipe is for (or a day before, for what's made
@@ -112,9 +112,9 @@ time in Settings; unticking something only puts it out of sight.
   kept with the plan; one from your Immich library is only linked, and stays there.
 - **Look back, and do it again**: past plans stay, by year. "Do it again" starts next year's from last year's.
 
-- **Front page, plan cost, and just this shop.** The front page gains cards for plans coming up and coupons about to
+- **Front page, plan cost, and just this store.** The front page gains cards for plans coming up and coupons about to
   run out (each only once you have one). A plan with recipes says roughly what its food will cost, going by the last
-  price of each ingredient. The grocery list, laid out by shop, can show just the shop you're in.
+  price of each ingredient. The grocery list, laid out by store, can show just the store you're in.
 
 - **Bring a recipe in**, three ways (Recipes → "Bring one in"). From a website: paste the address and Life Is reads the
   recipe the page publishes for search engines, without the story around it. From a photo or a book: the words are read
@@ -126,12 +126,12 @@ time in Settings; unticking something only puts it out of sight.
 - **One place to see what's on each day.** Your own dates (a day or several, with a time if it has one), with
   the week's meals, the time on projects and the days they're wanted by, what's about to go off in the pantry,
   and what you watched, read or heard. Each of those leads back to the page it lives on.
-- **Birthdays and anniversaries.** Tick "Every year" and give the day it first happened: it shows each year, counting
+- **Birthdays and anniversaries.** Check "Every year" and give the day it first happened: it shows each year, counting
   the years.
 - **On your phone's calendar.** Settings → "Your calendar on your phone" makes a private link that Apple Calendar (or
   any calendar app that follows a link) reads, so plans, meals and dates show there too. Off until you make one;
-  you tick what it carries; it only shows and can't change anything; a new link stops the old one working. Anyone
-  holding the link can read what's ticked, so it is long, random, and yours to replace.
+  you check what it carries; it only shows and can't change anything; a new link stops the old one working. Anyone
+  holding the link can read what's checked, so it is long, random, and yours to replace.
 - **Other calendars, on yours.** Settings → Outside services → "Other calendars" follows any calendar that has a link
   (a work calendar, a shared family one). Followed "busy only" by default: just the times, under a name you give it.
   What each thing is called, where it is and its notes are dropped as it's read and never stored. The link is kept
@@ -151,9 +151,39 @@ time in Settings; unticking something only puts it out of sight.
 - **What you've watched, read and heard**, by day. Add a film to the time on a project and "watched Alien while
   sewing" shows from the project, from the film, and on the calendar.
 
-## Try it
+## Run it yourself
 
-You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows or Mac) or Docker (Linux).
+Try it first, no install: [the demo](https://demo.lifeis.living) (anyone can change things there, and it resets).
+
+You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows or Mac) or Docker (Linux,
+a Synology or other home server). The image runs on Intel and ARM computers. Save this as `docker-compose.yml`
+in a folder of its own:
+
+```yaml
+services:
+  lifeis:
+    image: ghcr.io/lconthehub/lifeis:latest
+    ports: ["127.0.0.1:8020:8008"]
+    volumes: [lifeis_data:/data, lifeis_keys:/keys]
+    restart: unless-stopped
+volumes:
+  lifeis_data:
+  lifeis_keys:
+```
+
+Then, in that folder:
+
+```bash
+docker compose up -d
+```
+
+Open <http://localhost:8020> and make your account. It's only reachable from this computer; to use it from your
+phone, use [Tailscale](https://tailscale.com) and add it to your home screen.
+
+Your records are kept by Docker, encrypted, with the key kept apart from them. **Never run
+`docker compose down -v`**: the `-v` deletes them. To update: `docker compose pull && docker compose up -d`.
+
+Or build it from the source instead:
 
 ```bash
 git clone https://github.com/LConthehub/lifeis.git
@@ -161,10 +191,9 @@ cd lifeis
 docker compose up -d --build
 ```
 
-Then open <http://localhost:8020> and make your account. It's only reachable from this computer; to use it from
-your phone, use [Tailscale](https://tailscale.com) and add it to your home screen.
-
-Your records are kept by Docker, encrypted. **Never run `docker compose down -v`**: the `-v` deletes them.
+| The front page | Things and where they are | Upkeep | Pets |
+| --- | --- | --- | --- |
+| ![The front page](docs/site/img/demo-home.png) | ![Things](docs/site/img/demo-inventory.png) | ![Upkeep](docs/site/img/demo-upkeep.png) | ![Pets](docs/site/img/demo-pets.png) |
 
 ## For developers
 

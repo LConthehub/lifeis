@@ -19,6 +19,15 @@ All notable changes to Life Is are listed here. The format follows [Keep a Chang
 - Reading bank accounts through SimpleFIN, off by default and read-only, on a Life Is you host. Spending comes in
   without duplicates.
 - The website: the front page words live in docs/home.md, and a "Become an Android tester" section.
+- A display name for each person, separate from the sign-in name.
+- Routines: times of day with their steps, cycles that wait until they are done, a history, a chore chart, and
+  reminders on the phone.
+- A cooking view: big ingredients and steps to check off, and the screen stays on.
+- Bringing everything back in from a download: projects, plans, prices, coupons, stores, grocery barcodes, tags
+  and the budget.
+- A writing and study starter set.
+- A published image for Intel and ARM computers, ghcr.io/lconthehub/lifeis, built on each tagged release, and a
+  README section for running it yourself.
 
 ## [0.1.0]
 
