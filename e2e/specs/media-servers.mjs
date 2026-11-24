@@ -27,13 +27,13 @@ await wait(1000);
 { const skip = page.getByRole('dialog').getByRole('button', { name: 'Skip, show me everything' }); if (await skip.isVisible().catch(() => false)) { await skip.click(); await wait(900); } }
 
 // A tape of Alien, typed in by hand first.
-await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'fun', exact: true }).click(); await wait();
+await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'entertaining', exact: true }).click(); await wait();
 await page.getByRole('button', { name: '+ Add' }).click();
 await field('Title').fill('Alien'); await field('Year').fill('1979'); await page.getByPlaceholder('VHS, DVD, Blu-ray').fill('VHS');
 await page.getByRole('button', { name: 'Save' }).click(); await wait(900);
 
-await page.getByRole('link', { name: 'Servers' }).first().click(); await wait();
-say('the Servers page starts empty', /No servers connected/.test(await text()));
+await page.getByRole('link', { name: 'Connections', exact: true }).first().click(); await wait();
+say('the Connections page starts empty', /No servers connected/.test(await text()));
 await page.getByRole('button', { name: '+ Connect a server' }).click();
 await field('Its address').fill('http://127.0.0.1:8097');
 await field('A key').fill('not-the-key');
@@ -57,7 +57,7 @@ const covers = await page.locator('main img').evaluateAll((imgs) => imgs.map((im
 say('covers are shown from Life Is itself: ' + JSON.stringify(covers), covers.length === 3 && covers.every(([src, loaded]) => src.startsWith('/api/media/') && loaded));
 await page.screenshot({ path: shots + '/collection-with-server.png' });
 
-await page.getByRole('link', { name: 'Servers' }).first().click(); await wait();
+await page.getByRole('link', { name: 'Connections', exact: true }).first().click(); await wait();
 await page.getByRole('button', { name: 'Edit' }).click();
 await page.getByLabel(/take what it imported/).check();
 await page.getByRole('button', { name: 'Disconnect' }).click(); await wait(1200);

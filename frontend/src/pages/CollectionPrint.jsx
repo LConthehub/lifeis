@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { LIBRARIES, TYPES, piecesWord } from './Media';
+import { formatGroupName, inFormatGroup } from '../components/formatGroups';
 import { SORTS, collectionTotals, dollarsField, dollarsText, labelKey, sortTitles } from '../components/collectionTools';
 import { buttonClass, cardClass, quietButtonClass, errorMessage } from '../components/ui';
 
@@ -59,6 +60,8 @@ export default function CollectionPrint() {
   const [params] = useSearchParams();
   const lib = LIBRARIES[params.get('lib') ?? ''] ?? null;
   const type = lib ? lib.type : (TYPES.some(([id]) => id === params.get('type')) ? params.get('type') : '');
+  // The format chip under the kind (print, ebook, dvd...). The old ?lib= links name one for books.
+  const format = lib ? lib.group : (type ? (params.get('format') ?? '') : '');
   const show = ['wanted', 'lent'].includes(params.get('show')) ? params.get('show') : '';
   const q = (params.get('q') ?? '').trim();
   const genre = params.get('genre') ?? '';
@@ -78,14 +81,14 @@ export default function CollectionPrint() {
 
   const shown = useMemo(() => {
     if (!titles) return [];
-    const mine = lib ? titles.filter((m) => m.type === lib.type && lib.fits(m)) : titles;
+    const mine = titles;
     const word = q.toLowerCase();
-    const matching = mine.filter((m) => (!type || m.type === type) && (show !== 'wanted' || m.wanted) && (show !== 'lent' || m.lent_to.length > 0)
+    const matching = mine.filter((m) => (!type || m.type === type) && (!type || inFormatGroup(m, format)) && (show !== 'wanted' || m.wanted) && (show !== 'lent' || m.lent_to.length > 0)
       && (!genre || m.genres.some((g) => labelKey(g) === labelKey(genre)))
       && (lo === null || (m.year != null && m.year >= lo)) && (hi === null || (m.year != null && m.year <= hi))
       && (!word || [m.title, m.creator, ...m.genres, ...m.formats].some((v) => String(v ?? '').toLowerCase().includes(word))));
     return sortTitles(matching, sort);
-  }, [titles, lib, type, show, q, genre, lo, hi, sort]);
+  }, [titles, type, format, show, q, genre, lo, hi, sort]);
 
   // Where each is kept comes from the title's own copies, fetched a few at a time, and only when the list needs it.
   const needsPlaces = picked.where || group === 'place';
@@ -129,7 +132,7 @@ export default function CollectionPrint() {
   const totals = collectionTotals(shown);
 
   const describe = [
-    lib ? lib.title : type ? TYPES.find(([id]) => id === type)?.[1] : 'Everything', show === 'wanted' && 'Wanted', show === 'lent' && 'Lent out',
+    type ? TYPES.find(([id]) => id === type)?.[1] : 'Everything', format && formatGroupName(type, format), show === 'wanted' && 'Wanted', show === 'lent' && 'Lent out',
     q && `matching “${q}”`, genre && `genre ${genre}`, (lo !== null || hi !== null) && `years ${lo ?? 'any'} to ${hi ?? 'any'}`,
   ].filter(Boolean).join(' · ');
 

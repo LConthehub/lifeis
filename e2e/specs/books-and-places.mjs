@@ -20,8 +20,8 @@ if (await dialog.isVisible().catch(() => false)) { await dialog.getByRole('butto
 await page.evaluate(() => fetch('/api/things/places', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Bedroom' }) }));
 
 await page.goto(base + '/media/books'); await page.waitForTimeout(800);
-check('Books page has its heading', await page.getByRole('heading', { name: 'Books' }).isVisible());
-check('empty Books page explains scanning', await page.getByText('No books yet').isVisible());
+check('the old Books address opens the Collection', await page.getByRole('heading', { name: 'Collection' }).isVisible());
+check('an empty Books page explains scanning', await page.getByText('No print books yet').isVisible());
 await page.getByRole('button', { name: '+ Add' }).click(); await page.waitForTimeout(500);
 const form = page.getByRole('dialog');
 check('new title starts as a book', (await form.locator('select').first().inputValue()) === 'book');

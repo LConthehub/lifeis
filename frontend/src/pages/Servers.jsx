@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import BookServers from '../components/BookServers';
 import { CopyLine } from '../components/Copy';
@@ -36,12 +37,18 @@ export default function Servers() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Media servers</h1>
+        <div className="mr-auto">
+          <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">Connections</h1>
+          <p className="text-sm text-gray-600 dark:text-life-200">Your book and media servers</p>
+        </div>
         <button type="button" onClick={() => setEditing({})} className={buttonClass}>+ Connect a server</button>
       </div>
       <p className="text-sm text-gray-600 dark:text-life-200">
         Import your Jellyfin or Emby library into the collection, beside your tapes, discs, records and books. A film you also own on disc
         becomes one title with both copies. Life Is only reads from the server: nothing on it is ever changed.
+      </p>
+      <p className="text-sm text-gray-600 dark:text-life-200">
+        To see everything Life Is can reach outside, and to turn any of it off, open <Link to="/settings/connections" className="underline">Connections in Settings</Link>.
       </p>
       {message && <p className={`rounded-lg px-3 py-2 text-sm ${message.ok ? 'bg-life-50 text-life-800 dark:bg-life-700 dark:text-life-50' : 'bg-red-50 text-red-700'}`}>{message.ok || message.error}</p>}
       {servers.length === 0 ? (

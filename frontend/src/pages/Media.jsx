@@ -11,6 +11,7 @@ import Art from '../components/Art';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import { SORTS, centsFromDollars, decadeOf, dollarsField, dollarsText, labelKey, sameTitles, sortTitles } from '../components/collectionTools';
 import { bookServerName } from '../components/BookServers';
+import { formatChips, formatGroupName, inFormatGroup } from '../components/formatGroups';
 import { onDevice } from '../where';
 import { HistoryList } from './Thing';
 import { stickerCode } from './Places';
@@ -38,8 +39,6 @@ export function opensIn(link, source) {
 const SOURCES = { jellyfin: 'Jellyfin', emby: 'Emby', list: 'a list' };
 const sourceName = (source) => SOURCES[source] ?? bookServerName(source);
 const commaList = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
-// A book you listen to: an audiobook by name, or a book on CD, tape, cassette, MP3 or a record.
-const isAudio = (format) => /audio|audible|\b(cd|cds|mp3|tape|tapes|cassette|cassettes|vinyl|record|records|lp|playaway)\b/i.test(format);
 /**
  * The word for the pieces a copy comes in, by its format. The same function is in core/src/media.ts (pages cannot
  * import from there), and is tested there: keep them alike. `known` is false for the plain word "piece", which
@@ -54,26 +53,27 @@ export function piecesWord(format) {
 }
 /** "12 discs", or nothing when there is no number or just the one piece. */
 const piecesText = (format, pieces) => (pieces >= 2 ? `${pieces} ${piecesWord(format).many}` : null);
-const isEbook = (format) => /e-?book|kindle|kobo|epub|nook/i.test(format);
-
 /**
- * The libraries a book can be in, told apart by what it's on. A book you have on paper and as an audiobook
- * is in both. One you only want, with no copy yet, is with the books.
+ * The old links to the book shelves (/media/books, /media/ebooks, /media/audiobooks) open the Collection with Books
+ * and the matching format chip chosen. `empty` is the hint shown with that chip while nothing is in it.
  */
 export const LIBRARIES = {
   books: {
-    type: 'book', title: 'Books', fits: (m) => !m.formats.length || m.formats.some((f) => !isAudio(f) && !isEbook(f)),
-    empty: "No books yet. Scan the barcode on the back (its ISBN) and Life Is looks up the title and author, then asks where it's kept: a room, and a shelf in it.",
+    type: 'book', group: 'print', title: 'Books',
+    empty: "No print books yet. Scan the barcode on the back (its ISBN) and Life Is looks up the title and author, then asks where it's kept: a room, and a shelf in it.",
   },
   ebooks: {
-    type: 'book', title: 'eBooks', format: 'eBook', fits: (m) => m.formats.some(isEbook),
-    empty: "No eBooks yet. Add one and say what it's on (eBook, Kindle, Kobo, anything you like), import a list from Goodreads, or connect Calibre-Web or Kavita under Servers.",
+    type: 'book', group: 'ebook', title: 'eBooks', format: 'eBook',
+    empty: "No eBooks yet. Add one and say what it's on (eBook, Kindle, Kobo, anything you like), import a list from Goodreads, or connect Calibre-Web or Kavita under Connections.",
   },
   audiobooks: {
-    type: 'book', title: 'Audiobooks', format: 'Audiobook', fits: (m) => m.formats.some(isAudio),
-    empty: 'No audiobooks yet. Add one and say what it\'s on (Audiobook, Audible, CD, or anything with "audio" in it), import a list, or connect Audiobookshelf under Servers. Books on CD or tape belong here too: say "Book on CD" or "Book on tape" and where they are kept.',
+    type: 'book', group: 'audio', title: 'Audiobooks', format: 'Audiobook',
+    empty: "No audiobooks yet. Add one and say what it's on (Audiobook, Audible, CD, or anything with \"audio\" in it), import a list, or connect Audiobookshelf under Connections. Books on CD or tape belong here too: say \"Book on CD\" or \"Book on tape\" and where they are kept.",
   },
 };
+/** The hint for a chosen format chip with nothing in it yet. */
+const emptyHint = (type, group) => Object.values(LIBRARIES).find((l) => l.type === type && l.group === group)?.empty
+  ?? `Nothing on ${formatGroupName(type, group) || 'that format'} yet. Add a copy and say what it's on.`;
 
 const SORT_KEY = 'lifeis.mediaSort';
 const savedSort = () => { try { const s = localStorage.getItem(SORT_KEY); return SORTS.some(([id]) => id === s) ? s : 'title'; } catch { return 'title'; } };
@@ -81,13 +81,15 @@ const saveSort = (how) => { try { localStorage.setItem(SORT_KEY, how); } catch {
 const control = 'min-h-[44px]';
 
 /**
- * Everything you own to watch, hear, read or play, by title, with the formats you have it on. Given a
- * `library` (books, ebooks, audiobooks), the same collection shows only what belongs in it.
+ * Everything you own to watch, hear, read or play, by title, with the formats you have it on. Choosing a kind
+ * (Books, Films, Shows, Music) opens a second row of chips for the formats. Given a `library` (the old links for
+ * books, ebooks and audiobooks), it opens with Books and the matching format chosen.
  */
 export default function MediaPage({ library = null }) {
   const lib = library ? LIBRARIES[library] : null;
   const [titles, setTitles] = useState(null);
   const [type, setType] = useState(lib?.type ?? '');
+  const [format, setFormat] = useState(lib?.group ?? '');   // a group from formatGroups.js, or '' for all of them
   const [show, setShow] = useState('');     // '', 'wanted' or 'lent'
   const [q, setQ] = useState('');
   const [genre, setGenre] = useState('');
@@ -104,11 +106,11 @@ export default function MediaPage({ library = null }) {
   const load = useCallback(() => { axios.get('/api/media', { params: { tag: tag || undefined } }).then(({ data }) => setTitles(data)).catch(() => setTitles([])); }, [tag]);
   useEffect(() => { load(); }, [load]);
   if (!titles) return null;
-  const mine = lib ? titles.filter((m) => m.type === lib.type && lib.fits(m)) : titles;
+  const mine = titles;
   const word = q.trim().toLowerCase();
   const lo = from === '' ? null : Number(from);
   const hi = to === '' ? null : Number(to);
-  const matching = mine.filter((m) => (!type || m.type === type) && (show !== 'wanted' || m.wanted) && (show !== 'lent' || m.lent_to.length > 0)
+  const matching = mine.filter((m) => (!type || m.type === type) && (!type || inFormatGroup(m, format)) && (show !== 'wanted' || m.wanted) && (show !== 'lent' || m.lent_to.length > 0)
     && (!genre || m.genres.some((g) => labelKey(g) === labelKey(genre)))
     && (lo === null || (m.year != null && m.year >= lo)) && (hi === null || (m.year != null && m.year <= hi))
     && (!word || [m.title, m.creator, ...m.genres, ...m.formats].some((v) => String(v ?? '').toLowerCase().includes(word))));
@@ -116,21 +118,25 @@ export default function MediaPage({ library = null }) {
   const genres = [...new Map(mine.flatMap((m) => m.genres).map((g) => [labelKey(g), g])).values()].sort((a, b) => labelKey(a).localeCompare(labelKey(b)));
   const decades = [...new Set(mine.filter((m) => m.year != null).map((m) => decadeOf(m.year)))].sort((a, b) => b - a);
   const decade = from !== '' && to !== '' && Number(from) % 10 === 0 && Number(to) === Number(from) + 9 ? String(from) : '';
-  const filtering = Boolean((!lib && type) || show || word || genre || from !== '' || to !== '' || tag);
-  const clearFilters = () => { setType(lib?.type ?? ''); setShow(''); setQ(''); setGenre(''); setFrom(''); setTo(''); setTag(''); };
+  const filtering = Boolean(type || show || word || genre || from !== '' || to !== '' || tag);
+  const clearFilters = () => { setType(''); setFormat(''); setShow(''); setQ(''); setGenre(''); setFrom(''); setTo(''); setTag(''); };
   // The print page reads the tab, the filters and the sort back from the address.
-  const printAddress = `/media/print?${new URLSearchParams(Object.entries({ lib: library ?? '', type: lib ? '' : type, show, q: q.trim(), genre, from, to, sort }).filter(([, v]) => v !== '' && v != null))}`;
+  // A new title starts on the format the chosen chip names, when it names one (eBook, Audiobook).
+  const addFormat = type === 'book' ? ({ ebook: 'eBook', audio: 'Audiobook' }[format] ?? '') : '';
+  const printAddress = `/media/print?${new URLSearchParams(Object.entries({ type, format: type ? format : '', show, q: q.trim(), genre, from, to, sort }).filter(([, v]) => v !== '' && v != null))}`;
   const count = (id) => titles.filter((m) => m.type === id).length;
+  const pickType = (id) => { setType(id); setFormat(''); };
+  const chips = type ? formatChips(titles, type, format) : [];
   const chip = (active) => `rounded-full px-3 py-1 text-sm ${active ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">{lib ? lib.title : 'Collection'}</h1>
+        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Collection</h1>
         {mine.length > 0 && <Link to={printAddress} className={`${quietButtonClass} ${control} inline-flex items-center`}>Print or save a list</Link>}
         <button type="button" onClick={() => setListing(true)} className={`${quietButtonClass} ${control}`}>Import a list</button>
         <button type="button" onClick={() => setScanning(true)} className={`${quietButtonClass} ${control}`}><Icon of="scan" /> Scan a barcode</button>
         <button type="button" onClick={() => setScanMany(true)} className={`${quietButtonClass} ${control}`}><Icon of="scan" /> Scan many</button>
-        <button type="button" onClick={() => setAdding({ type: type || 'film', format: lib?.format || '' })} className={`${buttonClass} ${control}`}>+ Add</button>
+        <button type="button" onClick={() => setAdding({ type: type || 'film', format: addFormat })} className={`${buttonClass} ${control}`}>+ Add</button>
       </div>
       {mine.length === 0 && tag ? (
         <>
@@ -148,13 +154,21 @@ export default function MediaPage({ library = null }) {
       ) : (
         <>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="What to show">
-            {!lib && <button type="button" onClick={() => setType('')} aria-pressed={!type} className={chip(!type)}>Everything <span className="opacity-80">{titles.length}</span></button>}
-            {TYPES.filter(([id]) => !lib && count(id) > 0).map(([id, label, icon]) => (
-              <button key={id} type="button" onClick={() => setType(id)} aria-pressed={type === id} className={chip(type === id)}><Icon of={icon} /> {label} <span className="opacity-80">{count(id)}</span></button>
+            <button type="button" onClick={() => pickType('')} aria-pressed={!type} className={chip(!type)}>Everything <span className="opacity-80">{titles.length}</span></button>
+            {TYPES.filter(([id]) => count(id) > 0).map(([id, label, icon]) => (
+              <button key={id} type="button" onClick={() => pickType(id)} aria-pressed={type === id} className={chip(type === id)}><Icon of={icon} /> {label} <span className="opacity-80">{count(id)}</span></button>
             ))}
             {mine.some((m) => m.wanted) && <button type="button" onClick={() => setShow(show === 'wanted' ? '' : 'wanted')} aria-pressed={show === 'wanted'} className={chip(show === 'wanted')}>Wanted</button>}
             {mine.some((m) => m.lent_to.length) && <button type="button" onClick={() => setShow(show === 'lent' ? '' : 'lent')} aria-pressed={show === 'lent'} className={chip(show === 'lent')}>Lent out</button>}
           </div>
+          {chips.length > 0 && (
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label={`${typeOf(type)[1]}, by format`} data-formats>
+              {chips.map((c) => <button key={c.id} type="button" onClick={() => setFormat(c.id)} aria-pressed={format === c.id} className={`${chip(format === c.id)} inline-flex min-h-[44px] items-center gap-1`}>{c.label} <span className="opacity-80">{c.count}</span></button>)}
+            </div>
+          )}
+          {type && format && !chips.some((c) => c.id === format && c.count > 0) && (
+            <p className="text-sm text-gray-600 dark:text-life-200" data-format-hint>{emptyHint(type, format)}</p>
+          )}
           {mine.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a title, a person, a genre or a format" aria-label="Find in the collection" className={`${inputClass} ${control} max-w-sm`} />}
           <div className="grid grid-cols-2 items-end gap-3 sm:flex sm:flex-wrap" role="group" aria-label="Sort and narrow down">
             {mine.length > 1 && (
@@ -241,18 +255,18 @@ export default function MediaPage({ library = null }) {
         </Modal>
       )}
       {listing && (
-        <Modal title={lib ? 'Import a list of books' : 'Import a list'} onClose={() => { setListing(false); load(); }}>
-          <BookList format={lib?.format || ''} mixed={!lib} type={type || 'film'} onDone={() => { setListing(false); load(); }} />
+        <Modal title={type === 'book' ? 'Import a list of books' : 'Import a list'} onClose={() => { setListing(false); load(); }}>
+          <BookList format={addFormat} mixed={type !== 'book'} type={type || 'film'} onDone={() => { setListing(false); load(); }} />
         </Modal>
       )}
       {scanMany && (
         <Modal title="Scan many" onClose={() => { setScanMany(false); load(); }}>
-          <BulkScan lookUp={lookUp} ignoreCode={stickerCode} defaultType={type || lib?.type || 'film'} onDone={() => { setScanMany(false); load(); }} />
+          <BulkScan lookUp={lookUp} ignoreCode={stickerCode} defaultType={type || 'film'} onDone={() => { setScanMany(false); load(); }} />
         </Modal>
       )}
       {scanning && (
         <Modal title="Scan a barcode" onClose={() => setScanning(false)}>
-          <ScanToFind onAdd={(start) => { setScanning(false); setAdding({ ...start, type: start.type || type || 'film', format: start.format || lib?.format || '' }); }} />
+          <ScanToFind onAdd={(start) => { setScanning(false); setAdding({ ...start, type: start.type || type || 'film', format: start.format || addFormat }); }} />
         </Modal>
       )}
     </div>

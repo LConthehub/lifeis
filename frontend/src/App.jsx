@@ -84,7 +84,9 @@ const SECTIONS = [
   // Everything with a date or a time to it.
   { word: 'making', shown: 'busy', icon: 'date', home: '/calendar', owns: (path) => ['/calendar', '/routines', '/projects', '/plans', '/things/activities'].some((p) => path.startsWith(p)),
     tabs: [['/calendar', 'Calendar'], ['/routines', 'Routines'], ['/projects', 'Projects'], ['/plans', 'Plans'], ['/plans/holidays', 'Holidays'], ['/plans/trips', 'Trips'], ['/things/activities', 'Activities']] },
-  { word: 'enjoying', shown: 'fun', icon: 'media', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection'], ['/media/books', 'Books'], ['/media/ebooks', 'eBooks'], ['/media/audiobooks', 'Audiobooks'], ['/media/servers', 'Servers']] },
+  { word: 'enjoying', shown: 'entertaining', icon: 'media', home: '/media', owns: (path) => path.startsWith('/media'),
+    // The third place in a tab is the older addresses that still open it (the book shelves are now chips in the Collection).
+    tabs: [['/media', 'Collection', ['/media/books', '/media/ebooks', '/media/audiobooks']], ['/media/connections', 'Connections', ['/media/servers']]] },
 ];
 
 export default function App() {
@@ -146,8 +148,8 @@ function Shell({ user, demo = false, onLogout }) {
           <NavLink to="/settings" aria-label="Settings" className="order-2 text-sm text-white/90 hover:text-white hover:underline"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="sm:hidden"><Icon of="settings" size={22} /></span></NavLink>
           {tabs.length > 1 && (
             <nav className="order-4 flex w-full min-w-0 flex-wrap gap-1" aria-label={`Life is ${section.shown ?? section.word}`}>
-              {tabs.map(([to, label]) => (
-                <NavLink key={to} to={to} end={exact(to)} className={({ isActive }) => `flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium sm:min-h-0 ${isActive ? 'bg-white/25 text-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}>{label}</NavLink>
+              {tabs.map(([to, label, also = []]) => (
+                <NavLink key={to} to={to} end={exact(to)} className={({ isActive }) => `flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium sm:min-h-0 ${isActive || also.includes(pathname) ? 'bg-white/25 text-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}>{label}</NavLink>
               ))}
             </nav>
           )}
@@ -213,6 +215,7 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/media/ebooks" element={<MediaPage key="ebooks" library="ebooks" />} />
           <Route path="/media/audiobooks" element={<MediaPage key="audiobooks" library="audiobooks" />} />
           <Route path="/media/print" element={<CollectionPrint />} />
+          <Route path="/media/connections" element={<Servers />} />
           <Route path="/media/servers" element={<Servers />} />
           <Route path="/media/:id" element={<MediaTitlePage />} />
           <Route path="/tags" element={<TagsPage />} />
@@ -281,11 +284,11 @@ function SectionMenu({ showing, section, atHome }) {
 function BarLink({ to, icon, mark = false, word, current }) {
   return (
     <Link to={to} aria-current={current ? 'page' : undefined}
-      className={`flex min-h-[56px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-0.5 pt-1.5 pb-1 text-[11px] font-semibold leading-tight ${current ? 'text-avocado-100' : 'text-white/80 hover:text-white'}`}>
+      className={`flex min-h-[56px] min-w-max flex-1 flex-col items-center justify-center gap-0.5 px-0.5 pt-1.5 pb-1 text-[11px] font-semibold leading-tight ${current ? 'text-avocado-100' : 'text-white/80 hover:text-white'}`}>
       <span className={`flex h-7 w-11 items-center justify-center rounded-full ${current ? 'bg-avocado-100 text-avocado-800' : ''}`}>
         {mark ? <img src="/mark-192.png" alt="" className="h-6 w-6" /> : <Icon of={icon} size={20} />}
       </span>
-      <span className="max-w-full truncate">{word}</span>
+      <span className="whitespace-nowrap">{word}</span>
     </Link>
   );
 }

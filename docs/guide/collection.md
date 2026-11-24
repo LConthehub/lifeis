@@ -12,13 +12,20 @@ The **entertaining** section is what you own and what you have watched, read or 
 - **Type it.** A title is enough. What it is on can be any word: VHS, Vinyl, Kindle.
 - **Say where it is kept.** A room, and a shelf in it. You can add a place while you add the book.
 
-## Books, eBooks and Audiobooks
+## Finding things by format
 
-Each has its own tab. A book you have on paper and as an audiobook is in both.
+The entertaining section has two tabs: **Collection** and **Connections**. In the Collection, choose Books, Films, Shows or Music, and a second row of chips shows what you own it on, each with a count:
+
+- **Books:** Print, eBooks, Audiobooks. A book on CD or tape counts as an audiobook.
+- **Films and shows:** DVD, Blu-ray, 4K, Digital.
+- **Music:** Vinyl, CD, Cassette, Digital.
+- **Other** holds any format that fits none of those.
+
+A chip only shows once you own something in it, and the row is left out when there would be only **All**. A title on two formats is under both chips.
 
 ## A library on your own server
 
-Under **Servers**, connect a server you run and its library is brought in and kept in step:
+Under **Connections**, connect a server you run and its library is brought in and kept in step:
 
 - **Jellyfin** and **Emby** for films, shows and music.
 - **Audiobookshelf** for audiobooks and eBooks. It asks for an API token.
@@ -35,7 +42,7 @@ If the server is on the same computer as Life Is, and Life Is runs in Docker, us
 
 These offer no way for another program to read your library, so Life Is cannot link to them as it does to a server. Two ways round it:
 
-- **Import a list.** On Books, eBooks or Audiobooks, choose **Import a list**. It takes the file Goodreads gives you (My Books, then Import and export), one from StoryGraph, any spreadsheet saved as CSV with a Title column, or plain lines such as `Dune by Frank Herbert`. You see what was found before anything is added. Books on a to-read shelf can become books you want. A book you already have is not added twice, so you can import the same list again later.
+- **Import a list.** In the Collection, choose **Import a list**. It takes the file Goodreads gives you (My Books, then Import and export), one from StoryGraph, any spreadsheet saved as CSV with a Title column, or plain lines such as `Dune by Frank Herbert`. You see what was found before anything is added. Books on a to-read shelf can become books you want. A book you already have is not added twice, so you can import the same list again later.
 - **Keep a link on a copy.** Open the book in Kindle, Apple Books or Google Play Books, copy its address or use Share, and paste it into the copy. Life Is shows an **Open in Kindle** button. The link is only followed when you press it.
 
 Nothing in a list is looked up or sent anywhere.

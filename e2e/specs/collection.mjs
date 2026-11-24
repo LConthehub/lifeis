@@ -22,7 +22,7 @@ await wait(1000);
 { const skip = page.getByRole('dialog').getByRole('button', { name: 'Skip, show me everything' }); if (await skip.isVisible().catch(() => false)) { await skip.click(); await wait(900); } }
 await page.locator('header button[aria-haspopup]').click();
 const header = flat(await page.locator('nav[aria-label="Sections"]').innerText());
-say('the header has its sections: ' + header, /home\s+tasty\s+tidy\s+balanced\s+busy\s+fun/.test(header));
+say('the header has its sections: ' + header, /home\s+tasty\s+tidy\s+balanced\s+busy\s+entertaining/.test(header));
 await page.keyboard.press('Escape');
 
 // A place for the tapes, then the collection.
@@ -30,7 +30,7 @@ await page.goto(base + '/things/places'); await wait();
 await page.getByRole('button', { name: '+ New place' }).click();
 await field('called').fill('Tape cabinet'); await page.getByRole('button', { name: 'Save' }).click(); await wait();
 
-await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'fun', exact: true }).click(); await wait();
+await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'entertaining', exact: true }).click(); await wait();
 say('an empty collection says what to do', /Nothing here yet/.test(await text()));
 await page.getByRole('button', { name: '+ Add' }).click();
 await field('Title').fill('Alien'); await field('Director').fill('Ridley Scott'); await field('Year').fill('1979');
@@ -81,7 +81,7 @@ await field('How many discs').fill('12');
 await page.getByRole('button', { name: 'Save' }).click(); await wait(900);
 say('the copy says "Book on CD · 12 discs": ' + flat(await cdCopies.innerText()).slice(0, 80), /Book on CD · 12 discs/.test(await cdCopies.innerText()));
 await page.goto(base + '/media/audiobooks'); await wait(900);
-say('and so does the Audiobooks tab: ' + flat(await text()).slice(0, 120), /Dune on CD/.test(await text()) && /Book on CD · 12 discs/.test(await text()));
+say('and so does the Audiobooks chip (the old link): ' + flat(await text()).slice(0, 120), /Dune on CD/.test(await text()) && /Book on CD · 12 discs/.test(await text()));
 await page.goto(base + '/media'); await wait(700);
 await page.getByRole('link', { name: /Dune on CD/ }).click(); await wait(800);
 await cdCopies.getByRole('button', { name: /Book on CD/ }).click();

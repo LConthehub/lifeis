@@ -293,7 +293,7 @@ function MailSetting() {
 function MediaServers() {
   return (
     <Titled icon="show" title="Your Jellyfin or Emby" hint="Brings the films, shows, music and books on a media server you name into your collection. Life Is only reads from that server, using the key you give it, and talks to nowhere else.">
-      <Link to="/media/servers" className="text-sm text-life-600 hover:underline dark:text-life-200">Media servers →</Link>
+      <Link to="/media/connections" className="text-sm text-life-600 hover:underline dark:text-life-200">Your book and media servers, under Entertaining →</Link>
     </Titled>
   );
 }

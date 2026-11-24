@@ -4,6 +4,8 @@ import { chromium } from 'playwright-core';
 const base = process.argv[2], shots = process.argv[3];
 const browser = await chromium.launch({ ...browserChoice, headless: true });
 const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
+// The old shelves are chips in the Collection now: the old addresses open Books with the chip chosen.
+const shelf = async (name) => { await page.goto(base + '/media/' + name); };
 const bad = [];
 const expected400 = [];
 page.on('response', (r) => {
@@ -29,8 +31,8 @@ await wait(1000);
 { const skip = dialog().getByRole('button', { name: 'Skip, show me everything' }); if (await skip.isVisible().catch(() => false)) { await skip.click(); await wait(900); } }
 
 // ---- a list, for the libraries nothing can read ----
-await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'fun', exact: true }).click(); await wait();
-await page.getByRole('link', { name: 'eBooks' }).first().click(); await wait();
+await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'entertaining', exact: true }).click(); await wait();
+await shelf('ebooks'); await wait();
 await page.getByRole('button', { name: 'Import a list' }).click();
 await field('Or the list itself').fill('Title,Author,ISBN13,Exclusive Shelf,Date Read,Binding\n"Dune (Dune Chronicles, #1)",Frank Herbert,"=""9780441172719""",read,2024/03/05,Kindle Edition\nThe Left Hand of Darkness,Ursula K. Le Guin,,to-read,,Paperback\n"Piranesi",Susanna Clarke,,read,,Kindle Edition\n');
 await dialog().getByRole('button', { name: 'Look it over' }).click(); await wait(900);
@@ -43,11 +45,11 @@ say('bringing it in says what happened: ' + d.match(/Imported:[^.]*\./)?.[0], /I
 await dialog().getByRole('button', { name: 'Done' }).click(); await wait(900);
 let t = await text();
 say('the Kindle books are under eBooks, and the wanted one is not: ' + flat(t).slice(0, 200), /Dune/.test(t) && /Piranesi/.test(t) && /Kindle/.test(t) && !/Left Hand/.test(t));
-await page.getByRole('link', { name: 'Books', exact: true }).first().click(); await wait(900);
+await shelf('books'); await wait(900);
 say('the one on the to-read shelf is a book that is wanted', /The Left Hand of Darkness[\s\S]*wanted/.test(await text()));
 
 // ---- a link on a copy ----
-await page.getByRole('link', { name: 'eBooks' }).first().click(); await wait();
+await shelf('ebooks'); await wait();
 await page.getByRole('link', { name: /Dune/ }).first().click(); await wait(900);
 say('the day the list said it was read is in its log', /2024-03-05/.test(await text()));
 await page.getByRole('button', { name: /^Kindle/ }).first().click(); await wait();
@@ -60,7 +62,7 @@ const open = page.getByRole('link', { name: 'Open in Kindle' });
 say('the copy opens in Kindle, in a new tab, telling the other site nothing', await open.getAttribute('href') === 'https://read.amazon.com/?asin=B00B7NPRY8' && await open.getAttribute('target') === '_blank' && /noreferrer/.test(await open.getAttribute('rel')));
 
 // ---- book servers ----
-await page.getByRole('link', { name: 'Servers' }).first().click(); await wait();
+await page.getByRole('link', { name: 'Connections', exact: true }).first().click(); await wait();
 say('book servers start empty, and say what cannot be read', /No book servers connected/.test(await text()) && /Kindle, Apple Books and Google Play Books can't be read this way/.test(await text()));
 const connect = async (kind, fill) => {
   await page.getByRole('button', { name: '+ Connect a book server' }).click();
@@ -86,10 +88,10 @@ for (const [n, want] of [[0, /In step: 2 on Audiobookshelf, 2 added, 2 covers ke
 }
 await page.screenshot({ path: shots + '/book-servers.png', fullPage: true });
 
-await page.getByRole('link', { name: 'Audiobooks' }).first().click(); await wait(1000);
+await shelf('audiobooks'); await wait(1000);
 t = await text();
 say('audiobooks from Audiobookshelf are under Audiobooks: ' + flat(t).slice(0, 160), /Dune/.test(t) && /Project Hail Mary/.test(t) && !/Kindred/.test(t));
-await page.getByRole('link', { name: 'eBooks' }).first().click(); await wait(1000);
+await shelf('ebooks'); await wait(1000);
 t = await text();
 say('eBooks holds the list and both servers, with Dune once: ' + flat(t).slice(0, 220), (t.match(/Frank Herbert/g) ?? []).length === 1 && /Kindred/.test(t) && /Emma/.test(t) && /Bone/.test(t) && /Piranesi/.test(t));
 await page.screenshot({ path: shots + '/ebooks.png' });
@@ -103,14 +105,14 @@ await page.screenshot({ path: shots + '/book-three-copies.png' });
 
 // Narrow, like a phone: nothing runs off the side.
 await page.setViewportSize({ width: 390, height: 844 });
-await page.getByRole('link', { name: 'Servers' }).first().click(); await wait(900);
-say('the Servers page fits a phone', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+await page.getByRole('link', { name: 'Connections', exact: true }).first().click(); await wait(900);
+say('the Connections page fits a phone', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
 await page.setViewportSize({ width: 1100, height: 900 });
 
 await page.getByRole('button', { name: 'Edit Calibre-Web' }).click();
 await page.getByLabel(/take what it imported/).check();
 await dialog().getByRole('button', { name: 'Disconnect' }).click(); await wait(1200);
-await page.getByRole('link', { name: 'eBooks' }).first().click(); await wait(1000);
+await shelf('ebooks'); await wait(1000);
 t = await text();
 say('disconnecting Calibre-Web with its copies takes its books, and leaves Dune: ' + flat(t).slice(0, 160), /Dune/.test(t) && !/Kindred/.test(t) && !/Emma/.test(t) && /Bone/.test(t));
 console.log(expected400.length === 2 ? 'two refusals seen, the bad link and the wrong token, as intended' : 'UNEXPECTED refusals: ' + expected400.join(' | '));
