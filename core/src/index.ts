@@ -105,3 +105,5 @@ export { start, WANTS, PET_KINDS } from './start.ts';
 export type { Start, StartState, Suggestion, Cleared } from './start.ts';
 export { exportEverything, lookAtDownload, bringInDownload, bringInPictures, splitDownload, makeZip, readZip, csvField, csvText, KINDS as DOWNLOAD_KINDS, LEFT_OUT as DOWNLOAD_LEFT_OUT, MAX_EXPORT_BYTES, MAX_SENT_BYTES } from './exportAll.ts';
 export type { Everything, KindReport, Pending, Brought, PictureIn, ZipFile, KindInfo } from './exportAll.ts';
+export { outdoorTrips, PARTS as TRIP_PARTS, AFTER_TRIP, GEAR_SOURCES, ammoOnHand } from './outdoorTrips.ts';
+export type { OutdoorTrips, TripSummary as OutdoorTripSummary, YearView as OutdoorYearView, TripInput as OutdoorTripInput, SharedTrip as OutdoorSharedTrip, Gear as OutdoorGear, Part as OutdoorPart } from './outdoorTrips.ts';

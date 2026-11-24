@@ -22,7 +22,7 @@ const dollars = (cents) => (cents === null || cents === undefined ? '' : (cents 
 const cents = (text) => (String(text).trim() === '' ? null : Math.round(Number(text) * 100));
 
 /** A row you tick, with a tap target at least 44 pixels tall. */
-function Tick({ checked, onChange, children, label, disabled = false }) {
+export function Tick({ checked, onChange, children, label, disabled = false }) {
   return (
     <label className={`flex min-h-[44px] flex-1 items-center gap-3 text-sm text-gray-800 dark:text-life-50 ${disabled ? 'opacity-50' : 'cursor-pointer'}`}>
       <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} aria-label={label} className="h-5 w-5 flex-none accent-life-600" />
@@ -31,14 +31,14 @@ function Tick({ checked, onChange, children, label, disabled = false }) {
   );
 }
 
-const Heading = ({ icon, children, aside }) => (
+export const Heading = ({ icon, children, aside }) => (
   <div className="mb-2 flex flex-wrap items-center gap-2">
     <h2 className="flex flex-1 items-center gap-2 font-semibold text-life-800 dark:text-life-50"><Icon of={icon} /> {children}</h2>
     {aside}
   </div>
 );
-const Hint = ({ children }) => <p className="text-xs text-gray-500 dark:text-life-300">{children}</p>;
-const Remove = ({ onClick, label }) => <button type="button" onClick={onClick} aria-label={label} className="flex h-11 w-11 flex-none items-center justify-center rounded-full text-lg text-gray-400 hover:bg-life-50 hover:text-red-600 dark:hover:bg-life-700">×</button>;
+export const Hint = ({ children }) => <p className="text-xs text-gray-500 dark:text-life-300">{children}</p>;
+export const Remove = ({ onClick, label }) => <button type="button" onClick={onClick} aria-label={label} className="flex h-11 w-11 flex-none items-center justify-center rounded-full text-lg text-gray-400 hover:bg-life-50 hover:text-red-600 dark:hover:bg-life-700">×</button>;
 
 // ==================== the list of holidays ====================
 

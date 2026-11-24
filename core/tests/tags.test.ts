@@ -57,7 +57,7 @@ it('carries the old recipe tags over: one top-level tag for each word, each owne
   const other = await person('other');
   // Put the database back to how version 38 left it, with recipes that have a comma list of tags.
   // Version 46 comes last, then 45.
-  for (const table of ['holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays']) await db.run(`DROP TABLE ${table}`);
+  for (const table of ['outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays']) await db.run(`DROP TABLE ${table}`);
   await db.run('ALTER TABLE plan_photos DROP COLUMN spot');
   await db.run('DROP TABLE trip_receipts');
   for (const column of ['saved_cents', 'trip_id', 'claimed_on']) await db.run(`ALTER TABLE prices DROP COLUMN ${column}`);

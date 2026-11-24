@@ -15,7 +15,7 @@
 import { randomBytes } from 'node:crypto';
 import { statSync } from 'node:fs';
 import {
-  calendar, inventory, kitchen, life, manual, media, money, packing, pets, plans, projects, upkeep, type Db,
+  calendar, inventory, kitchen, life, manual, media, money, outdoorTrips, packing, pets, projects, upkeep, type Db,
 } from '../../core/src/index.ts';
 import { AREAS } from '../../core/src/life.ts';
 import { addDays } from '../../core/src/small.ts';
@@ -185,8 +185,33 @@ async function fill(db: Db, me: number): Promise<void> {
   await cal.createEvent({ title: 'Dentist appointment', day: day(1), time: '15:30' });
   await cal.createEvent({ title: "Mom's birthday", day: `1958-${day(9).slice(5)}`, yearly: true });
   await cal.createEvent({ title: 'School concert', day: day(11), time: '18:00' });
-  const trip = await plans(db, me).create({ name: 'Cabin weekend', start_day: day(18), end_day: day(20), note: 'Bring the camping stove.' });
-  await plans(db, me).addItem(trip.id, { kind: 'recipe', ref_id: soup.id }).catch(() => {});
+  // ---- an outdoor trip: one family camping and fishing weekend (no hunting in the demo) ----
+  await things.addStarter('outdoors');
+  const outdoorKinds = await things.listKinds();
+  const camping = outdoorKinds.find((x) => x.name === 'Camping gear')!;
+  const tackle = outdoorKinds.find((x) => x.name === 'Fishing tackle')!;
+  const typeOf = (kind: typeof camping) => String(kind.fields.find((f) => f.name === 'Type')!.id);
+  const tent = await things.createItem({ kind_id: camping.id, name: 'Family tent', place_id: garage, values: { [typeOf(camping)]: 'Tent' }, activities: ['Camping'] });
+  await things.createItem({ kind_id: camping.id, name: 'Sleeping bags (4)', quantity: 4, place_id: garage, values: { [typeOf(camping)]: 'Sleeping bag' }, activities: ['Camping'] });
+  await things.createItem({ kind_id: camping.id, name: 'Two-burner stove', place_id: garage, values: { [typeOf(camping)]: 'Stove' }, activities: ['Camping'] });
+  await things.createItem({ kind_id: camping.id, name: 'Big cooler', place_id: garage, values: { [typeOf(camping)]: 'Cooler' }, activities: ['Camping'] });
+  await things.createItem({ kind_id: camping.id, name: 'Lantern', place_id: garage, values: { [typeOf(camping)]: 'Lantern' }, activities: ['Camping'] });
+  await things.createItem({ kind_id: tackle.id, name: 'Rod and reel', place_id: garage, values: { [typeOf(tackle)]: 'Rod' }, activities: ['Fishing'] });
+  const jigs = await things.createItem({ kind_id: tackle.id, name: 'Jig heads', quantity: 2, low_at: 4, place_id: garage, values: { [typeOf(tackle)]: 'Lures' }, activities: ['Fishing'] });
+  await things.createItem({ kind_id: tackle.id, name: 'Spinners', quantity: 6, low_at: 2, place_id: garage, values: { [typeOf(tackle)]: 'Lures' }, activities: ['Fishing'] });
+  await things.createItem({ kind_id: tackle.id, name: 'Fishing line', quantity: 1, low_at: 1, place_id: garage, values: { [typeOf(tackle)]: 'Line' }, activities: ['Fishing'] });
+  const chili = await k.createRecipe({ title: 'Campfire chili', servings: 6, ingredients_text: '2 lb ground beef\n2 cans kidney beans\n1 can diced tomatoes\n1 onion\n2 tbsp chili powder', steps_text: 'Brown the beef and onion in a pot.\nAdd everything else and simmer for 30 minutes.' });
+  const out = outdoorTrips(db, me);
+  const weekend = await out.create({ name: 'Lake weekend', parts: ['camping', 'fishing'], day: day(18), end_day: day(20) });
+  const weekendPlan = weekend.years[0]!.plan_id;
+  await out.fillGear(weekendPlan, 'camping');
+  await out.fillGear(weekendPlan, 'fishing');
+  await out.addMeal(weekendPlan, { recipe_id: chili.id, day: day(18), meal: 'dinner' });
+  await out.addMeal(weekendPlan, { recipe_id: muffins.id, day: day(19), meal: 'breakfast' });
+  await out.addSeason(weekendPlan, { part: 'fishing', label: 'Walleye opener', opens_on: day(12), remind_days: 5 });
+  await out.setYear(weekendPlan, { water: 'Clear Lake', campground: 'Pine Hollow Campground', site: '14', confirmation: 'PH-20418', check_in: day(18), check_out: day(20), notes_next: 'Bring a second tarp.' });
+  void tent;
+  void jigs;
   void tv;
 }
 
