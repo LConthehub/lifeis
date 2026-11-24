@@ -13,6 +13,7 @@ import { budget } from '../src/budget.ts';
 import { money } from '../src/money.ts';
 import { pets } from '../src/pets.ts';
 import { prep } from '../src/prep.ts';
+import { holidays } from '../src/holidays.ts';
 import { plans } from '../src/plans.ts';
 import { projects } from '../src/projects.ts';
 import { tags as tagsOf } from '../src/tags.ts';
@@ -336,7 +337,7 @@ async function shape(owner: number) {
 async function bringIn(owner: number, zipBytes: Uint8Array, chosen: string[]) {
   const { files, pictures } = await splitDownload(zipBytes);
   const done = await bringInDownload(db, owner, files, chosen, clock);
-  const sent: PictureIn[] = done.pending.filter((p) => pictures.has(p.file)).map((p) => ({ as: p.as, id: p.id, kind: p.kind, name: p.name, bytes: pictures.get(p.file)! }));
+  const sent: PictureIn[] = done.pending.filter((p) => pictures.has(p.file)).map((p) => ({ as: p.as, id: p.id, kind: p.kind, name: p.name, spot: p.spot, bytes: pictures.get(p.file)! }));
   const kept = await bringInPictures(db, owner, sent, clock);
   return { ...done, kept };
 }
@@ -526,4 +527,39 @@ it('takes prep reminders and a time to eat along with the recipe and the meal', 
   const bobMeal = (await kitchen(db, bob, clock).listPlan('2046-03-06', 1))[0]!;
   const bobPrep = await prep(db, bob, clock).meal(bobMeal.id);
   expect([bobPrep.eat_time, bobPrep.steps.map((s) => s.words), bobPrep.recipe_steps.length]).toEqual(['19:30', ['Make the stock'], 2]);
+});
+
+it('holidays go out and come back: how each finds its day, each year, its lists and its spot photos, once', async () => {
+  const mine = holidays(db, ana, clock);
+  const made = await mine.create({ name: 'Thanksgiving', rule: { kind: 'weekday', month: 11, weekday: 4, nth: 4 } });
+  const year = made.years[0]!.plan_id;
+  await mine.setYear(year, { dinner_time: '17:00', turkey_pounds: 16, put_up_on: '2046-11-15', budget_cents: 20000 });
+  await mine.addPerson(year, 'guest', { name: 'Aunt June' });
+  await mine.addPerson(year, 'card', { name: 'Grandma' });
+  await mine.addStep(year, { words: 'Chill the wine', rule: 'morning_of', at: '09:00' });
+  await mine.addDecor(year, { spot: 'Mantel', label: 'Garland' });
+  await mine.addGift(year, { who: 'Maya', idea: 'A scarf' });
+  await mine.updateGift((await mine.year(year)).gifts[0]!.id, { status: 'bought', cents: 2500 });
+  await mine.keepSpotPhoto(year, 'Mantel', PNG);
+  await mine.finish(year, 'More pie');
+  const zip = (await exportEverything(db, ana, clock)).bytes;
+  const done = await bringIn(bob, zip, ['plans', 'holidays']);
+  for (const kind of done.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  const rows = (id: number) => holidays(db, id, clock);
+  const theirs = (await rows(bob).list())[0]!;
+  expect([theirs.name, theirs.rule_words, theirs.years.map((y) => y.day)]).toEqual(['Thanksgiving', 'Fourth Thursday of November', ['2047-11-28', '2046-11-22']]);
+  const there = await rows(bob).year(theirs.years[1]!.plan_id);
+  const here = await rows(ana).year(year);
+  expect([there.dinner_time, there.turkey_pounds, there.put_up_on, there.budget_cents, there.notes_next, there.notes_done]).toEqual([here.dinner_time, here.turkey_pounds, here.put_up_on, here.budget_cents, here.notes_next, here.notes_done]);
+  expect([there.guests.map((g) => g.name), there.cards.map((g) => g.name), there.countdown.steps.map((s) => s.words)]).toEqual([['Aunt June'], ['Grandma'], expect.arrayContaining(['Chill the wine'])]);
+  expect(there.gifts.map((g) => [g.who, g.idea, g.status, g.cents])).toEqual([['Maya', 'A scarf', 'bought', 2500]]);
+  expect(there.spots.map((s) => [s.name, s.items.map((i) => i.label), s.photos.length])).toEqual([['Mantel', ['Garland'], 1]]); // the photo kept its spot
+  expect(done.kept.kept).toBe(1);
+  // The same file again adds nothing.
+  const again = await bringIn(bob, zip, ['plans', 'holidays']);
+  expect(again.kinds.find((k) => k.key === 'holidays')).toMatchObject({ found: 1, fresh: 0, already: 1 });
+  expect((await rows(bob).list())).toHaveLength(1);
+  expect((await rows(bob).year(theirs.years[1]!.plan_id)).guests).toHaveLength(1);
+  // Nothing of Ana's moved.
+  expect((await rows(ana).list())[0]!.years).toHaveLength(2);
 });

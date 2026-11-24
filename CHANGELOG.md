@@ -6,6 +6,12 @@ All notable changes to Life Is are listed here. The format follows [Keep a Chang
 
 ### Added
 
+- Holidays, under Plans: a plan that comes back each year, on the same date, on a weekday rule (the fourth Thursday of
+  November) or on a day you set each year. Each year starts from last year's, with its own menu, guests, cards, gifts,
+  decorations by spot with last year's photo, put-up and take-down lists, a dinner countdown counted back from when
+  dinner is (a frozen turkey's thaw included), and a budget from spending tagged to the holiday. A birthday or
+  anniversary on the calendar can become a holiday with one tap. Gifts for someone who signs in stay hidden from them
+  until the day has passed.
 - AGPL-3.0 license, contributor guide, and security policy.
 - A test workflow on GitHub that runs the type checks, tests, and build on every push and pull request.
 - Version 0.2.0.

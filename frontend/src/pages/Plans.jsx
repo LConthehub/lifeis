@@ -105,6 +105,7 @@ export default function PlansPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Plans and memories</h1>
+        <Link to="/plans/holidays" className={`${quietButtonClass} flex min-h-[44px] items-center`}><Icon of="holiday" /> &nbsp;Holidays</Link>
         <button type="button" onClick={() => setAdding(true)} className={buttonClass}>+ New</button>
       </div>
       <div className="flex flex-wrap items-center gap-2">

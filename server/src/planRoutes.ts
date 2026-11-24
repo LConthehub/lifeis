@@ -16,7 +16,7 @@ const planFrom = (body: Body) => ({
 const sent = (body: Body, name: string) => Object.hasOwn(body, name);
 
 /** A picture sent as base64 text inside the request, turned back into its bytes. */
-function pictureFrom(body: Body): Uint8Array {
+export function pictureFrom(body: Body): Uint8Array {
   const text = read.text(body, 'data');
   if (text.length > MAX_PHOTO_BYTES * 1.4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(text)) throw new Refusal(400, 'That photo is too large to keep, or was damaged on the way');
   return Uint8Array.from(atob(text), (letter) => letter.charCodeAt(0));

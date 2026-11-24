@@ -67,6 +67,7 @@ const SUITE = [
   { specs: ['kitchen-week'], account: TRIAL },
   { specs: ['prep'], account: TRIAL },
   { specs: ['routines'], account: TRIAL },
+  { specs: ['holidays'], account: TRIAL },
   { specs: ['tags'], account: TRIAL },
   { specs: ['touch-targets'], account: TRIAL },
   { specs: ['trial'], phone: true },

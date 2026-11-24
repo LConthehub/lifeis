@@ -4,7 +4,7 @@ import {
   CloudSnow, CloudSun, CloudSunRain, CornerUpRight, Dog, FileText, Film, Fish, Flag, Gamepad2, Hammer, House, Hourglass, Image, Landmark, Link2, ListChecks,
   Lock, Mail, MapPin, Megaphone, MessageCircle, Music, Package, PackageCheck, Paperclip, PawPrint, PenLine, Phone, Pin, Plus, Rabbit, Receipt,
   Refrigerator, Repeat, Search, Settings, ShieldCheck, ShoppingCart, Siren, Smartphone, Sparkles, Sun, Tag, Thermometer, Ticket, Trophy, Truck, Tv,
-  TriangleAlert, Utensils, Wrench,
+  TriangleAlert, Utensils, Wrench, Gift, PartyPopper, Users, Timer, Box,
 } from 'lucide-react';
 
 /**
@@ -27,6 +27,8 @@ const MEANINGS = {
   contacts: Phone, handwritten: PenLine, warranty: ShieldCheck, receipt: Receipt, paper: FileText, cart: ShoppingCart, moved: CornerUpRight,
   packed: PackageCheck, moving: Truck, dog: Dog, cat: Cat, rabbit: Rabbit, bird: Bird, fish: Fish,
   settings: Settings, recipe: ChefHat, weather: CloudSun,
+  // Holidays
+  gift: Gift, holiday: PartyPopper, guests: Users, timer: Timer, box: Box,
   // Kinds of titles in the collection
   film: Film, show: Tv, music: Music, book: BookOpen, game: Gamepad2, other: Archive,
   // Weather, by what the server sends now (emoji from core/src/weather.ts)

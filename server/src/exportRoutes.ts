@@ -47,7 +47,7 @@ export function exportRoutes(db: Db): Route[] {
     // The pictures and papers that belong to what was brought in, a few at a time.
     ['POST', /^\/api\/export\/pictures$/, async (c) => {
       const pictures: PictureIn[] = read.records(c.body, 'pictures').slice(0, 40).map((one) => ({
-        as: read.text(one, 'as') as PictureIn['as'], id: read.maybeWhole(one, 'id') ?? 0, kind: read.maybeText(one, 'kind') ?? undefined, name: read.maybeText(one, 'name') ?? undefined, bytes: bytesFrom(one.data),
+        as: read.text(one, 'as') as PictureIn['as'], id: read.maybeWhole(one, 'id') ?? 0, kind: read.maybeText(one, 'kind') ?? undefined, name: read.maybeText(one, 'name') ?? undefined, spot: read.maybeText(one, 'spot') ?? undefined, bytes: bytesFrom(one.data),
       }));
       return { json: await bringInPictures(db, c.user.id, pictures, c.clock) };
     }],

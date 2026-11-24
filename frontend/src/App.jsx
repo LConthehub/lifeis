@@ -18,6 +18,7 @@ import Servers from './pages/Servers';
 import Mail from './pages/Mail';
 import Prices from './pages/Prices';
 import PlansPage, { PlanPage } from './pages/Plans';
+import HolidaysPage, { HolidayPage } from './pages/Holidays';
 import { PlacePage, StickerLanding, StickersPage } from './pages/Places';
 import FillPlace from './pages/FillPlace';
 import Thing from './pages/Thing';
@@ -61,7 +62,7 @@ const SECTIONS = [
     tabs: [['/calendar', 'Calendar'], ['/things', 'Things'], ['/things/places', 'Places'], ['/things/upkeep', 'Upkeep'], ['/routines', 'Routines'], ['/things/licenses', 'Licenses'], ['/things/pets', 'Pets'], ['/manual', 'House Manual'], ['/tags', 'Tags'], ['/mail', 'Mail']] },
   { word: 'spending', shown: 'budgeted', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month'], ['/money/year', 'Year'], ['/money/goals', 'Goals'], ['/money/income', 'Income and bills']] },
   { word: 'making', shown: 'doing', home: '/projects', owns: (path) => path.startsWith('/projects') || path.startsWith('/plans') || path.startsWith('/things/activities'),
-    tabs: [['/projects', 'Projects'], ['/plans', 'Plans'], ['/things/activities', 'Activities']] },
+    tabs: [['/projects', 'Projects'], ['/plans', 'Plans'], ['/plans/holidays', 'Holidays'], ['/things/activities', 'Activities']] },
   { word: 'enjoying', shown: 'entertaining', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection'], ['/media/books', 'Books'], ['/media/ebooks', 'eBooks'], ['/media/audiobooks', 'Audiobooks'], ['/media/servers', 'Servers']] },
 ];
 
@@ -189,6 +190,9 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/mail" element={<Mail />} />
           <Route path="/plans" element={<PlansPage />} />
+          <Route path="/plans/holidays" element={<HolidaysPage />} />
+          <Route path="/plans/holidays/:id" element={<HolidayPage />} />
+          <Route path="/plans/holidays/:id/:planId" element={<HolidayPage />} />
           <Route path="/plans/:id" element={<PlanPage />} />
           <Route path="/media" element={<MediaPage key="all" />} />
           <Route path="/media/books" element={<MediaPage key="books" library="books" />} />

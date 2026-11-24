@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Icon from '../components/Icon';
 import axios from 'axios';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
@@ -111,6 +111,7 @@ export default function Calendar() {
 }
 
 function EventForm({ event, onDone }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState({ title: event.title || '', day: event.day, end_day: event.end_day || '', time: event.time || '', note: event.note || '', yearly: Boolean(event.yearly) });
   const [tags, setTags] = useState(event.tag_list || []);
   const [error, setError] = useState('');
@@ -125,6 +126,10 @@ function EventForm({ event, onDone }) {
     } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   const remove = async () => { await axios.delete(`/api/calendar/events/${event.id}`).catch(() => {}); onDone(); };
+  // A birthday, anniversary or other yearly date becomes a holiday with one tap: its own plan each year, started from last year's.
+  const makeHoliday = async () => {
+    try { const { data } = await axios.post('/api/plans/holidays/from-event', { event_id: event.id }); navigate(`/plans/holidays/${data.id}/${data.years[0].plan_id}`); } catch (err) { setError(errorMessage(err, "Couldn't make that a holiday")); }
+  };
   return (
     <form onSubmit={submit} className="space-y-3">
       <Field label="What *"><input required autoFocus={!event.id} value={form.title} onChange={set('title')} placeholder="e.g. Dentist" className={inputClass} /></Field>
@@ -139,6 +144,11 @@ function EventForm({ event, onDone }) {
         <input type="checkbox" checked={form.yearly} onChange={(e) => setForm({ ...form, yearly: e.target.checked })} className="mt-0.5 accent-life-600" />
         <span>Every year <span className="block text-xs text-gray-500 dark:text-life-300">A birthday or an anniversary. Give the day it first happened, year and all, and the calendar counts the years.</span></span>
       </label>
+      {event.id && event.yearly && (
+        <button type="button" onClick={makeHoliday} className="min-h-[44px] w-full rounded-xl border border-life-200 px-3 text-sm text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100 dark:hover:bg-life-800">
+          <Icon of="holiday" /> Make it a holiday: its own gifts, menu, guests, decor and notes each year
+        </button>
+      )}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex items-center justify-between">
         {event.id ? <button type="button" onClick={remove} className="text-sm text-red-600 hover:underline">Remove</button> : <span />}

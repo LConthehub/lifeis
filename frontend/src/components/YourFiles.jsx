@@ -177,7 +177,7 @@ async function sendPictures(pending, find, onProgress) {
     // One picture too large to send in a single request is left out and counted, never cut short.
     if (bytes.length > MOST_ONE) { left += 1; continue; }
     if (weight + bytes.length > SENT_AT_ONCE) await flush();
-    batch.push({ as: one.as, id: one.id, kind: one.kind, name: one.name, data: base64(bytes) });
+    batch.push({ as: one.as, id: one.id, kind: one.kind, name: one.name, spot: one.spot, data: base64(bytes) });
     weight += bytes.length;
     if (batch.length >= 30) await flush();
   }
