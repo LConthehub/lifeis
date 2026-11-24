@@ -29,7 +29,7 @@ await wait(1000);
 { const skip = dialog().getByRole('button', { name: 'Skip, show me everything' }); if (await skip.isVisible().catch(() => false)) { await skip.click(); await wait(900); } }
 
 // ---- a list, for the libraries nothing can read ----
-await page.getByRole('link', { name: 'entertaining' }).click(); await wait();
+await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'fun', exact: true }).click(); await wait();
 await page.getByRole('link', { name: 'eBooks' }).first().click(); await wait();
 await page.getByRole('button', { name: 'Import a list' }).click();
 await field('Or the list itself').fill('Title,Author,ISBN13,Exclusive Shelf,Date Read,Binding\n"Dune (Dune Chronicles, #1)",Frank Herbert,"=""9780441172719""",read,2024/03/05,Kindle Edition\nThe Left Hand of Darkness,Ursula K. Le Guin,,to-read,,Paperback\n"Piranesi",Susanna Clarke,,read,,Kindle Edition\n');

@@ -1,6 +1,8 @@
 /* The display face for headings and the name: Fraunces, with its weight and its Soft axis, from the font files bundled with the app
    (SIL Open Font License; nothing is loaded from another site). */
 @import '@fontsource-variable/fraunces/soft.css';
+/* The words: Nunito, also bundled (SIL Open Font License). */
+@import '@fontsource-variable/nunito/wght.css';
 
 @tailwind base;
 @tailwind components;
@@ -29,9 +31,18 @@ body {
 .dark { color-scheme: dark; }
 .dark body { background: theme('colors.night'); }
 
-/* Headings and the name wear the display face; the words under them stay in the system's own sans. The Soft axis rounds
-   the letters off, which is where the warm 1970s feel comes from. */
+/* Headings and the name wear the display face; the words under them are Nunito. The Soft axis rounds the letters off,
+   which is where the warm 1970s feel comes from. */
 h1, h2, .font-display { font-family: theme('fontFamily.display'); font-variation-settings: 'SOFT' 100; letter-spacing: -0.005em; }
+
+/* The owner chose Nunito at semibold for the words (Nov 24), so every weight of it steps up to keep bold words standing
+   out. The display face keeps its own weights. Form fields take the page's weight instead of the browser's. */
+body { font-weight: 600; }
+input, button, select, textarea { font-weight: inherit; }
+:where(.font-normal):not(.font-display, h1, h2) { font-weight: 600; }
+:where(.font-medium):not(.font-display, h1, h2) { font-weight: 700; }
+:where(.font-semibold):not(.font-display, h1, h2) { font-weight: 750; }
+:where(.font-bold):not(.font-display, h1, h2), b, strong { font-weight: 850; }
 
 /* Red words, and the grey hints, would be too dim on the dark sheet, so they are lightened there. A dark: class on the
    same element still wins over these. */

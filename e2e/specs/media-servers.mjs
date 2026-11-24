@@ -27,7 +27,7 @@ await wait(1000);
 { const skip = page.getByRole('dialog').getByRole('button', { name: 'Skip, show me everything' }); if (await skip.isVisible().catch(() => false)) { await skip.click(); await wait(900); } }
 
 // A tape of Alien, typed in by hand first.
-await page.getByRole('link', { name: 'entertaining' }).click(); await wait();
+await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'fun', exact: true }).click(); await wait();
 await page.getByRole('button', { name: '+ Add' }).click();
 await field('Title').fill('Alien'); await field('Year').fill('1979'); await page.getByPlaceholder('VHS, DVD, Blu-ray').fill('VHS');
 await page.getByRole('button', { name: 'Save' }).click(); await wait(900);

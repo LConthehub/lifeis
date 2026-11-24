@@ -14,7 +14,10 @@ mkdirSync(out, { recursive: true });
 // brown), light or dark following the device, and the display face Fraunces (SIL Open Font License), served from this site.
 const LIGHT = '--ink: #33291f; --soft: #5a4e40; --paper: #f1e5c8; --card: #f6ead0; --line: #dfcb9f; --deep: #422a17; --teal: #734825; --btn: #734825; --btn-ink: #ffffff;';
 const DARK = '--ink: #fbf4e4; --soft: #d2b184; --paper: #2a190d; --card: #422a17; --line: #5a3a20; --deep: #f2ce47; --teal: #eead3e; --btn: #eead3e; --btn-ink: #2a190d;';
-const fontFace = (url) => `@font-face { font-family: "Fraunces Variable"; font-style: normal; font-display: swap; font-weight: 100 900; src: url(${url}) format("woff2-variations"); }`;
+// The words are Nunito (also SIL Open Font License), at semibold like the app; nunito.woff2 sits beside fraunces-soft.woff2.
+const fontFace = (url) => `@font-face { font-family: "Fraunces Variable"; font-style: normal; font-display: swap; font-weight: 100 900; src: url(${url}) format("woff2-variations"); }
+@font-face { font-family: "Nunito Variable"; font-style: normal; font-display: swap; font-weight: 200 1000; src: url(${url.replace('fraunces-soft.woff2', 'nunito.woff2')}) format("woff2-variations"); }
+b, strong { font-weight: 850; }`;
 const DISPLAY = 'font-family: "Fraunces Variable", Georgia, Cambria, serif; font-variation-settings: "SOFT" 100;';
 // The stripe: straight flat bands in the artwork's order until the owner's hand-made wave is added (frontend/src/art.js), then that picture, tiled.
 const bands = (up) => (ART.wave ? `.bands { height: 1rem; background: url(${up}art/${ART.wave}) repeat-x; background-size: auto 100%; }` : '.bands { height: .6rem; background: linear-gradient(180deg, #60304f 0 20%, #3a742f 20% 40%, #f2ce47 40% 60%, #e7602c 60% 80%, #f5e8cd 80% 100%); }');
@@ -22,6 +25,8 @@ if (ART.wave) { mkdirSync(path.join(out, 'art'), { recursive: true }); copyFileS
 const HEADER_BROWN = 'linear-gradient(100deg, #4a2f1a 0%, #5f361b 55%, #933f1d 100%)';
 copyFileSync(path.join(here, 'site-src', 'fraunces-soft.woff2'), path.join(out, 'fraunces-soft.woff2'));
 copyFileSync(path.join(here, 'site-src', 'fraunces-OFL.txt'), path.join(out, 'fraunces-OFL.txt'));
+copyFileSync(path.join(here, 'site-src', 'nunito.woff2'), path.join(out, 'nunito.woff2'));
+copyFileSync(path.join(here, 'site-src', 'nunito-OFL.txt'), path.join(out, 'nunito-OFL.txt'));
 // The small icons in the pages are Lucide's (ISC license); its notice is kept with the site like Fraunces'.
 copyFileSync(path.join(here, 'site-src', 'lucide-ISC.txt'), path.join(out, 'lucide-ISC.txt'));
 
@@ -105,7 +110,7 @@ const page = (title, body) => `<!doctype html>
   :root { ${LIGHT} --accent: #422a17; }
   @media (prefers-color-scheme: dark) { :root { ${DARK} --accent: #f2ce47; } }
   h1, h2 { ${DISPLAY} }
-  body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 600 17px/1.6 "Nunito Variable", system-ui, -apple-system, "Segoe UI", sans-serif; }
   main { max-width: 42rem; margin: 0 auto; padding: 2rem 1.1rem 4rem; }
   h1 { font-size: 1.7rem; line-height: 1.25; margin: 0 0 1rem; }
   h2 { font-size: 1.15rem; margin: 2rem 0 .4rem; color: var(--accent); }
@@ -214,7 +219,7 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
   ${bands("")}
   .hero .bands { position: absolute; left: 0; right: 0; bottom: 0; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 600 17px/1.6 "Nunito Variable", system-ui, -apple-system, "Segoe UI", sans-serif; }
   a { color: var(--teal); }
   .hero { position: relative; background: ${HEADER_BROWN}; color: #fff; padding: 1rem 1.1rem 3.5rem; }
   .bar, .wrap { max-width: 64rem; margin: 0 auto; }
@@ -442,7 +447,7 @@ writeFileSync(path.join(docsOut, 'docs.css'), `${fontFace('../fraunces-soft.woff
 h1, h2, .brand { ${DISPLAY} }
 ${bands("../")}
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 600 17px/1.6 "Nunito Variable", system-ui, -apple-system, "Segoe UI", sans-serif; }
 a { color: var(--teal); }
 .top { background: ${HEADER_BROWN}; color: #fff; padding: .7rem 1.1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .top a { color: #fff; text-decoration: none; opacity: .92; } .top .brand { font-weight: 700; font-size: 1.1rem; margin-right: auto; display: flex; align-items: center; gap: .5rem; opacity: 1; }

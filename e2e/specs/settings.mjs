@@ -5,7 +5,7 @@ const PASS = 'trial-only-password-8031';
 const browser = await chromium.launch({ ...browserChoice, headless: true });
 const bad = [];
 const say = (what, ok) => console.log((ok ? 'ok   ' : 'FAIL ') + what);
-const EXPECTED = ['your-name', 'life', 'tags', 'look', 'reminders', 'calendar-link', 'other-calendars', 'assistant', 'weather', 'mail', 'bank', 'lookups', 'recalls', 'photos', 'media', 'recipe-web', 'idle', 'password', 'security', 'people', 'sign-out', 'last-copy', 'your-files', 'recipes-out'];
+const EXPECTED = ['your-name', 'life', 'tags', 'mail-page', 'look', 'reminders', 'calendar-link', 'other-calendars', 'assistant', 'weather', 'mail', 'bank', 'lookups', 'recalls', 'photos', 'media', 'recipe-web', 'idle', 'password', 'security', 'people', 'sign-out', 'last-copy', 'your-files', 'recipes-out'];
 
 async function signedIn(width, height) {
   const context = await browser.newContext({ viewport: { width, height } });
@@ -27,7 +27,7 @@ await wide.goto(base + '/settings'); await wide.waitForTimeout(1500);
 const menu = wide.getByRole('navigation', { name: 'Settings' });
 const groups = await menu.getByRole('link').allInnerTexts();
 say('a menu of groups beside the settings: ' + groups.map((g) => g.trim()).join(' | '), groups.length === 6);
-say('the first group shows by itself, not the whole long page', (await wide.locator('[data-settings-group] > div[id]').count()) === 4);
+say('the first group shows by itself, not the whole long page', (await wide.locator('[data-settings-group] > div[id]').count()) === 5);
 const found = [];
 for (let i = 0; i < groups.length; i += 1) {
   await menu.getByRole('link').nth(i).click(); await wide.waitForTimeout(1200);

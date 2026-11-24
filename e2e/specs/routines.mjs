@@ -35,7 +35,7 @@ const serum = await send('POST', '/api/things/items', { kind_id: kind.id, name: 
 
 // ---------- making the routines from the ready-made ones ----------
 await page.goto(base + '/routines'); await wait(1200);
-say('the Routines page is under organized, beside Upkeep', await page.getByRole('link', { name: /Routines/ }).first().isVisible());
+say('the Routines page is under busy, beside Calendar', await page.getByRole('link', { name: /Routines/ }).first().isVisible());
 await page.getByRole('button', { name: 'Add Skincare' }).click(); await wait(900);
 say('the ready-made list stays open while adding', await page.getByRole('button', { name: 'Add 4-night skin cycle' }).isVisible());
 await page.getByRole('button', { name: 'Add 4-night skin cycle' }).click(); await wait(900);

@@ -29,6 +29,7 @@ const GROUPS = [
       { id: 'your-name', title: 'Your name', words: 'name call display nickname greeting called', render: () => <YourName /> },
       { id: 'life', title: 'What Life Is looks after', words: 'sections areas sewing garden cookware clothing money spending show hide', render: ({ onLifeChanged }) => <Titled title="What Life Is looks after" hint="Decides which sections show. Nothing is removed by unchecking."><LifeAreasPicker onSaved={onLifeChanged} /></Titled> },
       { id: 'tags', title: 'Tags', words: 'tags labels organize nest merge rename categories', render: () => <TagsSetting /> },
+      { id: 'mail-page', title: 'Mail', words: 'mail inbox email letters messages read', render: () => <MailSetting /> },
       { id: 'look', title: 'Look', words: 'theme dark mode light night day colour color appearance device system brown cream mushroom', render: () => <Look /> },
     ],
   },
@@ -277,6 +278,14 @@ function TagsSetting() {
   return (
     <Titled icon="tag" title="Tags" hint="One list of tags for your household, put on things, recipes, projects, plans, spending, titles, pets, upkeep and dates. Rename them, put one inside another, merge two, or delete one.">
       <Link to="/tags" className="text-sm text-life-600 hover:underline dark:text-life-200">See and change your tags →</Link>
+    </Titled>
+  );
+}
+
+function MailSetting() {
+  return (
+    <Titled icon="email" title="Mail" hint="The mail Life Is has read for you, and your inbox when an email account is connected under Connections.">
+      <Link to="/mail" className="text-sm text-life-600 hover:underline dark:text-life-200">Open Mail →</Link>
     </Titled>
   );
 }
