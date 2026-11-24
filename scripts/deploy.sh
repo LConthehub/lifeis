@@ -33,12 +33,16 @@ if [ "${1:-}" = "--check" ]; then
   node e2e/run.mjs || fail "a browser walk-through failed"
   # The walk-throughs take the website's pictures of the app again; keep the committed ones, so the merge below can switch branches.
   git checkout -- docs/site/img
-  [ -z "$(git status --porcelain)" ] || fail "the checks left files changed: $(git status --porcelain | head -5 | tr '\n' ' ')"
 fi
 
 say "Building the image (Life Is keeps running meanwhile)"
 docker compose build >/dev/null || fail "the image did not build; nothing was changed"
+# The website is built again to be sure it matches its words (its pictures of the app come from the latest walk-through, so the committed ones are kept). Pages that differ only in line endings (Windows) are put
+# back as committed; a page whose words really changed means the committed site is out of date, so stop before anything moves.
 node docs/build-site.mjs >/dev/null
+git diff --ignore-cr-at-eol --quiet -- docs/site ':!docs/site/img' || fail "the website in docs/site is out of date with its words; run node docs/build-site.mjs, commit it, and deploy again (nothing was changed)"
+git checkout -- docs/site
+[ -z "$(git status --porcelain)" ] || fail "files changed during the checks: $(git status --porcelain | head -5 | tr '\n' ' '); nothing was changed"
 
 say "Backing up"
 stamp=$(date +%Y%m%d-%H%M)
