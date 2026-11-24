@@ -83,6 +83,7 @@ export const KINDS: KindInfo[] = [
   { key: 'projects', label: 'Projects, with their lines, time and costs', file: 'projects.csv', importable: true, matched: 'by name' },
   { key: 'plans', label: 'Plans, with their things to do and photos', file: 'plans.csv', importable: true, matched: 'by name and first day' },
   { key: 'holidays', label: 'Holidays: how each finds its day, and what each year kept (guests, cards, gifts, decorations, countdown)', file: 'holidays.csv', importable: true, matched: 'by name; a year by its plan' },
+  { key: 'trips', label: 'Outdoor trips: the parts each has on, and what each year kept (bring list, seasons, catch and harvest logs, site booking)', file: 'outdoor-trips.csv', importable: true, matched: 'by name; a year by its plan' },
   { key: 'tags', label: 'Tags, and what carries them', file: 'tags.csv', importable: true, matched: 'by path; a tag on something by that thing’s name' },
   { key: 'connections', label: 'Servers and accounts you connected (names and addresses only)', file: 'connections.csv', importable: false, matched: '' },
   { key: 'settings', label: 'Preferences', file: 'settings.csv', importable: false, matched: '' },
@@ -583,6 +584,35 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   }
   out.csv('holiday-lists.csv', ['Plan', 'Starts', 'List', 'Name', 'Where, or who it is for', 'Status', 'Amount', 'Done', 'Note', 'Also'], listRows);
 
+  // ---------- outdoor trips: the parts each has on, and what each year kept ----------
+  const tripRows = await all('SELECT id, name, camping, fishing, hunting, private FROM outdoor_trips WHERE owner_id = ? ORDER BY id');
+  const tripOf = new Map(tripRows.map((t) => [t.id as number, t]));
+  out.csv('outdoor-trips.csv', ['Trip', 'Camping', 'Fishing', 'Hunting', 'Private'],
+    tripRows.map((t) => [str(t.name), yes(t.camping), yes(t.fishing), yes(t.hunting), yes(t.private)]));
+  const tripYears = await all(`SELECT y.plan_id, y.trip_id, y.water, y.campground, y.site, y.confirmation, y.check_in, y.check_out, y.budget_cents, y.notes_next, y.notes_done
+    FROM outdoor_trip_years y JOIN plans p ON p.id = y.plan_id WHERE p.owner_id = ? ORDER BY y.trip_id, y.year`);
+  out.csv('outdoor-trip-years.csv', ['Trip', 'Plan', 'Starts', 'Water', 'Campground', 'Site', 'Confirmation', 'Check in', 'Check out', 'Budget', 'Notes for next year', 'Notes for next year asked for'],
+    tripYears.map((y) => [str(tripOf.get(y.trip_id as number)?.name), str(planOf.get(y.plan_id as number)?.name), str(planOf.get(y.plan_id as number)?.start_day), str(y.water), str(y.campground), str(y.site),
+      str(y.confirmation), str(y.check_in), str(y.check_out), dollars(y.budget_cents), str(y.notes_next), yes(y.notes_done)]));
+  // One list file for what a year keeps. After the plan and its first day come: list, name, part, day, place or water, length, weight, amount, status, also, note, tag number or caliber.
+  const tripList: Cell[][] = [];
+  for (const g of await all(`SELECT g.plan_id, g.part, g.label, g.quantity, g.caliber, g.packed, g.returned, g.after_trip, g.after_done, g.note, i.name AS thing FROM outdoor_gear g JOIN plans pl ON pl.id = g.plan_id
+    LEFT JOIN items i ON i.id = g.thing_id WHERE pl.owner_id = ? ORDER BY g.plan_id, g.sort_order, g.id`)) {
+    const status = [g.packed ? 'packed' : '', g.returned ? 'returned' : '', g.after_trip ? `after ${g.after_trip}` : '', g.after_trip && g.after_done ? 'after done' : ''].filter(Boolean).join('; ');
+    tripList.push([...planCells(g.plan_id), 'gear', str(g.label), str(g.part), '', '', '', '', str(g.quantity), status, str(g.thing), str(g.note), str(g.caliber)]);
+  }
+  for (const s of await all(`SELECT s.plan_id, s.part, s.label, s.opens_on, s.closes_on, s.remind_days, s.note FROM outdoor_seasons s JOIN plans pl ON pl.id = s.plan_id WHERE pl.owner_id = ? ORDER BY s.plan_id, s.opens_on, s.id`)) {
+    tripList.push([...planCells(s.plan_id), 'season', str(s.label), str(s.part), str(s.opens_on), str(s.closes_on), '', '', str(s.remind_days), '', '', str(s.note), '']);
+  }
+  for (const c of await all(`SELECT c.plan_id, c.fish, c.day, c.water, c.length_inches, c.weight_lb, c.kept, c.lure, c.frozen, c.note, i.name AS thing FROM outdoor_catch c JOIN plans pl ON pl.id = c.plan_id
+    LEFT JOIN items i ON i.id = c.lure_thing_id WHERE pl.owner_id = ? ORDER BY c.plan_id, c.day, c.id`)) {
+    tripList.push([...planCells(c.plan_id), 'catch', str(c.fish), 'fishing', str(c.day), str(c.water), str(c.length_inches), str(c.weight_lb), '', [c.kept ? 'kept' : 'released', c.frozen ? 'frozen' : ''].filter(Boolean).join('; '), str(c.thing ?? c.lure), str(c.note), '']);
+  }
+  for (const h of await all(`SELECT h.plan_id, h.animal, h.day, h.place, h.tag_number, h.weight_lb, h.frozen, h.note FROM outdoor_harvest h JOIN plans pl ON pl.id = h.plan_id WHERE pl.owner_id = ? ORDER BY h.plan_id, h.day, h.id`)) {
+    tripList.push([...planCells(h.plan_id), 'harvest', str(h.animal), 'hunting', str(h.day), str(h.place), '', str(h.weight_lb), '', h.frozen ? 'frozen' : '', '', str(h.note), str(h.tag_number)]);
+  }
+  out.csv('outdoor-trip-lists.csv', ['Plan', 'Starts', 'List', 'Name', 'Part', 'Day', 'Place or water', 'Length (inches)', 'Weight (pounds)', 'Amount', 'Status', 'Also', 'Note', 'Tag number or caliber'], tripList);
+
   // ---------- spending ----------
   const categories = await all('SELECT id, name, monthly_cents FROM money_categories WHERE owner_id = ? ORDER BY sort_order, id');
   const sharedWith = await all('SELECT s.category_id, u.username FROM money_shares s JOIN users u ON u.id = s.user_id JOIN money_categories c ON c.id = s.category_id WHERE c.owner_id = ? ORDER BY u.username');
@@ -709,6 +739,7 @@ const FILE_ABOUT: [string, string][] = [
   ['projects.csv', 'Projects, and project-lines.csv, project-time.csv and project-costs.csv for what they use, the time spent and what they cost.'],
   ['plans.csv', 'Plans, and plan-items.csv and plan-photos.csv for what belongs to each.'],
   ['holidays.csv', 'Holidays: how each finds its day. holiday-years.csv has each year (its plan, dinner time, turkey, days to put up and take down, notes for next year) and holiday-lists.csv has what each year keeps: guests, cards, gifts, decorations and countdown steps.'],
+  ['outdoor-trips.csv', 'Outdoor trips: the parts each has on. outdoor-trip-years.csv has each year (its plan, the water, the site booking, notes for next year) and outdoor-trip-lists.csv has what each year kept: the bring list, seasons, the catch log and the harvest log.'],
   ['money-categories.csv', 'Your spending categories and what each is for a month.'],
   ['money-entries.csv', 'What you wrote down as spent.'],
   ['money-income.csv', 'What comes in, and how often; money-goals.csv and money-goal-saved.csv for savings goals and what was put toward each. Bills are in upkeep.csv.'],
@@ -1841,6 +1872,87 @@ const importers: Record<string, Importer> = {
     return d;
   },
 
+  async trips(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'outdoor-trips.csv');
+    if (!t) return d;
+    const years = tableOf(c.files, 'outdoor-trip-years.csv')?.rows ?? [];
+    const lists = tableOf(c.files, 'outdoor-trip-lists.csv')?.rows ?? [];
+    const seen = new Map((await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM outdoor_trips WHERE owner_id = ? ORDER BY id', [c.owner])).map((h) => [labelKey(h.name), h.id]));
+    const planAt = async (name: string, day: string) => (await c.tx.get<{ id: number }>('SELECT id FROM plans WHERE owner_id = ? AND start_day = ? AND name = ? COLLATE NOCASE ORDER BY id LIMIT 1', [c.owner, day, name]))?.id ?? null;
+    const tagFor = async (name: string) => {
+      const key = labelKey(name);
+      const have = await c.tx.get<{ id: number }>('SELECT id FROM tags WHERE owner_id = ? AND key = ? ORDER BY parent_id IS NOT NULL, id LIMIT 1', [c.owner, key]);
+      return have?.id ?? (await c.tx.run('INSERT INTO tags (owner_id, name, key, parent_id, created_at) VALUES (?, ?, ?, NULL, ?)', [c.owner, name.replace(/>/g, ' ').slice(0, 60), key, c.at])).lastId;
+    };
+    const partOf = (text: string) => (['camping', 'fishing', 'hunting'].includes(text.toLowerCase()) ? text.toLowerCase() : null);
+    const thingNamed = (name: string) => (name ? c.tx.get<{ id: number }>('SELECT id FROM items WHERE owner_id = ? AND name = ? COLLATE NOCASE ORDER BY id DESC LIMIT 1', [c.owner, name]) : Promise.resolve(undefined));
+    for (const [at, row] of t.rows.entries()) {
+      const name = clean(cellOf(row, 'Trip'), 100);
+      if (!name) { skip(d, at, 'it has no name'); continue; }
+      d.found += 1;
+      const key = labelKey(name);
+      let id = seen.get(key);
+      if (id === undefined) {
+        id = (await c.tx.run('INSERT INTO outdoor_trips (owner_id, name, camping, fishing, hunting, private, tag_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [c.owner, name, yesOf(cellOf(row, 'Camping')) ? 1 : 0, yesOf(cellOf(row, 'Fishing')) ? 1 : 0, yesOf(cellOf(row, 'Hunting')) ? 1 : 0, yesOf(cellOf(row, 'Private')) ? 1 : 0, await tagFor(name), c.at, c.at])).lastId;
+        seen.set(key, id);
+        d.fresh += 1;
+      } else d.already += 1;
+      for (const y of years.filter((r) => labelKey(cellOf(r, 'Trip')) === key)) {
+        const start = dayOf(cellOf(y, 'Starts'));
+        const plan = start ? await planAt(cellOf(y, 'Plan'), start) : null;
+        if (!start || plan === null) { if (start || cellOf(y, 'Plan')) d.unlinked += 1; continue; }
+        if (await c.tx.get('SELECT 1 AS x FROM outdoor_trip_years WHERE plan_id = ?', [plan])) continue;
+        const year = Number(start.slice(0, 4));
+        if (await c.tx.get('SELECT 1 AS x FROM outdoor_trip_years WHERE trip_id = ? AND year = ?', [id, year])) continue;
+        await c.tx.run('INSERT INTO outdoor_trip_years (plan_id, trip_id, year, water, campground, site, confirmation, check_in, check_out, event_id, budget_cents, notes_next, notes_done) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)',
+          [plan, id, year, clean(cellOf(y, 'Water'), 200), clean(cellOf(y, 'Campground'), 200), clean(cellOf(y, 'Site'), 100), clean(cellOf(y, 'Confirmation'), 100), dayOf(cellOf(y, 'Check in')), dayOf(cellOf(y, 'Check out')),
+            centsOf(cellOf(y, 'Budget')), clean(cellOf(y, 'Notes for next year'), 5000), yesOf(cellOf(y, 'Notes for next year asked for')) ? 1 : 0]);
+        // What a year keeps comes with a year that is new, never added to one already kept.
+        let order = 1;
+        for (const l of lists.filter((r) => cellOf(r, 'Plan').toLowerCase() === cellOf(y, 'Plan').toLowerCase() && cellOf(r, 'Starts') === start)) {
+          const list = cellOf(l, 'List').toLowerCase();
+          const label = clean(cellOf(l, 'Name'), 300);
+          const part = partOf(cellOf(l, 'Part'));
+          const day = dayOf(cellOf(l, 'Day'));
+          const status = cellOf(l, 'Status').toLowerCase();
+          const also = cellOf(l, 'Also');
+          const note = clean(cellOf(l, 'Note'), 500);
+          if (!label || !part) continue;
+          if (list === 'gear') {
+            const thing = await thingNamed(also);
+            const after = /after (dry|clean|repair|replace)/.exec(status)?.[1] ?? null;
+            const amount = numberOf(cellOf(l, 'Amount'));
+            await c.tx.run('INSERT INTO outdoor_gear (plan_id, part, thing_id, label, quantity, caliber, packed, returned, after_trip, after_done, note, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [plan, part, thing?.id ?? null, label.slice(0, 200), amount !== null && amount > 0 ? amount : null, part === 'hunting' ? clean(cellOf(l, 'Tag number or caliber'), 40) : null, status.includes('packed') ? 1 : 0, status.includes('returned') ? 1 : 0,
+                after, after && status.includes('after done') ? 1 : 0, note, order]);
+          } else if (list === 'season' && part !== 'camping') {
+            if (!day) continue;
+            const remind = wholeOf(cellOf(l, 'Amount'));
+            await c.tx.run('INSERT INTO outdoor_seasons (plan_id, part, label, opens_on, closes_on, remind_days, note) VALUES (?, ?, ?, ?, ?, ?, ?)',
+              [plan, part, label.slice(0, 100), day, dayOf(cellOf(l, 'Place or water')), remind !== null && remind >= 0 && remind <= 120 ? remind : 7, note]);
+          } else if (list === 'catch') {
+            if (!day) continue;
+            const length = numberOf(cellOf(l, 'Length (inches)'));
+            const weight = numberOf(cellOf(l, 'Weight (pounds)'));
+            const lure = await thingNamed(also);
+            await c.tx.run('INSERT INTO outdoor_catch (plan_id, fish, day, water, length_inches, weight_lb, kept, lure_thing_id, lure, frozen, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [plan, label.slice(0, 100), day, clean(cellOf(l, 'Place or water'), 200), length !== null && length >= 0 ? length : null, weight !== null && weight >= 0 ? weight : null, status.includes('kept') ? 1 : 0,
+                lure?.id ?? null, clean(also, 100), status.includes('frozen') ? 1 : 0, note]);
+          } else if (list === 'harvest') {
+            if (!day) continue;
+            const weight = numberOf(cellOf(l, 'Weight (pounds)'));
+            await c.tx.run('INSERT INTO outdoor_harvest (plan_id, animal, day, place, tag_number, weight_lb, frozen, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              [plan, label.slice(0, 100), day, clean(cellOf(l, 'Place or water'), 200), clean(cellOf(l, 'Tag number or caliber'), 60), weight !== null && weight >= 0 ? weight : null, status.includes('frozen') ? 1 : 0, note]);
+          } else continue;
+          order += 1;
+        }
+      }
+    }
+    return d;
+  },
+
   async budget(c) {
     const d = blank();
     const income = tableOf(c.files, 'money-income.csv');
@@ -1925,7 +2037,7 @@ const importers: Record<string, Importer> = {
     return d;
   },
 };
-const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'manual', 'licenses', 'collection', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'budget', 'tags'];
+const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'manual', 'licenses', 'collection', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
 
 function rowsIn(files: Files, info: KindInfo): number {
   return tableOf(files, info.file)?.rows.length ?? 0;

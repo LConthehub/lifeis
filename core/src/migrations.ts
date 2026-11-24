@@ -1487,6 +1487,105 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE plan_photos ADD COLUMN spot TEXT`,
     ],
   },
+  {
+    number: 47,
+    name: 'outdoor trips: camping, fishing and hunting parts, each year its own plan',
+    statements: [
+      // A trip that comes back: each year is a plan (outdoor_trip_years). camping, fishing and hunting are the parts turned on.
+      // private: left shared, other people in the house see its name, days and (for fishing) the catch; hunting is never shown.
+      `CREATE TABLE outdoor_trips (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        camping INTEGER NOT NULL DEFAULT 0 CHECK(camping IN (0, 1)),
+        fishing INTEGER NOT NULL DEFAULT 0 CHECK(fishing IN (0, 1)),
+        hunting INTEGER NOT NULL DEFAULT 0 CHECK(hunting IN (0, 1)),
+        private INTEGER NOT NULL DEFAULT 0 CHECK(private IN (0, 1)),
+        tag_id INTEGER REFERENCES tags(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_outdoor_trips_owner ON outdoor_trips(owner_id)`,
+      // One year of a trip. The site booking is typed in (words only: no map, no place looked up) and shows on the calendar (event_id).
+      `CREATE TABLE outdoor_trip_years (
+        plan_id INTEGER PRIMARY KEY REFERENCES plans(id) ON DELETE CASCADE,
+        trip_id INTEGER NOT NULL REFERENCES outdoor_trips(id) ON DELETE CASCADE,
+        year INTEGER NOT NULL,
+        water TEXT,
+        campground TEXT,
+        site TEXT,
+        confirmation TEXT,
+        check_in TEXT,
+        check_out TEXT,
+        event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+        budget_cents INTEGER CHECK(budget_cents IS NULL OR budget_cents >= 0),
+        notes_next TEXT,
+        notes_done INTEGER NOT NULL DEFAULT 0 CHECK(notes_done IN (0, 1)),
+        UNIQUE (trip_id, year)
+      )`,
+      `CREATE INDEX idx_outdoor_trip_years ON outdoor_trip_years(trip_id, year)`,
+      // The bring list: pack and return, then what each piece needs after the trip (after_trip). A repair is sent to Upkeep (job_id).
+      // caliber: for a hunting line that is ammunition, how many rounds to bring.
+      `CREATE TABLE outdoor_gear (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        part TEXT NOT NULL CHECK(part IN ('camping', 'fishing', 'hunting')),
+        thing_id INTEGER REFERENCES items(id) ON DELETE SET NULL,
+        label TEXT NOT NULL,
+        quantity REAL,
+        caliber TEXT,
+        packed INTEGER NOT NULL DEFAULT 0 CHECK(packed IN (0, 1)),
+        returned INTEGER NOT NULL DEFAULT 0 CHECK(returned IN (0, 1)),
+        after_trip TEXT CHECK(after_trip IS NULL OR after_trip IN ('dry', 'clean', 'repair', 'replace')),
+        after_done INTEGER NOT NULL DEFAULT 0 CHECK(after_done IN (0, 1)),
+        job_id INTEGER REFERENCES upkeep_jobs(id) ON DELETE SET NULL,
+        note TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )`,
+      `CREATE INDEX idx_outdoor_gear ON outdoor_gear(plan_id, part)`,
+      // Seasons are dates the person types; a reminder comes remind_days before opening day.
+      `CREATE TABLE outdoor_seasons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        part TEXT NOT NULL CHECK(part IN ('fishing', 'hunting')),
+        label TEXT NOT NULL,
+        opens_on TEXT NOT NULL,
+        closes_on TEXT,
+        remind_days INTEGER NOT NULL DEFAULT 7 CHECK(remind_days >= 0 AND remind_days <= 120),
+        note TEXT
+      )`,
+      `CREATE INDEX idx_outdoor_seasons ON outdoor_seasons(plan_id)`,
+      // The catch log. Fish and water are free words; the lure is one of the person's tackle, or typed.
+      `CREATE TABLE outdoor_catch (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        fish TEXT NOT NULL,
+        day TEXT NOT NULL,
+        water TEXT,
+        length_inches REAL CHECK(length_inches IS NULL OR length_inches >= 0),
+        weight_lb REAL CHECK(weight_lb IS NULL OR weight_lb >= 0),
+        kept INTEGER NOT NULL DEFAULT 0 CHECK(kept IN (0, 1)),
+        lure_thing_id INTEGER REFERENCES items(id) ON DELETE SET NULL,
+        lure TEXT,
+        frozen INTEGER NOT NULL DEFAULT 0 CHECK(frozen IN (0, 1)),
+        note TEXT
+      )`,
+      `CREATE INDEX idx_outdoor_catch ON outdoor_catch(plan_id)`,
+      // The harvest log. The animal is free words: nothing is assumed.
+      `CREATE TABLE outdoor_harvest (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        animal TEXT NOT NULL,
+        day TEXT NOT NULL,
+        place TEXT,
+        tag_number TEXT,
+        weight_lb REAL CHECK(weight_lb IS NULL OR weight_lb >= 0),
+        frozen INTEGER NOT NULL DEFAULT 0 CHECK(frozen IN (0, 1)),
+        note TEXT
+      )`,
+      `CREATE INDEX idx_outdoor_harvest ON outdoor_harvest(plan_id)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

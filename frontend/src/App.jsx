@@ -19,6 +19,7 @@ import Mail from './pages/Mail';
 import Prices from './pages/Prices';
 import PlansPage, { PlanPage } from './pages/Plans';
 import HolidaysPage, { HolidayPage } from './pages/Holidays';
+import TripsPage, { TripPage } from './pages/Trips';
 import { PlacePage, StickerLanding, StickersPage } from './pages/Places';
 import FillPlace from './pages/FillPlace';
 import Thing from './pages/Thing';
@@ -62,9 +63,9 @@ const SECTIONS = [
   { word: 'keeping', shown: 'tidy', icon: 'thing', home: '/things', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || path.startsWith('/manual'),
     tabs: [['/things', 'Things'], ['/things/places', 'Places'], ['/things/upkeep', 'Upkeep'], ['/things/pets', 'Pets'], ['/things/licenses', 'Licenses'], ['/manual', 'House Manual']] },
   { word: 'spending', shown: 'balanced', icon: 'bill', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month'], ['/money/year', 'Year'], ['/money/goals', 'Goals'], ['/money/income', 'Income and bills']] },
-  // Everything with a date or a time to it. Trips join these tabs when they are built.
+  // Everything with a date or a time to it.
   { word: 'making', shown: 'busy', icon: 'date', home: '/calendar', owns: (path) => ['/calendar', '/routines', '/projects', '/plans', '/things/activities'].some((p) => path.startsWith(p)),
-    tabs: [['/calendar', 'Calendar'], ['/routines', 'Routines'], ['/projects', 'Projects'], ['/plans', 'Plans'], ['/plans/holidays', 'Holidays'], ['/things/activities', 'Activities']] },
+    tabs: [['/calendar', 'Calendar'], ['/routines', 'Routines'], ['/projects', 'Projects'], ['/plans', 'Plans'], ['/plans/holidays', 'Holidays'], ['/plans/trips', 'Trips'], ['/things/activities', 'Activities']] },
   { word: 'enjoying', shown: 'fun', icon: 'media', home: '/media', owns: (path) => path.startsWith('/media'), tabs: [['/media', 'Collection'], ['/media/books', 'Books'], ['/media/ebooks', 'eBooks'], ['/media/audiobooks', 'Audiobooks'], ['/media/servers', 'Servers']] },
 ];
 
@@ -184,6 +185,9 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/plans/holidays" element={<HolidaysPage />} />
           <Route path="/plans/holidays/:id" element={<HolidayPage />} />
           <Route path="/plans/holidays/:id/:planId" element={<HolidayPage />} />
+          <Route path="/plans/trips" element={<TripsPage />} />
+          <Route path="/plans/trips/:id" element={<TripPage />} />
+          <Route path="/plans/trips/:id/:planId" element={<TripPage />} />
           <Route path="/plans/:id" element={<PlanPage />} />
           <Route path="/media" element={<MediaPage key="all" />} />
           <Route path="/media/books" element={<MediaPage key="books" library="books" />} />
