@@ -56,7 +56,8 @@ beforeEach(async () => {
 it('carries the old recipe tags over: one top-level tag for each word, each owner on their own', async () => {
   const other = await person('other');
   // Put the database back to how version 38 left it, with recipes that have a comma list of tags.
-  // Version 48 comes last, then 47.
+  // Version 49 comes last, then 48, then 47.
+  await db.run('ALTER TABLE items DROP COLUMN import_ref');
   await db.run('DROP TABLE item_fields');
   await db.run('DROP INDEX idx_items_asset');
   for (const column of ['gone_on', 'gone_how', 'gone_to', 'gone_cents', 'insured', 'asset_no']) await db.run(`ALTER TABLE items DROP COLUMN ${column}`);

@@ -1612,6 +1612,14 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_item_fields_item ON item_fields(item_id, sort_order)`,
     ],
   },
+  {
+    number: 49,
+    name: 'things: where a thing was brought in from (the reference its other app gave it)',
+    statements: [
+      // Bringing the same file in twice finds what is already here by this reference. Null for a thing made here.
+      `ALTER TABLE items ADD COLUMN import_ref TEXT`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

@@ -1188,6 +1188,23 @@ it('a bank statement is looked over, then brought in once, privately, over the w
   expect((await other.post('/api/money/statement/read', { text })).json.already).toBe(0);
 });
 
+it("a HomeBox file is looked over, then brought in once, and only for the person who brought it", async () => {
+  const admin = await owner();
+  const other = await member(admin, 'ben');
+  const text = 'HB.import_ref,HB.location,HB.labels,HB.asset_id,HB.name,HB.quantity\nr1,Garage / Shelf,Tools,000-001,Drill,1\nr2,,,000-002,Box,2\n';
+  const seen = await admin.post('/api/things/homebox/read', { text });
+  expect([seen.status, seen.json.fresh, seen.json.places, seen.json.kinds.map((k: { name: string }) => k.name)]).toEqual([200, 2, { total: 2, fresh: 2 }, ['Other', 'Tools']]);
+  expect((await admin.get('/api/things/items')).json).toEqual([]);
+  expect((await admin.post('/api/things/homebox/read', { text: 'Title,Author\nDune,Herbert\n' })).status).toBe(400);
+  expect((await admin.post('/api/things/homebox/read', {})).status).toBe(422);
+  const brought = await admin.post('/api/things/homebox', { text });
+  expect([brought.status, brought.json]).toMatchObject([201, { added: 2, already: 0, places_made: 2, tags_made: 1, asset_changed: 0 }]);
+  expect((await admin.post('/api/things/homebox', { text })).json).toMatchObject({ added: 0, already: 2 });
+  expect((await admin.get('/api/things/items')).json.map((i: { name: string; asset_no: string }) => [i.name, i.asset_no]).sort()).toEqual([['Box', '000-002'], ['Drill', '000-001']]);
+  expect((await other.get('/api/things/items')).json).toEqual([]);
+  expect((await other.post('/api/things/homebox/read', { text })).json.already).toBe(0);
+});
+
 it('the budget answers over the web: income, bills from upkeep, goals, the month and the year, and tags', async () => {
   const admin = await owner();
   const other = await member(admin, 'ben');

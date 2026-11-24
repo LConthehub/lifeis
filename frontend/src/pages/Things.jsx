@@ -7,6 +7,7 @@ import { ScanSticker } from './Places';
 import PlacePicker from '../components/PlacePicker';
 import { kindChoices } from '../projectKinds';
 import { money } from '../components/Records';
+import HomeboxIn from '../components/HomeboxIn';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 // The headings kinds sit under, in the order shown. Which heading a kind belongs to comes with the kind (its `group`).
 const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garage', 'Garden', 'Outdoors', 'Electronics', 'Music', 'Around the house', 'Clothes and linens'];
@@ -85,6 +86,7 @@ export default function Things() {
             Start from a ready-made set and change it to suit you, or <Link to="/things/kinds" className="underline">make your own kind</Link> from nothing.</p>
         </div>
         <Starters onAdded={load} />
+        <div><HomeboxIn onDone={load} /></div>
       </div>
     );
   }
@@ -162,6 +164,7 @@ export default function Things() {
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Things</h1>
         {items.length > 0 && <Link to="/things/report" className={quietButtonClass}><Icon of="home" /> Home inventory</Link>}
+        <HomeboxIn onDone={load} />
         <Link to="/things/kinds" className="px-1 py-2 text-sm text-life-600 underline dark:text-life-200">Manage kinds</Link>
         <button type="button" onClick={() => setEditing({ kind_id: chosenKind ?? inGroup[0].id })} className={buttonClass}>+ Add</button>
       </div>

@@ -1,0 +1,8 @@
+HB.import_ref,HB.location,HB.labels,HB.asset_id,HB.archived,HB.name,HB.quantity,HB.description,HB.insured,HB.notes,HB.purchase_price,HB.purchase_from,HB.purchase_time,HB.manufacturer,HB.model_number,HB.serial_number,HB.lifetime_warranty,HB.warranty_expires,HB.warranty_details,HB.sold_to,HB.sold_price,HB.sold_time,HB.sold_notes,HB.field.Color,HB.field.Voltage
+ref-001,Garage / Shelf 2,Tools;Power,000-001,false,Cordless drill,1,"Drill, 18 volt",true,"Battery in the blue case.
+Second line of notes.",89.99,Hardware Hut,2044-05-12,Brightmark,BD-18,SN12345,false,2047-05-12,Two years parts and labor,,0,0001-01-01,,Blue,18V
+ref-002,Garage / Shelf 2,Tools,000-002,false,Hand saw,2,,false,,15.5,,2043-01-02,,,,true,,,,0,0001-01-01,,,
+ref-003,Kitchen,Kitchen;Appliances,000-003,false,Toaster,1,Two slice,false,,32,Market Street,2042-11-30,Sunnyday,T-2,,false,,,Neighbor Pat,12,2046-02-01,Works fine,Silver,
+ref-004,Office / Desk,Electronics,000-004,false,Laptop,1,,true,,"1,200.00",Online shop,2045-08-15,Northwind,NW-14,SERIAL-9,false,2048-08-15,,,0,0001-01-01,,,
+ref-005,,,000-005,false,Mystery box,1,,false,,,,,,,,false,,,,0,0001-01-01,,,
+ref-006,Garage,Garden,000-006,true,Old hose,1,,false,,,,,,,,false,,,,0,0001-01-01,,,

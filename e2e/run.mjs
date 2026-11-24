@@ -57,6 +57,7 @@ const SUITE = [
   { specs: ['calendar-link'], account: TRIAL },
   { specs: ['collection'], account: TRIAL },
   { specs: ['bring-in'], account: TRIAL },
+  { specs: ['homebox-in'], account: TRIAL },
   { specs: ['recipe-photos'], account: TRIAL },
   { specs: ['cooking'], account: TRIAL },
   { specs: ['mail'], account: TRIAL, docker: true },

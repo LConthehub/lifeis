@@ -2,7 +2,7 @@
  * The addresses for the things you keep (/api/things) and the projects that use them (/api/projects).
  * What they do is core/'s inventory.ts and projects.ts; this only reads what was sent and passes it on.
  */
-import { inventory, packing, pets, projects, upkeep, whatIsThis, MAX_PET_PHOTO, MAX_DOCUMENT, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
+import { importHomebox, inventory, lookOverHomebox, readHomebox, packing, pets, projects, upkeep, whatIsThis, MAX_PET_PHOTO, MAX_DOCUMENT, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
 import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -148,6 +148,10 @@ export function makingRoutes(db: Db): Route[] {
 
     ['GET', at('things/starters'), async (c) => ({ json: await things(c).listStarters() })],
     ['POST', at('things/starters'), async (c) => ({ json: await things(c).addStarter(read.text(c.body, 'slug')) })],
+
+    // HomeBox's CSV, looked over and then brought in. Read here, sent nowhere. See core/'s homebox.ts.
+    ['POST', at('things/homebox/read'), async (c) => ({ json: await lookOverHomebox(db, c.user.id, readHomebox(read.text(c.body, 'text'))) })],
+    ['POST', at('things/homebox'), async (c) => ({ status: 201, json: await importHomebox(db, c.user.id, c.clock, readHomebox(read.text(c.body, 'text'))) })],
 
     ['GET', at('things/places'), async (c) => ({ json: await things(c).listPlaces() })],
     ['GET', at('things/places/stickers'), async (c) => ({ json: await things(c).stickers() })],
