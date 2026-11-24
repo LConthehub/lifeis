@@ -42,7 +42,8 @@ export default {
         'life-sunrise': 'linear-gradient(135deg, #60304f 0 20%, #3a742f 20% 40%, #f2ce47 40% 60%, #e7602c 60% 80%, #f5e8cd 80% 100%)',
       },
       fontFamily: {
-        sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        // Everything else: Nunito, rounded like the Soft Fraunces, also bundled with the app (SIL Open Font License).
+        sans: ['"Nunito Variable"', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
         // Headings and the name: Fraunces, soft and a little wonky, from the font files bundled with the app.
         display: ['"Fraunces Variable"', 'Georgia', 'Cambria', 'serif'],
       },
