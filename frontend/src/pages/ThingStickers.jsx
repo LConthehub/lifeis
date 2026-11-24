@@ -64,6 +64,7 @@ export function ThingStickersPage() {
           <li key={s.code} className="flex break-inside-avoid flex-col items-center rounded-lg border border-dashed border-gray-400 p-1.5 text-center">
             {pictures[s.code] ? <img src={pictures[s.code]} alt={s.name ? `Sticker for ${s.name}` : 'A blank sticker'} data-code={s.code} className="w-full" /> : <span className="aspect-square w-full" />}
             <span className={`mt-0.5 font-semibold leading-tight ${SIZES[size][2]}`}>{s.name || s.code}</span>
+            {s.asset_no && <span className={`font-mono leading-tight ${SIZES[size][2]}`} data-asset>{s.asset_no}</span>}
           </li>
         ))}
       </ul>

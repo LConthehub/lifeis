@@ -563,3 +563,37 @@ it('holidays go out and come back: how each finds its day, each year, its lists 
   // Nothing of Ana's moved.
   expect((await rows(ana).list())[0]!.years).toHaveLength(2);
 });
+
+it('what is new about things goes out and comes back in: asset numbers, insured, gone, and fields of your own', async () => {
+  const stuff = inventory(db, ana, clock);
+  const kind = (await stuff.createKind({ name: 'Household' }))[0]!.id;
+  const room = (await stuff.createPlace({ name: 'Den' }))[0]!.id;
+  const tv = await stuff.createItem({ kind_id: kind, name: 'Television', place_id: room, insured: true, own_fields: [{ name: 'Remote', value: 'In the drawer' }, { name: 'Wall mount', value: 'Yes; "VESA"' }] });
+  await stuff.createItem({ kind_id: kind, name: 'Lamp' });
+  const rug = await stuff.createItem({ kind_id: kind, name: 'Rug', place_id: room });
+  await stuff.letGo(rug.id, { how: 'sold', day: '2046-02-01', to: 'Mrs. Park, next door', price_cents: 4550 });
+  await stuff.letGo(tv.id, { how: 'given', day: '2046-03-01' });
+  await stuff.takeBack(tv.id);
+  const zip = (await exportEverything(db, ana, clock)).bytes;
+  const files = await splitDownload(zip);
+  expect(names(files)).toContain('thing-own-fields.csv');
+  expect(rowsOf(files, 'thing-own-fields.csv')).toHaveLength(3);
+
+  const first = await bringIn(bob, zip, ['places', 'things']);
+  for (const kind of first.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  expect(first.kinds.find((k) => k.key === 'things')).toMatchObject({ found: 3, fresh: 3 });
+  const mine = inventory(db, bob, clock);
+  const all = [...(await mine.listItems()), ...(await mine.listItems({ gone: true }))];
+  const look = (list: typeof all) => list.map((t) => [t.name, t.asset_no, t.insured, t.gone, t.own_fields]).sort();
+  const before = [...(await stuff.listItems()), ...(await stuff.listItems({ gone: true }))];
+  expect(look(all)).toEqual(look(before));
+  expect(look(all)).toEqual(expect.arrayContaining([
+    ['Rug', '000-003', false, { on: '2046-02-01', how: 'sold', to: 'Mrs. Park, next door', cents: 4550 }, []],
+    ['Television', '000-001', true, null, [{ name: 'Remote', value: 'In the drawer' }, { name: 'Wall mount', value: 'Yes; "VESA"' }]],
+  ]));
+  expect((await mine.listItems()).map((t) => t.name)).toEqual(['Lamp', 'Television']);
+  // The same file again adds nothing, and nothing of Ana's moved.
+  const again = await bringIn(bob, zip, ['things']);
+  expect(again.kinds.find((k) => k.key === 'things')).toMatchObject({ found: 3, fresh: 0, already: 3 });
+  expect(look([...(await mine.listItems()), ...(await mine.listItems({ gone: true }))])).toEqual(look(all));
+});

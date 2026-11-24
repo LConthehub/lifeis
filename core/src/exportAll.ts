@@ -20,7 +20,7 @@
 import { csvRows } from './bookList.ts';
 import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { noteHistory } from './history.ts';
-import { placePaths } from './inventory.ts';
+import { assetLabel, assetNumber, GONE_HOW, placePaths } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
 import { Problem } from './problem.ts';
 import { prepAsText, prepFromText, type PrepRule } from './prep.ts';
@@ -394,7 +394,8 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('kinds.csv', ['Kind', 'Icon', 'Usual unit', 'For activity', 'Field', 'Field is', 'Field unit', 'Choices'], kindRows);
 
   const items = await all(`SELECT i.id, i.name, i.kind_id, k.name AS kind, i.quantity, i.unit, i.place_id, i.low_at, i.note, i.barcode, i.model, i.serial,
-      i.bought_on, i.bought_at, i.price_cents, i.value_cents, i.warranty_until
+      i.bought_on, i.bought_at, i.price_cents, i.value_cents, i.warranty_until,
+      i.asset_no, i.insured, i.gone_on, i.gone_how, i.gone_to, i.gone_cents
     FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.owner_id = ? ORDER BY i.name COLLATE NOCASE, i.id`);
   const values = new Map<string, string>();
   for (const v of await all('SELECT v.item_id, v.field_id, v.value FROM item_values v JOIN items i ON i.id = v.item_id WHERE i.owner_id = ?')) values.set(`${v.item_id}:${v.field_id}`, str(v.value));
@@ -410,10 +411,12 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   }
   const shownValue = (f: R, stored: string | undefined) => (stored === undefined ? '' : f.type === 'yesno' ? (stored === '1' ? 'yes' : 'no') : stored);
   out.csv('things.csv',
-    ['Name', 'Kind', 'Place', 'Amount', 'Unit', 'Running low at', 'Notes', 'For activities', 'Barcode', 'Make or model', 'Serial number', 'Bought on', 'Bought at', 'Cost', 'Worth now', 'Warranty until', 'Photo file', ...fieldColumns.map((c) => c.heading)],
+    ['Name', 'Kind', 'Place', 'Amount', 'Unit', 'Running low at', 'Notes', 'For activities', 'Barcode', 'Make or model', 'Serial number', 'Bought on', 'Bought at', 'Cost', 'Worth now', 'Warranty until', 'Photo file',
+      'Asset number', 'Insured', 'No longer have', 'Gone on', 'Gone to', 'Gone price', ...fieldColumns.map((c) => c.heading)],
     items.map((i) => [
       str(i.name), str(i.kind), where(i.place_id), str(i.quantity), str(i.unit), str(i.low_at), str(i.note), (doing.get(i.id as number) ?? []).join('; '), str(i.barcode),
       str(i.model), str(i.serial), str(i.bought_on), str(i.bought_at), dollars(i.price_cents), dollars(i.value_cents), str(i.warranty_until), photoPath.get(i.id as number) ?? '',
+      assetLabel(num(i.asset_no) ?? 0), i.insured ? 'yes' : 'no', str(i.gone_how), str(i.gone_on), str(i.gone_to), dollars(i.gone_cents),
       ...fieldColumns.map((c) => (c.field.kind_id === i.kind_id ? shownValue(c.field, values.get(`${i.id}:${c.field.id}`)) : '')),
     ]));
   const itemName = new Map(items.map((i) => [i.id as number, i]));
@@ -427,6 +430,12 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     paperRows.push([str(thing.name), where(thing.place_id), str(d.kind), str(d.name), file]);
   }
   out.csv('thing-papers.csv', ['Thing', 'Place', 'Kind of paper', 'Name', 'File'], paperRows);
+  const ownRows: Cell[][] = [];
+  for (const f of await all('SELECT f.item_id, f.name, f.value FROM item_fields f JOIN items i ON i.id = f.item_id WHERE i.owner_id = ? ORDER BY f.item_id, f.sort_order, f.id')) {
+    const thing = itemName.get(f.item_id as number)!;
+    ownRows.push([str(thing.name), where(thing.place_id), str(f.name), str(f.value)]);
+  }
+  out.csv('thing-own-fields.csv', ['Thing', 'Place', 'Field', 'Value'], ownRows);
   out.csv('thing-history.csv', ['Thing', 'Place now', 'What happened', 'Day', 'From', 'To', 'For project', 'For job', 'For activity', 'Notes'],
     (await all("SELECT h.item_id, h.what, h.day, h.from_place, h.to_place, h.project, h.job, h.activity, h.note FROM item_history h JOIN items i ON i.id = h.item_id WHERE h.owner_id = ? AND i.owner_id = ? ORDER BY h.item_id, h.day, h.id", [owner, owner]))
       .map((h) => { const t = itemName.get(h.item_id as number)!; return [str(t.name), where(t.place_id), str(h.what), str(h.day), str(h.from_place), str(h.to_place), str(h.project), str(h.job), str(h.activity), str(h.note)]; }));
@@ -721,7 +730,8 @@ const FILE_ABOUT: [string, string][] = [
   ['barcodes.csv', 'The barcodes you taught Life Is for groceries: which ingredient each is, its product name and its size.'],
   ['places.csv', 'Every place (a room, a shelf, a box) as its full path, such as Sewing room › Shelf 2.'],
   ['kinds.csv', 'The kinds of thing you made (Fabric, Seeds) and the fields each has.'],
-  ['things.csv', 'Everything you keep: where it is, how many, what it cost and is worth, model and serial number, warranty, and a column for each field of its kind.'],
+  ['things.csv', 'Everything you keep: where it is, how many, what it cost and is worth, model and serial number, warranty, asset number, whether it is insured, whether it has gone (sold, given away, thrown out or stolen), and a column for each field of its kind.'],
+  ['thing-own-fields.csv', 'The fields you added to one thing yourself: a name and a value for each.'],
   ['thing-papers.csv', 'The receipts, manuals and warranty cards kept with things, and the file each is in.'],
   ['thing-history.csv', 'Where each thing has been and what it was used for.'],
   ['upkeep.csv', 'Jobs that come round again, bills, renewals and chores: how often, when last done and next due.'],
@@ -987,10 +997,13 @@ const importers: Record<string, Importer> = {
     }
 
     // The columns that are one kind's own field ("Fabric: Width").
-    const base = new Set(['name', 'kind', 'place', 'amount', 'unit', 'running low at', 'notes', 'for activities', 'barcode', 'make or model', 'serial number', 'bought on', 'bought at', 'cost', 'worth now', 'warranty until', 'photo file']);
+    const base = new Set(['name', 'kind', 'place', 'amount', 'unit', 'running low at', 'notes', 'for activities', 'barcode', 'make or model', 'serial number', 'bought on', 'bought at', 'cost', 'worth now', 'warranty until', 'photo file', 'asset number', 'insured', 'no longer have', 'gone on', 'gone to', 'gone price']);
     const own = t.headers.filter((h) => !base.has(h) && h.includes(': ')).map((h) => ({ heading: h, kind: labelKey(h.slice(0, h.indexOf(': '))), field: labelKey(h.slice(h.indexOf(': ') + 2)) }));
 
     const kept = await c.tx.all<{ name: string; place_id: number | null }>('SELECT name, place_id FROM items WHERE owner_id = ?', [c.owner]);
+    // Asset numbers: one given in the file is kept when nothing has it; otherwise the next one in order.
+    const taken = new Set((await c.tx.all<{ n: number }>('SELECT asset_no AS n FROM items WHERE owner_id = ?', [c.owner])).map((r) => r.n));
+    let nextAsset = Math.max(0, ...taken);
     const seen = new Seen(kept.map((i) => `${labelKey(i.name)}\n${labelKey(i.place_id === null ? '' : book.pathOf(i.place_id))}`));
     const fresh = new Map<string, number>();
     for (const [at, row] of t.rows.entries()) {
@@ -1012,13 +1025,20 @@ const importers: Record<string, Importer> = {
       const quantity = numberOf(cellOf(row, 'Amount'));
       const price = centsOf(cellOf(row, 'Cost'));
       const worth = centsOf(cellOf(row, 'Worth now'));
+      let assetNo = assetNumber(cellOf(row, 'Asset number'));
+      if (assetNo === null || assetNo < 1 || taken.has(assetNo)) { do nextAsset += 1; while (taken.has(nextAsset)); assetNo = nextAsset; }
+      taken.add(assetNo);
+      const goneOn = dayOf(cellOf(row, 'Gone on')) ? cellOf(row, 'Gone on') : '';
+      const goneHow = (GONE_HOW as readonly string[]).includes(labelKey(cellOf(row, 'No longer have'))) ? labelKey(cellOf(row, 'No longer have')) : 'thrown';
       const made = await c.tx.run(
-        `INSERT INTO items (owner_id, kind_id, name, quantity, unit, place_id, low_at, note, barcode, bought_on, bought_at, price_cents, value_cents, serial, model, warranty_until, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO items (owner_id, kind_id, name, quantity, unit, place_id, low_at, note, barcode, bought_on, bought_at, price_cents, value_cents, serial, model, warranty_until,
+           asset_no, insured, gone_on, gone_how, gone_to, gone_cents, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [c.owner, kind.id, name, quantity !== null && quantity >= 0 ? quantity : null, units.canonical(clean(cellOf(row, 'Unit'), 20)), placeId,
           numberOf(cellOf(row, 'Running low at')), clean(row.notes, 5000), clean(cellOf(row, 'Barcode').replace(/[^0-9A-Za-z]/g, '').toUpperCase(), 40),
           dayOf(cellOf(row, 'Bought on')), clean(cellOf(row, 'Bought at'), 120), price, worth, clean(cellOf(row, 'Serial number'), 120), clean(cellOf(row, 'Make or model'), 120),
-          dayOf(cellOf(row, 'Warranty until')), c.at, c.at]);
+          dayOf(cellOf(row, 'Warranty until')), assetNo, yesOf(cellOf(row, 'Insured')) ? 1 : 0,
+          goneOn ? dayOf(goneOn) : null, goneOn ? goneHow : null, goneOn ? clean(cellOf(row, 'Gone to'), 200) : null, goneOn ? centsOf(cellOf(row, 'Gone price')) : null, c.at, c.at]);
       const id = made.lastId;
       fresh.set(key, fresh.get(key) ?? id);
       d.fresh += 1;
@@ -1046,6 +1066,19 @@ const importers: Record<string, Importer> = {
       await noteHistory(c.tx, c.owner, { item_id: id }, { what: 'added', to_place: placeId ? book.pathOf(placeId) : null, day: c.today, at: c.at });
       const photo = cellOf(row, 'Photo file');
       if (photo) d.pending.push({ file: photo, as: 'thing-photo', id });
+    }
+    // The fields of their own that people gave the things that came in now.
+    const ownSeen = new Map<number, Set<string>>();
+    for (const row of tableOf(c.files, 'thing-own-fields.csv')?.rows ?? []) {
+      const id = fresh.get(`${labelKey(cellOf(row, 'Thing'))}\n${labelKey(book.normal(cellOf(row, 'Place')))}`);
+      const name = clean(cellOf(row, 'Field'), 60);
+      const value = clean(cellOf(row, 'Value'), 2000);
+      if (id === undefined || !name || !value) continue;
+      const have = ownSeen.get(id) ?? new Set<string>();
+      if (have.has(labelKey(name)) || have.size >= 30) continue;
+      have.add(labelKey(name));
+      ownSeen.set(id, have);
+      await c.tx.run('INSERT INTO item_fields (item_id, name, value, sort_order) VALUES (?, ?, ?, ?)', [id, name, value, have.size]);
     }
     // The papers of the things that came in now.
     for (const row of tableOf(c.files, 'thing-papers.csv')?.rows ?? []) {

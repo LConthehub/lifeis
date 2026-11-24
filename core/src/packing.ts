@@ -40,7 +40,7 @@ export function packing(db: Db, owner: number, clock: Clock = () => new Date()) 
     for (const r of rows) {
       const place = places.get(r.id);
       if (!place) continue;
-      const inside = await db.all<{ id: number; name: string }>('SELECT id, name FROM items WHERE owner_id = ? AND place_id = ? ORDER BY name COLLATE NOCASE', [owner, r.id]);
+      const inside = await db.all<{ id: number; name: string }>('SELECT id, name FROM items WHERE owner_id = ? AND place_id = ? AND gone_on IS NULL ORDER BY name COLLATE NOCASE', [owner, r.id]);
       const titles = await db.all<{ id: number; name: string }>(
         'SELECT DISTINCT m.id, m.title AS name FROM media_copies c JOIN media m ON m.id = c.media_id WHERE m.owner_id = ? AND c.place_id = ? ORDER BY m.title COLLATE NOCASE', [owner, r.id]);
       boxes.push({ id: r.id, name: place.name, path: place.path, state: r.box_state, destination: r.box_destination,
@@ -102,7 +102,7 @@ export function packing(db: Db, owner: number, clock: Clock = () => new Date()) 
       if (toPlaceId === id) throw new Problem(400, 'Unpack it into somewhere else');
       await owned(toPlaceId);
       let moved = 0;
-      for (const t of await db.all<{ id: number }>('SELECT id FROM items WHERE owner_id = ? AND place_id = ?', [owner, id])) {
+      for (const t of await db.all<{ id: number }>('SELECT id FROM items WHERE owner_id = ? AND place_id = ? AND gone_on IS NULL', [owner, id])) {
         await things.moveItem(t.id, toPlaceId, 'unpacked');
         moved += 1;
       }

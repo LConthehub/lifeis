@@ -6,6 +6,7 @@ import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, err
 import { ScanSticker } from './Places';
 import PlacePicker from '../components/PlacePicker';
 import { kindChoices } from '../projectKinds';
+import { money } from '../components/Records';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 // The headings kinds sit under, in the order shown. Which heading a kind belongs to comes with the kind (its `group`).
 const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garage', 'Garden', 'Outdoors', 'Electronics', 'Music', 'Around the house', 'Clothes and linens'];
@@ -14,6 +15,10 @@ const OTHER = 'Other';
 
 const TYPES = [['text', 'Text'], ['number', 'A number'], ['choice', 'A choice from a list'], ['yesno', 'Yes or no'], ['date', 'A date'], ['link', 'A link']];
 const typeName = (type) => (TYPES.find(([id]) => id === type) || ['', type])[1];
+/** How a thing went, in words: "Sold · Mar 1, 2046 · to a neighbor · $50.00". */
+const HOW_GONE = { sold: 'Sold', given: 'Given away', thrown: 'Thrown out', stolen: 'Stolen' };
+export const goneText = (g) => [HOW_GONE[g.how] ?? g.how, new Date(`${g.on}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }),
+  g.to && `to ${g.to}`, g.cents != null && money(g.cents)].filter(Boolean).join(' · ');
 const commaList = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
 
 /** How a field's value reads in a list: "Yes", "45 min", "Flax". */
@@ -60,13 +65,14 @@ export default function Things() {
   const [kind, setKind] = useState(null);
   const [q, setQ] = useState('');
   const [tag, setTag] = useState('');
+  const [showGone, setShowGone] = useState(false);   // the "No longer have" list: sold, given away, thrown out, stolen
   const sel = useSelecting();
   const [editing, setEditing] = useState(null);
   const load = useCallback(() => {
     axios.get('/api/things/kinds').then(({ data }) => setKinds(data)).catch(() => setKinds([]));
     axios.get('/api/things/places').then(({ data }) => setPlaces(data)).catch(() => {});
-    axios.get('/api/things/items', { params: { tag: tag || undefined } }).then(({ data }) => setItems(data)).catch(() => setItems([]));
-  }, [tag]);
+    axios.get('/api/things/items', { params: { tag: tag || undefined, gone: showGone ? 1 : undefined } }).then(({ data }) => setItems(data)).catch(() => setItems([]));
+  }, [tag, showGone]);
   useEffect(() => { load(); }, [load]);
   if (!kinds) return null;
 
@@ -93,9 +99,9 @@ export default function Things() {
   const pickGroup = (g) => { setGroup(g); setKind(null); };
 
   const word = q.trim().toLowerCase();
-  const matches = (item) => !word || [item.name, item.note, item.place, ...Object.values(item.values)].some((v) => String(v ?? '').toLowerCase().includes(word));
+  const matches = (item) => !word || [item.name, item.note, item.place, item.asset_no, ...Object.values(item.values), ...(item.own_fields || []).flatMap((f) => [f.name, f.value])].some((v) => String(v ?? '').toLowerCase().includes(word));
   const shownItems = items.filter((i) => (chosenKind === null || i.kind_id === chosenKind) && inGroup.some((k) => k.id === i.kind_id) && matches(i));
-  const low = items.filter((i) => i.low).map((i) => i.name);
+  const low = items.filter((i) => i.low && !i.gone).map((i) => i.name);
   const chip = (on) => `min-h-[44px] rounded-full px-4 py-2 text-sm ${on ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
   const kindChips = (list, label, all) => (
     <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>
@@ -128,6 +134,7 @@ export default function Things() {
                         {(details.length > 0 || item.place) && (
                           <span className="block text-xs text-gray-500 dark:text-life-300"><Dots parts={[...details, item.place && <><Icon of="place" /> {item.place}</>]} /></span>
                         )}
+                        {item.gone && <span className="block text-xs text-honey-700">{goneText(item.gone)}</span>}
                         {item.set_aside > 0 && <span className="block text-xs text-life-600 dark:text-life-200">{item.set_aside} {item.unit || ''} set aside for projects</span>}
                       </span>
                       {item.low && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">low</span>}
@@ -175,13 +182,15 @@ export default function Things() {
         </>
       ) : kindChips(kinds, 'Kind of thing', 'Everything')}
       <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => setShowGone((on) => !on)} aria-pressed={showGone} className={chip(showGone)}>No longer have</button>
         {items.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find something" aria-label="Find a thing" className={`${inputClass} max-w-sm`} />}
         <TagFilter value={tag} onChange={setTag} />
         {items.length > 0 && <SelectButton sel={sel} />}
       </div>
       <BulkBar sel={sel} kind="thing" list={shownItems.map((i) => i.id)} noun="things" onDone={load} />
       {shownItems.length === 0 ? (
-        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>{items.length === 0 && !tag ? 'Nothing here yet. Add the first thing you keep.' : 'Nothing matches.'}</div>
+        <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>{showGone && items.length === 0 ? 'Nothing is marked as gone. Open a thing and choose "No longer have it" when you sell it, give it away, throw it out, or it is stolen.'
+          : items.length === 0 && !tag ? 'Nothing here yet. Add the first thing you keep.' : 'Nothing matches.'}</div>
       ) : grouped ? (
         <div className="space-y-6">
           {groupsShown.map((g) => (
@@ -231,6 +240,7 @@ export function ItemForm({ item, kinds, places, onPlaces, onDone }) {
     kind_id: item.kind_id, name: item.name || '', quantity: item.quantity ?? '', unit: item.unit || '', place_id: item.place_id ?? '',
     low_at: item.low_at ?? '', note: item.note || '', values: { ...(item.values || {}) },
     activities: (item.activities || []).join(', '), barcode: item.barcode || '',
+    insured: Boolean(item.insured), own: (item.own_fields || []).map((f) => ({ ...f })),
   });
   const [tags, setTags] = useState(item.tag_list || []);
   const [error, setError] = useState('');
@@ -245,7 +255,8 @@ export function ItemForm({ item, kinds, places, onPlaces, onDone }) {
     }
     const body = { name: form.name, quantity: form.quantity === '' ? null : Number(form.quantity), unit: form.unit || null,
       place_id: form.place_id === '' ? null : Number(form.place_id), low_at: form.low_at === '' ? null : Number(form.low_at), note: form.note || null, values,
-      activities: commaList(form.activities), barcode: form.barcode || null };
+      activities: commaList(form.activities), barcode: form.barcode || null,
+      insured: form.insured, own_fields: form.own.filter((f) => f.name.trim() || f.value.trim()) };
     try {
       const { data } = item.id ? await axios.put(`/api/things/items/${item.id}`, body) : await axios.post('/api/things/items', { ...body, kind_id: kind.id });
       await saveTags('thing', data.id, tags);
@@ -294,6 +305,20 @@ export function ItemForm({ item, kinds, places, onPlaces, onDone }) {
         <Field label="Barcode on it or its box"><input inputMode="numeric" value={form.barcode} onChange={set('barcode')} className={inputClass} /></Field>
       </div>
       <Field label="Notes"><textarea rows={2} value={form.note} onChange={set('note')} className={inputClass} /></Field>
+      <label className="flex min-h-[44px] items-center gap-2 text-sm text-gray-800 dark:text-life-50">
+        <input type="checkbox" checked={form.insured} onChange={(e) => setForm({ ...form, insured: e.target.checked })} className="h-5 w-5 accent-life-600" /> Insured
+      </label>
+      <fieldset className="space-y-2 border-t border-life-100 pt-3 dark:border-life-700">
+        <legend className="text-xs font-medium text-gray-600 dark:text-life-200">Your own fields on this one</legend>
+        {form.own.map((f, n) => (
+          <div key={n} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
+            <input aria-label="Name of your field" value={f.name} placeholder="Name" onChange={(e) => setForm({ ...form, own: form.own.map((x, i) => (i === n ? { ...x, name: e.target.value } : x)) })} className={`${inputClass} min-h-[44px]`} />
+            <input aria-label="Value of your field" value={f.value} placeholder="Value" onChange={(e) => setForm({ ...form, own: form.own.map((x, i) => (i === n ? { ...x, value: e.target.value } : x)) })} className={`${inputClass} min-h-[44px]`} />
+            <button type="button" onClick={() => setForm({ ...form, own: form.own.filter((_, i) => i !== n) })} aria-label={`Take away the field ${f.name || n + 1}`} className="min-h-[44px] min-w-[44px] text-gray-500 hover:text-red-600">✕</button>
+          </div>
+        ))}
+        <button type="button" onClick={() => setForm({ ...form, own: [...form.own, { name: '', value: '' }] })} className="min-h-[44px] text-sm text-life-600 underline dark:text-life-200">+ Add a field of your own</button>
+      </fieldset>
       <TagPicker value={tags} onChange={setTags} />
       {item.set_aside > 0 && <p className="text-xs text-life-600 dark:text-life-200">{item.set_aside} {item.unit || ''} is set aside for projects, leaving {item.free} free.</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}

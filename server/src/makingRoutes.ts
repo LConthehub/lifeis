@@ -20,6 +20,8 @@ const itemFrom = (body: Body) => ({
   ...(sent(body, 'barcode') ? { barcode: read.maybeText(body, 'barcode') } : {}),
   ...(sent(body, 'activities') ? { activities: read.texts(body, 'activities') } : {}),
   ...(sent(body, 'records') ? { records: recordsFrom(read.record(body, 'records')) } : {}),
+  ...(sent(body, 'insured') ? { insured: read.yesNo(body, 'insured') } : {}),
+  ...(sent(body, 'own_fields') ? { own_fields: read.records(body, 'own_fields').map((f) => ({ name: read.maybeText(f, 'name') ?? '', value: read.maybeText(f, 'value') ?? '' })) } : {}),
 });
 
 /** A thing's home records as sent: only the fields that were sent, so the rest are left as they are. */
@@ -49,7 +51,7 @@ function reportChoices(query: URLSearchParams) {
   if (ids && (ids.length > 200 || !ids.every((id) => Number.isInteger(id) && id >= 0))) throw notUnderstood('rooms');
   const least = queryNumber(query, 'min_cents');
   if (least !== null && !(Number.isInteger(least) && least >= 0)) throw notUnderstood('min_cents');
-  return { rooms: ids, min_cents: least, unvalued: query.get('unvalued') !== '0' };
+  return { rooms: ids, min_cents: least, unvalued: query.get('unvalued') !== '0', insured_only: query.get('insured') === '1' };
 }
 
 const placeFrom = (body: Body) => ({ name: read.text(body, 'name'), parent_id: read.maybeWhole(body, 'parent_id'), note: read.maybeText(body, 'note') });
@@ -160,6 +162,7 @@ export function makingRoutes(db: Db): Route[] {
       return {
         json: await things(c).listItems({
           kind_id: queryNumber(c.query, 'kind_id'), place_id: queryNumber(c.query, 'place_id'), q, low: c.query.get('low') === '1', tag: queryNumber(c.query, 'tag'),
+          gone: c.query.get('gone') === '1',
         }),
       };
     }],
@@ -187,6 +190,11 @@ export function makingRoutes(db: Db): Route[] {
     }],
     ['GET', at('things/stickers/blank'), async (c) => ({ json: await things(c).blankCodes(queryNumber(c.query, 'count') ?? 30) })],
     ['POST', at('things/items/:id/move'), async (c) => ({ json: await things(c).moveItem(c.id, read.maybeWhole(c.body, 'place_id'), read.maybeText(c.body, 'note')) })],
+    // "No longer have it" (sold, given away, thrown out, stolen), and taking that back.
+    ['POST', at('things/items/:id/gone'), async (c) => ({
+      json: await things(c).letGo(c.id, { how: read.text(c.body, 'how'), day: read.maybeText(c.body, 'day'), to: read.maybeText(c.body, 'to'), price_cents: read.maybeWhole(c.body, 'price_cents') }),
+    })],
+    ['DELETE', at('things/items/:id/gone'), async (c) => ({ json: await things(c).takeBack(c.id) })],
     ['GET', at('things/items/:id/history'), async (c) => ({ json: await things(c).itemHistory(c.id) })],
     ['POST', at('things/items/:id/uses'), async (c) => ({
       status: 201,

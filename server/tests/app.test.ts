@@ -548,7 +548,7 @@ it('home records over the web: what a thing cost, its papers, and the home inven
   expect([sheet.status, sheet.headers.get('content-type'), sheet.headers.get('content-disposition')])
     .toEqual([200, 'text/csv; charset=utf-8', expect.stringMatching(/^attachment; filename="home-inventory-\d{4}-\d{2}-\d{2}\.csv"$/)]);
   expect([...sheet.bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
-  expect(sheet.bytes.toString('utf8')).toContain('No place yet,,Television,Appliances,some,,SN-123,,,799.00,500.00,2099-01-01,no,yes\r\n');
+  expect(sheet.bytes.toString('utf8')).toContain('No place yet,,Television,Appliances,some,,SN-123,,,799.00,500.00,2099-01-01,no,yes,000-001,no\r\n');
   expect((await admin.get('/api/things/report.csv?min_cents=lots')).status).toBe(422);
   expect((await other.get('/api/things/report.csv')).bytes.toString('utf8')).not.toContain('Television');
   expect((await admin.delete(`/api/things/documents/${kept.json[0].id}`)).status).toBe(204);
@@ -982,11 +982,37 @@ it('the front page gathers today, and each person chooses what it shows', async 
   expect((await visitor().get('/api/home')).status).toBe(401);
 });
 
+it('things answer over the web: no longer have it and undoing it, insured, asset numbers and fields of your own', async () => {
+  const admin = await owner();
+  const kind = (await admin.post('/api/things/kinds', { name: 'Household' })).json[0];
+  const tv = (await admin.post('/api/things/items', { kind_id: kind.id, name: 'Television', insured: true, own_fields: [{ name: 'Remote', value: 'In the drawer' }] })).json;
+  const lamp = (await admin.post('/api/things/items', { kind_id: kind.id, name: 'Lamp' })).json;
+  expect([tv.asset_no, lamp.asset_no, tv.insured, tv.own_fields]).toEqual(['000-001', '000-002', true, [{ name: 'Remote', value: 'In the drawer' }]]);
+  expect((await admin.get('/api/things/items?q=000-002')).json.map((t: { name: string }) => t.name)).toEqual(['Lamp']);
+  expect((await admin.get('/api/things/report?insured=1')).json.rooms[0].lines.map((l: { name: string }) => l.name)).toEqual(['Television']);
+  expect((await admin.get('/api/things/report.csv?insured=1')).bytes.toString()).not.toContain('Lamp');
+
+  const gone = await admin.post(`/api/things/items/${tv.id}/gone`, { how: 'sold', day: '2046-03-01', to: 'A neighbor', price_cents: 5000 });
+  expect([gone.status, gone.json.gone]).toEqual([200, { on: '2046-03-01', how: 'sold', to: 'A neighbor', cents: 5000 }]);
+  expect((await admin.post(`/api/things/items/${tv.id}/gone`, { how: 'sold' })).status).toBe(409);
+  expect((await admin.post(`/api/things/items/${lamp.id}/gone`, { how: 'misplaced' })).status).toBe(400);
+  expect((await admin.get('/api/things/items')).json.map((t: { name: string }) => t.name)).toEqual(['Lamp']);
+  expect((await admin.get('/api/things/items?gone=1')).json.map((t: { name: string }) => t.name)).toEqual(['Television']);
+  // Editing the thing without saying so keeps its fields and insurance.
+  const edited = (await admin.put(`/api/things/items/${tv.id}`, { name: 'Television, 55 inch' })).json;
+  expect([edited.insured, edited.own_fields.length, edited.gone.how]).toEqual([true, 1, 'sold']);
+  const back = await admin.delete(`/api/things/items/${tv.id}/gone`);
+  expect([back.status, back.json.gone]).toEqual([200, null]);
+  expect((await admin.get('/api/things/items')).json).toHaveLength(2);
+  const other = await member(admin, 'partner');
+  expect((await other.post(`/api/things/items/${tv.id}/gone`, { how: 'sold' })).status).toBe(404);
+});
+
 it('a database from before things and projects is upgraded, with a copy saved first', async () => {
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.

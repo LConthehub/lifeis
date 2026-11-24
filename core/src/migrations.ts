@@ -1586,6 +1586,32 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_outdoor_harvest ON outdoor_harvest(plan_id)`,
     ],
   },
+  {
+    number: 48,
+    name: 'things: no longer have it, insured, asset numbers, your own fields',
+    statements: [
+      // A thing that is gone (sold, given away, thrown out, stolen) stays as a record: gone_on is the day, gone_how says
+      // which (checked in the code, so a later feature can add its own), gone_to is who it went to in free words.
+      `ALTER TABLE items ADD COLUMN gone_on TEXT`,
+      `ALTER TABLE items ADD COLUMN gone_how TEXT`,
+      `ALTER TABLE items ADD COLUMN gone_to TEXT`,
+      `ALTER TABLE items ADD COLUMN gone_cents INTEGER`,
+      `ALTER TABLE items ADD COLUMN insured INTEGER NOT NULL DEFAULT 0`,
+      // 1, 2, 3 ... in order for each person's things, shown as 000-001. Things already kept are numbered in the order they were made.
+      `ALTER TABLE items ADD COLUMN asset_no INTEGER`,
+      `UPDATE items SET asset_no = (SELECT COUNT(*) FROM items j WHERE j.owner_id = items.owner_id AND j.id <= items.id)`,
+      `CREATE UNIQUE INDEX idx_items_asset ON items(owner_id, asset_no)`,
+      // A person's own fields on one thing, beside the fields of its kind.
+      `CREATE TABLE item_fields (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        value TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )`,
+      `CREATE INDEX idx_item_fields_item ON item_fields(item_id, sort_order)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

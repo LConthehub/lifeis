@@ -6,7 +6,7 @@ import Picture from '../components/Picture';
 import PlacePicker from '../components/PlacePicker';
 import { shrink } from '../components/shrink';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput } from '../components/ui';
-import { ItemForm } from './Things';
+import { ItemForm, goneText } from './Things';
 import { DueBadge } from './Upkeep';
 import Records from '../components/Records';
 import { ThingRecalls } from '../components/Recalls';
@@ -56,7 +56,7 @@ export default function Thing() {
   const [history, setHistory] = useState([]);
   const [kinds, setKinds] = useState([]);
   const [places, setPlaces] = useState([]);
-  const [modal, setModal] = useState(null);       // 'edit' or 'use'
+  const [modal, setModal] = useState(null);       // 'edit', 'use' or 'gone'
   const [jobs, setJobs] = useState([]);
   const [routines, setRoutines] = useState([]);
   const [error, setError] = useState('');
@@ -85,6 +85,10 @@ export default function Thing() {
     if (!file) return;
     setError('');
     try { setItem((await axios.put(`/api/things/items/${id}/photo`, { data: await shrink(file) })).data); } catch (err) { setError(errorMessage(err, "The photo couldn't be kept")); }
+  };
+  const takeBack = async () => {
+    setError('');
+    try { setItem((await axios.delete(`/api/things/items/${id}/gone`)).data); load(); } catch (err) { setError(errorMessage(err, "Couldn't undo that")); }
   };
   const removePhoto = async () => { setItem((await axios.delete(`/api/things/items/${id}/photo`)).data); };
 
@@ -115,9 +119,15 @@ export default function Thing() {
               <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">{item.name}</h1>
               <p className="text-xs text-gray-500 dark:text-life-300">{[item.icon && `${item.icon} ${item.kind}`, item.amount !== 'some' && item.amount].filter(Boolean).join(' · ') || item.kind}</p>
             </div>
-            <button type="button" onClick={() => setModal('use')} className={buttonClass}><Icon of="session" /> I used it</button>
+            {!item.gone && <button type="button" onClick={() => setModal('use')} className={buttonClass}><Icon of="session" /> I used it</button>}
             <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Change</button>
           </div>
+          {item.gone && (
+            <div className="space-y-2 rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700" role="status" data-gone>
+              <p>No longer have it: {goneText(item.gone)}</p>
+              <button type="button" onClick={takeBack} className="min-h-[44px] rounded-xl border border-honey-700 px-3 text-sm">I have it again</button>
+            </div>
+          )}
           <Field label="Where it is">
             <PlacePicker value={item.place_id ?? ''} places={places} onPlaces={setPlaces} onChange={move} />
           </Field>
@@ -129,10 +139,18 @@ export default function Thing() {
             </div>
           </div>
           <p className="text-xs text-gray-500 dark:text-life-300">
-            {[item.barcode && `Barcode ${item.barcode}`, item.code ? 'Has its Life Is sticker' : null].filter(Boolean).join(' · ')}
+            {[`Asset ${item.asset_no}`, item.insured && 'Insured', item.barcode && `Barcode ${item.barcode}`, item.code ? 'Has its Life Is sticker' : null].filter(Boolean).join(' · ')}
             {' '}<Link to={`/things/stickers?ids=${id}`} className="text-life-600 underline dark:text-life-200">{item.code ? 'Print its sticker again' : 'Print a sticker for it'}</Link>
           </p>
+          {item.own_fields.length > 0 && (
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm" aria-label="Your own fields">
+              {item.own_fields.map((f) => (
+                <div key={f.name} className="contents"><dt className="text-xs font-medium text-gray-600 dark:text-life-200">{f.name}</dt><dd className="break-words text-gray-800 dark:text-life-50">{f.value}</dd></div>
+              ))}
+            </dl>
+          )}
           {item.note && <p className="whitespace-pre-line text-sm text-gray-700 dark:text-life-100">{item.note}</p>}
+          {!item.gone && <button type="button" onClick={() => setModal('gone')} className={`${quietButtonClass} min-h-[44px]`}>No longer have it</button>}
           {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
         </section>
       </div>
@@ -177,12 +195,54 @@ export default function Thing() {
           <ItemForm item={item} kinds={kinds} places={places} onPlaces={setPlaces} onDone={() => { setModal(null); axios.get(`/api/things/items/${id}`).then(({ data }) => { setItem(data); load(); }).catch(() => navigate('/things')); }} />
         </Modal>
       )}
+      {modal === 'gone' && (
+        <Modal title={`No longer have ${item.name}`} onClose={() => setModal(null)}>
+          <GoneForm item={item} onDone={(saved) => { setItem(saved); setModal(null); load(); }} />
+        </Modal>
+      )}
       {modal === 'use' && (
         <Modal title={`Using ${item.name}`} onClose={() => setModal(null)}>
           <UseForm item={item} onDone={(h) => { setHistory(h); setModal(null); }} />
         </Modal>
       )}
     </div>
+  );
+}
+
+/** Dollars as typed ("1,200", "$50.5") to whole cents; null when nothing is typed, NaN when it is not an amount. */
+const centsOf = (text) => {
+  const t = String(text).replace(/[$,\s]/g, '');
+  if (t === '') return null;
+  return /^\d+(\.\d{0,2})?$/.test(t) ? Math.round(Number(t) * 100) : Number.NaN;
+};
+
+/** "No longer have it": how it went, on which day, to whom (in your own words) and for how much. It stays on file and can be undone. */
+function GoneForm({ item, onDone }) {
+  const [form, setForm] = useState({ how: 'sold', day: toDateInput(new Date()), to: '', price: '' });
+  const [error, setError] = useState('');
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const submit = async (e) => {
+    e.preventDefault();
+    const cents = form.how === 'sold' ? centsOf(form.price) : null;
+    if (Number.isNaN(cents)) { setError('An amount is a number, like 250 or 79.99'); return; }
+    try { onDone((await axios.post(`/api/things/items/${item.id}/gone`, { how: form.how, day: form.day, to: form.to || null, price_cents: cents })).data); } catch (err) { setError(errorMessage(err, "Couldn't keep that")); }
+  };
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <p className="text-sm text-gray-600 dark:text-life-200">It leaves your lists and totals, but the record is kept. You can undo this from its page.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="What happened">
+          <select value={form.how} onChange={set('how')} className={`${inputClass} min-h-[44px]`}>
+            <option value="sold">Sold</option><option value="given">Given away</option><option value="thrown">Thrown out</option><option value="stolen">Stolen</option>
+          </select>
+        </Field>
+        <Field label="Which day"><input type="date" required value={form.day} onChange={set('day')} className={`${inputClass} min-h-[44px]`} /></Field>
+      </div>
+      <Field label="Who to (if you want to say)"><input value={form.to} onChange={set('to')} maxLength={200} placeholder="a neighbor, the thrift store…" className={`${inputClass} min-h-[44px]`} /></Field>
+      {form.how === 'sold' && <Field label="Sold for (dollars)"><input inputMode="decimal" value={form.price} onChange={set('price')} placeholder="50" className={`${inputClass} min-h-[44px]`} /></Field>}
+      {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+      <div className="flex justify-end"><button type="submit" className={`${buttonClass} min-h-[44px]`}>Keep it</button></div>
+    </form>
   );
 }
 

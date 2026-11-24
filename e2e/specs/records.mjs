@@ -115,7 +115,7 @@ const [saved] = await Promise.all([page.waitForEvent('download'), page.getByRole
 const csv = (await import('node:fs')).readFileSync(await saved.path(), 'utf8');
 check('the spreadsheet downloads with the day in its name', /^home-inventory-\d{4}-\d{2}-\d{2}\.csv$/.test(saved.suggestedFilename()), saved.suggestedFilename());
 check('it starts with a byte-order mark and has one row for the one thing chosen', csv.charCodeAt(0) === 0xfeff && csv.trim().split('\r\n').length === 2, JSON.stringify(csv.slice(0, 120)));
-check('and that row has what an adjuster asks for', csv.includes(`Living room,,Television,Appliances,some,QN55,SN-12345,,Costco,799.00,500.00,${day},yes,yes\r\n`), JSON.stringify(csv.slice(-130)));
+check('and that row has what an adjuster asks for', csv.includes(`Living room,,Television,Appliances,some,QN55,SN-12345,,Costco,799.00,500.00,${day},yes,yes,000-002,no\r\n`), JSON.stringify(csv.slice(-130)));
 
 await page.getByLabel('Only things worth at least (dollars)').fill(''); await page.getByRole('radio', { name: 'All rooms' }).check();
 await page.getByRole('checkbox', { name: 'One room per page' }).check(); await page.waitForTimeout(1000);

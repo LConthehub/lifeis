@@ -101,11 +101,11 @@ it('makes a spreadsheet with a row for each thing, quoting commas, quotes and li
   expect(filename).toBe('home-inventory-2046-03-05.csv');
   expect(text.charCodeAt(0)).toBe(0xfeff);
   expect(text.endsWith('\r\n')).toBe(true);
-  expect(text.slice(1).split('\r\n')[0]).toBe('Room,Where exactly,What it is,Kind,Quantity,Make/model,Serial number,Bought on,Bought at,Cost,Worth now,Warranty until,Has photo,Has receipt');
-  expect(text).toContain('Living room,,"Television, 55"" ""Q"" model\nsecond line",Appliances,some,,SN-1,2045-04-04,"Costco, Seattle",799.99,500.01,,no,no\r\n');
-  expect(text).toContain('Living room,Shelf › Bin,Cable,Appliances,some,,,,,10.05,10.05,,yes,no\r\n'); // dollars as a plain number; worth falls back to the cost
+  expect(text.slice(1).split('\r\n')[0]).toBe('Room,Where exactly,What it is,Kind,Quantity,Make/model,Serial number,Bought on,Bought at,Cost,Worth now,Warranty until,Has photo,Has receipt,Asset number,Insured');
+  expect(text).toContain('Living room,,"Television, 55"" ""Q"" model\nsecond line",Appliances,some,,SN-1,2045-04-04,"Costco, Seattle",799.99,500.01,,no,no,000-001,no\r\n');
+  expect(text).toContain('Living room,Shelf › Bin,Cable,Appliances,some,,,,,10.05,10.05,,yes,no,000-002,no\r\n'); // dollars as a plain number; worth falls back to the cost
   expect(text).toContain("Living room,Shelf,'=SUM(A1),Appliances"); // a name that looks like a formula is not run by Excel
-  expect(text).toContain('No place yet,,Kettle,Appliances,some,,,,,,,,no,no\r\n');
+  expect(text).toContain('No place yet,,Kettle,Appliances,some,,,,,,,,no,no,000-005,no\r\n');
   // The same choices narrow it: a heading and one thing.
   expect((await things.homeReportCsv({ rooms: [h.attic] })).text.split('\r\n').filter(Boolean)).toHaveLength(2);
 });

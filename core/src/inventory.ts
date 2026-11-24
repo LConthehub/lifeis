@@ -27,6 +27,7 @@ export const HOLDING = ['planned', 'active', 'paused'] as const;
 const MAX_FIELDS = 40;
 const MAX_CHOICES = 60;
 const MAX_DEPTH = 10;
+const MAX_OWN_FIELDS = 30;
 
 export type FieldInput = { name: string; type: FieldType; unit?: string | null; choices?: string[] };
 export type Field = { id: number; kind_id: number; name: string; type: FieldType; unit: string | null; choices: string[]; sort_order: number };
@@ -62,7 +63,24 @@ export type ItemInput = {
   activities?: string[];
   /** Its home records. Left out: unchanged; a field left out of it: unchanged. */
   records?: RecordsInput;
+  /** Whether it is insured. Left out: unchanged (a new thing is not). */
+  insured?: boolean;
+  /** The person's own fields on this thing, in order. Left out: unchanged; a list replaces the ones it had. */
+  own_fields?: { name: string; value: string }[];
 };
+/** How a thing went: sold, given away, thrown out, stolen. A later feature (guns) may take more. */
+export const GONE_HOW = ['sold', 'given', 'thrown', 'stolen'] as const;
+export type GoneHow = (typeof GONE_HOW)[number];
+export type Gone = { on: string; how: string; to: string | null; cents: number | null };
+export type GoneInput = { how: string; day?: string | null; to?: string | null; price_cents?: number | null };
+export type OwnField = { name: string; value: string };
+/** An asset number as it is written: 1 is 000-001, 1234 is 001-234. */
+export const assetLabel = (n: number): string => `${String(Math.floor(n / 1000)).padStart(3, '0')}-${String(n % 1000).padStart(3, '0')}`;
+/** The number out of what was typed ("000-012", "0-12"), or null when it isn't one. */
+export function assetNumber(read: string): number | null {
+  const m = /^(\d{1,6})-(\d{1,3})$/.exec(read.trim());
+  return m ? Number(m[1]) * 1000 + Number(m[2]) : null;
+}
 /** What a thing cost and where it came from, the numbers that identify it, its warranty and what it's worth. */
 export type Records = {
   bought_on: string | null; bought_at: string | null; price_cents: number | null; value_cents: number | null;
@@ -107,6 +125,13 @@ export type Item = {
   documents: number;
   /** Days until its warranty ends: below 0, it has. Null without one. */
   warranty_days: number | null;
+  /** Its asset number, given in order the first time it is kept: "000-001". */
+  asset_no: string;
+  insured: boolean;
+  /** When and how it went, if it did: it is then left out of the lists, but kept. Null for a thing that is here. */
+  gone: Gone | null;
+  /** The person's own fields on this thing. */
+  own_fields: OwnField[];
   created_at: string;
   updated_at: string;
 };
@@ -139,7 +164,8 @@ export function stickerCode(read: string): string | null {
   const m = /(?:^|\/p\/)([2-9A-HJ-NP-Za-hj-np-z]{10})\/?$/.exec(read.trim());
   return m ? m[1]!.toUpperCase() : null;
 }
-type ItemRow = Omit<Item, 'tag_list' | 'amount' | 'place' | 'low' | 'values' | 'set_aside' | 'free' | 'photo' | 'activities' | 'records' | 'warranty_days'> & { photo: number } & Records;
+type ItemRow = Omit<Item, 'tag_list' | 'amount' | 'place' | 'low' | 'values' | 'set_aside' | 'free' | 'photo' | 'activities' | 'records' | 'warranty_days' | 'asset_no' | 'insured' | 'gone' | 'own_fields'> & { photo: number } & Records
+  & { asset_n: number; insured: number; gone_on: string | null; gone_how: string | null; gone_to: string | null; gone_cents: number | null };
 
 /** The code out of a scanned thing's sticker: a web address ending in /t/ and the code. Null when it isn't one. */
 export function thingStickerCode(read: string): string | null {
@@ -181,6 +207,7 @@ export type ReportLine = {
   where: string | null;
   serial: string | null; model: string | null; bought_on: string | null; bought_at: string | null;
   price_cents: number | null; value_cents: number | null; /** What it's worth now if said, else what it cost. */ worth_cents: number; warranty_until: string | null;
+  asset_no: string; insured: boolean;
 };
 export type ReportRoom = {
   id: number; name: string; things: number;
@@ -199,12 +226,16 @@ export type ReportOptions = {
   min_cents?: number | null;
   /** Whether to keep things with no price or value. Default yes. */
   unvalued?: boolean;
+  /** Only the things that are insured. Default: all of them. */
+  insured_only?: boolean;
 };
 export type HomeReport = {
   day: string;
   /** All of the household's things and what they are worth, whatever was chosen to leave out. */
   things: number; worth_cents: number; price_cents: number; /** How many have a price or a value. */ valued: number; unvalued: number;
   with_photo: number; with_receipt: number; with_serial: number; at_cost: number;
+  /** How many of all of them are insured. */
+  insured: number;
   /** What is in the report as chosen. */
   shown: { things: number; worth_cents: number; price_cents: number };
   /** Every room, chosen or not, for choosing among: with how many things lack a photo or a value. */
@@ -225,9 +256,9 @@ function csvField(text: string): string {
   return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
 export const CSV_COLUMNS = ['Room', 'Where exactly', 'What it is', 'Kind', 'Quantity', 'Make/model', 'Serial number', 'Bought on', 'Bought at',
-  'Cost', 'Worth now', 'Warranty until', 'Has photo', 'Has receipt'] as const;
+  'Cost', 'Worth now', 'Warranty until', 'Has photo', 'Has receipt', 'Asset number', 'Insured'] as const;
 
-export type ThingSticker = { id: number; name: string; place: string | null; code: string };
+export type ThingSticker = { id: number; name: string; place: string | null; code: string; asset_no: string };
 export type ActivitySummary = { name: string; things: number; projects: number; jobs: number };
 export const MAX_THING_PHOTO = 8_000_000;
 
@@ -284,7 +315,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
 
   async function kinds(q: Queries): Promise<Kind[]> {
     const rows = await q.all<KindRow & { items: number }>(
-      `SELECT k.id, k.name, k.icon, k.unit, k.activity, (SELECT COUNT(*) FROM items i WHERE i.kind_id = k.id) AS items
+      `SELECT k.id, k.name, k.icon, k.unit, k.activity, (SELECT COUNT(*) FROM items i WHERE i.kind_id = k.id AND i.gone_on IS NULL) AS items
        FROM kinds k WHERE k.owner_id = ? ORDER BY k.name COLLATE NOCASE`, [owner]);
     const out: Kind[] = [];
     for (const row of rows) out.push({ ...row, group: groupOfKind(row.name), fields: await fieldsOf(q, row.id) });
@@ -350,7 +381,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     const rows = await placeRows(q);
     const paths = placePaths(rows);
     const counts = new Map((await q.all<{ place_id: number; n: number }>(
-      'SELECT place_id, COUNT(*) AS n FROM items WHERE owner_id = ? AND place_id IS NOT NULL GROUP BY place_id', [owner])).map((r) => [r.place_id, r.n]));
+      'SELECT place_id, COUNT(*) AS n FROM items WHERE owner_id = ? AND place_id IS NOT NULL AND gone_on IS NULL GROUP BY place_id', [owner])).map((r) => [r.place_id, r.n]));
     return rows
       .map((row) => ({ ...row, path: paths.get(row.id)!, items: counts.get(row.id) ?? 0 }))
       .sort((a, b) => inOrder(a.path.toLowerCase(), b.path.toLowerCase()));
@@ -418,13 +449,18 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     }
   }
 
-  async function items(q: Queries, where = '', args: Value[] = []): Promise<Item[]> {
+  /** Which things: the ones that are here (the usual), only the ones that have gone, or both. */
+  type Which = 'here' | 'gone' | 'any';
+  const whichSql = (which: Which) => (which === 'here' ? ' AND i.gone_on IS NULL' : which === 'gone' ? ' AND i.gone_on IS NOT NULL' : '');
+
+  async function items(q: Queries, where = '', args: Value[] = [], which: Which = 'here'): Promise<Item[]> {
     const rows = await q.all<ItemRow>(
       `SELECT i.id, i.kind_id, k.name AS kind, k.icon, i.name, i.quantity, i.unit, i.place_id, i.low_at, i.note, i.code, i.barcode,
               i.bought_on, i.bought_at, i.price_cents, i.value_cents, i.serial, i.model, i.warranty_until,
+              i.asset_no AS asset_n, i.insured, i.gone_on, i.gone_how, i.gone_to, i.gone_cents,
               (SELECT COUNT(*) FROM item_documents d WHERE d.item_id = i.id) AS documents,
               EXISTS (SELECT 1 FROM item_photos ph WHERE ph.item_id = i.id) AS photo, i.created_at, i.updated_at
-       FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.owner_id = ? ${where} ORDER BY i.name COLLATE NOCASE, i.id`, [owner, ...args]);
+       FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.owner_id = ?${whichSql(which)} ${where} ORDER BY i.name COLLATE NOCASE, i.id`, [owner, ...args]);
     const doing = new Map<number, string[]>();
     for (const row of await q.all<{ item_id: number; activity: string }>(
       'SELECT a.item_id, a.activity FROM item_activities a JOIN items i ON i.id = a.item_id WHERE i.owner_id = ? ORDER BY a.activity COLLATE NOCASE', [owner])) {
@@ -439,13 +475,22 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       if (!values.has(row.item_id)) values.set(row.item_id, {});
       values.get(row.item_id)![String(row.field_id)] = shownValue(row.type, row.value);
     }
+    const own = new Map<number, OwnField[]>();
+    for (const row of await q.all<{ item_id: number; name: string; value: string }>(
+      'SELECT f.item_id, f.name, f.value FROM item_fields f JOIN items i ON i.id = f.item_id WHERE i.owner_id = ? ORDER BY f.sort_order, f.id', [owner])) {
+      own.set(row.item_id, [...(own.get(row.item_id) ?? []), { name: row.name, value: row.value }]);
+    }
     const today = todayOf(clock);
     const tagged = await attachTags(q, owner, 'thing', rows);
-    return tagged.map(({ bought_on, bought_at, price_cents, value_cents, serial, model, warranty_until, ...row }) => {
+    return tagged.map(({ bought_on, bought_at, price_cents, value_cents, serial, model, warranty_until, asset_n, insured, gone_on, gone_how, gone_to, gone_cents, ...row }) => {
       const setAside = rounded(aside.get(row.id) ?? 0, 4);
       return {
         ...row,
         records: { bought_on, bought_at, price_cents, value_cents, serial, model, warranty_until },
+        asset_no: assetLabel(asset_n),
+        insured: Boolean(insured),
+        gone: gone_on ? { on: gone_on, how: gone_how ?? 'thrown', to: gone_to, cents: gone_cents } : null,
+        own_fields: own.get(row.id) ?? [],
         warranty_days: warranty_until ? dayNumber(warranty_until) - dayNumber(today) : null,
         amount: row.quantity !== null ? units.amount(row.quantity, row.unit) : 'some',
         place: row.place_id !== null ? (paths.get(row.place_id) ?? null) : null,
@@ -460,7 +505,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
   }
 
   async function item(q: Queries, id: number): Promise<Item> {
-    const found = (await items(q, 'AND i.id = ?', [id]))[0];
+    const found = (await items(q, 'AND i.id = ?', [id], 'any'))[0];
     if (!found) throw new Problem(404, 'Not found');
     return found;
   }
@@ -494,6 +539,25 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     if (input.serial !== undefined) put('serial', clean(input.serial, 120));
     if (input.model !== undefined) put('model', clean(input.model, 120));
     if (sets.length) await q.run(`UPDATE items SET ${sets.join(', ')} WHERE id = ?`, [...args, itemId]);
+  }
+
+  /** The person's own fields on a thing, checked and kept in the order given. Blank ones are dropped. */
+  async function saveOwnFields(q: Queries, itemId: number, input: { name: string; value: string }[] | undefined) {
+    if (input === undefined) return;
+    if (!Array.isArray(input)) throw new Problem(400, 'Your own fields are a list of names with values');
+    const kept: OwnField[] = [];
+    for (const one of input) {
+      const name = clean(String(one?.name ?? ''), 60);
+      const value = clean(String(one?.value ?? ''), 2000);
+      if (!name && !value) continue;
+      if (!name) throw new Problem(400, 'Give each of your own fields a name');
+      if (!value) throw new Problem(400, `Give "${name}" a value, or take the field away`);
+      if (kept.some((f) => labelKey(f.name) === labelKey(name))) throw new Problem(409, `There's already a field called "${name}" on this`);
+      kept.push({ name, value });
+    }
+    if (kept.length > MAX_OWN_FIELDS) throw new Problem(400, `A thing can have ${MAX_OWN_FIELDS} fields of your own at most`);
+    await q.run('DELETE FROM item_fields WHERE item_id = ?', [itemId]);
+    for (const [n, f] of kept.entries()) await q.run('INSERT INTO item_fields (item_id, name, value, sort_order) VALUES (?, ?, ?, ?)', [itemId, f.name, f.value, n]);
   }
 
   async function ownedItem(q: Queries, id: number): Promise<{ id: number; place_id: number | null; code: string | null }> {
@@ -543,6 +607,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
         where: room && t.place && t.place !== roomName ? t.place.slice(roomName.length + 3) : null,
         serial: t.records.serial, model: t.records.model, bought_on: t.records.bought_on, bought_at: t.records.bought_at,
         price_cents: t.records.price_cents, value_cents: t.records.value_cents, worth_cents: worth(t), warranty_until: t.records.warranty_until,
+        asset_no: t.asset_no, insured: t.insured,
       };
     };
     const lines = all.map((t) => ({ t, line: lineOf(t) }));
@@ -562,7 +627,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     const chosen = options.rooms ? new Set(options.rooms) : null;
     const least = options.min_cents && options.min_cents > 0 ? options.min_cents : 0;
     const keep = ({ t, line }: (typeof lines)[number]) =>
-      (!chosen || chosen.has(line.room_id)) && (options.unvalued !== false || recorded(t)) && worth(t) >= least;
+      (!chosen || chosen.has(line.room_id)) && (options.unvalued !== false || recorded(t)) && worth(t) >= least && (!options.insured_only || t.insured);
     const rooms: ReportRoom[] = choices.map((c) => {
       const list = grouped.get(c.id)!.filter(keep);
       const things = list.map(({ t }) => t);
@@ -581,7 +646,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       things: all.length, worth_cents: sum(all, worth), price_cents: sum(all, (t) => t.records.price_cents ?? 0),
       valued: all.filter(recorded).length, unvalued: all.filter((t) => !recorded(t)).length,
       with_photo: all.filter((t) => t.photo).length, with_receipt: all.filter((t) => receipts.has(t.id)).length,
-      with_serial: all.filter((t) => t.records.serial).length,
+      with_serial: all.filter((t) => t.records.serial).length, insured: all.filter((t) => t.insured).length,
       at_cost: all.filter((t) => t.records.value_cents === null && t.records.price_cents !== null).length,
       shown: { things: rooms.reduce((n, r) => n + r.things, 0), worth_cents: rooms.reduce((n, r) => n + r.worth_cents, 0), price_cents: rooms.reduce((n, r) => n + r.price_cents, 0) },
       choices, neediest: needy ? { id: needy.id, name: needy.name, gaps: needy.gaps } : null,
@@ -644,7 +709,11 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       return atomic(db, async (tx) => {
         await kindRow(tx, id);
         const count = (await tx.get<{ n: number }>('SELECT COUNT(*) AS n FROM items WHERE kind_id = ?', [id]))!.n;
-        if (count > 0) throw new Problem(409, `Remove ${count === 1 ? 'the one thing' : `the ${count} things`} of this kind first`);
+        if (count > 0) {
+          const here = (await tx.get<{ n: number }>('SELECT COUNT(*) AS n FROM items WHERE kind_id = ? AND gone_on IS NULL', [id]))!.n;
+          throw new Problem(409, here === 0 ? 'Things of this kind that you no longer have are still kept. Remove them first'
+            : `Remove ${count === 1 ? 'the one thing' : `the ${count} things`} of this kind first`);
+        }
         await tx.run('DELETE FROM kinds WHERE id = ?', [id]);
         return kinds(tx);
       });
@@ -768,7 +837,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     // ---------- things ----------
 
     /** The person's things: all of them, or of one kind, in one place (and the places inside it), or matching some words. */
-    async listItems(find: { kind_id?: number | null; place_id?: number | null; q?: string | null; low?: boolean; tag?: number | null } = {}): Promise<Item[]> {
+    async listItems(find: { kind_id?: number | null; place_id?: number | null; q?: string | null; low?: boolean; tag?: number | null; gone?: boolean } = {}): Promise<Item[]> {
       let where = '';
       const args: Value[] = [];
       if (find.kind_id != null) {
@@ -777,10 +846,13 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       }
       if (find.q?.trim()) {
         const like = `%${find.q.trim()}%`;
-        where += ' AND (i.name LIKE ? OR i.note LIKE ? OR i.id IN (SELECT item_id FROM item_values WHERE value LIKE ?))';
-        args.push(like, like, like);
+        // The asset number is found as it is written (000-012), whole or in part.
+        where += ` AND (i.name LIKE ? OR i.note LIKE ? OR i.id IN (SELECT item_id FROM item_values WHERE value LIKE ?)
+          OR i.id IN (SELECT item_id FROM item_fields WHERE name LIKE ? OR value LIKE ?)
+          OR printf('%03d-%03d', i.asset_no / 1000, i.asset_no % 1000) LIKE ?)`;
+        args.push(like, like, like, like, like, like);
       }
-      let found = await items(db, where, args);
+      let found = await items(db, where, args, find.gone ? 'gone' : 'here');
       if (find.place_id != null) {
         const rows = await placeRows(db);
         const inside = new Set<number>([find.place_id]);
@@ -812,12 +884,14 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
           if (await tx.get('SELECT id FROM items WHERE code = ?', [code])) throw new Problem(409, 'That sticker is already on something');
         }
         const made = await tx.run(
-          'INSERT INTO items (owner_id, kind_id, name, quantity, unit, place_id, low_at, note, code, barcode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [owner, kind.id, ...(await itemValues(tx, input, kind)), code, plainBarcode(input.barcode), now(), now()]);
+          `INSERT INTO items (owner_id, kind_id, name, quantity, unit, place_id, low_at, note, code, barcode, insured, asset_no, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(asset_no), 0) + 1 FROM items WHERE owner_id = ?), ?, ?)`,
+          [owner, kind.id, ...(await itemValues(tx, input, kind)), code, plainBarcode(input.barcode), input.insured ? 1 : 0, owner, now(), now()]);
         await saveValues(tx, made.lastId, kind.id, input.values);
         // Nothing said it's for: it's for what its kind is for.
         await saveActivities(tx, made.lastId, input.activities?.some((a) => clean(String(a), 60)) ? input.activities : kind.activity ? [kind.activity] : input.activities);
         await saveRecords(tx, made.lastId, input.records);
+        await saveOwnFields(tx, made.lastId, input.own_fields);
         await noteHistory(tx, owner, { item_id: made.lastId }, { what: 'added', to_place: await placePath(tx, owner, input.place_id), ...when() });
         return item(tx, made.lastId);
       });
@@ -834,7 +908,36 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
         await saveValues(tx, id, kind.id, input.values);
         await saveActivities(tx, id, input.activities);
         await saveRecords(tx, id, input.records);
+        if (input.insured !== undefined) await tx.run('UPDATE items SET insured = ? WHERE id = ?', [input.insured ? 1 : 0, id]);
+        await saveOwnFields(tx, id, input.own_fields);
         await noteMove(tx, owner, { item_id: id }, before.place_id, input.place_id ?? null, when());
+        return item(tx, id);
+      });
+    },
+
+    /**
+     * "No longer have it": sold, given away, thrown out or stolen, on a day, to whom (free words) and for how much.
+     * The thing leaves the lists, the search and the totals but is kept, and can be taken back.
+     */
+    letGo(id: number, input: GoneInput): Promise<Item> {
+      return atomic(db, async (tx) => {
+        const before = await item(tx, id);
+        if (before.gone) throw new Problem(409, 'That is already marked as gone');
+        if (!GONE_HOW.includes(input.how as GoneHow)) throw new Problem(400, 'It was sold, given away, thrown out or stolen');
+        if (input.day != null && input.day !== '' && !dayOrNull(input.day)) throw new Problem(400, 'Pick the day it went');
+        const cents = input.price_cents ?? null;
+        if (cents !== null && !(Number.isInteger(cents) && cents >= 0 && cents < 1e12)) throw new Problem(400, 'An amount of money is 0 or more');
+        await tx.run('UPDATE items SET gone_on = ?, gone_how = ?, gone_to = ?, gone_cents = ?, updated_at = ? WHERE id = ?',
+          [dayOrNull(input.day) ?? todayOf(clock), input.how, clean(input.to, 200), cents, now(), id]);
+        return item(tx, id);
+      });
+    },
+
+    /** Undo "no longer have it": the thing is back in the lists, where it was. */
+    takeBack(id: number): Promise<Item> {
+      return atomic(db, async (tx) => {
+        await ownedItem(tx, id);
+        await tx.run('UPDATE items SET gone_on = NULL, gone_how = NULL, gone_to = NULL, gone_cents = NULL, updated_at = ? WHERE id = ?', [now(), id]);
         return item(tx, id);
       });
     },
@@ -943,7 +1046,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       for (const room of report.rooms) {
         for (const l of room.lines) {
           rows.push([room.name, l.where ?? "", l.name, l.kind, l.amount, l.model ?? "", l.serial ?? "", l.bought_on ?? "", l.bought_at ?? "",
-            plainDollars(l.price_cents), plainDollars(l.value_cents ?? l.price_cents), l.warranty_until ?? "", l.photo ? "yes" : "no", l.receipt ? "yes" : "no"]);
+            plainDollars(l.price_cents), plainDollars(l.value_cents ?? l.price_cents), l.warranty_until ?? "", l.photo ? "yes" : "no", l.receipt ? "yes" : "no", l.asset_no, l.insured ? "yes" : "no"]);
         }
       }
       return { filename: `home-inventory-${report.day}.csv`, text: '\uFEFF' + rows.map((row) => row.map(csvField).join(',')).join('\r\n') + '\r\n' };
@@ -961,7 +1064,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
             if (!(await tx.get('SELECT id FROM items WHERE code = ?', [fresh]))) { code = fresh; await tx.run('UPDATE items SET code = ? WHERE id = ?', [code, id]); }
           }
           const thing = await item(tx, id);
-          out.push({ id, name: thing.name, place: thing.place, code });
+          out.push({ id, name: thing.name, place: thing.place, code, asset_no: thing.asset_no });
         }
         return out;
       });

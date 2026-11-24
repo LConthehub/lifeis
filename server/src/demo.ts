@@ -88,7 +88,7 @@ async function fill(db: Db, me: number): Promise<void> {
   const kidsRoom = await place("Leo's room");
   const bookshelf = await place('Bookshelf', kidsRoom);
 
-  const tv = await things.createItem({ kind_id: household, name: 'Television', place_id: living, records: { bought_on: day(-400), bought_at: 'Costco', price_cents: 79900, value_cents: 55000, model: 'QN55', serial: 'SN-48213-A', warranty_until: day(30) } });
+  const tv = await things.createItem({ kind_id: household, name: 'Television', place_id: living, insured: true, own_fields: [{ name: 'Remote', value: 'In the drawer' }], records: { bought_on: day(-400), bought_at: 'Costco', price_cents: 79900, value_cents: 55000, model: 'QN55', serial: 'SN-48213-A', warranty_until: day(30) } });
   await things.createItem({ kind_id: household, name: 'Stand mixer', place_id: kitchenRoom, records: { bought_on: day(-900), price_cents: 32900, serial: 'KM-77120' }, activities: ['Baking'] });
   const drill = await things.createItem({ kind_id: household, name: 'Cordless drill', place_id: toolShelf, records: { price_cents: 12900, model: 'DCD771' }, activities: ['Woodworking', 'Home maintenance'] });
   const ladder = await things.createItem({ kind_id: household, name: 'Step ladder', place_id: garage, activities: ['Home maintenance', 'Painting'] });

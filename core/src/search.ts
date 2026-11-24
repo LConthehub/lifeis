@@ -66,11 +66,12 @@ export async function search(db: Db, owner: number, query: string, only?: Search
   const where = (id: number | null) => (id !== null ? (paths.get(id) ?? null) : null);
 
   if (wants('thing')) {
-    const w = every(['i.name', 'i.note', 'i.barcode', 'i.serial', 'i.model', 'i.bought_at', 'k.name',
+    const w = every(['i.name', 'i.note', 'i.barcode', 'i.serial', 'i.model', 'i.bought_at', 'k.name', "printf('%03d-%03d', i.asset_no / 1000, i.asset_no % 1000)",
+      "(SELECT GROUP_CONCAT(f.name || ' ' || f.value, ' ') FROM item_fields f WHERE f.item_id = i.id)",
       "(SELECT GROUP_CONCAT(v.value, ' ') FROM item_values v WHERE v.item_id = i.id)",
       "(SELECT GROUP_CONCAT(a.activity, ' ') FROM item_activities a WHERE a.item_id = i.id)"]);
     for (const t of await db.all<{ id: number; name: string; kind: string; icon: string | null; place_id: number | null }>(
-      `SELECT i.id, i.name, k.name AS kind, k.icon, i.place_id FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.owner_id = ? AND (${w.sql}${await tagged('thing', 'i.id')}) ORDER BY i.name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
+      `SELECT i.id, i.name, k.name AS kind, k.icon, i.place_id FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.owner_id = ? AND i.gone_on IS NULL AND (${w.sql}${await tagged('thing', 'i.id')}) ORDER BY i.name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
       out.push({ kind: 'thing', id: t.id, icon: t.icon || '📦', title: t.name, detail: join(t.kind, where(t.place_id) && `📍 ${where(t.place_id)}`), link: `/things/${t.id}` });
     }
   }

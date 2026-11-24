@@ -40,6 +40,7 @@ export default function HomeReport() {
   const [picked, setPicked] = useState(null);          // null: all rooms; else a list of room ids (0 is "no place yet")
   const [minText, setMinText] = useState('');
   const [withUnvalued, setWithUnvalued] = useState(true);
+  const [insuredOnly, setInsuredOnly] = useState(false);
   const [photos, setPhotos] = useState(true);
   const [perPage, setPerPage] = useState(false);
   const [problem, setProblem] = useState('');
@@ -52,8 +53,9 @@ export default function HomeReport() {
     if (picked) params.rooms = picked.join(',');
     if (minCents) params.min_cents = String(minCents);
     if (!withUnvalued) params.unvalued = '0';
+    if (insuredOnly) params.insured = '1';
     return params;
-  }, [picked, minCents, withUnvalued]);
+  }, [picked, minCents, withUnvalued, insuredOnly]);
 
   useEffect(() => {
     if (minBad) return undefined;
@@ -78,7 +80,7 @@ export default function HomeReport() {
   if (report === null) return null;
   if (report === false) return <p className="text-sm text-gray-600 dark:text-life-200">The inventory couldn't be made just now.</p>;
   const choiceName = (id) => report.choices.find((c) => c.id === id)?.name;
-  const filtered = picked !== null || Boolean(minCents) || !withUnvalued;
+  const filtered = picked !== null || Boolean(minCents) || !withUnvalued || insuredOnly;
   const toggleRoom = (id) => setPicked((list) => { const has = list.includes(id); return has ? list.filter((x) => x !== id) : [...list, id]; });
   const nothing = report.things === 0;
   const atCost = report.rooms.reduce((n, r) => n + r.at_cost, 0);
@@ -141,6 +143,7 @@ export default function HomeReport() {
               </label>
               <div>
                 <label className="flex min-h-11 items-center gap-2 text-sm text-gray-800 dark:text-life-50"><input type="checkbox" checked={withUnvalued} onChange={(e) => setWithUnvalued(e.target.checked)} className="h-4 w-4 accent-life-600" /> Include things with no value</label>
+                <label className="flex min-h-11 items-center gap-2 text-sm text-gray-800 dark:text-life-50"><input type="checkbox" checked={insuredOnly} onChange={(e) => setInsuredOnly(e.target.checked)} className="h-4 w-4 accent-life-600" /> Only insured things <span className="text-xs text-gray-500 dark:text-life-300">{report.insured}</span></label>
                 <label className="flex min-h-11 items-center gap-2 text-sm text-gray-800 dark:text-life-50"><input type="checkbox" checked={photos} onChange={(e) => setPhotos(e.target.checked)} className="h-4 w-4 accent-life-600" /> With photos (they make it longer)</label>
                 <label className="flex min-h-11 items-center gap-2 text-sm text-gray-800 dark:text-life-50"><input type="checkbox" checked={perPage} onChange={(e) => setPerPage(e.target.checked)} className="h-4 w-4 accent-life-600" /> One room per page</label>
               </div>
@@ -150,7 +153,7 @@ export default function HomeReport() {
               <button type="button" disabled={!report.shown.things} onClick={() => window.print()} className={`${buttonClass} min-h-11`}>Print or save as PDF</button>
               <button type="button" disabled={!report.shown.things || saving} onClick={download} className={`${quietButtonClass} min-h-11`}>{saving ? 'Making it…' : 'Download as a spreadsheet (CSV)'}</button>
             </div>
-            <p className="text-xs text-gray-500 dark:text-life-300">The spreadsheet has a row for each thing: room, where, what it is, make and model, serial number, when and where bought, cost, worth now and warranty. Photos and papers are not in it.</p>
+            <p className="text-xs text-gray-500 dark:text-life-300">The spreadsheet has a row for each thing: room, where, what it is, make and model, serial number, when and where bought, cost, worth now, warranty, asset number and whether it is insured. Photos and papers are not in it.</p>
             {problem && <p className="text-sm text-red-600" role="alert">{problem}</p>}
           </section>
         )}
@@ -193,7 +196,7 @@ export default function HomeReport() {
                         {photos && l.photo && <Picture src={`/api/things/items/${l.id}/photo`} alt={`Photo of ${l.name}`} className="h-16 w-16 shrink-0 rounded object-cover" />}
                         <div className="min-w-0">
                           <Link to={`/things/${l.id}`} className="font-medium">{l.name}</Link>{l.amount !== 'some' && l.amount !== '1' && <span className="text-gray-700"> × {l.amount}</span>}
-                          <div className="text-[11px] text-gray-700">{[l.kind, l.where, l.photo && 'photo', l.receipt && 'receipt'].filter(Boolean).join(' · ')}</div>
+                          <div className="text-[11px] text-gray-700">{[l.asset_no, l.kind, l.where, l.insured && 'insured', l.photo && 'photo', l.receipt && 'receipt'].filter(Boolean).join(' · ')}</div>
                           <div className="text-[11px] text-gray-700 sm:hidden print:hidden">{[l.model, l.serial && <span key="s" className="serial">S/N {l.serial}</span>, l.bought_on, l.bought_at].filter(Boolean).reduce((out, part, i) => (i ? [...out, ' · ', part] : [part]), [])}</div>
                         </div>
                       </div>
