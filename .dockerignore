@@ -1,5 +1,11 @@
 **/node_modules
 **/dist
+# The image never uses these, and the Android build alone is hundreds of MB, which made every image build slow.
+frontend/android
+frontend/dist-device
+frontend/public/ocr
+e2e
+docs/site/img
 **/__pycache__
 backend/data
 .git
