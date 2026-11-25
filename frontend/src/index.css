@@ -62,3 +62,122 @@ input, button, select, textarea { font-weight: inherit; }
 
 /* The one touch of the artwork's plum: the color of selected words. */
 ::selection { background: theme('colors.plum.500'); color: theme('colors.cream'); }
+
+/* ---------- Printouts: one frame for all of them (src/print/PrintFrame.jsx) ----------
+   White paper, color as accents: the stripe band (3/8 in), the mushroom (1/2 in) with the section's phrase, the title in Fraunces
+   in chocolate with a gold line under it. The plain styles (Plain chocolate, Plain black) keep every room the art takes but draw
+   none of it, and set every word and line in the one color. The layout is the same in all three. */
+.pf { --pf-ink: #000; --pf-choc: #422a17; color: #000; }
+.pf-head { margin: 0 0 0.16in; break-inside: avoid; break-after: avoid; }
+.pf-bands { display: flex; flex-direction: column; height: 0.375in; width: 100%; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pf-bands > i { display: block; flex: 1 1 0; }
+.pf-bands-art { display: block; background-repeat: repeat-x; background-size: auto 100%; }
+.pf-brand { display: flex; align-items: center; gap: 0.12in; min-height: 0.5in; margin-top: 0.08in; }
+.pf-mark { flex: none; object-fit: contain; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pf-phrase { font-size: 15pt; font-weight: 650; line-height: 1.1; color: #e7602c; }
+.pf-title { margin: 0.04in 0 0.05in; padding-bottom: 0.04in; border-bottom: 3px solid #f2ce47; font-size: 22pt; font-weight: 700; line-height: 1.15; color: var(--pf-choc); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pf-sub { margin: 0; font-size: 10pt; color: #555; }
+.pf-head ~ * h2, .pf-head ~ * h3, .pf-head ~ h2, .pf-head ~ h3 { color: var(--pf-choc); }
+.pf[data-print-style="life"] .pf-sheet-rule { border-color: #f2ce47; }
+.pf[data-print-style="chocolate"] { --pf-ink: #422a17; }
+.pf[data-print-style="black"] { --pf-ink: #000; }
+.pf[data-print-style="chocolate"], .pf[data-print-style="black"],
+.pf[data-print-style="chocolate"] *, .pf[data-print-style="black"] * {
+  color: var(--pf-ink) !important; border-color: var(--pf-ink) !important; background-color: transparent !important; background-image: none !important;
+  box-shadow: none !important; text-decoration-color: var(--pf-ink) !important; fill: currentColor;
+}
+.pf[data-print-style="chocolate"] .pf-art, .pf[data-print-style="black"] .pf-art { visibility: hidden; }
+.pf[data-print-style="chocolate"] .pf-life-only, .pf[data-print-style="black"] .pf-life-only { display: none; }
+
+/* The recipe card frame: a thin line border inset 1/4 in, until the owner's card-frame.svg is added. Left off in the plain styles. */
+.pf-card-frame { position: absolute; inset: 0.25in; border: 1px solid #c29a68; pointer-events: none; }
+.pf-card-frame img { position: absolute; inset: -0.25in; width: calc(100% + 0.5in); height: calc(100% + 0.5in); }
+.pf[data-print-style="chocolate"] .pf-card-frame, .pf[data-print-style="black"] .pf-card-frame { display: none; }
+
+/* ---------- The house manual's printouts (src/print/ManualSheets.jsx) ---------- */
+.pm h3.pm-h { margin: 0.18in 0 0.05in; padding-bottom: 0.02in; border-bottom: 1.5px solid #f2ce47; font-size: 14pt; font-weight: 700; color: var(--pf-choc); break-after: avoid; }
+.pm .pm-entry { margin: 0.07in 0; break-inside: avoid; font-size: 10.5pt; line-height: 1.35; }
+.pm .pm-entry b, .pm .pm-entry strong { font-weight: 800; }
+.pm .pm-entry p { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.pm .pm-phone { font-weight: 800; letter-spacing: 0.01em; }
+.pm .pm-wifi { display: flex; align-items: center; gap: 0.2in; break-inside: avoid; }
+.pm .pm-wifi img { width: 1.5in; height: 1.5in; flex: none; image-rendering: pixelated; }
+.pm .pm-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; overflow-wrap: anywhere; }
+.pm .pm-fridge { font-size: 11pt; }
+.pm .pm-numbers li { display: flex; justify-content: space-between; gap: 0.2in; border-bottom: 1px solid #e6dcc6; padding: 0.05in 0; font-size: 13pt; }
+.pm .pm-numbers .pm-phone { font-size: 15pt; white-space: nowrap; }
+.pm .pm-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3in; }
+
+/* The pocket zine: one letter sheet (landscape), 4 panels across and 2 down. The top row is turned half a turn (zineLayout.js). */
+.zine { position: relative; width: 10.5in; height: 7.98in; overflow: hidden; break-inside: avoid; page-break-inside: avoid; }
+.zine-grid { display: grid; grid-template-columns: repeat(4, 2.625in); grid-template-rows: repeat(2, 3.99in); width: 10.5in; height: 7.98in; }
+.zine-panel { position: relative; box-sizing: border-box; width: 2.625in; height: 3.99in; padding: 0.2in 0.2in 0.18in; overflow: hidden; font-size: 8.5pt; line-height: 1.3; }
+.zine-panel.is-turned { transform: rotate(180deg); }
+.zine-panel h3 { margin: 0 0 0.06in; padding-bottom: 0.02in; border-bottom: 1.5px solid #f2ce47; font-size: 12.5pt; font-weight: 700; line-height: 1.15; color: var(--pf-choc); }
+.zine-panel p { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.zine-panel .z-item { margin: 0 0 0.055in; }
+.zine-panel .z-item b { font-weight: 800; }
+.zine-panel .z-phone { font-weight: 800; }
+.zine-panel .z-more { margin-top: 0.05in; font-style: italic; color: #734825; }
+.zine-panel .z-wifi img { display: block; width: 1.7in; height: 1.7in; margin: 0.04in auto 0.08in; image-rendering: pixelated; }
+.zine-panel .z-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; overflow-wrap: anywhere; }
+.zine-cover { text-align: left; }
+.zine-cover .pf-bands { width: 100%; }
+.zine-cover .z-big { margin: 0.12in 0 0.04in; font-size: 24pt; font-weight: 700; line-height: 1.05; color: var(--pf-choc); border: 0; padding: 0; }
+.zine-cover .z-phrase { font-size: 14pt; font-weight: 650; color: #e7602c; }
+.zine-fold-v, .zine-fold-h, .zine-cut { position: absolute; pointer-events: none; border: 0 dashed #cdbf9f; }
+.zine-fold-v { top: 0; bottom: 0; border-left-width: 0.5pt; }
+.zine-fold-h { left: 0; right: 0; top: 50%; border-top-width: 0.5pt; }
+.zine-cut { left: 25%; width: 50%; top: 50%; border-top: 1.5pt dashed #8c5a33; }
+.zine-note { font-size: 7.5pt; line-height: 1.25; }
+/* Stickers keep their size and layout in every style; the Life Is look only warms the cut line. */
+.sticker-sheet.pf[data-print-style="life"] > li { border-color: #d9a82a; }
+
+/* ---------- Recipes on paper (src/print/RecipeSheets.jsx) ---------- */
+/* Around the title on the recipe page: a thin line frame (the owner's card frame, smaller, once it is added). Dropped in the plain styles. */
+.pf-titlebox { margin: 0.04in 0 0.05in; padding: 0.1in 0.18in; border: 1px solid #c29a68; background-size: 100% 100%; background-repeat: no-repeat; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.pf-titlebox .pf-title { margin: 0; }
+.pf[data-print-style="chocolate"] .pf-titlebox, .pf[data-print-style="black"] .pf-titlebox { border-color: transparent !important; }
+.pr { font-size: 11pt; line-height: 1.4; }
+.pr-desc { margin: 0 0 0.12in; font-style: italic; white-space: pre-wrap; }
+.pr-photo { display: block; max-height: 2.7in; max-width: 100%; margin: 0 0 0.14in; border-radius: 0.06in; object-fit: contain; }
+.pr-cols { display: grid; grid-template-columns: 2.3in minmax(0, 1fr); gap: 0.3in; align-items: start; }
+.pr h3 { margin: 0 0 0.06in; font-size: 13pt; font-weight: 700; color: var(--pf-choc); border-bottom: 1.5px solid #f2ce47; break-after: avoid; }
+.pr-ing h3 ~ h3 { margin-top: 0.16in; }
+.pr ul, .pr ol { margin: 0; padding: 0; list-style: none; }
+.pr-ing li { margin: 0 0 0.04in; break-inside: avoid; overflow-wrap: anywhere; }
+.pr-sub { margin-top: 0.1in !important; font-weight: 800; font-size: 9.5pt; letter-spacing: 0.04em; text-transform: uppercase; }
+.pr-steps li { display: flex; gap: 0.1in; margin: 0 0 0.09in; break-inside: avoid; white-space: pre-wrap; }
+.pr-n { flex: none; width: 0.22in; font-family: 'Fraunces Variable', Georgia, serif; font-weight: 800; color: #e7602c; }
+.pr-notes { margin-top: 0.2in; break-inside: avoid; }
+.pr-notes p { margin: 0; white-space: pre-wrap; }
+.pr-source { margin: 0.18in 0 0; font-size: 9pt; color: #734825; }
+
+/* Recipe cards: 6 x 4 inches (landscape), the words inside the middle area (1/2 in in from every side), two to a letter sheet. */
+.rc-measure { position: absolute; left: -20000px; top: 0; visibility: hidden; pointer-events: none; }
+.rc-card { position: relative; box-sizing: border-box; width: 6in; height: 4in; padding: 0.5in; overflow: hidden; background: #fff;
+  font-family: 'Nunito Variable', system-ui, sans-serif; font-weight: 600; font-size: 8.5pt; line-height: 1.3; color: #000; }
+.rc-page { display: flex; flex-direction: column; align-items: center; gap: 0.35in; break-after: page; padding-top: 0.2in; }
+.rc-page:last-child { break-after: auto; }
+.rc-page .rc-card::after { content: ''; position: absolute; inset: 0; border: 1px dashed #9c8a6a; pointer-events: none; z-index: 2; }
+.rc-head { height: 0.62in; overflow: hidden; }
+.rc-head-more { height: 0.26in; }
+.rc-title { margin: 0; font-size: 15pt; font-weight: 700; line-height: 1.1; color: var(--pf-choc, #422a17); overflow: hidden; max-height: 0.5in; }
+.rc-title-more { margin: 0; font-size: 9pt; font-weight: 800; color: var(--pf-choc, #422a17); }
+.rc-meta { margin: 0.03in 0 0; font-size: 8pt; color: #734825; }
+.rc-body { box-sizing: border-box; height: 2.38in; width: 100%; column-count: 2; column-gap: 0.25in; column-fill: auto; overflow: hidden; }
+.rc-head-more + .rc-body { height: 2.74in; }
+.rc-body p { margin: 0 0 0.04in; overflow-wrap: anywhere; }
+.rc-h { margin-top: 0.02in !important; font-size: 9.5pt; font-weight: 800; color: #e7602c; border-bottom: 1px solid #f2ce47; break-after: avoid; }
+.rc-sub { font-weight: 800; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.04em; break-after: avoid; }
+.rc-step { padding-left: 0.14in; text-indent: -0.14in; }
+.rc-cont { text-indent: 0; }
+.rc-desc, .rc-note { font-style: italic; }
+.rc-ing { padding-left: 0.1in; text-indent: -0.1in; break-inside: avoid; }
+.rc-card .pf-card-frame { z-index: 0; }
+.rc-card .rc-head, .rc-card .rc-body { position: relative; z-index: 1; }
+.pf[data-print-style="chocolate"] .rc-page .rc-card::after, .pf[data-print-style="black"] .rc-page .rc-card::after { border-color: var(--pf-ink); }
+@media print {
+  /* The sheets are the only thing on paper: the page's own spacing between its parts must not push them down. */
+  .manual-print, .recipe-print { margin: 0 !important; }
+}

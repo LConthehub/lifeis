@@ -5,6 +5,7 @@ import { LIBRARIES, TYPES, piecesWord } from './Media';
 import { formatGroupName, inFormatGroup } from '../components/formatGroups';
 import { SORTS, collectionTotals, dollarsField, dollarsText, labelKey, sortTitles } from '../components/collectionTools';
 import { buttonClass, cardClass, quietButtonClass, errorMessage } from '../components/ui';
+import PrintFrame, { PrintStyleChoice } from '../print/PrintFrame';
 
 const control = 'min-h-[44px]';
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -189,6 +190,7 @@ export default function CollectionPrint() {
           <p className="text-xs text-gray-600 dark:text-life-200" role="status">
             {none ? 'Nothing matches those filters.' : `${plural(shown.length, 'title', 'titles')}: ${describe}.`}{waiting ? ' Looking up where each one is kept…' : ''}
           </p>
+          <PrintStyleChoice />
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={none || waiting} onClick={() => window.print()} className={`${buttonClass} ${control}`}>Print or save as PDF</button>
             <button type="button" disabled={none || waiting || saving} onClick={save} className={`${quietButtonClass} ${control}`}>{saving ? 'Making it…' : 'Save as spreadsheet'}</button>
@@ -198,9 +200,8 @@ export default function CollectionPrint() {
       </div>
 
       {/* The sheet itself: black on white whatever the page's colors. */}
-      <div className="list-sheet space-y-4 rounded-xl bg-card print:bg-white p-4 text-black sm:p-6" aria-label="The list">
+      <PrintFrame phrase="Life is full" title="Collection" className="list-sheet space-y-4 rounded-xl bg-card print:bg-white p-4 text-black sm:p-6" aria-label="The list">
         <header>
-          <h2 className="text-lg font-bold">Collection</h2>
           <p className="text-sm text-gray-700" data-filters>{describe} · sorted by: {SORTS.find(([id]) => id === sort)?.[1]}</p>
           <p className="text-sm text-gray-700">Made on {dayText()}</p>
         </header>
@@ -231,7 +232,7 @@ export default function CollectionPrint() {
           </p>
         )}
         {total && !none && picked.worth && <p className="text-xs text-gray-700">A copy is counted at the value you gave it, or at what it cost when no value was given.</p>}
-      </div>
+      </PrintFrame>
     </div>
   );
 }

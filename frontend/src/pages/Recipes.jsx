@@ -9,6 +9,8 @@ import RecipeFile from '../components/RecipeFile';
 import { shrink } from '../components/shrink';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import { RecipePrep } from '../components/PrepSteps';
+import { PrintMenu, printSoon } from '../print/PrintFrame';
+import RecipeSheets from '../print/RecipeSheets';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, minutesText, toDateInput } from '../components/ui';
 
 /** Where a recipe's picture is asked for; the version makes a changed picture show at once instead of the one remembered. */
@@ -341,6 +343,8 @@ export function RecipePage() {
   const [showOriginal, setShowOriginal] = useState(false);
   const [pictureError, setPictureError] = useState('');
   const [cooking, setCooking] = useState(false);
+  // On paper: the recipe page unless another way was chosen (?print=card opens the cards).
+  const [way, setWay] = useState(() => { const w = new URLSearchParams(window.location.search).get('print'); return w === 'card' || w === 'page' ? w : null; });
   const stopCooking = useCallback(() => setCooking(false), []);
   const picker = useRef(null);
   const load = useCallback(() => {
@@ -368,7 +372,9 @@ export function RecipePage() {
   };
   let stepNumber = 0;
   return (
-    <article className="space-y-4">
+    <>
+    <RecipeSheets way={way ?? 'page'} recipe={r} servings={servings === '' ? r.servings : Number(servings)} photo={r.has_photo ? photoAddress(r) : null} />
+    <article className="space-y-4 print:hidden">
       <div className="flex flex-wrap items-start gap-2">
         <div className="mr-auto">
           <Link to="/recipes" className="text-xs text-life-600 hover:underline dark:text-life-200">← Recipes</Link>
@@ -381,6 +387,12 @@ export function RecipePage() {
         <button type="button" onClick={() => setModal('plan')} className={quietButtonClass}>Add to the week</button>
         <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Edit</button>
       </div>
+      <PrintMenu ways={[['page', 'Recipe page (letter)'], ['card', 'Recipe card (4 x 6 inch)']]} onPrint={(id) => printSoon(setWay, id)}>
+        <p className="text-sm text-gray-600 dark:text-life-100">
+          <b>Recipe page</b>: the title, the picture, the ingredients beside the steps, and the notes. <b>Recipe card</b>: 4 x 6 inch cards, two to a letter sheet with cut lines, and a second card when it runs long.
+          They are made here and go nowhere.
+        </p>
+      </PrintMenu>
       {r.description && <p className="whitespace-pre-wrap text-gray-700 dark:text-life-100">{r.description}</p>}
       <div className="space-y-2" data-section="picture">
         {r.has_photo && <Picture src={photoAddress(r)} alt={r.title} loading="lazy" decoding="async" className="max-h-72 w-full rounded-xl bg-life-50 object-contain dark:bg-life-700 sm:max-w-md" />}
@@ -460,6 +472,7 @@ export function RecipePage() {
         </Modal>
       )}
     </article>
+    </>
   );
 }
 

@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { buttonClass, cardClass } from '../components/ui';
 import { serverOrigin } from '../where';
+import { PrintInk, PrintStyleChoice } from '../print/PrintFrame';
 
 /** What a thing's sticker carries: an address ending in /t/ and its code, so a phone's camera opens it. */
 export const thingStickerAddress = (code) => `${serverOrigin()}/t/${code}`;
@@ -52,6 +53,7 @@ export function ThingStickersPage() {
           </select>
           <button type="button" disabled={!stickers.length} onClick={() => window.print()} className={buttonClass}>Print {stickers.length || ''}</button>
         </div>
+        <PrintStyleChoice />
         <p className="text-sm text-gray-600 dark:text-life-100">
           {blank ? 'Stick these on things first. Then fill a place and scan each one: Life Is asks what it is on, once, and after that the sticker finds it.'
             : "Stick each on its thing. A phone's camera then opens it in Life Is, and scanning it while filling a place moves it there."}
@@ -59,7 +61,7 @@ export function ThingStickersPage() {
         </p>
         {!stickers.length && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>No things to make stickers for.</div>}
       </div>
-      <ul className={`sticker-sheet grid gap-2 rounded-xl bg-card print:bg-white p-3 text-black ${SIZES[size][1]}`} aria-label="The stickers that will print">
+      <PrintInk as="ul" className={`sticker-sheet grid gap-2 rounded-xl bg-card print:bg-white p-3 text-black ${SIZES[size][1]}`} aria-label="The stickers that will print">
         {stickers.map((s) => (
           <li key={s.code} className="flex break-inside-avoid flex-col items-center rounded-lg border border-dashed border-gray-400 p-1.5 text-center">
             {pictures[s.code] ? <img src={pictures[s.code]} alt={s.name ? `Sticker for ${s.name}` : 'A blank sticker'} data-code={s.code} className="w-full" /> : <span className="aspect-square w-full" />}
@@ -67,7 +69,7 @@ export function ThingStickersPage() {
             {s.asset_no && <span className={`font-mono leading-tight ${SIZES[size][2]}`} data-asset>{s.asset_no}</span>}
           </li>
         ))}
-      </ul>
+      </PrintInk>
     </div>
   );
 }

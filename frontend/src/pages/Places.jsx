@@ -5,6 +5,7 @@ import axios from 'axios';
 import Scanner from '../components/Scanner';
 import { buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { serverOrigin } from '../where';
+import { PrintInk, PrintStyleChoice } from '../print/PrintFrame';
 
 /** The code out of a scanned sticker: the code itself, or an address ending in /p/ and the code. */
 export const stickerCode = (read) => (/(?:^|\/p\/)([2-9A-HJ-NP-Za-hj-np-z]{10})\/?$/.exec(String(read).trim()) || [])[1]?.toUpperCase() || null;
@@ -157,6 +158,7 @@ export function StickersPage() {
           </select>
           <button type="button" disabled={printing.length === 0} onClick={() => window.print()} className={buttonClass}>Print {printing.length || ''}</button>
         </div>
+        <PrintStyleChoice />
         <p className="text-sm text-gray-600 dark:text-life-100">
           Print these on sticker paper (or plain paper and tape), and put each on its shelf, box or bin. Point a phone's camera at one to see what's inside.
           Only someone signed in to your Life Is can see anything: to anyone else the sticker is just an address that asks them to sign in.
@@ -176,7 +178,7 @@ export function StickersPage() {
         )}
       </div>
       {/* The sheet itself: black on white whatever the page's colors, and the only thing that prints. */}
-      <ul className={`sticker-sheet grid gap-3 rounded-xl bg-card print:bg-white p-3 text-black ${SIZES[size][1]}`} aria-label="The stickers that will print">
+      <PrintInk as="ul" className={`sticker-sheet grid gap-3 rounded-xl bg-card print:bg-white p-3 text-black ${SIZES[size][1]}`} aria-label="The stickers that will print">
         {printing.map((s) => (
           <li key={s.id} className="flex break-inside-avoid flex-col items-center rounded-lg border border-dashed border-gray-400 p-2 text-center">
             {pictures[s.id] ? <img src={pictures[s.id]} alt={`Sticker for ${s.path}`} data-code={s.code} className="w-full" /> : <span className="aspect-square w-full" />}
@@ -184,7 +186,7 @@ export function StickersPage() {
             {s.path !== s.name && <span className={`leading-tight text-gray-600 ${SIZES[size][2]}`}>{s.path.slice(0, s.path.length - s.name.length - 3)}</span>}
           </li>
         ))}
-      </ul>
+      </PrintInk>
     </div>
   );
 }

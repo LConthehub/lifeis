@@ -102,7 +102,7 @@ On the Things page, **Home inventory** lists everything room by room, with what 
 
 Before you print, choose what goes in it: all rooms or only the ones you pick, only things worth at least an amount, things with no value or not, **Only insured things**, photos, and one room per page. **Download as a spreadsheet (CSV)** gives a row for each thing with its room, model, serial number, purchase, cost, worth, warranty, asset number and whether it is insured. Photos and papers are not in the spreadsheet.
 
-**Press Print or save as PDF, and keep a copy somewhere other than home.** An inventory that burns with the house helps nobody.
+**Press Print or save as PDF, and keep a copy somewhere other than home.** The chore chart, the collection list, the guns list and the stickers take the same **Print style**. An inventory that burns with the house helps nobody.
 
 ## Pets
 
@@ -123,7 +123,15 @@ The House Manual is what someone else needs to know to look after your home: a s
 
 An entry can say where a thing is, using the places you already keep, and carry a phone number to tap. On a phone, under **Who to call**, tap **Choose from your contacts** to fill in a name and number. Only the one contact you tap is read, and Life Is asks for no access to your address book. Your pets appear by themselves, with their food and vet.
 
-Press **Print** and put it in a drawer. Or use **Share it by a link**, for a sitter. The link opens the manual on their phone with no sign-in. You choose how long it works: a day, a week, or until you turn it off. Making a new link stops the old one.
+Press **Print** and choose how:
+
+- **Full manual:** letter pages with page numbers. Emergencies and who to call come first, then the Wi-Fi with a code a phone can read to join, the pets, how the house works, and your home services.
+- **Fridge sheet:** one page with emergency numbers, the Wi-Fi code, and how to feed the pets.
+- **Pocket zine:** one sheet, printed on one side, with eight small panels. Fold it in half, cut the dashed line between the middle four panels, and fold it into a little book. Anything too long for a panel says "More in the full manual."
+
+Private entries are left off the paper unless you tick the box. The Wi-Fi code is drawn on your device. Choose a **Print style** first: Life Is look, Plain chocolate or Plain black.
+
+Or use **Share it by a link**, for a sitter. The link opens the manual on their phone with no sign-in. You choose how long it works: a day, a week, or until you turn it off. Making a new link stops the old one.
 
 Mark an entry **private**, such as an alarm code, and it is never on the shared link. The shared page is plain: nothing on it can be changed, and it shows nothing else of your Life Is.
 

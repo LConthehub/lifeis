@@ -4,6 +4,7 @@ import axios from 'axios';
 import Picture from '../components/Picture';
 import { money } from '../components/Records';
 import { buttonClass, cardClass, quietButtonClass, errorMessage } from '../components/ui';
+import PrintFrame, { PrintStyleChoice } from '../print/PrintFrame';
 
 const dayText = (day) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -152,6 +153,7 @@ export default function HomeReport() {
               </div>
             </div>
             {filtered && <p className="text-xs text-gray-600 dark:text-life-200">Showing {plural(report.shown.things, 'thing', 'things')} of {report.things}{picked ? ` in ${picked.map(choiceName).filter(Boolean).join(', ') || 'no rooms'}` : ''}.</p>}
+            <PrintStyleChoice />
             <div className="flex flex-wrap gap-2">
               <button type="button" disabled={!report.shown.things} onClick={() => window.print()} className={`${buttonClass} min-h-11`}>Print or save as PDF</button>
               <button type="button" disabled={!report.shown.things || saving} onClick={download} className={`${quietButtonClass} min-h-11`}>{saving ? 'Making it…' : 'Download as a spreadsheet (CSV)'}</button>
@@ -163,9 +165,8 @@ export default function HomeReport() {
       </div>
 
       {/* The sheet itself: black on white whatever the page's colors. */}
-      <div className={`report-sheet space-y-5 rounded-xl bg-card print:bg-white p-4 text-black sm:p-6 ${perPage ? 'one-room-per-page' : ''}`} aria-label="The inventory">
+      <PrintFrame phrase="Life is covered" title="Home inventory" className={`report-sheet space-y-5 rounded-xl bg-card print:bg-white p-4 text-black sm:p-6 ${perPage ? 'one-room-per-page' : ''}`} aria-label="The inventory">
         <header>
-          <h2 className="text-lg font-bold">Home inventory</h2>
           <p className="text-sm text-gray-700">Made on {dayText(report.day)}</p>
           <p className="mt-1 text-sm" data-totals>
             {report.things} thing{report.things === 1 ? '' : 's'} · worth {money(report.worth_cents)} in all · {report.with_photo} with a photo · {report.with_receipt} with a receipt
@@ -217,7 +218,7 @@ export default function HomeReport() {
         {atCost > 0 && (
           <p className="text-xs text-gray-700" data-footnote>* Worth now is the value you gave. Where none was given, the thing is counted at what it cost ({atCost} here).</p>
         )}
-      </div>
+      </PrintFrame>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { money } from '../components/Records';
 import { goneText } from './Things';
 import { csvText } from './CollectionPrint';
 import { buttonClass, cardClass, quietButtonClass, errorMessage } from '../components/ui';
+import PrintFrame, { PrintStyleChoice } from '../print/PrintFrame';
 
 const control = 'min-h-[44px]';
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -96,6 +97,7 @@ export default function GunList() {
             </label>
           ))}
           <p className="text-xs text-gray-600 dark:text-life-200" role="status">{none ? 'No guns are kept yet.' : `${plural(here.length, 'gun', 'guns')} here${away.length ? `, ${away.length} no longer yours` : ''}.`}</p>
+          <PrintStyleChoice />
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={none} onClick={() => window.print()} className={`${buttonClass} ${control}`}>Print or save as PDF</button>
             <button type="button" disabled={none || saving} onClick={save} className={`${quietButtonClass} ${control}`}>{saving ? 'Making it…' : 'Save as spreadsheet'}</button>
@@ -104,9 +106,8 @@ export default function GunList() {
         </section>
       </div>
 
-      <div className="gun-sheet space-y-3 rounded-xl bg-card p-4 text-black print:bg-white sm:p-6" aria-label="The list">
+      <PrintFrame phrase="Life is careful" title="List of guns" className="gun-sheet space-y-3 rounded-xl bg-card p-4 text-black print:bg-white sm:p-6" aria-label="The list">
         <header>
-          <h2 className="text-lg font-bold">List of guns</h2>
           <p className="text-sm text-gray-700">Made on {dayText(today())}</p>
           <p className="text-sm" data-totals>{plural(here.length, 'gun', 'guns')}{away.length ? ` here · ${away.length} no longer owned` : ''}</p>
         </header>
@@ -114,7 +115,7 @@ export default function GunList() {
         {here.map(block)}
         {away.length > 0 && <h2 className="border-b-2 border-gray-800 pt-2 font-semibold">No longer owned</h2>}
         {away.map(block)}
-      </div>
+      </PrintFrame>
     </div>
   );
 }

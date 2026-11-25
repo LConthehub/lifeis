@@ -6,6 +6,9 @@ import PlacePicker from '../components/PlacePicker';
 import CopyButton from '../components/Copy';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { onDevice, serverOrigin } from '../where';
+import { PrintMenu, printSoon } from '../print/PrintFrame';
+import ManualSheets from '../print/ManualSheets';
+import { manualParts, wifiCode } from '../print/manualParts';
 import { contactPicker } from '../device/phoneContacts';
 
 const ICONS = { emergency: 'emergency', contacts: 'contacts', house: 'home', routines: 'date' };
@@ -19,10 +22,27 @@ export default function ManualPage() {
   const [manual, setManual] = useState(null);
   const [places, setPlaces] = useState([]);
   const [editing, setEditing] = useState(null);       // an entry, or { section, title } for a new one
+  // The sheets for paper: which way to print (the full manual unless another was chosen; ?sheet=zine opens it that way), the
+  // links this person can see, the pets' routines, and the Wi-Fi code, drawn here in the browser.
+  const [way, setWay] = useState(() => { const w = new URLSearchParams(window.location.search).get('sheet'); return ['full', 'fridge', 'zine'].includes(w) ? w : null; });
+  const [services, setServices] = useState([]);
+  const [routines, setRoutines] = useState([]);
+  const [wifiPicture, setWifiPicture] = useState(null);
+  const [includePrivate, setIncludePrivate] = useState(false);
   useEffect(() => {
     axios.get('/api/manual').then(({ data }) => setManual(data)).catch(() => setManual(false));
     axios.get('/api/things/places').then(({ data }) => setPlaces(data)).catch(() => {});
+    axios.get('/api/home-services').then(({ data }) => setServices(data.services ?? [])).catch(() => {});
+    axios.get('/api/routines').then(({ data }) => setRoutines(data)).catch(() => {});
   }, []);
+  const wifi = useMemo(() => (manual ? manualParts(manual, { includePrivate }).wifi : null), [manual, includePrivate]);
+  useEffect(() => {
+    let live = true;
+    if (!wifi) { setWifiPicture(null); return undefined; }
+    // Drawn here, on this device: the network and password go to no code-making website.
+    import('qrcode').then(({ default: QRCode }) => QRCode.toDataURL(wifiCode(wifi), { errorCorrectionLevel: 'M', margin: 1, width: 480 })).then((url) => { if (live) setWifiPicture(url); }).catch(() => {});
+    return () => { live = false; };
+  }, [wifi]);
   if (manual === null) return null;
   if (manual === false) return <p className="text-sm text-gray-600 dark:text-life-200">The manual couldn't be opened just now.</p>;
   const written = manual.sections.reduce((n, s) => n + s.entries.length, 0);
@@ -31,16 +51,29 @@ export default function ManualPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">House Manual</h1>
-        <button type="button" disabled={!written && !manual.pets.length} onClick={() => window.print()} className={quietButtonClass}>Print</button>
       </div>
+      <PrintMenu
+        disabled={!written && !manual.pets.length}
+        ways={[['full', 'Full manual'], ['fridge', 'Fridge sheet'], ['zine', 'Pocket zine']]}
+        onPrint={(id) => printSoon(setWay, id)}
+      >
+        <p className="text-sm text-gray-600 dark:text-life-100">
+          <b>Full manual</b>: letter pages, emergencies and who to call first. <b>Fridge sheet</b>: one page with emergency numbers, the Wi-Fi code and feeding the pets.
+          <b> Pocket zine</b>: one sheet, printed on one side, folded into eighths and cut once. Everything is made here and goes nowhere.
+        </p>
+        <label className="flex min-h-[44px] items-center gap-2 text-sm text-gray-700 dark:text-life-100">
+          <input type="checkbox" checked={includePrivate} onChange={(e) => setIncludePrivate(e.target.checked)} className="h-5 w-5 accent-life-600" /> Put private entries on the paper too
+        </label>
+      </PrintMenu>
       <p className="text-sm text-gray-600 dark:text-life-100 print:hidden">
         What someone else needs to know to look after your home: a sitter, a guest, family, or you on the day something goes wrong.
         Tap an idea to start, and write it the way you'd say it.
       </p>
       {!onDevice() && <Sharing manual={manual} onChanged={setManual} />}
 
-      <div className="report-sheet space-y-4">
-        <h2 className="hidden text-lg font-bold text-black print:block">House Manual</h2>
+      <ManualSheets way={way ?? 'full'} manual={manual} services={services} routines={routines} wifiPicture={wifiPicture} includePrivate={includePrivate} />
+
+      <div className="space-y-4 print:hidden">
         {manual.sections.map((s) => (
           <section key={s.id} className={`${cardClass} break-inside-avoid-page print:bg-white print:p-0 print:shadow-none print:ring-0`} aria-label={s.title}>
             <div className="mb-1 flex items-baseline gap-2">

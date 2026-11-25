@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Checklists } from '../components/Routines';
 import { buttonClass, cardClass } from '../components/ui';
+import PrintFrame, { PrintStyleChoice } from '../print/PrintFrame';
 
 const START_KEY = 'lifeis.weekStartsOn';
 /** Which day the week starts on, kept on this device: Sunday, as American calendars have it, unless it was changed. */
@@ -105,6 +106,7 @@ export default function ChoreChart() {
           <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Chore chart</h1>
           <button type="button" disabled={sheets.length === 0} onClick={() => window.print()} className={`${buttonClass} min-h-[44px]`}>Print</button>
         </div>
+        <PrintStyleChoice />
         <p className="text-sm text-gray-600 dark:text-life-100">A sheet for the fridge: each person's chores, with a box to check on each day one is due. Points and what they are worth are on it for you to add up.</p>
 
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Which week">
@@ -150,15 +152,11 @@ export default function ChoreChart() {
       </div>
 
       {sheets.map((groups, i) => (
-        <section key={groups.map(keyOf).join('|')} className="chart-sheet break-after-page rounded-xl bg-card print:bg-white p-3 text-black last:break-after-auto sm:p-6 print:break-after-page print:last:break-after-auto" aria-label={`${title(groups)}, ${range}`} data-sheet={i}>
-          <div className="mb-2">
-            <h2 className="text-lg font-bold print:text-xl">{title(groups)}</h2>
-            <p className="text-sm">{range}</p>
-          </div>
+        <PrintFrame key={groups.map(keyOf).join('|')} phrase="Life is shared" title={title(groups)} sub={range} className="chart-sheet break-after-page rounded-xl bg-card print:bg-white p-3 text-black last:break-after-auto sm:p-6 print:break-after-page print:last:break-after-auto" aria-label={`${title(groups)}, ${range}`} data-sheet={i}>
           <div className="space-y-5">
             {groups.map((g) => <Part key={keyOf(g)} group={g} days={chart.days} pointCents={chart.point_cents} />)}
           </div>
-        </section>
+        </PrintFrame>
       ))}
     </div>
   );

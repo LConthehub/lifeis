@@ -19,6 +19,8 @@ Import a recipe four ways:
 
 A recipe can say which pans and dishes it needs, from the things you keep. Planning a big meal, Life Is tells you if you are short of an 8x8 dish before the day.
 
+**Printing a recipe.** Press **Print** on a recipe. **Recipe page** is a letter page with the title, the picture, the ingredients in a column beside the steps, and the notes. **Recipe card** makes 4 x 6 inch cards, two to a letter sheet with cut lines, and a second card when the recipe runs long. **Print style** is Life Is look (the stripe, the mushroom, chocolate and gold), Plain chocolate or Plain black. The plain styles have no art, no stripe and no card frame, and the page is laid out the same. Your pick is kept on this device. Nothing leaves it.
+
 ## The cooking view
 
 Open a recipe and choose **Start cooking**. The recipe fills the screen: big ingredients, then the steps, each with a large box to tick. Tick a step and the next one that is not done scrolls to the middle. If you set a number of servings first, the amounts are scaled and shown beside each ingredient.
