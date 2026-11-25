@@ -26,8 +26,23 @@ export function doneLine(step, time) {
   return `Done${when ? ` at ${when}` : ''} by ${step.by}`;
 }
 
-/** Ticks one step, or takes the tick back. Gives the time as it now is. */
-const tickStep = (step, done) => axios.put(`/api/routine-day/steps/${step.id}`, { done }).then(({ data }) => data);
+// Not the full-width input of other forms: these sit side by side.
+const numberBox = 'rounded-xl border border-life-200 bg-card px-3 py-2 text-sm text-gray-800 focus:border-life-500 focus:outline-none focus:ring-2 focus:ring-life-200 dark:border-life-700 dark:bg-life-800 dark:text-life-50';
+
+/** The numbers boxes of a workout step as text: what is typed, from the numbers it starts as. */
+const NUMBER_KEYS = ['sets', 'reps', 'weight', 'minutes', 'distance'];
+export const typed = (n) => ({
+  sets: n.sets ?? '', reps: n.reps ?? '', weight: n.weight ?? '', weight_unit: n.weight_unit ?? 'lb',
+  minutes: n.minutes ?? '', distance: n.distance ?? '', distance_unit: n.distance_unit ?? 'mi',
+});
+/** What is sent: numbers, or null for a box left blank. */
+export const sentNumbers = (v) => ({
+  ...Object.fromEntries(NUMBER_KEYS.map((k) => [k, v[k] === '' ? null : Number(v[k])])),
+  weight_unit: v.weight === '' ? null : v.weight_unit, distance_unit: v.distance === '' ? null : v.distance_unit,
+});
+
+/** Ticks one step, or takes the tick back. Gives the time as it now is. A workout step sends the numbers that were typed. */
+const tickStep = (step, done, nums) => axios.put(`/api/routine-day/steps/${step.id}`, nums ? { done, nums: sentNumbers(nums) } : { done }).then(({ data }) => data);
 const finishTime = (time, done) => axios.put(`/api/routine-day/times/${time.id}`, { done }).then(({ data }) => data);
 
 /** Marks the thing a step names as running low (on the grocery list), and says so. */
@@ -48,14 +63,53 @@ function RunningLow({ step }) {
   );
 }
 
+/** "Last time: 3 x 10 at 25 lb, Mon", for a workout step that was done before. */
+export function LastTime({ step, big }) {
+  if (!step.last) return null;
+  return <span data-last-time className={`block ${big ? 'text-base text-gray-700 dark:text-life-100' : 'text-xs text-gray-600 dark:text-life-200'}`}>Last time: {step.last.text}</span>;
+}
+
+/**
+ * The boxes for what is done today on a workout step: only the ones the step carries (sets, reps, weight, minutes,
+ * distance), starting as last time was. They can be changed with a tap before the step is checked off.
+ */
+export function StepNumbers({ step, value, onChange, big }) {
+  const has = (k) => step.nums[k] !== null || step.prefill[k] !== null;
+  const set = (patch) => onChange({ ...value, ...patch });
+  const box = `${numberBox} ${big ? 'min-h-[52px] text-lg' : 'min-h-[44px]'} mt-0.5 block`;
+  const label = 'block text-xs text-gray-600 dark:text-life-200';
+  const field = (key, name, stepBy = 'any') => has(key) && (
+    <label className={label} key={key}>{name}
+      <input type="number" inputMode="decimal" min="0" step={stepBy} value={value[key]} onChange={(e) => set({ [key]: e.target.value })} aria-label={`${name} for ${step.words}`} className={`${box} w-20 max-w-full`} />
+    </label>
+  );
+  const unit = (key, choices, name) => (
+    <label className={label}>Unit
+      <select value={value[key]} onChange={(e) => set({ [key]: e.target.value })} aria-label={`${name} unit for ${step.words}`} className={box}>
+        {choices.map((c) => <option key={c} value={c}>{c}</option>)}
+      </select>
+    </label>
+  );
+  return (
+    <div className="flex flex-wrap items-end gap-2" data-numbers>
+      {field('sets', 'Sets', '1')}{field('reps', 'Reps', '1')}
+      {field('weight', 'Weight')}{has('weight') && unit('weight_unit', ['lb', 'kg'], 'Weight')}
+      {field('minutes', 'Minutes')}
+      {field('distance', 'Distance')}{has('distance') && unit('distance_unit', ['mi', 'km'], 'Distance')}
+    </div>
+  );
+}
+
 /** One time of a routine, with the steps that fall today as boxes to tick. */
 export function TimeChecklist({ time, onChange, onGo }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [nums, setNums] = useState({});
   const run = async (work) => {
     setBusy(true); setError('');
     try { onChange(await work()); } catch (err) { setError(errorMessage(err, "Couldn't save that")); } finally { setBusy(false); }
   };
+  const valueOf = (s) => nums[s.id] ?? typed(s.prefill);
   return (
     <section className={cardClass} data-routine-time={time.title} aria-label={time.title}>
       <div className="flex flex-wrap items-baseline gap-x-2">
@@ -69,15 +123,18 @@ export function TimeChecklist({ time, onChange, onGo }) {
       <ul className="mt-1">
         {time.steps.map((s) => (
           <li key={s.id}>
-            <button type="button" role="checkbox" aria-checked={s.ticked} disabled={busy} onClick={() => run(() => tickStep(s, !s.ticked))}
+            <button type="button" role="checkbox" aria-checked={s.ticked} disabled={busy} onClick={() => run(() => tickStep(s, !s.ticked, !s.ticked && s.tracks ? valueOf(s) : null))}
               className="flex min-h-[44px] w-full items-center gap-3 rounded-xl py-1 text-left hover:bg-life-50 dark:hover:bg-life-700">
               <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 text-sm font-bold ${s.ticked ? 'border-life-600 bg-life-600 text-white' : 'border-life-400 text-transparent dark:border-life-300'}`}><Icon of="done" size={16} /></span>
               <span className="min-w-0 flex-1">
                 <span className={`block break-words text-sm text-gray-800 dark:text-life-50 ${s.ticked ? 'text-gray-500 line-through dark:text-life-300' : ''}`}>{s.words}</span>
                 {doneLine(s, time) && <span data-done-by className="block text-xs text-gray-600 dark:text-life-200">{doneLine(s, time)}</span>}
+                {s.tracks && s.ticked && s.kept_words && <span data-kept className="block text-xs text-gray-600 dark:text-life-200">Done: {s.kept_words}</span>}
+                {s.tracks && !s.ticked && <LastTime step={s} />}
               </span>
               {s.wait_seconds && <span className="shrink-0 text-xs text-gray-500 dark:text-life-300">wait {waitText(s.wait_seconds)}</span>}
             </button>
+            {s.tracks && !s.ticked && <div className="pb-2 pl-10"><StepNumbers step={s} value={valueOf(s)} onChange={(v) => setNums((n) => ({ ...n, [s.id]: v }))} /></div>}
             <RunningLow step={s} />
           </li>
         ))}
@@ -104,7 +161,9 @@ export function GoThrough({ time: start, onChange, onClose }) {
   const [left, setLeft] = useState(null);       // seconds of a wait still to run, or null when none is running
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [nums, setNums] = useState({});
   const step = time.steps[at];
+  const valueOf = (s) => nums[s.id] ?? typed(s.prefill);
   const over = at >= time.steps.length;
 
   useEffect(() => {
@@ -128,7 +187,7 @@ export function GoThrough({ time: start, onChange, onClose }) {
     setBusy(true); setError('');
     try {
       let now = time;
-      if (tick && step && !step.ticked) now = await tickStep(step, true);
+      if (tick && step && !step.ticked) now = await tickStep(step, true, step.tracks ? valueOf(step) : null);
       setTime(now); onChange(now);
       setAt((n) => n + 1);
     } catch (err) { setError(errorMessage(err, "Couldn't save that")); } finally { setBusy(false); }
@@ -157,6 +216,13 @@ export function GoThrough({ time: start, onChange, onClose }) {
             <div className="flex flex-1 flex-col justify-center gap-4" data-step>
               <p className={`break-words text-3xl font-semibold leading-snug ${step.ticked ? 'text-gray-500 line-through dark:text-life-300' : 'text-gray-900 dark:text-life-50'}`}>{step.words}</p>
               {doneLine(step, time) && <p className="text-base text-gray-700 dark:text-life-100" data-done-by>{doneLine(step, time)}</p>}
+              {step.tracks && step.ticked && step.kept_words && <p className="text-base text-gray-700 dark:text-life-100" data-kept>Done: {step.kept_words}</p>}
+              {step.tracks && !step.ticked && (
+                <div className="space-y-2">
+                  <LastTime step={step} big />
+                  <StepNumbers step={step} value={valueOf(step)} onChange={(v) => setNums((n) => ({ ...n, [step.id]: v }))} big />
+                </div>
+              )}
               {step.wait_seconds && (
                 <div className="space-y-2 rounded-2xl bg-life-50/70 p-3 dark:bg-life-700/60" data-wait>
                   <p className="text-base text-gray-800 dark:text-life-50">Wait {waitText(step.wait_seconds)} after this step.</p>

@@ -1767,6 +1767,49 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE routine_ticks ADD COLUMN ticked_at TEXT`,
     ],
   },
+  {
+    number: 57,
+    name: "workouts (a routine with a kind, steps that carry numbers, ticks that keep them) and a person's own measures",
+    // routines.kind is 'plain' (as before) or 'workout'. A workout step can carry numbers (sets, reps, a weight, minutes, a distance, with the
+    // units the person typed): on the step they are what it usually is; on a tick (routine_ticks) they are what was done that day, and "last time" is
+    // read from the latest earlier tick. Measures are a person's own: a name, a unit, an optional target, and dated entries. They belong to one
+    // person (owner_id) and are only ever read with that person's id: no sharing, not even for the person in charge.
+    statements: [
+      `ALTER TABLE routines ADD COLUMN kind TEXT NOT NULL DEFAULT 'plain'`,
+      `ALTER TABLE routine_steps ADD COLUMN sets INTEGER`,
+      `ALTER TABLE routine_steps ADD COLUMN reps INTEGER`,
+      `ALTER TABLE routine_steps ADD COLUMN weight REAL`,
+      `ALTER TABLE routine_steps ADD COLUMN weight_unit TEXT`,
+      `ALTER TABLE routine_steps ADD COLUMN minutes REAL`,
+      `ALTER TABLE routine_steps ADD COLUMN distance REAL`,
+      `ALTER TABLE routine_steps ADD COLUMN distance_unit TEXT`,
+      `ALTER TABLE routine_ticks ADD COLUMN sets INTEGER`,
+      `ALTER TABLE routine_ticks ADD COLUMN reps INTEGER`,
+      `ALTER TABLE routine_ticks ADD COLUMN weight REAL`,
+      `ALTER TABLE routine_ticks ADD COLUMN weight_unit TEXT`,
+      `ALTER TABLE routine_ticks ADD COLUMN minutes REAL`,
+      `ALTER TABLE routine_ticks ADD COLUMN distance REAL`,
+      `ALTER TABLE routine_ticks ADD COLUMN distance_unit TEXT`,
+      `CREATE TABLE measures (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        unit TEXT NOT NULL DEFAULT '',
+        target REAL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_measures_owner ON measures(owner_id)`,
+      `CREATE TABLE measure_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        measure_id INTEGER NOT NULL REFERENCES measures(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        value REAL NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_measure_entries ON measure_entries(measure_id, day)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

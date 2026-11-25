@@ -7,17 +7,27 @@
  *   /api/routine-day  using them: ticking a step, finishing a time, marking a thing running low (free for good).
  */
 import { addDays, todayOf } from '../../core/src/small.ts';
-import { pets, routines, upkeep, type Db, type RoutineInput, type RoutineStepRule } from '../../core/src/index.ts';
+import { pets, routines, upkeep, type Db, type RoutineInput, type RoutineKind, type RoutineNumbers, type RoutineStepRule } from '../../core/src/index.ts';
 import { queryNumber, read, type Body, type Context, type Route } from './http.ts';
 
 const ID = '([0-9]{1,15})';
 const at = (path: string) => new RegExp(`^/api/${path.replaceAll(':id', ID)}$`);
 const sent = (body: Body, name: string) => Object.hasOwn(body, name);
 
+/** The numbers a workout step carries, as a page sent them (blank is fine). */
+function numbersFrom(body: Body): Partial<RoutineNumbers> {
+  return {
+    sets: read.maybeWhole(body, 'sets'), reps: read.maybeWhole(body, 'reps'), weight: read.maybeNumber(body, 'weight'), weight_unit: read.maybeText(body, 'weight_unit'),
+    minutes: read.maybeNumber(body, 'minutes'), distance: read.maybeNumber(body, 'distance'), distance_unit: read.maybeText(body, 'distance_unit'),
+  };
+}
+
 /** A routine as a page sent it: its name and whose it is, and (when given) its times with their steps. */
 function routineFrom(body: Body): RoutineInput {
   const input: RoutineInput = {
-    name: read.text(body, 'name'), for_user: read.maybeWhole(body, 'for_user'), for_member: read.maybeWhole(body, 'for_member'), for_pet: read.maybeWhole(body, 'for_pet'),
+    name: read.text(body, 'name'), kind: read.maybeText(body, 'kind') as RoutineKind | null,
+    // Not saying whose it is leaves a new workout the maker's own; sending null means everyone's.
+    ...(sent(body, 'for_user') || sent(body, 'for_member') || sent(body, 'for_pet') ? { for_user: read.maybeWhole(body, 'for_user'), for_member: read.maybeWhole(body, 'for_member'), for_pet: read.maybeWhole(body, 'for_pet') } : {}),
     cycle_length: read.maybeWhole(body, 'cycle_length'), points: read.maybeWhole(body, 'points'), note: read.maybeText(body, 'note'),
   };
   if (sent(body, 'times')) {
@@ -27,6 +37,7 @@ function routineFrom(body: Body): RoutineInput {
         id: read.maybeWhole(s, 'id'), words: read.text(s, 'words'), rule: read.maybeText(s, 'rule') as RoutineStepRule | null,
         weekdays: s.weekdays === undefined || s.weekdays === null ? null : read.wholes(s, 'weekdays'),
         night: read.maybeWhole(s, 'night'), item_id: read.maybeWhole(s, 'item_id'), wait_seconds: read.maybeWhole(s, 'wait_seconds'),
+        nums: sent(s, 'nums') && s.nums !== null ? numbersFrom(read.record(s, 'nums')) : null,
       })),
     }));
   }
@@ -59,6 +70,7 @@ export function routineRoutes(db: Db): Route[] {
       return { json: await mine(c).coming(from, addDays(from, (queryNumber(c.query, 'days') ?? 2) - 1)) };
     }],
     ['GET', at('routines/for-thing/:id'), async (c) => ({ json: await mine(c).usedIn(c.id) })],
+    ['GET', at('routines/:id/history'), async (c) => ({ json: await mine(c).history(c.id) })],
     ['GET', at('routines/:id'), async (c) => ({ json: await mine(c).get(c.id) })],
     ['PUT', at('routines/:id'), async (c) => ({ json: await mine(c).update(c.id, routineFrom(c.body)) })],
     ['DELETE', at('routines/:id'), async (c) => (await mine(c).remove(c.id), { status: 204 })],
@@ -66,7 +78,7 @@ export function routineRoutes(db: Db): Route[] {
     // ---------- using ----------
     ['GET', at('routine-day'), async (c) => ({ json: await mine(c).today(day(c), queryNumber(c.query, 'pet')) })],
     ['GET', at('routine-day/times/:id'), async (c) => ({ json: await mine(c).time(c.id, day(c)) })],
-    ['PUT', at('routine-day/steps/:id'), async (c) => ({ json: await mine(c).tick(c.id, read.yesNo(c.body, 'done'), read.maybeText(c.body, 'day')) })],
+    ['PUT', at('routine-day/steps/:id'), async (c) => ({ json: await mine(c).tick(c.id, read.yesNo(c.body, 'done'), read.maybeText(c.body, 'day'), sent(c.body, 'nums') ? (c.body.nums === null ? null : numbersFrom(read.record(c.body, 'nums'))) : undefined) })],
     ['PUT', at('routine-day/times/:id'), async (c) => ({ json: await mine(c).finish(c.id, read.yesNo(c.body, 'done'), read.maybeText(c.body, 'day')) })],
     ['POST', at('routine-day/steps/:id/low'), async (c) => ({ json: await mine(c).low(c.id) })],
   ];

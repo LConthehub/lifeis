@@ -56,6 +56,8 @@ A personal key lets one shortcut on your phone, like Siri, read or add a few thi
 
 See [Get started](getting-started.html). Nothing is seen by anyone else unless it is shared.
 
+**Measures are yours alone.** The numbers you keep on the Measures tab can never be shared, not even with the person in charge. They are in your own download of everything, and nobody else's.
+
 ## The privacy policy
 
 It is short: [read it](../privacy).

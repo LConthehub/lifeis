@@ -1,6 +1,6 @@
 ---
 title: Routines and the chore chart
-blurb: Checklists for parts of the day, a step at a time with a timer, and a printed chore chart for the fridge.
+blurb: Checklists for parts of the day, workouts with numbers, your own measures, and a printed chore chart for the fridge.
 ---
 # Routines and the chore chart
 
@@ -36,6 +36,24 @@ A pet can have a routine, such as a dog's morning: feed, fresh water, walk. It s
 Each time of day shows "5 of the last 7 days". It never counts a streak.
 
 Only the person who made the routine can change or delete it. Monthly meds and flea treatment are not routines. They are the pet's care, and Life Is reminds you when they are due. Taking a pet away takes its routines too.
+
+## Workouts
+
+A workout is a routine whose steps can carry numbers. Choose **+ New workout** on the **Routines** tab. It starts as yours alone, so it shows only on your front page. Choose someone else, or **Everyone's**, under **Whose is it?** to share it like any routine.
+
+Each step can have sets and reps, a weight, minutes or a distance. Fill in only the ones you want. A step with none is a plain checklist step. You type the unit: lb or kg, miles or km. Life Is remembers it with the step.
+
+On the front page, each numbered step says **Last time**, such as "Last time: 3 x 10 at 25 lb, Mon". The boxes start as last time was. Change a number with a tap before you check the step off, and the numbers you checked off with are kept.
+
+Choose **Look back** on a workout to see "5 of the last 7 days", a month of dots, and the last few times of each numbered step. Life Is keeps no streaks, points or badges, and never says you missed a day.
+
+## Measures
+
+The **Measures** tab, beside Routines, is for numbers you want to watch over time, such as a weight or the pages you read. Choose **+ New measure**, give it a name and a unit, and add an entry with its day whenever you like. You see the latest entries as a plain list. Add a target only if you want one.
+
+Life Is suggests nothing and judges nothing here: no "good" or "bad", no arrows, no colors for up or down.
+
+Measures are only ever seen by you. There is no switch to share them, not even with the person in charge. They stay out of search, the front page, reminders, the assistant, voice keys and everyone else's download. They are in your own full download, and come back in with it.
 
 ## A cycle
 

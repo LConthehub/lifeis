@@ -165,6 +165,12 @@ async function fill(db: Db, me: number): Promise<void> {
   const petSupplies = (await things.createKind({ name: 'Pet supplies', icon: '🐾' })).find((x) => x.name === 'Pet supplies')!.id;
   const dogFood = await things.createItem({ kind_id: petSupplies, name: 'Dog food', quantity: 3, unit: 'cup', low_at: 2, place_id: kitchenRoom });
   await routines(db, me).create({ name: 'Dog, daily', for_pet: biscuit.id, times: [{ name: 'Morning', steps: [{ words: 'Feed 1 cup', item_id: dogFood.id }, { words: 'Walk' }] }] });
+  // One made-up workout (it is the demo person's own), done two days ago so each numbered step has a "last time".
+  const leg = await routines(db, me).create({ name: 'Leg day', kind: 'workout', times: [{ name: 'Workout', steps: [
+    { words: 'Goblet squat', nums: { sets: 3, reps: 10, weight: 25, weight_unit: 'lb' } }, { words: 'Easy walk', nums: { minutes: 20, distance: 1, distance_unit: 'mi' } }, { words: 'Stretch' },
+  ] }] });
+  await routines(db, me).tick(leg.times[0]!.steps[0]!.id, true, day(-2));
+  await routines(db, me).tick(leg.times[0]!.steps[1]!.id, true, day(-2), { minutes: 25, distance: 1.2, distance_unit: 'mi' });
   await animals.addWeight(biscuit.id, { value: 27.5, unit: 'lb', day: day(-90) });
   await animals.addWeight(biscuit.id, { value: 28.2, unit: 'lb', day: day(-5) });
   const pepper = await animals.create({ name: 'Pepper', species: 'cat', born_on: day(-365 * 7), vet_name: 'Oak Lane Veterinary Clinic', vet_phone: '555 0100', food: 'Half a can twice a day; dry food always out' });

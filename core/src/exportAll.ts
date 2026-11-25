@@ -29,7 +29,7 @@ import { BUILT_IN_NAMES, LIST_TYPES, TO_WATCH } from './mediaLists.ts';
 import { Problem } from './problem.ts';
 import { prepAsText, prepFromText, type PrepRule } from './prep.ts';
 import { recipeKey } from './recipeFiles.ts';
-import { daysAsText, daysFromText, MAX_STEPS, MAX_TIMES, type StepRule } from './routines.ts';
+import { daysAsText, daysFromText, MAX_STEPS, MAX_TIMES, NO_NUMBERS, tidyNumbers, type StepRule } from './routines.ts';
 import { cut, linesAsText, splitLines } from './recipeText.ts';
 import { clean, dayNumber, labelKey, pictureType, stamp, todayOf, type Clock } from './small.ts';
 import { ensurePath, exportRows, setByPaths, tagKindOfLabel, tagsOnto, targetsByTitle, type TagKind } from './tags.ts';
@@ -74,6 +74,7 @@ export const KINDS: KindInfo[] = [
   { key: 'pets', label: 'Pets, with their weights and photos', file: 'pets.csv', importable: true, matched: 'by name' },
   { key: 'upkeep', label: 'Upkeep jobs, bills, renewals and chores, with when each was done', file: 'upkeep.csv', importable: true, matched: 'by name (and pet)' },
   { key: 'routines', label: 'Routines, with their times and steps, and the days each time was finished', file: 'routines.csv', importable: true, matched: 'by name' },
+  { key: 'measures', label: 'Your own measures, with their entries (private to you: only your own download holds them)', file: 'measures.csv', importable: true, matched: 'a measure by name; an entry by day and value' },
   { key: 'manual', label: 'The house manual', file: 'house-manual.csv', importable: true, matched: 'by part and title' },
   { key: 'services', label: 'Home services: your links, and who sees each', file: 'home-services.csv', importable: true, matched: 'by name and address' },
   { key: 'licenses', label: 'Licenses and permits', file: 'licenses.csv', importable: true, matched: 'by name and holder' },
@@ -484,21 +485,33 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     (await all('SELECT id, name FROM household_members WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id')).map((m) => [str(m.name), str(earned.get(m.id as number)?.n ?? 0), str(earned.get(m.id as number)?.points ?? 0)]));
 
   // ---------- routines ----------
-  const routineRows = await all('SELECT r.id, r.name, r.cycle_length, r.points, r.note, u.username AS signin, m.name AS member, p.name AS pet FROM routines r LEFT JOIN users u ON u.id = r.for_user LEFT JOIN household_members m ON m.id = r.for_member LEFT JOIN pets p ON p.id = r.for_pet WHERE r.owner_id = ? ORDER BY r.sort_order, r.id');
-  const routineSteps = await all(`SELECT t.routine_id, t.name AS time_name, t.at_time, s.words, s.rule, s.weekdays, s.night, i.name AS thing, s.wait_seconds
+  const routineRows = await all('SELECT r.id, r.name, r.kind, r.cycle_length, r.points, r.note, u.username AS signin, m.name AS member, p.name AS pet FROM routines r LEFT JOIN users u ON u.id = r.for_user LEFT JOIN household_members m ON m.id = r.for_member LEFT JOIN pets p ON p.id = r.for_pet WHERE r.owner_id = ? ORDER BY r.sort_order, r.id');
+  const routineSteps = await all(`SELECT t.routine_id, t.name AS time_name, t.at_time, s.words, s.rule, s.weekdays, s.night, i.name AS thing, s.wait_seconds, s.sets, s.reps, s.weight, s.weight_unit, s.minutes, s.distance, s.distance_unit
     FROM routine_steps s JOIN routine_times t ON t.id = s.time_id JOIN routines r ON r.id = t.routine_id LEFT JOIN items i ON i.id = s.item_id
     WHERE r.owner_id = ? ORDER BY r.sort_order, r.id, t.sort_order, t.id, s.sort_order, s.id`);
   const routineById = new Map(routineRows.map((r) => [r.id as number, r]));
-  out.csv('routines.csv', ['Routine', 'For (sign-in)', 'For (household)', 'For (pet)', 'Cycle nights', 'Points', 'Notes', 'Time', 'At', 'Step', 'Days', 'Thing', 'Wait (seconds)'],
+  out.csv('routines.csv', ['Routine', 'For (sign-in)', 'For (household)', 'For (pet)', 'Cycle nights', 'Points', 'Notes', 'Time', 'At', 'Step', 'Days', 'Thing', 'Wait (seconds)', 'Kind', 'Sets', 'Reps', 'Weight', 'Weight unit', 'Minutes', 'Distance', 'Distance unit'],
     routineSteps.map((s) => {
       const r = routineById.get(s.routine_id as number)!;
       const weekdays = str(s.weekdays).split(',').map(Number).filter((n) => n >= 1 && n <= 7);
       return [str(r.name), str(r.signin), str(r.member), str(r.pet), str(r.cycle_length), str(r.points), str(r.note), str(s.time_name), str(s.at_time), str(s.words),
-        daysAsText({ rule: str(s.rule) as StepRule, weekdays, night: num(s.night) }), str(s.thing), str(s.wait_seconds)];
+        daysAsText({ rule: str(s.rule) as StepRule, weekdays, night: num(s.night) }), str(s.thing), str(s.wait_seconds),
+        str(r.kind) === 'workout' ? 'workout' : '', str(s.sets), str(s.reps), str(s.weight), str(s.weight_unit), str(s.minutes), str(s.distance), str(s.distance_unit)];
     }));
   out.csv('routine-history.csv', ['Routine', 'Time', 'Day finished', 'Night of the cycle', 'Points'],
     (await all(`SELECT r.name, t.name AS time_name, f.day, f.night, f.points FROM routine_finished f JOIN routine_times t ON t.id = f.time_id JOIN routines r ON r.id = t.routine_id
       WHERE r.owner_id = ? ORDER BY r.id, t.id, f.day`)).map((f) => [str(f.name), str(f.time_name), str(f.day), str(f.night), str(f.points)]));
+
+  // ---------- measures: the person's own, never anyone else's ----------
+  const measureRows = await all('SELECT id, name, unit, target FROM measures WHERE owner_id = ? ORDER BY sort_order, id');
+  const measureEntries = await all('SELECT e.measure_id, e.day, e.value FROM measure_entries e JOIN measures m ON m.id = e.measure_id WHERE m.owner_id = ? ORDER BY m.id, e.day, e.id');
+  const entriesOf = new Map<number, typeof measureEntries>();
+  for (const e of measureEntries) entriesOf.set(e.measure_id as number, [...(entriesOf.get(e.measure_id as number) ?? []), e]);
+  out.csv('measures.csv', ['Measure', 'Unit', 'Target', 'Day', 'Value'],
+    measureRows.flatMap((m) => {
+      const es = entriesOf.get(m.id as number) ?? [];
+      return es.length ? es.map((e) => [str(m.name), str(m.unit), str(m.target), str(e.day), str(e.value)]) : [[str(m.name), str(m.unit), str(m.target), '', '']];
+    }));
 
   // ---------- pets ----------
   const pets = await all('SELECT id, name, species, breed, born_on, microchip, vet_name, vet_phone, food, note, photo_type, photo FROM pets WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id');
@@ -773,7 +786,8 @@ const FILE_ABOUT: [string, string][] = [
   ['upkeep.csv', 'Jobs that come round again, bills, renewals and chores: how often, when last done and next due.'],
   ['upkeep-history.csv', 'Each time each job was done.'],
   ['household.csv', 'People in the household, and the chore points each has earned.'],
-  ['routines.csv', 'Routines: one row for each step, with its time of day, which days it falls on and the thing it uses. routine-history.csv has the days each time was finished.'],
+  ['routines.csv', 'Routines: one row for each step, with its time of day, which days it falls on and the thing it uses. routine-history.csv has the days each time was finished. A workout is marked in the Kind column, and its steps carry their numbers.'],
+  ['measures.csv', 'Your own measures: one row for each entry, with its unit and target. They are private to you, so only your own download holds them.'],
   ['pets.csv', 'Your pets.'],
   ['pet-weights.csv', 'Your pets’ weights over time. Their care is in upkeep.csv, with the pet’s name.'],
   ['home-services.csv', 'Your home services: links to programs at home, with their addresses (no passwords), and who sees each. Only the links you may see are in it.'],
@@ -1445,9 +1459,10 @@ const importers: Record<string, Importer> = {
       const cycleSaid = wholeOf(cellOf(first, 'Cycle nights'));
       const cycle = cycleSaid !== null && cycleSaid >= 2 && cycleSaid <= 14 ? cycleSaid : null;
       const pointsSaid = wholeOf(cellOf(first, 'Points'));
+      const workout = cellOf(first, 'Kind').toLowerCase() === 'workout';
       next += 1;
-      const made = await c.tx.run('INSERT INTO routines (owner_id, name, for_user, for_member, for_pet, cycle_length, points, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [c.owner, g.name, forUser, forMember, forPet, cycle, forMember !== null && pointsSaid !== null && pointsSaid >= 0 && pointsSaid <= 1000 ? pointsSaid : null, clean(cellOf(first, 'Notes'), 1000), next, c.at, c.at]);
+      const made = await c.tx.run('INSERT INTO routines (owner_id, name, kind, for_user, for_member, for_pet, cycle_length, points, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, g.name, workout ? 'workout' : 'plain', forUser, forMember, forPet, cycle, forMember !== null && pointsSaid !== null && pointsSaid >= 0 && pointsSaid <= 1000 ? pointsSaid : null, clean(cellOf(first, 'Notes'), 1000), next, c.at, c.at]);
       const timeIds = new Map<string, number>();
       const perTime = new Map<number, number>();
       for (const row of g.rows) {
@@ -1471,8 +1486,16 @@ const importers: Record<string, Importer> = {
         const itemId = thing ? things.get(labelKey(thing)) ?? null : null;
         if (thing && itemId === null) lost = true;
         const wait = wholeOf(cellOf(row, 'Wait (seconds)'));
-        await c.tx.run('INSERT INTO routine_steps (time_id, words, rule, weekdays, night, item_id, wait_seconds, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          [timeId, words, days.rule ?? 'daily', days.rule === 'weekdays' ? days.weekdays!.join(',') : null, days.rule === 'cycle' ? days.night! : null, itemId, wait !== null && wait >= 1 && wait <= 3600 ? wait : null, count]);
+        let nums = NO_NUMBERS;
+        if (workout) {
+          try {
+            nums = tidyNumbers({ sets: wholeOf(cellOf(row, 'Sets')), reps: wholeOf(cellOf(row, 'Reps')), weight: numberOf(cellOf(row, 'Weight')), weight_unit: cellOf(row, 'Weight unit') || null,
+              minutes: numberOf(cellOf(row, 'Minutes')), distance: numberOf(cellOf(row, 'Distance')), distance_unit: cellOf(row, 'Distance unit') || null }, words);
+          } catch { lost = true; }
+        }
+        await c.tx.run('INSERT INTO routine_steps (time_id, words, rule, weekdays, night, item_id, wait_seconds, sort_order, sets, reps, weight, weight_unit, minutes, distance, distance_unit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [timeId, words, days.rule ?? 'daily', days.rule === 'weekdays' ? days.weekdays!.join(',') : null, days.rule === 'cycle' ? days.night! : null, itemId, wait !== null && wait >= 1 && wait <= 3600 ? wait : null, count,
+            nums.sets, nums.reps, nums.weight, nums.weight_unit, nums.minutes, nums.distance, nums.distance_unit]);
       }
       // The days each time was finished come with a routine that is new, never added to one already kept.
       for (const h of history) {
@@ -1490,6 +1513,36 @@ const importers: Record<string, Importer> = {
       d.fresh += 1;
     }
     if (membersMade) d.note = `${membersMade} household member${membersMade === 1 ? '' : 's'} added for the routines`;
+    return d;
+  },
+
+  /** The person's own measures. Brought into the person doing the bringing-in, and no one else. */
+  async measures(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'measures.csv');
+    if (!t) return d;
+    const have = new Map((await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM measures WHERE owner_id = ?', [c.owner])).map((m) => [labelKey(m.name), m.id]));
+    let next = (await c.tx.get<{ n: number | null }>('SELECT MAX(sort_order) AS n FROM measures WHERE owner_id = ?', [c.owner]))?.n ?? -1;
+    const counted = new Set<string>();
+    for (const [at, row] of t.rows.entries()) {
+      const name = clean(cellOf(row, 'Measure'), 60);
+      if (!name) { skip(d, at, 'it has no name'); continue; }
+      const key = labelKey(name);
+      let id = have.get(key);
+      if (!counted.has(key)) { counted.add(key); d.found += 1; if (id === undefined) d.fresh += 1; else d.already += 1; }
+      if (id === undefined) {
+        if (have.size >= 30) { skip(d, at, 'Life Is keeps 30 measures at most'); continue; }
+        next += 1;
+        const target = numberOf(cellOf(row, 'Target'));
+        id = (await c.tx.run('INSERT INTO measures (owner_id, name, unit, target, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)', [c.owner, name, clean(cellOf(row, 'Unit'), 20) ?? '', target, next, c.at])).lastId;
+        have.set(key, id);
+      }
+      const day = dayOf(cellOf(row, 'Day'));
+      const value = numberOf(cellOf(row, 'Value'));
+      if (!day || value === null) continue;
+      if (await c.tx.get('SELECT 1 AS one FROM measure_entries WHERE measure_id = ? AND day = ? AND value = ?', [id, day, value])) continue;
+      await c.tx.run('INSERT INTO measure_entries (measure_id, day, value, created_at) VALUES (?, ?, ?, ?)', [id, day, value, c.at]);
+    }
     return d;
   },
 
@@ -2248,7 +2301,7 @@ ${mediaId}`);
     return d;
   },
 };
-const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
+const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'measures', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
 
 function rowsIn(files: Files, info: KindInfo): number {
   return tableOf(files, info.file)?.rows.length ?? 0;

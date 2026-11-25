@@ -421,6 +421,10 @@ it('keeps the pet link in the download and when it is brought in, and leaves a r
 it('upgrades from the version before pet routines: routines and ticks kept, ticks without a time, new ones with', async () => {
   const r = await mine().create({ name: 'Morning', times: [{ name: 'Morning', steps: [{ words: 'One' }, { words: 'Two' }] }] });
   await mine().tick(r.times[0]!.steps[0]!.id, true);
+  await db.run('DROP TABLE measure_entries');
+  await db.run('DROP TABLE measures');
+  await db.run('ALTER TABLE routines DROP COLUMN kind');
+  for (const column of ['sets', 'reps', 'weight', 'weight_unit', 'minutes', 'distance', 'distance_unit']) for (const table of ['routine_steps', 'routine_ticks']) await db.run(`ALTER TABLE ${table} DROP COLUMN ${column}`);
   await db.run('ALTER TABLE routines DROP COLUMN for_pet');
   await db.run('ALTER TABLE routine_ticks DROP COLUMN ticked_at');
   await db.run('PRAGMA user_version = 55');
@@ -430,4 +434,131 @@ it('upgrades from the version before pet routines: routines and ticks kept, tick
   expect(before.who_kind).toBe('everyone');
   await mine(partner).tick(before.steps[1]!.id, true);
   expect((await mine(owner).today())[0]!.steps[1]).toMatchObject({ by: 'partner', at: stamp(clock()) });
+});
+
+// ---------- workouts ----------
+
+const squat = { words: 'Goblet squat', nums: { sets: 3, reps: 10, weight: 25, weight_unit: 'lb' } };
+const run = { words: 'Easy run', nums: { minutes: 20, distance: 2, distance_unit: 'mi' } };
+const stretch = { words: 'Stretch' };
+const workout = () => mine().create({ name: 'Leg day', kind: 'workout', times: [{ name: 'Workout', steps: [squat, run, stretch] }] });
+const todaySteps = async (who = owner) => (await mine(who).today())[0]!.steps;
+
+it('a workout starts as its maker alone: others cannot see it until it is shared like any routine', async () => {
+  const w = await workout();
+  expect(w).toMatchObject({ kind: 'workout', who_kind: 'me', for_user: owner });
+  expect(await mine(partner).list()).toEqual([]);
+  expect(await mine(partner).today()).toEqual([]);
+  await expect(mine(partner).get(w.id)).rejects.toEqual(problem(404));
+  await expect(mine(partner).history(w.id)).rejects.toEqual(problem(404));
+  // Shared with one person, or with everyone, the way any routine is.
+  const shared = await mine().update(w.id, { name: 'Leg day', for_user: partner });
+  expect(shared.who_kind).toBe('person');
+  expect((await mine(partner).today())[0]!.kind).toBe('workout');
+  expect((await mine().update(w.id, { name: 'Leg day', for_user: null })).who_kind).toBe('everyone');
+  // An ordinary routine is still everyone's unless said otherwise.
+  expect((await mine().create({ name: 'Plain', times: [{ name: 'Plain', steps: [{ words: 'One' }] }] })).who_kind).toBe('everyone');
+});
+
+it('a workout step carries optional numbers; a step with none is a plain checklist step; a plain routine keeps none', async () => {
+  const w = await workout();
+  const steps = w.times[0]!.steps;
+  expect(steps.map((s) => [s.words, s.tracks])).toEqual([['Goblet squat', true], ['Easy run', true], ['Stretch', false]]);
+  expect(steps[0]!.nums).toEqual({ sets: 3, reps: 10, weight: 25, weight_unit: 'lb', minutes: null, distance: null, distance_unit: null });
+  expect(steps[1]!.nums).toMatchObject({ minutes: 20, distance: 2, distance_unit: 'mi', weight: null, weight_unit: null });
+  // Units as typed (kg, km), and remembered with the step.
+  const kg = await mine().update(w.id, { name: 'Leg day', times: [{ id: w.times[0]!.id, name: 'Workout', steps: [{ id: steps[0]!.id, words: 'Goblet squat', nums: { sets: 3, reps: 8, weight: 12.5, weight_unit: 'kg' } }] }] });
+  expect(kg.times[0]!.steps[0]!.nums).toMatchObject({ weight: 12.5, weight_unit: 'kg' });
+  const plain = await mine().create({ name: 'Morning', times: [{ name: 'Morning', steps: [{ words: 'Lift', nums: { sets: 3 } }] }] });
+  expect(plain.kind).toBe('plain');
+  expect(plain.times[0]!.steps[0]).toMatchObject({ tracks: false, nums: { sets: null } });
+  for (const bad of [{ sets: 0 }, { sets: 2.5 }, { weight: -1 }, { weight: 5, weight_unit: 'stone' }, { distance: 3, distance_unit: 'ft' }, { minutes: 0 }]) {
+    await expect(mine().create({ name: 'Bad', kind: 'workout', times: [{ name: 'T', steps: [{ words: 'X', nums: bad }] }] })).rejects.toEqual(problem(400));
+  }
+});
+
+it('shows last time on a step, keeps the numbers that were ticked (or changed before ticking), and the next time starts from them', async () => {
+  const w = await workout();
+  let steps = await todaySteps();
+  expect(steps[0]).toMatchObject({ last: null, prefill: { sets: 3, reps: 10, weight: 25 }, kept: null });
+  expect(steps[2]).toMatchObject({ tracks: false, last: null });
+  // Monday: ticked as it starts; the run with the minutes changed.
+  const first = await mine().tick(steps[0]!.id, true);
+  expect(first.steps[0]).toMatchObject({ ticked: true, kept_words: '3 x 10 at 25 lb' });
+  const second = await mine().tick(steps[1]!.id, true, null, { minutes: 25, distance: 2.5, distance_unit: 'mi' });
+  expect(second.steps[1]).toMatchObject({ ticked: true, kept_words: '25 min, 2.5 mi' });
+  await mine().tick(steps[2]!.id, true);
+  expect((await todaySteps())[2]).toMatchObject({ ticked: true, kept: null, kept_words: null });
+  // Tuesday: last time is Monday's, and it is what the boxes start as.
+  day = '2046-03-06';
+  steps = await todaySteps();
+  expect(steps[0]!.last).toEqual({ day: '2046-03-05', words: '3 x 10 at 25 lb', text: '3 x 10 at 25 lb, Mon' });
+  expect(steps[1]!.last!.text).toBe('25 min, 2.5 mi, Mon');
+  expect(steps[1]!.prefill).toMatchObject({ minutes: 25, distance: 2.5 });
+  expect(steps[2]!.last).toBeNull();
+  // Changed with a tap before ticking: 30 lb today.
+  const heavier = await mine().tick(steps[0]!.id, true, null, { sets: 3, reps: 10, weight: 30, weight_unit: 'lb' });
+  expect(heavier.steps[0]!.kept_words).toBe('3 x 10 at 30 lb');
+  // Ticking again with other numbers changes the ones kept; unticking takes them away.
+  expect((await mine().tick(steps[0]!.id, true, null, { sets: 4, reps: 8, weight: 30, weight_unit: 'lb' })).steps[0]!.kept_words).toBe('4 x 8 at 30 lb');
+  expect((await mine().tick(steps[0]!.id, false)).steps[0]).toMatchObject({ ticked: false, kept: null });
+  await mine().tick(steps[0]!.id, true, null, { sets: 3, reps: 10, weight: 30, weight_unit: 'lb' });
+  // A week later, last time says the date and not a weekday.
+  day = '2046-03-20';
+  expect((await todaySteps())[0]!.last!.text).toBe('3 x 10 at 30 lb, Mar 6');
+  day = '2046-03-08';
+  expect((await todaySteps())[0]!.last!.text).toBe('3 x 10 at 30 lb, Tue');
+  // "Tick them all" keeps what the boxes start as.
+  day = '2046-03-09';
+  const all = await mine().finish(w.times[0]!.id, true);
+  expect(all.steps.map((s) => s.kept_words)).toEqual(['3 x 10 at 30 lb', '25 min, 2.5 mi', null]);
+});
+
+it('looks back without judging: days of the last 7, a month of days, and each numbered step\'s last times', async () => {
+  const w = await workout();
+  for (const [d, weight] of [['2046-03-01', 20], ['2046-03-03', 22.5], ['2046-03-05', 25]] as const) {
+    day = d;
+    const steps = await todaySteps();
+    await mine().tick(steps[0]!.id, true, null, { sets: 3, reps: 10, weight, weight_unit: 'lb' });
+  }
+  day = '2046-03-05';
+  const h = await mine().history(w.id);
+  expect(h).toMatchObject({ name: 'Leg day', kind: 'workout', last7: 3, last7_text: '3 of the last 7 days' });
+  expect(h.days).toHaveLength(30);
+  expect(h.days[29]).toEqual({ day: '2046-03-05', done: true });
+  expect(h.days.filter((d) => d.done).map((d) => d.day)).toEqual(['2046-03-01', '2046-03-03', '2046-03-05']);
+  expect(h.steps.map((s) => s.words)).toEqual(['Goblet squat', 'Easy run']);
+  expect(h.steps[0]!.entries.map((e) => [e.label, e.words])).toEqual([['Mon', '3 x 10 at 25 lb'], ['Sat', '3 x 10 at 22.5 lb'], ['Thu', '3 x 10 at 20 lb']]);
+  expect(h.steps[1]!.entries).toEqual([]);
+  // The time's own "of the last 7 days" counts the days anything was done, too.
+  expect((await mine().today())[0]!.last7).toBe(3);
+  // Nothing in it says streak, missed or points.
+  expect(JSON.stringify(h).toLowerCase()).not.toMatch(/streak|missed|badge|points/);
+});
+
+it('a workout comes back from a download with its kind and numbers, once', async () => {
+  await workout();
+  const files = (await splitDownload((await exportEverything(db, owner, clock)).bytes)).files;
+  expect(files['routines.csv']).toContain('Kind');
+  const pia = await person('pia');
+  const done = await bringInDownload(db, pia, files, ['routines'], clock);
+  expect(done.kinds[0]).toMatchObject({ key: 'routines', ok: true, fresh: 1 });
+  const theirs = (await mine(pia).list()).filter((x) => x.mine);
+  expect(theirs.map((x) => [x.name, x.kind])).toEqual([['Leg day', 'workout']]);
+  expect(theirs[0]!.times[0]!.steps.map((s) => [s.words, s.tracks, s.nums.weight, s.nums.distance_unit])).toEqual([['Goblet squat', true, 25, null], ['Easy run', true, null, 'mi'], ['Stretch', false, null, null]]);
+  expect((await bringInDownload(db, pia, files, ['routines'], clock)).kinds[0]).toMatchObject({ fresh: 0, already: 1 });
+});
+
+it('upgrades from the version before workouts: routines and ticks stay, as plain ones with no numbers', async () => {
+  const r = await mine().create({ name: 'Morning', times: [{ name: 'Morning', steps: [{ words: 'One' }] }] });
+  await mine().tick(r.times[0]!.steps[0]!.id, true);
+  await db.run('DROP TABLE measure_entries');
+  await db.run('DROP TABLE measures');
+  await db.run('ALTER TABLE routines DROP COLUMN kind');
+  for (const column of ['sets', 'reps', 'weight', 'weight_unit', 'minutes', 'distance', 'distance_unit']) for (const table of ['routine_steps', 'routine_ticks']) await db.run(`ALTER TABLE ${table} DROP COLUMN ${column}`);
+  await db.run('PRAGMA user_version = 56');
+  expect(await migrate(db)).toBe(LATEST);
+  const back = (await mine().list())[0]!;
+  expect(back).toMatchObject({ name: 'Morning', kind: 'plain' });
+  expect((await mine().today())[0]!.steps[0]).toMatchObject({ ticked: true, tracks: false, last: null, kept: null });
 });

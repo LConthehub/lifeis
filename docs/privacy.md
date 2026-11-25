@@ -95,7 +95,7 @@ Life Is is a household tool for general use and is not directed at children. Sin
 
 ## Your rights and your data
 
-Because everything is kept by you, you already hold it. You can read, change, export, back up or delete it at any time, in the app. Uninstalling the app removes everything it kept on that device. There is nothing for us to delete, correct or hand over, because we have nothing.
+Measures, the numbers a person keeps over time, are seen only by that person: there is no way to share them, and they are left out of search, reminders, the assistant, voice keys and everyone else's download. Because everything is kept by you, you already hold it. You can read, change, export, back up or delete it at any time, in the app. Uninstalling the app removes everything it kept on that device. There is nothing for us to delete, correct or hand over, because we have nothing.
 
 ## Changes to this policy
 

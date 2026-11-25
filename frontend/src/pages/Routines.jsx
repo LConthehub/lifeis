@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
-import { Checklists, waitText } from '../components/Routines';
+import { Checklists, sentNumbers, typed, waitText } from '../components/Routines';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 
 /**
@@ -13,18 +13,18 @@ const DAYS = [[1, 'Mon', 'Monday'], [2, 'Tue', 'Tuesday'], [3, 'Wed', 'Wednesday
 const WAITS = [[30, '30 seconds'], [60, '1 minute'], [120, '2 minutes'], [300, '5 minutes'], [600, '10 minutes']];
 const control = `${inputClass} min-h-[44px]`;
 
-const blankStep = () => ({ id: null, words: '', rule: 'daily', weekdays: [], night: '', item_id: '', wait_seconds: '' });
+const blankStep = () => ({ id: null, words: '', rule: 'daily', weekdays: [], night: '', item_id: '', wait_seconds: '', nums: typed({}) });
 const blankTime = (name = '') => ({ id: null, name, at: '', steps: [blankStep()] });
 
 /** What a routine becomes in the form. */
-function formOf(r, me, startWho = 'me') {
-  if (!r) return { name: '', who: startWho, cycle_length: '', points: '', note: '', times: [blankTime('Morning')] };
+function formOf(r, me, startWho = 'me', startKind = 'plain') {
+  if (!r) return { name: '', kind: startKind, who: startWho, cycle_length: '', points: '', note: '', times: [blankTime('Morning')] };
   return {
-    name: r.name, cycle_length: r.cycle_length ?? '', points: r.points ?? '', note: r.note ?? '',
+    name: r.name, kind: r.kind ?? 'plain', cycle_length: r.cycle_length ?? '', points: r.points ?? '', note: r.note ?? '',
     who: r.for_pet != null ? `p${r.for_pet}` : r.for_member !== null ? `m${r.for_member}` : r.for_user === me ? 'me' : r.for_user !== null ? `u${r.for_user}` : 'everyone',
     times: r.times.map((t) => ({
       id: t.id, name: t.name, at: t.at ?? '',
-      steps: t.steps.map((s) => ({ id: s.id, words: s.words, rule: s.rule, weekdays: s.weekdays, night: s.night ?? '', item_id: s.item_id ?? '', wait_seconds: s.wait_seconds ?? '' })),
+      steps: t.steps.map((s) => ({ id: s.id, words: s.words, rule: s.rule, weekdays: s.weekdays, night: s.night ?? '', item_id: s.item_id ?? '', wait_seconds: s.wait_seconds ?? '', nums: typed(s.nums ?? {}) })),
     })),
   };
 }
@@ -32,7 +32,7 @@ function formOf(r, me, startWho = 'me') {
 /** What the form sends. */
 function bodyOf(f, me) {
   return {
-    name: f.name, cycle_length: f.cycle_length === '' ? null : Number(f.cycle_length),
+    name: f.name, kind: f.kind, cycle_length: f.cycle_length === '' ? null : Number(f.cycle_length),
     for_user: f.who === 'me' ? me : f.who.startsWith('u') ? Number(f.who.slice(1)) : null,
     for_member: f.who.startsWith('m') ? Number(f.who.slice(1)) : null,
     for_pet: /^p\d+$/.test(f.who) ? Number(f.who.slice(1)) : null,
@@ -42,16 +42,45 @@ function bodyOf(f, me) {
       steps: t.steps.map((s) => ({
         id: s.id, words: s.words, rule: s.rule, weekdays: s.rule === 'weekdays' ? s.weekdays : null, night: s.rule === 'cycle' ? Number(s.night) : null,
         item_id: s.item_id === '' ? null : Number(s.item_id), wait_seconds: s.wait_seconds === '' ? null : Number(s.wait_seconds),
+        nums: f.kind === 'workout' ? sentNumbers(s.nums) : null,
       })),
     })),
   };
 }
 
-function StepEditor({ step, cycle, items, onChange, onRemove, canRemove }) {
+/** The optional numbers of a workout step (sets, reps, a weight, minutes, a distance). Blank ones are not kept: a step with none is a plain checklist step. */
+function NumbersEditor({ nums, onChange }) {
+  const set = (patch) => onChange({ ...nums, ...patch });
+  const small = 'mt-0.5 block min-h-[44px] w-20 max-w-full rounded-xl border border-life-200 bg-card px-3 py-2 text-sm text-gray-800 focus:border-life-500 focus:outline-none focus:ring-2 focus:ring-life-200 dark:border-life-700 dark:bg-life-800 dark:text-life-50';
+  const box = (key, label) => (
+    <label className="block text-xs text-gray-600 dark:text-life-200">{label}
+      <input type="number" inputMode="decimal" min="0" step={key === 'sets' || key === 'reps' ? '1' : 'any'} value={nums[key]} onChange={(e) => set({ [key]: e.target.value })} aria-label={label} className={small} />
+    </label>
+  );
+  const unit = (key, choices, label) => (
+    <label className="block text-xs text-gray-600 dark:text-life-200">Unit
+      <select value={nums[key]} onChange={(e) => set({ [key]: e.target.value })} aria-label={label} className={small.replace('w-20 ', '')}>
+        {choices.map((c) => <option key={c} value={c}>{c}</option>)}
+      </select>
+    </label>
+  );
+  return (
+    <div data-step-numbers>
+      <p className="text-xs text-gray-500 dark:text-life-300">Numbers, if you want them (leave blank for a plain step)</p>
+      <div className="flex flex-wrap items-end gap-2">
+        {box('sets', 'Sets')}{box('reps', 'Reps')}{box('weight', 'Weight')}{unit('weight_unit', ['lb', 'kg'], 'Weight unit')}
+        {box('minutes', 'Minutes')}{box('distance', 'Distance')}{unit('distance_unit', ['mi', 'km'], 'Distance unit')}
+      </div>
+    </div>
+  );
+}
+
+function StepEditor({ step, cycle, items, onChange, onRemove, canRemove, workout }) {
   const set = (patch) => onChange({ ...step, ...patch });
   return (
     <div className="space-y-2 rounded-lg bg-life-50/70 p-2 dark:bg-life-700/60" data-routine-step>
-      <input value={step.words} onChange={(e) => set({ words: e.target.value })} placeholder="Wash your face" aria-label="Step" className={control} />
+      <input value={step.words} onChange={(e) => set({ words: e.target.value })} placeholder={workout ? 'Goblet squat' : 'Wash your face'} aria-label="Step" className={control} />
+      {workout && <NumbersEditor nums={step.nums} onChange={(nums) => set({ nums })} />}
       <div className="flex flex-wrap items-center gap-2">
         <select value={step.rule} onChange={(e) => set({ rule: e.target.value, night: e.target.value === 'cycle' ? (step.night || 1) : '', weekdays: e.target.value === 'weekdays' ? step.weekdays : [] })} aria-label="Days" className={`${control} w-auto`}>
           <option value="daily">Every day</option>
@@ -91,8 +120,8 @@ function StepEditor({ step, cycle, items, onChange, onRemove, canRemove }) {
   );
 }
 
-export function RoutineForm({ routine, me, people, items, onDone, onGone, startWho }) {
-  const [f, setF] = useState(() => formOf(routine, me, startWho));
+export function RoutineForm({ routine, me, people, items, onDone, onGone, startWho, startKind }) {
+  const [f, setF] = useState(() => formOf(routine, me, startWho, startKind));
   const [tags, setTags] = useState(routine?.tag_list ?? []);
   const [error, setError] = useState('');
   const [sure, setSure] = useState(false);
@@ -116,9 +145,11 @@ export function RoutineForm({ routine, me, people, items, onDone, onGone, startW
     try { await axios.delete(`/api/routines/${routine.id}`); onGone(); } catch (err) { setError(errorMessage(err, "Couldn't remove it")); }
   };
   const forMember = f.who.startsWith('m');
+  const workout = f.kind === 'workout';
   return (
     <form onSubmit={save} className="space-y-4">
-      <Field label="Name"><input value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="Skincare" aria-label="Name of the routine" className={control} /></Field>
+      {workout && <p className="text-sm text-gray-700 dark:text-life-100" data-kind="workout">A workout: its steps can carry numbers, and each shows what you did last time. It starts as yours alone; pick someone else below to share it.</p>}
+      <Field label="Name"><input value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder={workout ? 'Leg day' : 'Skincare'} aria-label="Name of the routine" className={control} /></Field>
       <Field label="Whose is it?">
         <select value={f.who} onChange={(e) => set({ who: e.target.value })} aria-label="Whose is it" className={control}>
           <option value="me">Mine: shows on my front page</option>
@@ -154,7 +185,7 @@ export function RoutineForm({ routine, me, people, items, onDone, onGone, startW
             </div>
             <p className="text-xs text-gray-500 dark:text-life-300">With a clock time, Life Is reminds you then, the ways your reminders already go.</p>
             {t.steps.map((s, n) => (
-              <StepEditor key={n} step={s} cycle={f.cycle_length} items={items} canRemove={t.steps.length > 1}
+              <StepEditor key={n} step={s} cycle={f.cycle_length} items={items} canRemove={t.steps.length > 1} workout={workout}
                 onChange={(next) => setTime(i, { steps: t.steps.map((x, at) => (at === n ? next : x)) })} onRemove={() => setTime(i, { steps: t.steps.filter((_, at) => at !== n) })} />
             ))}
             <div className="flex flex-wrap gap-2">
@@ -178,9 +209,45 @@ export function RoutineForm({ routine, me, people, items, onDone, onGone, startW
   );
 }
 
+/** Looking back at a workout: how many of the last 7 days, a month of days, and each numbered step's last few times. Nothing is judged. */
+function History({ routine }) {
+  const [h, setH] = useState(null);
+  useEffect(() => { axios.get(`/api/routines/${routine.id}/history`).then(({ data }) => setH(data)).catch(() => setH(false)); }, [routine.id]);
+  if (h === null) return <p className="text-sm text-gray-500 dark:text-life-300">Loading…</p>;
+  if (h === false) return <p className="text-sm text-red-600">Couldn't load that</p>;
+  return (
+    <div className="space-y-4" data-history>
+      <p className="text-lg font-semibold text-life-800 dark:text-life-50" data-last7>{h.last7_text}</p>
+      <div>
+        <p className="mb-1 text-xs text-gray-500 dark:text-life-300">The last 30 days, oldest first. A filled dot is a day something was done.</p>
+        <ul className="flex flex-wrap gap-1.5" aria-label="The last 30 days" data-dots>
+          {h.days.map((d) => (
+            <li key={d.day} data-day={d.day} data-done={d.done ? 'yes' : 'no'} title={`${d.day}: ${d.done ? 'done' : 'nothing'}`}
+              className={`h-4 w-4 rounded-full border-2 border-life-500 ${d.done ? 'bg-life-600' : 'bg-transparent'}`}>
+              <span className="sr-only">{d.day}: {d.done ? 'done' : 'nothing'}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {h.steps.length === 0 && <p className="text-sm text-gray-600 dark:text-life-100">No step of this workout carries numbers yet.</p>}
+      {h.steps.map((s) => (
+        <section key={s.id} data-history-step={s.words}>
+          <h3 className="text-sm font-semibold text-life-800 dark:text-life-50">{s.words}</h3>
+          {s.entries.length === 0 ? <p className="text-xs text-gray-500 dark:text-life-300">Nothing kept yet.</p> : (
+            <ul className="mt-0.5 text-sm text-gray-700 dark:text-life-100">
+              {s.entries.map((e) => <li key={e.day}>{e.label}: {e.words}</li>)}
+            </ul>
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export const timeLine = (t) => `${t.name}${t.at_words ? ` at ${t.at_words}` : ''}: ${t.steps.length} ${t.steps.length === 1 ? 'step' : 'steps'}, ${t.last7} of the last 7 days`;
 
 export default function RoutinesPage() {
+  const [looking, setLooking] = useState(null);
   const [list, setList] = useState(null);
   const [starters, setStarters] = useState([]);
   const [people, setPeople] = useState({ users: [], members: [], me: 0 });
@@ -212,8 +279,9 @@ export default function RoutinesPage() {
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Routines</h1>
         <button type="button" onClick={() => setModal({ routine: null })} className={`${buttonClass} min-h-[44px]`}>+ New</button>
+        <button type="button" onClick={() => setModal({ routine: null, kind: 'workout' })} className={`${quietButtonClass} min-h-[44px]`}>+ New workout</button>
       </div>
-      <p className="text-sm text-gray-600 dark:text-life-100">Checklists for parts of the day. They show on the front page, where you tick them off or go through one a step at a time.</p>
+      <p className="text-sm text-gray-600 dark:text-life-100">Checklists for parts of the day. They show on the front page, where you tick them off or go through one a step at a time. A workout is a routine whose steps can carry numbers.</p>
       <div className="flex flex-wrap items-center gap-2">
         <TagFilter value={tag} onChange={setTag} />
         {(list.length > 0 || tag) && <SelectButton sel={sel} />}
@@ -229,8 +297,9 @@ export default function RoutinesPage() {
               <PickBox sel={sel} id={r.id} name={r.name} />
               <div className="min-w-0 flex-1">
                 <h2 className="break-words font-semibold text-life-800 dark:text-life-50">{r.name}</h2>
-                <p className="text-xs text-gray-500 dark:text-life-300">{r.who_kind === 'me' ? 'For you' : r.who_kind === 'everyone' ? 'For everyone' : r.who_kind === 'member' ? `For ${r.who}, on the chore chart` : r.who_kind === 'pet' ? `For ${r.who}, on every front page` : `For ${r.who}`}{r.cycle_length ? ` · ${r.cycle_length}-night cycle` : ''}{r.points ? ` · ${r.points} points a time` : ''}</p>
+                <p className="text-xs text-gray-500 dark:text-life-300">{r.kind === 'workout' ? 'Workout · ' : ''}{r.who_kind === 'me' ? 'For you' : r.who_kind === 'everyone' ? 'For everyone' : r.who_kind === 'member' ? `For ${r.who}, on the chore chart` : r.who_kind === 'pet' ? `For ${r.who}, on every front page` : `For ${r.who}`}{r.cycle_length ? ` · ${r.cycle_length}-night cycle` : ''}{r.points ? ` · ${r.points} points a time` : ''}</p>
               </div>
+              {r.kind === 'workout' && <button type="button" onClick={() => setLooking(r)} className={`${quietButtonClass} min-h-[44px]`} aria-label={`Look back at ${r.name}`}>Look back</button>}
               {r.mine && <button type="button" onClick={() => setModal({ routine: r })} className={`${quietButtonClass} min-h-[44px]`} aria-label={`Change ${r.name}`}>Change</button>}
             </div>
             <ul className="mt-1 space-y-0.5 text-sm text-gray-700 dark:text-life-100">
@@ -258,8 +327,13 @@ export default function RoutinesPage() {
         </details>
       )}
       {modal && (
-        <Modal title={modal.routine ? `Change ${modal.routine.name}` : 'New routine'} wide onClose={() => setModal(null)}>
-          <RoutineForm routine={modal.routine} me={people.me} people={people} items={items} onDone={done} onGone={done} />
+        <Modal title={modal.routine ? `Change ${modal.routine.name}` : modal.kind === 'workout' ? 'New workout' : 'New routine'} wide onClose={() => setModal(null)}>
+          <RoutineForm routine={modal.routine} me={people.me} people={people} items={items} startKind={modal.kind} onDone={done} onGone={done} />
+        </Modal>
+      )}
+      {looking && (
+        <Modal title={`${looking.name}: looking back`} onClose={() => setLooking(null)}>
+          <History routine={looking} />
         </Modal>
       )}
     </div>

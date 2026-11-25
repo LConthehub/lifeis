@@ -48,6 +48,7 @@ const PackingPage = lazyPage(() => import('./pages/Packing'));
 const UpkeepPage = lazyPage(() => import('./pages/Upkeep'));
 const JobPage = lazyPage(() => import('./pages/Upkeep').then((m) => ({ default: m.JobPage })));
 const RoutinesPage = lazyPage(() => import('./pages/Routines'));
+const MeasuresPage = lazyPage(() => import('./pages/Measures'));
 const ChoreChart = lazyPage(() => import('./pages/ChoreChart'));
 const CollectionPrint = lazyPage(() => import('./pages/CollectionPrint'));
 const ThingStickersPage = lazyPage(() => import('./pages/ThingStickers').then((m) => ({ default: m.ThingStickersPage })));
@@ -87,8 +88,8 @@ const SECTIONS = [
     tabs: [['/things', 'Things'], ['/things/places', 'Places'], ['/things/upkeep', 'Upkeep'], ['/things/pets', 'Pets'], ['/things/licenses', 'Licenses'], ['/manual', 'House Manual'], ['/manual/services', 'Home services']] },
   { word: 'spending', shown: 'balanced', icon: 'bill', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month'], ['/money/year', 'Year'], ['/money/goals', 'Goals'], ['/money/income', 'Income and bills']] },
   // Everything with a date or a time to it.
-  { word: 'making', shown: 'busy', icon: 'date', home: '/calendar', owns: (path) => ['/calendar', '/routines', '/projects', '/plans', '/things/activities'].some((p) => path.startsWith(p)),
-    tabs: [['/calendar', 'Calendar'], ['/routines', 'Routines'], ['/projects', 'Projects'], ['/plans', 'Plans'], ['/plans/holidays', 'Holidays'], ['/plans/trips', 'Trips'], ['/things/activities', 'Activities']] },
+  { word: 'making', shown: 'busy', icon: 'date', home: '/calendar', owns: (path) => ['/calendar', '/routines', '/measures', '/projects', '/plans', '/things/activities'].some((p) => path.startsWith(p)),
+    tabs: [['/calendar', 'Calendar'], ['/routines', 'Routines'], ['/measures', 'Measures'], ['/projects', 'Projects'], ['/plans', 'Plans'], ['/plans/holidays', 'Holidays'], ['/plans/trips', 'Trips'], ['/things/activities', 'Activities']] },
   { word: 'enjoying', shown: 'entertaining', icon: 'media', home: '/media', owns: (path) => path.startsWith('/media'),
     // The third place in a tab is the older addresses that still open it (the book shelves are now chips in the Collection).
     tabs: [['/media', 'Collection', ['/media/books', '/media/ebooks', '/media/audiobooks']], ['/media/lists', 'Lists'], ['/media/connections', 'Connections', ['/media/servers']]] },
@@ -190,6 +191,7 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/things/places/:id/walk" element={<WalkThrough />} />
           <Route path="/things/activities" element={<Activities />} />
           <Route path="/routines" element={<RoutinesPage />} />
+          <Route path="/measures" element={<MeasuresPage />} />
           <Route path="/things/upkeep" element={<UpkeepPage />} />
           <Route path="/things/upkeep/chart" element={<ChoreChart />} />
           <Route path="/things/upkeep/:id" element={<JobPage />} />
