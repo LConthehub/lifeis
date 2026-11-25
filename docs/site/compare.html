@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Life Is next to other apps</title>
+<style>
+  @font-face { font-family: "Fraunces Variable"; font-style: normal; font-display: swap; font-weight: 100 900; src: url(fraunces-soft.woff2) format("woff2-variations"); }
+@font-face { font-family: "Nunito Variable"; font-style: normal; font-display: swap; font-weight: 200 1000; src: url(nunito.woff2) format("woff2-variations"); }
+b, strong { font-weight: 850; }
+  :root { --ink: #33291f; --soft: #5a4e40; --paper: #f1e5c8; --card: #f6ead0; --line: #dfcb9f; --deep: #422a17; --teal: #734825; --btn: #734825; --btn-ink: #ffffff; --accent: #422a17; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #fbf4e4; --soft: #d2b184; --paper: #2a190d; --card: #422a17; --line: #5a3a20; --deep: #f2ce47; --teal: #eead3e; --btn: #eead3e; --btn-ink: #2a190d; --accent: #f2ce47; } }
+  h1, h2 { font-family: "Fraunces Variable", Georgia, Cambria, serif; font-variation-settings: "SOFT" 100; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 600 17px/1.6 "Nunito Variable", system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 42rem; margin: 0 auto; padding: 2rem 1.1rem 4rem; }
+  h1 { font-size: 1.7rem; line-height: 1.25; margin: 0 0 1rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 .4rem; color: var(--accent); }
+  p, ul { margin: .6rem 0; } ul { padding-left: 1.2rem; }
+  a { color: var(--accent); }
+  .bands { height: .6rem; background: linear-gradient(180deg, #60304f 0 20%, #3a742f 20% 40%, #f2ce47 40% 60%, #e7602c 60% 80%, #f5e8cd 80% 100%); }
+  .wide { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .93rem; }
+  th, td { text-align: left; vertical-align: top; padding: .5rem .6rem; border-bottom: 1px solid var(--line); }
+  nav { font-size: .9rem; margin-bottom: 1.5rem; } footer { margin-top: 3rem; font-size: .85rem; color: var(--soft); }
+</style>
+</head>
+<body>
+<div class="bands" aria-hidden="true"></div>
+<main>
+<nav><a href="./">Life Is</a></nav>
+<h1 id="life-is-next-to-other-apps">Life Is next to other apps</h1>
+<p>Life Is is one app for food, the things you own, upkeep, money and plans. Other apps do one part of that, some of them very well. This page says what each one is, where its data lives, what it costs, and who should pick it instead of Life Is.</p>
+<p>Everything about the other apps comes from each app's own site, checked on Nov 24, 2026. Where a site did not say, this page says that too. Prices and features change, so check the app's site before you decide.</p>
+<h2 id="what-life-is-is">What Life Is is</h2>
+<ul><li><strong>Where data lives:</strong> on your phone, or on a computer you run at home. It is encrypted. There is no Life Is account and no Life Is cloud.</li><li><strong>Price:</strong> free on your own computer, with every part included. The phone app keeps the kitchen free for good, then every other part is free for 7 days and unlocks with one payment of $14.99. No subscription.</li><li><strong>Platforms:</strong> any web browser (including on an iPhone, through a Life Is you run), and an Android app that is being tested. There is no iPhone app yet.</li><li><strong>What it covers:</strong> recipes kept as you wrote them, the week's meals, a grocery list that knows your pantry and what things cost; things and places with receipts and warranties, QR stickers for shelves, upkeep, chores, routines and workouts, pets, a House Manual; a monthly budget; a calendar, projects and plans; books, films, music and games.</li></ul>
+<h2 id="homebox">HomeBox</h2>
+<p>A self-hosted inventory for the home. Items sit in locations with tags and custom fields, with photos, documents, warranties, purchase details and maintenance. It runs as a Docker container and the pages work on phones and tablets. The data is a SQLite database on your server. Its pages did not state a price. The project accepts donations and lists hosted options.</p>
+<ul><li><strong>Choose HomeBox if</strong> all you want is a home inventory, kept on your own server, from a project that does only that.</li><li><strong>Choose Life Is if</strong> you want the inventory to connect to recipes, upkeep, projects and the calendar, or you want it on a phone with no server. Life Is can bring in a HomeBox CSV export.</li><li><strong>Where Life Is lacks:</strong> HomeBox is a focused tool with a community around it. Life Is is newer and does not have that history.</li></ul>
+<p>Checked: the project's page at https://github.com/sysadminsmedia/homebox. The project's own site, https://homebox.software/en/, refused our request (error 403), so nothing here comes from it.</p>
+<h2 id="grocy">Grocy</h2>
+<p>A self-hosted "groceries and household management" tool. It tracks food stock, makes shopping lists from minimum amounts, plans meals from recipes, and tracks chores, tasks, equipment and batteries. It reads barcodes, has a REST API, and runs in a browser, as a Windows program, in Docker or as a Home Assistant add-on. It is open source and asks only for donations. Data lives on the server you run.</p>
+<ul><li><strong>Choose Grocy if</strong> you want the most detailed food stock tracking, with minimum amounts, due dates and an API, and you are happy to run a server.</li><li><strong>Choose Life Is if</strong> you want food to sit beside the rest of the home (things, upkeep, money), and you want a phone app that works without any server.</li><li><strong>Where Life Is lacks:</strong> Grocy has a REST API and a larger set of add-ons and community apps. Life Is has no Home Assistant add-on.</li></ul>
+<p>Checked: https://grocy.info/</p>
+<h2 id="mealie">Mealie</h2>
+<p>A self-hosted recipe manager and meal planner. It imports recipes from websites, plans breakfast, lunch, dinner and snacks on a calendar, builds shopping lists from recipes, shares recipes in groups, has a REST API and makes backups from its admin page. Data lives on your server, in SQLite by default, with PostgreSQL as an option. Its front page did not state a price. It names a hosted option from the same maker.</p>
+<ul><li><strong>Choose Mealie if</strong> recipes and meal plans are all you need, you cook for a group of people, and you want a polished recipe site on your own server.</li><li><strong>Choose Life Is if</strong> you also want the pantry, prices by store, and the rest of the home in the same place, or you want it on a phone with no server.</li><li><strong>Where Life Is lacks:</strong> Mealie has a REST API and a longer record as a recipe site. Life Is can read recipes pasted as text or as recipe JSON.</li></ul>
+<p>Checked: https://mealie.io/</p>
+<h2 id="cozi">Cozi</h2>
+<p>A free family organizer: a shared calendar color-coded by person, shopping and to-do lists that update live on everyone's phone, a meal planner and a recipe box. It runs on iPhone, Android and the web. The paid plans are Gold ($39 a year) and Max ($79 a year, with AI tools). Its page did not say where data is stored, only that the family shares one account and the content syncs to every phone.</p>
+<ul><li><strong>Choose Cozi if</strong> your main need is a family calendar and lists that everyone sees at once on their own phone, and a company-run service is fine with you.</li><li><strong>Choose Life Is if</strong> you want your household's records to stay on a device you control, with no ads and no subscription.</li><li><strong>Where Life Is lacks:</strong> Cozi has iPhone and Android apps today, shared live lists, and imports of school and sports schedules. Life Is has no iPhone app yet, and phone-only Life Is does not sync between family phones. To share, run Life Is on a home computer.</li></ul>
+<p>Checked: https://cozi.com/</p>
+<h2 id="paprika">Paprika</h2>
+<p>A recipe manager for iPhone, iPad, Mac, Android and Windows. It saves recipes from websites, has a cooking mode with spoken steps, merges grocery lists and sorts them by aisle, and plans meals by day, week and month. Data syncs through Paprika's cloud, which is a Premium feature. The free version holds 50 recipes. Its page showed no dollar amounts: it says prices differ by region and show in your app store.</p>
+<ul><li><strong>Choose Paprika if</strong> you want a mature recipe app on every kind of device, with a spoken cooking mode, and cloud sync is fine.</li><li><strong>Choose Life Is if</strong> you want recipes kept word for word on your own device, with the pantry, prices and the week connected to them.</li><li><strong>Where Life Is lacks:</strong> Paprika works on iPhone, Mac and Windows as apps. Life Is has no spoken cooking mode and no iPhone app yet.</li></ul>
+<p>Checked: https://www.paprikaapp.com/ (its pricing page, /pricing/, returned an error, so no price is given here).</p>
+<h2 id="sortly">Sortly</h2>
+<p>A cloud inventory service built for teams that track items and assets across locations. It scans barcodes and QR codes and prints labels, works offline on phones and syncs later, sends low stock and date alerts, and handles pick lists, stock counts and purchase orders. It has iOS and Android apps, a desktop app and a web sign-in. Plans listed on its pricing page: Free at $0, Advanced $24 a month, Ultra $74, Premium $149, and Enterprise by quote. The site marks those as discounted first-year prices. Its page did not say where data is stored.</p>
+<ul><li><strong>Choose Sortly if</strong> you run a shop, a crew or a small business and need purchase orders and many users on a paid service.</li><li><strong>Choose Life Is if</strong> you want a home inventory with receipts, warranties and shelf stickers, for a one-time price or free, kept on your own device.</li><li><strong>Where Life Is lacks:</strong> Life Is has no purchase orders, pick lists or business tools, and no iPhone app yet.</li></ul>
+<p>Checked: https://www.sortly.com/ and https://www.sortly.com/pricing/</p>
+<h2 id="mealboard">MealBoard</h2>
+<p>An app for saving recipes, planning meals and making shopping lists, which it calls an all-in-one kitchen app. Its site shows an App Store link for iPhone and iPad. The pages we could reach did not state a price, where data is stored, or more than those three features. Its features page returned an error.</p>
+<ul><li><strong>Choose MealBoard if</strong> you use an iPhone or iPad and want a kitchen app from the App Store. Read its site for what it does, since we could confirm little.</li><li><strong>Choose Life Is if</strong> you want recipes and the pantry connected to the rest of the home, and your data on your own device.</li><li><strong>Where Life Is lacks:</strong> MealBoard has an iPhone and iPad app. Life Is does not yet.</li></ul>
+<p>Checked: https://www.mealboard.com/ (https://www.mealboard.com/features/ returned an error).</p>
+<h2 id="icollect-everything">iCollect Everything</h2>
+<p>An app for cataloging collections: movies, books, music, comics, games, action figures, wine, vinyl and more. It runs on iPhone, iPad, Android, Mac, Windows and the web, and syncs between devices. Its page did not say where data is stored or what it costs. We tried https://www.icollect-everything.com/ first, and that address does not exist. The page we read is https://www.icollecteverything.com/.</p>
+<ul><li><strong>Choose iCollect Everything if</strong> your main need is a catalog of collectibles of every kind, on many platforms, with sync.</li><li><strong>Choose Life Is if</strong> your collection is books, films, music and games, and you want it next to your other things, with who borrowed what, on your own device.</li><li><strong>Where Life Is lacks:</strong> iCollect covers many more kinds of collectibles from the start and has apps for more platforms. Life Is has no iPhone app and no Windows or Mac app (it runs in a browser).</li></ul>
+<h2 id="choose-life-is-if">Choose Life Is if</h2>
+<ul><li>You want your household's records on a device you control, with no account, no ads and no subscription.</li><li>You want food, the things you own, upkeep, money and plans in one place that knows how they connect.</li><li>You are fine with a phone-only start, or with running a small program at home to share with the people you live with.</li></ul>
+<h2 id="where-life-is-is-behind">Where Life Is is behind</h2>
+<ul><li>No iPhone app yet. An iPhone can use a Life Is you run, through the browser.</li><li>No live sharing between phones unless you run Life Is on a computer at home.</li><li>Newer than most of these apps, with fewer users and no add-on ecosystem.</li><li>No general API for other programs, only a few short voice requests (add to the grocery list, ask what is for dinner).</li></ul>
+<h2 id="how-this-was-checked">How this was checked</h2>
+<p>Checked on Nov 24, 2026 against each app's own site:</p>
+<ul><li>HomeBox: https://github.com/sysadminsmedia/homebox (its own site, https://homebox.software/en/, refused our request)</li><li>Grocy: https://grocy.info/</li><li>Mealie: https://mealie.io/</li><li>Cozi: https://cozi.com/</li><li>Paprika: https://www.paprikaapp.com/</li><li>Sortly: https://www.sortly.com/ and https://www.sortly.com/pricing/</li><li>MealBoard: https://www.mealboard.com/</li><li>iCollect Everything: https://www.icollecteverything.com/</li></ul>
+<p>Each line about Life Is is true of the app as built today. If something here is wrong, write to <a href="mailto:hello@lifeis.living">hello@lifeis.living</a> and it will be fixed.</p>
+</main>
+</body>
+</html>

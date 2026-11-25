@@ -134,6 +134,9 @@ ${body}
 
 const policy = readFileSync(path.join(here, 'privacy.md'), 'utf8');
 writeFileSync(path.join(out, 'privacy.html'), page('Life Is privacy policy', `<nav><a href="./">Life Is</a></nav>\n${html(policy)}`));
+// A plain page that sets Life Is next to other apps, each line checked against that app's own site (docs/compare.md).
+const compare = readFileSync(path.join(here, 'compare.md'), 'utf8');
+writeFileSync(path.join(out, 'compare.html'), page('Life Is next to other apps', `<nav><a href="./">Life Is</a></nav>\n${html(compare)}`));
 // The front page has a layout of its own: wider, with pictures of the demo and a way into it.
 // Its words are in docs/home.md; the layout and styles are here.
 const DEMO = 'https://demo.lifeis.living';
@@ -302,7 +305,7 @@ ${androidSection}
 <p class="lede" style="text-align:center;margin:0 auto">${words(say('closing', 'text'))}</p>
 </div>
 <footer>
-  <a href="docs/">${words(say('footer', 'guides'))}</a> · <a href="privacy">${words(say('footer', 'privacy'))}</a> · ${words(say('footer', 'questions'))} <a href="mailto:${safe(say('footer', 'email'))}">${safe(say('footer', 'email'))}</a>
+  <a href="docs/">${words(say('footer', 'guides'))}</a> · <a href="compare">Compare</a> · <a href="privacy">${words(say('footer', 'privacy'))}</a> · ${words(say('footer', 'questions'))} <a href="mailto:${safe(say('footer', 'email'))}">${safe(say('footer', 'email'))}</a>
 </footer>
 </body>
 </html>
@@ -409,7 +412,7 @@ ${guide.slug === 'install' ? '<script src="setup.js"></script>' : ''}
 <p class="next">${(() => { const next = guides[guides.indexOf(guide) + 1]; return next && guide.slug !== 'index' ? `Next: <a href="${next.slug}.html">${safe(next.title)}</a>` : ''; })()}</p>
 </main>
 </div>
-<footer><a href="../">Life Is</a> · <a href="../privacy">Privacy policy</a> · <a href="mailto:hello@lifeis.living">hello@lifeis.living</a></footer>
+<footer><a href="../">Life Is</a> · <a href="../compare">Compare</a> · <a href="../privacy">Privacy policy</a> · <a href="mailto:hello@lifeis.living">hello@lifeis.living</a></footer>
 </body>
 </html>
 `;
