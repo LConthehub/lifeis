@@ -63,7 +63,9 @@ export type CopyState = {
   remind: boolean;
 };
 export type DigestLine = { kind: Cover; icon: string; title: string; detail: string | null; link: string; urgent: boolean };
-export type Digest = { day: string; lines: DigestLine[]; title: string; text: string };
+/** One message sent as it stands, not as a list of things for the day (a finished cooking timer). `hidden` is what an ntfy server is told when the person chose to send only counts. */
+export type Single = { title: string; body: string; link: string; hidden: { title: string; body: string } };
+export type Digest = { day: string; lines: DigestLine[]; title: string; text: string; single?: Single };
 export type Channel = 'email' | 'ntfy' | 'push';
 export type PushSubscription = { endpoint: string; p256dh: string; auth: string };
 /** Carries a message to one browser. 'gone' when the browser has stopped listening, so it's forgotten. */
@@ -258,13 +260,14 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
       try {
         if (!s.ntfy) throw new Problem(400, 'Choose an ntfy server and topic first');
         if (!tools.fetcher) throw new Problem(400, "This copy of Life Is can't reach outside services");
-        const body = s.ntfy.detail === 'count'
+        const body = d.single ? (s.ntfy.detail === 'count' ? d.single.hidden.body : d.single.body) : s.ntfy.detail === 'count'
           ? (d.lines.length ? `${plural(d.lines.length, 'thing needs', 'things need')} you today. Open Life Is to see what.` : 'Nothing needs you today.')
           : d.text;
         // Header values are kept to plain letters: the title says only how many.
-        const headers: Record<string, string> = { Title: `Life Is: ${d.lines.length ? plural(d.lines.length, 'thing') : 'nothing'} today`, Tags: 'house', 'Content-Type': 'text/plain; charset=utf-8' };
-        if (link) headers.Click = link;
-        if (d.lines.some((l) => l.urgent)) headers.Priority = 'high';
+        const title = d.single ? (s.ntfy.detail === 'count' ? d.single.hidden.title : d.single.title).replace(/[^ -~]/g, '').trim() || 'Timer done' : `Life Is: ${d.lines.length ? plural(d.lines.length, 'thing') : 'nothing'} today`;
+        const headers: Record<string, string> = { Title: title, Tags: d.single ? 'alarm_clock' : 'house', 'Content-Type': 'text/plain; charset=utf-8' };
+        if (link) headers.Click = d.single ? `${s.origin}${d.single.link}` : link;
+        if (d.single || d.lines.some((l) => l.urgent)) headers.Priority = 'high';
         const answer = await tools.fetcher(`${s.ntfy.server.replace(/\/+$/, '')}/${encodeURIComponent(s.ntfy.topic)}`, headers, { method: 'POST', body });
         if (answer.status >= 300) throw new Problem(400, `the ntfy server answered with an error (${answer.status})`);
         sent.push('ntfy');
@@ -278,7 +281,7 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
         const body = d.lines.length ? d.lines.slice(0, 6).map((l) => `${l.title}${l.detail ? ` — ${l.detail}` : ''}`).join('\n') + (d.lines.length > 6 ? `\n…and ${d.lines.length - 6} more` : '') : 'Nothing needs you today.';
         let reached = 0;
         for (const b of browsers) {
-          if ((await tools.push(b, { title: `Life Is: ${d.title}`, body, url: d.lines.length === 1 ? d.lines[0]!.link : '/' })) === 'gone') {
+          if ((await tools.push(b, d.single ? { title: d.single.title, body: d.single.body, url: d.single.link } : { title: `Life Is: ${d.title}`, body, url: d.lines.length === 1 ? d.lines[0]!.link : '/' })) === 'gone') {
             await db.run('DELETE FROM push_subscriptions WHERE id = ?', [b.id]);
           } else reached += 1;
         }

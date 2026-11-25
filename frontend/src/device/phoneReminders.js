@@ -94,3 +94,20 @@ async function scheduleRoutines() {
 export function followReminderTaps(go) {
   LocalNotifications.addListener('localNotificationActionPerformed', ({ notification }) => go(notification.extra?.url || '/'));
 }
+
+// A cooking timer on a phone that keeps everything on the phone: its end is handed to the phone to show, so it goes
+// off even when the app is closed. A run of ids is set aside for them; the same id replaces the old one.
+export async function scheduleTimerNotice(id, label, at, recipeId) {
+  let allowed = (await LocalNotifications.checkPermissions()).display;
+  if (allowed !== 'granted') allowed = (await LocalNotifications.requestPermissions()).display;
+  if (allowed !== 'granted') return;
+  await LocalNotifications.cancel({ notifications: [{ id }] }).catch(() => {});
+  await LocalNotifications.schedule({ notifications: [{
+    id, title: `Timer done: ${label}`, body: 'Your cooking timer has ended.',
+    schedule: { at, allowWhileIdle: true }, extra: { url: recipeId ? `/recipes/${recipeId}` : '/recipes' },
+  }] });
+}
+
+export async function cancelTimerNotice(id) {
+  await LocalNotifications.cancel({ notifications: [{ id }] }).catch(() => {});
+}

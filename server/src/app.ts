@@ -16,6 +16,8 @@ import { securityRoutes } from './securityRoutes.ts';
 import type { MailTools } from './mailRoutes.ts';
 import { notUnderstood, read, readBody, MAX_PAPER_BODY_BYTES, Refusal, type Context, type Reply, type Route } from './http.ts';
 import type { Reach } from './connectionRoutes.ts';
+import { cookTimers, type CookTimers } from './cookTimers.ts';
+import { cookingTimerRoutes, sendFinished } from './cookingTimerRoutes.ts';
 import { everydayRoutes } from './everydayRoutes.ts';
 import { pages } from './pages.ts';
 import { zip } from './zip.ts';
@@ -55,6 +57,8 @@ export type Options = {
   demo?: { username: string; password: string };
   /** Locks the secret of a person's authenticator app. Left out: the vault in the same key folder main.ts uses. */
   sealer?: Sealer;
+  /** Cooking timers. Left out: the server keeps its own, in its memory. A test gives one with a clock it can move. */
+  timers?: CookTimers;
   /** Told about anything that went wrong inside Life Is itself (never about a person's mistake). */
   onError?: (problem: unknown) => void;
 };
@@ -118,6 +122,9 @@ export function createApp(options: Options) {
     const token = await auth.createSession(db, userId, { method, ip: c.ip, userAgent: c.userAgent }, clock);
     return { 'Set-Cookie': sessionCookie(c, token) };
   }
+
+  // Cooking timers: kept in memory, and sent out the person's own ways (browser push, ntfy) when one ends.
+  const timers = options.timers ?? cookTimers({ notify: sendFinished(db, { fetcher: options.reach?.fetcher, push: options.push?.send, clock, onError: options.onError ?? console.error }) });
 
   // Two-step sign-in and passkeys (securityRoutes.ts).
   const security = securityRoutes(db, { clock, sealer: () => options.sealer ?? sealerFromEnvironment(), demo: Boolean(options.demo), signIn });
@@ -226,6 +233,7 @@ export function createApp(options: Options) {
       headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="lifeis-recipes.zip"' },
     })],
 
+    ...cookingTimerRoutes(timers),
     ...everydayRoutes(db, { fetcher: outside, reach: options.reach, mail: options.mail, photos: options.photos, calendars: options.calendars, bank: options.bank, assistant: options.assistant, push: options.push }),
   ];
 
