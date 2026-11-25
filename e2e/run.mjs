@@ -71,6 +71,7 @@ const SUITE = [
   { specs: ['book-servers'], account: TRIAL, fixtures: [['books', 8099]] },
   { specs: ['photo-library'], account: TRIAL, docker: true },
   { specs: ['kitchen-week'], account: TRIAL },
+  { specs: ['grocery-line-scan'], account: TRIAL },
   { specs: ['prep'], account: TRIAL },
   { specs: ['routines'], account: TRIAL },
   { specs: ['holidays'], account: TRIAL },

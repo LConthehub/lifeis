@@ -82,6 +82,8 @@ export type RecipeLine = {
   ingredient: string | null;
   /** The amount for the servings asked for, when that isn't the recipe's own. The line itself never changes. */
   scaled: string | null;
+  /** For a method step that names a time ("simmer 12 minutes"): the minutes, the longer of a range. Otherwise null. */
+  timer_minutes: number | null;
 };
 
 export type RecipeSummary = {

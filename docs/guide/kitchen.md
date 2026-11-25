@@ -25,6 +25,12 @@ Open a recipe and choose **Start cooking**. The recipe fills the screen: big ing
 
 Where the phone or browser allows it, the screen stays on while the view is open. If it cannot, a note says the screen may dim, so tap now and then. The ticks are only for this cooking. Nothing is saved, and they are gone when you choose **Done cooking** or press Escape.
 
+### Timers
+
+A step that names a time, like "simmer 12 minutes" or "bake 25 to 30 minutes", has a button such as **Start 12 min timer** (a range uses the longer time). Any step also has a **Timer** button where you type the minutes. Several timers can run at once. Each shows on top of the cooking view with its step and a countdown, with **Stop** and **+1 min**. A timer keeps running if you reload the page.
+
+When a timer ends, the page shows a notice, beeps and buzzes where the browser allows it. Life Is also sends "Timer done" through the ways you turned on in Settings, Reminders: browser notifications and ntfy (never email). That way it reaches a locked iPhone and its Apple Watch. If you chose to send ntfy only counts, it says only that a timer ended. With none turned on, timers still work on the page. Timers are kept in memory, so a restart of Life Is loses the ones running. In the phone app that keeps everything on the phone, the phone itself shows the notice at the end.
+
 ## The week
 
 Put recipes on days and meals. The front page shows today's, and the calendar shows the week.
@@ -32,6 +38,8 @@ Put recipes on days and meals. The front page shows today's, and the calendar sh
 ## Groceries
 
 Fill the list from the week's meals, less what the pantry already has, or add anything by hand. Scan a package to add it. The list can be shown by store, with each thing's usual size.
+
+Every line also has its own scan button. Tap it on "Milk", scan the package, and that barcode is milk from then on. A grocery can have several barcodes, such as a store brand and an organic one. The line is checked off as soon as the scan matches, and the price box starts with last time's price. Change it, or leave it and that price is used and marked as a guess. If the barcode is already known as something else, such as oat milk, Life Is asks whether to get it in place of milk this time, or whether it is milk from now on.
 
 ## The pantry
 

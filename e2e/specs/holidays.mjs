@@ -169,6 +169,16 @@ await page.goto(base + '/plans/holidays'); await wait(1000);
 t = await text();
 say('both holidays are listed, and the date is off the "from your calendar" list', /Thanksgiving/.test(t) && /Grandma's birthday/.test(t) && !/From your calendar/.test(t));
 
+// ---------- "Given to you": nothing before the day, the gift after it ----------
+say('nothing is given to you before the day, so there is no such part', !/Given to you/.test(await text()));
+await page.route('**/api/plans/holidays/given-to-me', (route) => route.fulfill({ json: [{ holiday: 'Thanksgiving', year: 2020, day: '2020-11-26', idea: 'A pair of binoculars' }] }));
+await page.goto(base + '/plans/holidays'); await wait(1000);
+t = await text();
+say('after the day the holidays page shows what you were given: ' + t.replace(/\s+/g, ' ').slice(0, 120), /Given to you/.test(t) && /A pair of binoculars/.test(t) && /Thanksgiving 2020/.test(t));
+await page.goto(base + `/plans/holidays/${holiday.id}`); await wait(1000);
+say('and the page of a holiday with that name shows it too', /A pair of binoculars/.test(await text()));
+await page.unroute('**/api/plans/holidays/given-to-me');
+
 // ---------- wide screen, and nothing broke ----------
 await page.setViewportSize({ width: 1280, height: 900 }); await wait(500);
 await page.goto(base + `/plans/holidays/${holiday.id}/${after.years[0].plan_id}`); await wait(1200);

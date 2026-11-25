@@ -21,6 +21,7 @@ import type {
   EquipmentInput, EquipmentShortage, ExportFile, GroceryItem, Ingredient, Meal, PantryInput, PantryItem, Part, PlanInput, PlannedMeal, Recipe,
   RecipeEquipment, RecipeInput, RecipeLine, RecipeSummary,
 } from './kitchenTypes.ts';
+import { minutesInStep } from './cookTimer.ts';
 import { Problem } from './problem.ts';
 import { attachTags, onlyTagged, setByNames, unlink, type TagRef } from './tags.ts';
 import { addDays, clean, dayNumber, inOrder, labelKey, pictureType, rounded, stamp, todayOf, type Clock } from './small.ts';
@@ -142,6 +143,8 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
       is_heading: Boolean(line.is_heading),
       // Scaling shows a new amount next to the line; the line itself never changes.
       scaled: factor !== 1 && line.quantity !== null ? units.amount(line.quantity * factor, line.unit) : null,
+      // A step that names a time ('simmer 12 minutes') offers a timer for it in the cooking view.
+      timer_minutes: line.part === 'steps' && !line.is_heading ? minutesInStep(line.text) : null,
     }));
     return {
       ...row,

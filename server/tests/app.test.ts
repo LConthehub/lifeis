@@ -1641,7 +1641,19 @@ it('lists of titles answer over the web: private by default, shared with the hou
   expect((await other.put(`/api/media/lists/${made.id}`, { name: 'Mine' })).status).toBe(403);
   expect((await other.delete(`/api/media/lists/${made.id}`)).status).toBe(403);
   expect((await other.get('/api/media')).json).toEqual([]); // nothing of it is in the partner's collection
-
+  // It is the household's: the partner can reorder it, mark a title watched (in their own log, off the list for all) and take one off.
+  const ids = (await other.get(`/api/media/lists/${made.id}`)).json.entries.map((e: { media_id: number }) => e.media_id);
+  const names = (r: { json: { entries: { title: string }[] } }) => r.json.entries.map((e) => e.title);
+  expect(names(await other.post(`/api/media/lists/${made.id}/move`, { media_id: ids[2], way: 'up' }))).toEqual(['Dune', 'Spirited Away', 'Ticket to Ride']);
+  expect(names(await other.post(`/api/media/lists/${made.id}/move`, { media_id: ids[2], way: 'down' }))).toEqual(['Dune', 'Ticket to Ride', 'Spirited Away']);
+  const temp = (await other.post(`/api/media/lists/${made.id}/titles`, { type: 'film', title: 'Temp' })).json.entries[3].media_id;
+  expect(names(await other.post(`/api/media/lists/${made.id}/watched`, { media_id: temp, day: MONDAY }))).toEqual(['Dune', 'Ticket to Ride', 'Spirited Away']);
+  expect(names(await admin.get(`/api/media/lists/${made.id}`))).toEqual(['Dune', 'Ticket to Ride', 'Spirited Away']);
+  expect((await other.post(`/api/media/lists/${made.id}/watched`, { media_id: temp, day: MONDAY })).status).toBe(404);
+  expect((await other.get('/api/search?q=temp')).json).toEqual([expect.objectContaining({ kind: 'title' })]); // in their own log
+  expect((await admin.get('/api/search?q=temp')).json).toEqual([]);
+  const sneaky = (await other.post(`/api/media/lists/${made.id}/titles`, { type: 'film', title: 'Sneaky' })).json.entries[3].media_id;
+  expect(names(await other.post(`/api/media/lists/${made.id}/take`, { media_id: sneaky }))).toEqual(['Dune', 'Ticket to Ride', 'Spirited Away']);
   // The two lists everyone has stay.
   expect((await admin.put(`/api/media/lists/${toWatch.id}`, { name: 'Other' })).status).toBe(400);
   expect((await admin.delete(`/api/media/lists/${toWatch.id}`)).status).toBe(400);

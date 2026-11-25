@@ -51,11 +51,11 @@ Life Is does not read books itself. It keeps track of them and opens them where 
 
 ## Lists
 
-The **Lists** tab holds lists of titles. A list can mix films, shows, music, books and games, in the order you choose (use the up and down buttons). Everyone has two lists that stay: **To watch, read or hear** and **Wanted**. Wanted is every title you marked as wanted. You can make more lists, such as "Rainy day" or "Gift ideas".
+The **Lists** tab holds lists of titles. A list can mix films, shows, music, books and games, in the order you choose (choose **Change order**, use the up and down buttons, then **Done**). Everyone has two lists that stay: **To watch, read or hear** and **Wanted**. Wanted is every title you marked as wanted. You can make more lists, such as "Rainy day" or "Gift ideas".
 
-You can choose **Pick one I own** to add a title from your Collection. You can also type a title onto a list even if you do not own it: a name, what kind it is, and a year or note if you like. It is kept, and search finds it, but it is not counted in your Collection, its formats, the printable list or any totals until you add a copy. Choose **I have it now** on the list to add the copy. Marking a title watched, read or heard takes it off To watch.
+You can choose **Pick one I own** to add a title from your Collection. You can also type a title onto a list even if you do not own it: a name, what kind it is, and a year or note if you like. It is kept, and search finds it, but it is not counted in your Collection, its formats, the printable list or any totals until you add a copy. Each title has one main button, **Watched today** (or **Read today**, **Heard today**), and **More**. Under More are **I have it now**, which adds the copy, and **Take off**. On Wanted the main button is **I have it now**. Marking a title watched, read or heard takes it off To watch.
 
-A list is only yours unless you choose **Share with the household**. Then everyone who signs in can see it and add titles to it. Only you can reorder, rename or delete it. A list you do not share is not seen by anyone else, in search or in their downloads.
+A list is only yours unless you choose **Share with the household**. Then it belongs to the household: everyone who signs in can see it, add titles, take any off, change the order and mark a title watched. That goes in their own log, and the title comes off the list for everyone. Only you can rename it, stop sharing it or delete it. Deleting a list never removes a title: ones you do not own stay in search and can go on another list. A list you do not share is not seen by anyone else, in search or in their downloads.
 
 Lists are in the download of everything, and come back when you bring it in. Bringing the same file in twice adds nothing. Nothing on a list is sent anywhere.
 

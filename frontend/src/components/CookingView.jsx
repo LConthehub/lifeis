@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Icon from './Icon';
+import { StepTimer, TimerStrip, useCookTimers } from './CookTimers';
 
 /** Keeps the screen on while this is open (Screen Wake Lock). Returns false where the browser has no such thing. */
 function useScreenOn() {
@@ -37,6 +38,7 @@ export default function CookingView({ recipe, servings, onDone }) {
   const [ticked, setTicked] = useState(() => new Set());
   const box = useRef(null);
   const able = useScreenOn();
+  const cook = useCookTimers(recipe.id);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onDone(); };
     document.addEventListener('keydown', onKey);
@@ -57,7 +59,7 @@ export default function CookingView({ recipe, servings, onDone }) {
     }
   };
 
-  const row = (key, isStep, label, children) => {
+  const row = (key, isStep, label, children, after) => {
     const done = ticked.has(key);
     return (
       <li key={key} data-key={key}>
@@ -69,6 +71,7 @@ export default function CookingView({ recipe, servings, onDone }) {
             <span className="sr-only">{label}</span>
           </span>
         </button>
+        {after}
       </li>
     );
   };
@@ -79,6 +82,7 @@ export default function CookingView({ recipe, servings, onDone }) {
     <div ref={box} role="dialog" aria-modal="true" aria-label={`Cooking ${recipe.title}`} data-cooking
       className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-card text-gray-900 dark:bg-life-800 dark:text-life-50">
       <div className="mx-auto max-w-2xl space-y-6 px-4 pb-24 pt-4">
+        <TimerStrip cook={cook} />
         <div className="flex items-start gap-3">
           <h1 className="mr-auto min-w-0 break-words text-2xl font-semibold text-life-800 dark:text-life-50">{recipe.title}</h1>
           <button type="button" onClick={onDone} className="min-h-[48px] shrink-0 rounded-full bg-gradient-to-br from-life-500 to-life-700 px-5 text-base font-semibold text-white shadow-md">Done cooking</button>
@@ -99,7 +103,8 @@ export default function CookingView({ recipe, servings, onDone }) {
           <ol className="space-y-1">
             {recipe.steps.map((s) => (s.is_heading
               ? <li key={`h${s.id}`} className="px-3 pt-3 text-sm font-semibold uppercase tracking-wide text-life-600 dark:text-life-300">{s.text}</li>
-              : row(`s${s.id}`, true, '', <><span className="mr-2 font-semibold text-life-600 dark:text-life-300">{++n}.</span>{s.text}</>)))}
+              : row(`s${s.id}`, true, '', <><span className="mr-2 font-semibold text-life-600 dark:text-life-300">{++n}.</span>{s.text}</>,
+                <StepTimer step={s} name={s.text} cook={cook} />)))}
           </ol>
         </section>
         <div className="flex justify-center pt-2">

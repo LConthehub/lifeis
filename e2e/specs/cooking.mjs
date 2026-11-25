@@ -9,6 +9,18 @@ process.on('exit', () => console.log(results.join(String.fromCharCode(10))));
 
 const browser = await chromium.launch({ ...browserChoice, headless: true });
 const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+// Stand-ins for the beep and the buzz, which count what is asked of them.
+await context.addInitScript(() => {
+  window.__audio = { made: 0, tones: 0 };
+  window.__vibes = 0;
+  window.AudioContext = class {
+    constructor() { window.__audio.made += 1; this.state = 'running'; this.currentTime = 0; this.destination = {}; }
+    resume() { return Promise.resolve(); }
+    createOscillator() { window.__audio.tones += 1; return { frequency: {}, connect: (x) => x, start() {}, stop() {} }; }
+    createGain() { return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect: (x) => x }; }
+  };
+  navigator.vibrate = () => { window.__vibes += 1; return true; };
+});
 // A stand-in for the screen lock that counts what is asked of it. (The page checks for navigator.wakeLock.)
 await context.addInitScript(() => {
   window.__wake = { asked: 0, released: 0 };
@@ -21,6 +33,8 @@ await context.addInitScript(() => {
   }
 });
 const page = await context.newPage();
+// Time on the page can be moved forward, to see a timer end without waiting for it.
+await page.clock.install();
 const bad = [];
 page.on('response', (r) => { if (r.url().includes('/api/') && r.status() >= 400) bad.push(`${r.request().method()} ${new URL(r.url()).pathname} ${r.status()}`); });
 page.on('pageerror', (e) => bad.push('page error: ' + e.message));
@@ -73,6 +87,27 @@ await steps.nth(2).click(); await wait(1200);
 const place = await steps.nth(3).evaluate((el) => { const b = el.getBoundingClientRect(); return [b.top >= 0, b.bottom <= window.innerHeight]; });
 check('ticking a step brings the next one into view', place[0] && place[1], JSON.stringify(place));
 
+// Timers. A step that names a time offers a one-tap timer; any step offers a typed one; several run at once.
+const timerButtons = (await view.locator('ol button:not([role=checkbox])').allInnerTexts()).map((t) => t.trim());
+check('the step that names "twenty minutes" offers "Start 20 min timer", and every step a "Timer" button', timerButtons.filter((t) => t === 'Start 20 min timer').length === 1 && timerButtons.filter((t) => t === 'Timer').length === 4, JSON.stringify(timerButtons));
+await view.getByRole('button', { name: 'Start 20 min timer' }).click(); await wait(600);
+const second = view.locator('ol li').nth(1);
+await second.getByRole('button', { name: /Set a timer for step/ }).click();
+await second.getByLabel('Minutes').fill('5');
+await second.getByRole('button', { name: 'Start', exact: true }).click(); await wait(800);
+const running = view.locator('[data-timer]');
+check('two timers run at once, each with its step name and a countdown', (await running.count()) === 2 && /^\d+:\d\d$/.test((await running.first().locator('.font-mono').innerText()).trim()), (await view.locator('[data-timers]').innerText()).replace(/\s+/g, ' '));
+check('the 5 minute timer counts down from 5:00 and is first (it ends first)', /Add the onion/.test(await running.first().innerText()) && /^[45]:\d\d$/.test((await running.first().locator('.font-mono').innerText()).trim()), await running.first().innerText());
+const before = (await running.first().locator('.font-mono').innerText()).trim();
+await running.first().getByRole('button', { name: /Add 1 minute/ }).click(); await wait(600);
+const after = (await running.first().locator('.font-mono').innerText()).trim();
+const secs = (t) => t.split(':').reduce((a, n) => a * 60 + Number(n), 0);
+check('"+1 min" adds a minute', secs(after) - secs(before) >= 58 && secs(after) - secs(before) <= 62, `${before} -> ${after}`);
+const mine = await send('GET', '/api/cooking/timers');
+check('the server holds both timers', mine.length === 2 && mine.every((t) => t.seconds_left > 0), JSON.stringify(mine));
+check('a line says running timers are lost if Life Is restarts', /Timers are kept in memory\. If Life Is restarts, running timers are lost\./.test(await view.locator('[data-timers]').innerText()));
+check('with no reminder way on, a line points to Settings', (await view.locator('[data-timers] a[href="/settings/reminders#reminders"]').count()) === 1 && /phone and Watch/.test(await view.locator('[data-timers]').innerText()));
+
 // Sizes and fit at 375px.
 const small = await view.locator('button').evaluateAll((all) => all.map((b) => [b.textContent.trim().slice(0, 20), Math.round(b.getBoundingClientRect().height)]).filter(([, h]) => h < 44));
 check('every tap target is at least 44px tall' + (small.length ? ': ' + JSON.stringify(small) : ''), small.length === 0);
@@ -106,6 +141,27 @@ await page.getByRole('button', { name: 'Start cooking' }).click(); await wait(60
 check('coming back, nothing is ticked', (await tickedCount()) === 0 && (await checks().count()) === 8);
 check('and nothing was kept on the server', (await send('GET', `/api/kitchen/recipes/${stew.id}`)).steps_text.startsWith('Warm the oil'));
 await page.getByRole('button', { name: 'Done cooking' }).first().click(); await wait(300);
+
+// The timers go on after leaving the view and after a reload: they are asked of the server.
+await page.reload(); await wait(1200);
+await page.getByRole('button', { name: 'Start cooking' }).click(); await wait(900);
+check('after a reload the timers are still running', (await view.locator('[data-timer]').count()) === 2);
+// The first tap in the view after a reload allows sound again.
+await checks().nth(0).click(); await wait(200);
+// A timer that ends: a notice on the page, a beep, a buzz. (Time on the page is moved forward.)
+await view.locator('[data-timer]').first().getByRole('button', { name: /Stop the timer/ }).click(); await wait(500);
+check('"Stop" ends a timer', (await view.locator('[data-timer]').count()) === 1 && (await send('GET', '/api/cooking/timers')).length === 1);
+await page.clock.fastForward(21 * 60_000); await wait(1500);
+const noticeText = await page.locator('[data-timer-done]').innerText().catch(() => '');
+const heard = await page.evaluate(() => ({ audio: window.__audio, vibes: window.__vibes }));
+check('when a timer ends the page shows "Timer done: <step>"', /Timer done: .*Simmer gently/.test(noticeText), noticeText);
+check('and beeps (Web Audio) and buzzes', heard.audio.tones >= 3 && heard.vibes >= 1, JSON.stringify(heard));
+await page.screenshot({ path: shots + '/cooking-timer-done-375.png' });
+await page.locator('[data-timer-done]').getByRole('button', { name: 'OK' }).click(); await wait(300);
+check('"OK" clears the notice', (await page.locator('[data-timer-done]').count()) === 0);
+await page.getByRole('button', { name: 'Done cooking' }).first().click(); await wait(300);
+for (const t of await send('GET', '/api/cooking/timers')) await send('DELETE', `/api/cooking/timers/${t.id}`);
+check('the timers address needs a sign-in (who sees whose is in the server tests)', (await fetch(base + '/api/cooking/timers')).status === 401);
 
 // At desktop width.
 await page.setViewportSize({ width: 1280, height: 900 });

@@ -194,9 +194,9 @@ export default function Groceries() {
               {open.filter((g) => groupOf(g) === aisle).map((g) => {
                 const l = lineOf(g);
                 return (
-                  <li key={g.id} className="flex items-center gap-3 py-2">
+                  <li key={g.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
                     <input type="checkbox" checked={false} onChange={() => tick(g)} aria-label={`Got ${g.label}`} className="h-5 w-5 accent-life-600" />
-                    <span className="min-w-0 flex-1 text-sm">
+                    <span className="min-w-[8rem] flex-1 basis-[calc(100%-2rem)] text-sm sm:basis-0">
                       {g.ingredient_id
                         ? <button type="button" onClick={() => setModal({ usual: g })} aria-label={`${g.label}: where and what size`} className="text-left text-gray-800 hover:underline dark:text-life-50">{g.label}</button>
                         : <span className="text-gray-800 dark:text-life-50">{g.label}</span>}
@@ -234,6 +234,8 @@ export default function Groceries() {
                     )}
                     <input inputMode="decimal" value={typed[g.id] ?? ''} onChange={(e) => setTyped({ ...typed, [g.id]: e.target.value })} placeholder={l.last ? (l.last.cents / 100).toFixed(2) : 'price'}
                       aria-label={`Price of ${g.label}`} className={`${inputClass} !w-20 text-right`} />
+                    <button type="button" onClick={() => setModal({ lineScan: g })} aria-label={`Scan ${g.label}`} data-line-scan
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-life-600 hover:bg-life-50 dark:text-life-200 dark:hover:bg-life-700"><Icon of="scan" /></button>
                     <button type="button" onClick={() => remove(g)} className="text-xs text-gray-400 hover:text-red-600" aria-label={`Remove ${g.label}`}>✕</button>
                   </li>
                 );
@@ -337,6 +339,11 @@ export default function Groceries() {
       {modal?.trip !== undefined && (
         <Modal title={`Done at ${modal.trip || 'the store'}`} onClose={() => setModal(null)}>
           <TripDone store={modal.trip} sign={sign} onDone={(text) => { setModal(null); setMessage(text); load(); }} />
+        </Modal>
+      )}
+      {modal?.lineScan && (
+        <Modal title={`Scan ${modal.lineScan.label}`} onClose={() => { setModal(null); load(); }}>
+          <LineScan line={modal.lineScan} sign={sign} putAway={putAway} onChanged={load} onClose={() => { setModal(null); load(); }} />
         </Modal>
       )}
       {modal?.scan && (
@@ -823,6 +830,85 @@ function ScanGrocery({ open, sign, putAway, onChanged }) {
       {lastLine}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex items-center justify-end gap-2">{another}<button type="submit" className={buttonClass}>In the buggy</button></div>
+    </form>
+  );
+}
+
+/**
+ * Scan from one line of the list. A barcode not seen before is taught as this line's grocery (a grocery can
+ * have several barcodes: store brand, organic). The line is ticked off as soon as the scan matches, with
+ * last time's price standing in (marked assumed) until a price is typed. A barcode known as something else
+ * is asked about, never changed without a say.
+ */
+function LineScan({ line, sign, putAway, onChanged, onClose }) {
+  const [round, setRound] = useState(0);
+  const [seen, setSeen] = useState(null);           // what the scan turned out to be
+  const [step, setStep] = useState('scan');         // scan, ask (it's something else), price, or failed
+  const [text, setText] = useState('');
+  const [touched, setTouched] = useState(false);
+  const [error, setError] = useState('');
+  const again = () => { setSeen(null); setStep('scan'); setText(''); setTouched(false); setError(''); setRound((n) => n + 1); };
+
+  // The scan matched: the line goes in the buggy, with last time's price standing in unless one is typed next.
+  const take = async (data) => {
+    await axios.post(`/api/kitchen/grocery/${line.id}/tick`, { done: true, put_away: putAway });
+    if (data.last) await axios.put(`/api/shopping/prices/${line.id}`, { cents: data.last.cents, assumed: true, barcode: data.barcode });
+    onChanged();
+    setSeen(data); setText(data.last ? (data.last.cents / 100).toFixed(2) : ''); setTouched(false); setStep('price');
+  };
+  const look = useCallback(async (code) => {
+    setError('');
+    try {
+      const { data } = await axios.get('/api/shopping/scan', { params: { code } });
+      if (data.ingredient && data.ingredient.id !== line.ingredient_id) { setSeen(data); setStep('ask'); return; }
+      if (data.ingredient) { await take(data); return; }
+      // New to Life Is: this barcode is this line's grocery from now on.
+      const found = await lookUpProduct(data.barcode);
+      const label = found ? [found.name, found.brand, found.size].filter(Boolean).join(', ') : null;
+      await take((await axios.put('/api/shopping/scan', { code: data.barcode, grocery_id: line.id, product: label, size: found?.size || null })).data);
+    } catch (err) { setError(errorMessage(err, "Couldn't look that up")); setStep('failed'); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [line.id, line.ingredient_id, putAway]);
+  const guard = (fn) => async () => { setError(''); try { await fn(); } catch (err) { setError(errorMessage(err, "Couldn't do that")); } };
+  const inPlace = guard(() => take(seen));
+  const fromNow = guard(async () => take((await axios.put('/api/shopping/scan', { code: seen.barcode, grocery_id: line.id })).data));
+  const finish = async (e) => {
+    e.preventDefault();
+    const cents = centsOf(text);
+    try {
+      if (touched && cents !== null) await axios.put(`/api/shopping/prices/${line.id}`, { cents, barcode: seen.barcode });
+      onChanged(); onClose();
+    } catch (err) { setError(errorMessage(err, "Couldn't save that price")); }
+  };
+
+  if (step === 'scan') return <Scanner key={round} onCode={look} label={`Point the camera at the barcode on the ${line.label.toLowerCase()}`} />;
+  if (step === 'failed') return <div className="space-y-3"><p className="text-sm text-red-600">{error}</p><button type="button" onClick={again} className={quietButtonClass}>Scan again</button></div>;
+  if (step === 'ask') {
+    return (
+      <div className="space-y-3" data-in-place>
+        <p className="text-sm font-medium text-gray-800 dark:text-life-50">This is {seen.ingredient.name.toLowerCase()}. Get it in place of {line.label.toLowerCase()} this time?</p>
+        {seen.ingredient.product && <p className="text-xs text-gray-500 dark:text-life-300">{seen.ingredient.product}</p>}
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex flex-col gap-2">
+          <button type="button" onClick={inPlace} className={buttonClass}>Yes, get it this time</button>
+          <button type="button" onClick={fromNow} className={quietButtonClass}>It's {line.label.toLowerCase()} from now on</button>
+          <button type="button" onClick={again} className={quietButtonClass}>Scan again</button>
+        </div>
+      </div>
+    );
+  }
+  const last = seen.last;
+  return (
+    <form onSubmit={finish} className="space-y-3" data-line-scan-price>
+      <p className="rounded-lg bg-life-100 px-3 py-2 text-sm text-life-800">{line.label} is in the buggy.</p>
+      <Field label={`What it costs (${sign})`}>
+        <input autoFocus inputMode="decimal" value={text} onChange={(e) => { setText(e.target.value); setTouched(true); }} placeholder="price" className={inputClass} />
+      </Field>
+      {last
+        ? <p className="text-xs text-gray-500 dark:text-life-300">Last time {money(last.cents, sign)}{last.amount ? ` for ${last.amount}` : ''}{last.store ? ` at ${last.store}` : ''}, {shortDay(last.day)}. Leave it as it is and that price is used, marked as a guess.</p>
+        : <p className="text-xs text-gray-500 dark:text-life-300">No price yet. Type one, or leave it empty.</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex justify-end"><button type="submit" className={buttonClass}>Done</button></div>
     </form>
   );
 }

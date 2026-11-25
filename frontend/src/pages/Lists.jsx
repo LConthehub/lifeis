@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import Icon, { Dots } from '../components/Icon';
@@ -6,6 +6,7 @@ import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessa
 
 const KINDS = [['film', 'Film'], ['show', 'Show'], ['music', 'Music'], ['book', 'Book'], ['game', 'Game'], ['other', 'Other']];
 const DID = { film: 'Watched', show: 'Watched', music: 'Listened', book: 'Read', game: 'Played', other: 'Enjoyed' };
+const TODAY = { film: 'Watched today', show: 'Watched today', music: 'Heard today', book: 'Read today', game: 'Played today', other: 'Enjoyed today' };
 const control = 'min-h-[44px]';
 const small = `${quietButtonClass} ${control} inline-flex items-center justify-center`;
 
@@ -84,6 +85,7 @@ export function ListPage() {
   const [list, setList] = useState(undefined);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
+  const [ordering, setOrdering] = useState(false);
   const load = useCallback(() => { axios.get(`/api/media/lists/${id}`).then(({ data }) => { setList(data); setName(data.name); }).catch(() => setList(null)); }, [id]);
   useEffect(() => { load(); }, [load]);
   if (list === undefined) return null;
@@ -93,16 +95,21 @@ export function ListPage() {
     try { const { data } = await promise; setList(data); setName(data.name); } catch (err) { setError(errorMessage(err, 'That did not work')); }
   };
   const act = (path, body) => run(axios.post(`/api/media/lists/${id}/${path}`, body));
+  // Watched, read or heard today: it goes in the person's own log (on a shared list it comes off for everyone).
+  // Wanted titles are not on a shelf yet, so there the owner's own title is logged.
   const watched = async (e) => {
     setError('');
-    try { await axios.post(`/api/media/${e.media_id}/log`, { day: toDateInput(new Date()) }); load(); } catch (err) { setError(errorMessage(err, 'That did not work')); }
+    const day = toDateInput(new Date());
+    if (list.builtin !== 'wanted') return act('watched', { media_id: e.media_id, day });
+    try { await axios.post(`/api/media/${e.media_id}/log`, { day }); load(); } catch (err) { setError(errorMessage(err, 'That did not work')); }
   };
   const remove = async () => {
-    if (!window.confirm(`Delete the list ${list.name}? The titles on it that you do not own go with it.`)) return;
+    if (!window.confirm(`Delete the list ${list.name}? No title is removed: the ones you do not own stay in search and can go on another list.`)) return;
     try { await axios.delete(`/api/media/lists/${id}`); navigate('/media/lists'); } catch (err) { setError(errorMessage(err, 'That did not work')); }
   };
   const custom = list.mine && !list.builtin;
-  const ordered = list.mine && list.builtin !== 'wanted';
+  const ordered = list.builtin !== 'wanted';
+  const canOrder = ordered && list.entries.length > 1;
   return (
     <div className="space-y-4">
       <div>
@@ -115,6 +122,12 @@ export function ListPage() {
         </p>
       </div>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      {canOrder && (
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setOrdering(!ordering)} aria-pressed={ordering} className={ordering ? `${buttonClass} ${control}` : small}>{ordering ? 'Done' : 'Change order'}</button>
+          {ordering && <span className="text-xs text-gray-500 dark:text-life-300">Use the arrows, then tap Done.</span>}
+        </div>
+      )}
       <AddToList list={list} onAdd={(body) => act('titles', body)} />
       {list.entries.length > 0 && (
         <section className={cardClass} aria-label="Titles on the list">
@@ -133,17 +146,14 @@ export function ListPage() {
                     {e.note && <span className="block whitespace-pre-wrap text-xs text-gray-700 dark:text-life-100">{e.note}</span>}
                   </span>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 pl-7">
-                  {ordered && (
-                    <>
-                      <button type="button" disabled={i === 0} onClick={() => act('move', { media_id: e.media_id, way: 'up' })} aria-label={`Move ${e.title} up`} className={`${small} w-11 disabled:opacity-40`}>↑</button>
-                      <button type="button" disabled={i === list.entries.length - 1} onClick={() => act('move', { media_id: e.media_id, way: 'down' })} aria-label={`Move ${e.title} down`} className={`${small} w-11 disabled:opacity-40`}>↓</button>
-                    </>
-                  )}
-                  {list.mine && <button type="button" onClick={() => watched(e)} className={small}>{DID[e.type]} today</button>}
-                  {list.mine && e.owned === false && <Link to={`/media/${e.media_id}?copy=1`} className={small}>I have it now</Link>}
-                  {e.can_remove && <button type="button" onClick={() => act('take', { media_id: e.media_id })} aria-label={`Take ${e.title} off the list`} className={small}>Take off</button>}
-                </div>
+                {ordering && ordered ? (
+                  <div className="flex flex-wrap items-center gap-2 pl-7">
+                    <button type="button" disabled={i === 0} onClick={() => act('move', { media_id: e.media_id, way: 'up' })} aria-label={`Move ${e.title} up`} className={`${small} w-11 disabled:opacity-40`}>↑</button>
+                    <button type="button" disabled={i === list.entries.length - 1} onClick={() => act('move', { media_id: e.media_id, way: 'down' })} aria-label={`Move ${e.title} down`} className={`${small} w-11 disabled:opacity-40`}>↓</button>
+                  </div>
+                ) : (
+                  <EntryActions list={list} entry={e} onWatched={() => watched(e)} onTake={() => act('take', { media_id: e.media_id })} />
+                )}
               </li>
             ))}
           </ol>
@@ -158,11 +168,11 @@ export function ListPage() {
           <label className={`flex ${control} items-center gap-2 text-sm text-gray-700 dark:text-life-100`}>
             <input type="checkbox" checked={list.shared} onChange={(ev) => run(axios.put(`/api/media/lists/${id}`, { shared: ev.target.checked }))} className="h-5 w-5 accent-life-600" /> Share with the household
           </label>
-          <p className="text-xs text-gray-500 dark:text-life-300">Shared: everyone who signs in here can see this list and add titles to it. Only you can reorder it, rename it or delete it. Not shared: only you see it, in search and in your downloads too.</p>
+          <p className="text-xs text-gray-500 dark:text-life-300">Shared: everyone who signs in here can see this list, add titles, take any off, change the order and mark one watched. Only you can rename it, stop sharing it or delete it. Not shared: only you see it, in search and in your downloads too.</p>
           <button type="button" onClick={remove} className={`${control} text-sm text-red-600 hover:underline`}>Delete this list</button>
         </section>
       )}
-      {!list.mine && <p className="text-xs text-gray-500 dark:text-life-300">This list is shared with the household. You can add a title to it and take off what you added. Whoever made it keeps it in order.</p>}
+      {!list.mine && <p className="text-xs text-gray-500 dark:text-life-300">This list is shared with the household. You can add titles, take any off, change the order and mark one watched. Only {list.owner_name} can rename it, stop sharing it or delete it.</p>}
     </div>
   );
 }
@@ -215,5 +225,39 @@ function AddToList({ list, onAdd }) {
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * One title's buttons: one main button, then More. Main is "Watched today" (by kind), or "I have it now" on Wanted.
+ * More holds the rest: the other of those two, and Take off.
+ */
+function EntryActions({ list, entry: e, onWatched, onTake }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef(null);
+  const more = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const away = (ev) => { if (box.current && !box.current.contains(ev.target)) setOpen(false); };
+    const key = (ev) => { if (ev.key === 'Escape') { setOpen(false); more.current?.focus(); } };
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', key); };
+  }, [open]);
+  const wanted = list.builtin === 'wanted';
+  const have = list.mine && e.owned === false;
+  const haveLink = <Link to={`/media/${e.media_id}?copy=1`} className={small}>I have it now</Link>;
+  const watchedButton = <button type="button" onClick={() => { setOpen(false); onWatched(); }} className={small}>{TODAY[e.type]}</button>;
+  return (
+    <div className="flex flex-wrap items-start gap-2 pl-7" ref={box}>
+      {wanted ? haveLink : watchedButton}
+      <button ref={more} type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="true" aria-label={`More for ${e.title}`} className={small}>More</button>
+      {open && (
+        <div role="group" aria-label={`Other choices for ${e.title}`} className="flex w-full flex-wrap gap-2" data-more>
+          {wanted ? watchedButton : have && haveLink}
+          {e.can_remove && <button type="button" onClick={() => { setOpen(false); onTake(); }} aria-label={`Take ${e.title} off the list`} className={small}>Take off</button>}
+        </div>
+      )}
+    </div>
   );
 }
