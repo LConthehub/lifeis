@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit -p .)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(docker compose logs *)",
+      "mcp__Claude_Browser__find",
+      "Bash(docker compose config *)",
+      "PowerShell(Get-ChildItem *)",
+      "mcp__Claude_Browser__get_page_text",
+      "Bash(docker compose ls *)",
+      "mcp__Claude_Browser__read_page",
+      "Bash(docker compose ps *)",
+      "mcp__scheduled-tasks__list_scheduled_tasks",
+      "mcp__ccd_session_mgmt__list_events",
+      "mcp__Claude_Browser__read_console_messages"
+    ]
+  }
+}
