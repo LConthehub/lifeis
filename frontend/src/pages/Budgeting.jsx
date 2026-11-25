@@ -4,6 +4,7 @@ import axios from 'axios';
 import Icon from '../components/Icon';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { money, toCents } from '../components/Budget';
+import { GoalProgress, GoalQuestion, SafeToSpend } from '../components/Goals';
 
 const pad = (n) => String(n).padStart(2, '0');
 const today = () => { const now = new Date(); return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`; };
@@ -69,9 +70,22 @@ export function SavingsCard({ month }) {
 /** The budget part of the month page: what comes in, what is due, what is planned and put aside, and what is left. */
 export function MonthBudget({ month }) {
   const [b, setB] = useState(null);
-  useEffect(() => { setB(null); axios.get('/api/money/budget', { params: { month } }).then(({ data }) => setB(data)).catch(() => {}); }, [month]);
+  const [goals, setGoals] = useState([]);
+  const [error, setError] = useState('');
+  const load = useCallback(() => {
+    axios.get('/api/money/budget', { params: { month } }).then(({ data }) => setB(data)).catch(() => {});
+    axios.get('/api/money/goals').then(({ data }) => setGoals(data)).catch(() => {});
+  }, [month]);
+  useEffect(() => { setB(null); load(); }, [load]);
   if (!b) return null;
   const sign = b.currency;
+  const thisMonth = today().slice(0, 7);
+  const asking = month === thisMonth ? goals.filter((g) => g.ask > 0 || g.set_aside > 0) : [];
+  const asked = goals.filter((g) => g.question);
+  const setAside = async (g) => {
+    setError('');
+    try { await axios.post(`/api/money/goals/${g.id}/saved`, { cents: g.ask }); load(); } catch (err) { setError(errorMessage(err, "Couldn't save that")); }
+  };
   const row = (label, cents, extra) => (
     <div className="flex items-baseline justify-between gap-2 py-1.5"><dt className="text-sm text-gray-600 dark:text-life-100">{label}</dt><dd className="tabular-nums text-sm text-gray-800 dark:text-life-50">{extra}{money(cents, sign)}</dd></div>
   );
@@ -81,7 +95,26 @@ export function MonthBudget({ month }) {
         <h2 className="mr-auto font-semibold text-life-800 dark:text-life-50">The month's budget</h2>
         <Link to="/money/income" className="inline-flex min-h-[44px] items-center text-sm text-life-600 hover:underline dark:text-life-200">Income and bills</Link>
       </div>
-      <dl className="divide-y divide-life-100 dark:divide-life-800">
+      <SafeToSpend safe={b.safe} />
+      {asked.map((g) => <div key={g.id} className="mt-2"><GoalQuestion goal={g} sign={sign} onDone={load} /></div>)}
+      {asking.length > 0 && (
+        <div className="mt-3" data-goal-asks>
+          <h3 className="text-sm font-semibold text-life-800 dark:text-life-50">Goals ask this month</h3>
+          <ul className="divide-y divide-life-100 text-sm dark:divide-life-800">
+            {asking.map((g) => (
+              <li key={g.id} className="flex flex-wrap items-center gap-x-2 py-1" data-goal-ask={g.name}>
+                <Link to="/money/goals" className="flex min-h-[44px] min-w-0 flex-1 items-center hover:underline"><span className="truncate">{g.name}</span></Link>
+                <span className="tabular-nums text-gray-700 dark:text-life-100">{money(Math.max(g.ask, g.set_aside), sign)}</span>
+                {g.checked ? <span className="inline-flex min-h-[44px] items-center text-green-700 dark:text-green-400">Set aside</span>
+                  : <button type="button" onClick={() => setAside(g)} className={`${quietButtonClass} min-h-[44px]`} aria-label={`Set aside ${money(g.ask, sign)} for ${g.name}`}>Set aside</button>}
+                {g.raised && <span className="basis-full pb-1 text-xs text-amber-700 dark:text-amber-300">{money(g.behind, sign)} behind, so each month now asks {money(g.ask, sign)} instead of {money(g.even, sign)}.</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+      <dl className="mt-2 divide-y divide-life-100 dark:divide-life-800">
         {row('Income', b.income.total, '+ ')}
         {row('Bills due', b.bills.total, '− ')}
         {row(b.past ? 'Spent' : 'Planned spending', b.spending, '− ')}
@@ -92,6 +125,7 @@ export function MonthBudget({ month }) {
           </div>
         )}
         {row('Put into goals', b.saved.total, '− ')}
+        {b.goals_spent > 0 && <div className="flex items-baseline justify-between gap-2 py-1.5 pl-4" data-goals-spent><dt className="text-sm text-gray-600 dark:text-life-100">Spent from plans' goals <span className="text-xs text-gray-500 dark:text-life-300">not counted above</span></dt><dd className="tabular-nums text-sm text-gray-800 dark:text-life-50">{money(b.goals_spent, sign)}</dd></div>}
         <div className="flex items-baseline justify-between gap-2 py-2"><dt className="text-sm font-semibold text-life-800 dark:text-life-50">{b.left_over < 0 ? 'Short by' : 'Left over'}</dt><dd className="tabular-nums" data-left-over><Left cents={b.left_over} sign={sign} /></dd></div>
       </dl>
       <p className="text-xs text-gray-500 dark:text-life-300">{b.past ? `This month is over, so spending is what was spent (${money(b.spent, sign)}).` : `Spending counts the larger of what is planned in the categories (${money(b.planned.total, sign)}) and what was spent (${money(b.spent, sign)}).`} It leaves out a bill you paid through spending, since the bill is counted already.</p>
@@ -111,7 +145,7 @@ export function MonthBudget({ month }) {
       )}
       {b.bills.unscheduled.length > 0 && <p className="mt-1 text-xs text-gray-500 dark:text-life-300">No date yet, so not counted: {b.bills.unscheduled.map((u, i) => <span key={u.job_id}>{i ? ', ' : ''}<Link to={`/things/upkeep/${u.job_id}`} className="underline">{u.name}</Link></span>)}.</p>}
       <h3 className="mt-3 text-sm font-semibold text-life-800 dark:text-life-50">Put into goals</h3>
-      {b.saved.goals.length === 0 ? <p className="text-sm text-gray-500 dark:text-life-300">Nothing this month. <Link to="/money/goals" className="underline">Savings goals</Link></p> : (
+      {b.saved.goals.length === 0 ? <p className="text-sm text-gray-500 dark:text-life-300">Nothing this month. <Link to="/money/goals" className="underline">Goals</Link></p> : (
         <ul className="text-sm">{b.saved.goals.map((g) => <li key={g.id} className="flex items-center justify-between gap-2"><Link to="/money/goals" className="flex min-h-[44px] items-center hover:underline">{g.name}</Link><span className="tabular-nums">{money(g.cents, sign)}</span></li>)}</ul>
       )}
       <h3 className="mt-3 text-sm font-semibold text-life-800 dark:text-life-50">Spending by tag</h3>
@@ -191,17 +225,7 @@ export function YearPage() {
   );
 }
 
-/** A progress bar: how much of a goal is saved. */
-function Progress({ part, whole: all, done }) {
-  const pct = all > 0 ? Math.max(0, Math.min(100, Math.round((part / all) * 100))) : 0;
-  return (
-    <div className="mt-1 h-2 overflow-hidden rounded-full bg-life-100 dark:bg-life-800" role="img" aria-label={`${pct}% saved`}>
-      <div className={`h-full rounded-full ${done ? 'bg-green-600' : 'bg-life-500'}`} style={{ width: `${pct}%` }} />
-    </div>
-  );
-}
-
-/** Savings goals: what is saved, what is left, what a month takes, and the money put toward each. */
+/** Goals: what is saved, what is left, what a month takes, and the money put toward each. A goal can be for a plan, a project, or nothing. */
 export function GoalsPage() {
   const [goals, setGoals] = useState(null);
   const [sign, setSign] = useState('$');
@@ -221,20 +245,21 @@ export function GoalsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Savings goals</h1>
+        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Goals</h1>
         <button type="button" onClick={() => setModal({ goal: {} })} className={`${buttonClass} min-h-[44px]`}>+ A goal</button>
       </div>
       {goals.length === 0 && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>No goals yet. Add one for something you are saving toward: a trip, a new roof, a cushion for a rainy day.</div>}
       {goals.map((g) => (
         <section key={g.id} className={cardClass} data-goal={g.name}>
           <div className="flex flex-wrap items-baseline gap-x-2">
-            <h2 className="mr-auto font-semibold text-life-800 dark:text-life-50">{g.name}{g.project && <Link to={`/projects/${g.project_id}`} className="ml-2 text-xs font-normal text-life-600 underline dark:text-life-200">for {g.project}</Link>}</h2>
+            <h2 className="mr-auto font-semibold text-life-800 dark:text-life-50">{g.name}{g.project && <Link to={`/projects/${g.project_id}`} className="ml-2 inline-flex min-h-[44px] items-center text-xs font-normal text-life-600 underline dark:text-life-200">for {g.project}</Link>}{g.plan && g.plan_id !== null && <Link to={`/plans/${g.plan_id}`} className="ml-2 inline-flex min-h-[44px] items-center text-xs font-normal text-life-600 underline dark:text-life-200">for {g.plan}</Link>}</h2>
             <span className="text-sm tabular-nums text-gray-600 dark:text-life-100">{money(g.saved, sign)} of {money(g.target_cents, sign)}</span>
           </div>
-          <Progress part={g.saved} whole={g.target_cents} done={g.done} />
+          <GoalProgress progress={g.progress} name={g.name} />
+          {g.question && <div className="mt-2"><GoalQuestion goal={g} sign={sign} onDone={load} /></div>}
           <p className="mt-2 text-sm text-gray-700 dark:text-life-100" data-goal-left>
             {g.done ? 'Reached.' : <>{money(g.left, sign)} left.</>}
-            {g.by_day && !g.done && (g.late ? <> The day, {dayText(g.by_day)}, has passed.</> : <> To reach it by {dayText(g.by_day)}, put in <span className="font-semibold">{money(g.per_month, sign)}</span> a month.</>)}
+            {g.by_day && !g.done && (g.late ? <> The day, {dayText(g.by_day)}, has passed.</> : <> To reach it by {dayText(g.by_day)}, put in <span className="font-semibold">{money(g.per_month, sign)}</span> a month.{g.raised && <span className="text-amber-700 dark:text-amber-300" data-goal-raised> You are {money(g.behind, sign)} behind, so this month asks {money(g.ask, sign)} instead of {money(g.even, sign)}.</span>}</>)}
             {g.by_day && g.done && <> Aimed for {dayText(g.by_day)}.</>}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -256,7 +281,7 @@ export function GoalsPage() {
         </section>
       ))}
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
-      {modal?.goal && <Modal title={modal.goal.id ? modal.goal.name : 'A savings goal'} onClose={() => setModal(null)}><GoalForm goal={modal.goal} onDone={done} /></Modal>}
+      {modal?.goal && <Modal title={modal.goal.id ? modal.goal.name : 'A goal'} onClose={() => setModal(null)}><GoalForm goal={modal.goal} onDone={done} /></Modal>}
       {modal?.put && <Modal title={`Put money toward ${modal.put.name}`} onClose={() => setModal(null)}><PutForm goal={modal.put} out={false} onDone={done} /></Modal>}
       {modal?.take && <Modal title={`Take money out of ${modal.take.name}`} onClose={() => setModal(null)}><PutForm goal={modal.take} out onDone={done} /></Modal>}
     </div>

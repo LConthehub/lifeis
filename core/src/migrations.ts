@@ -1736,6 +1736,26 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE media ADD COLUMN stars INTEGER`,
     ],
   },
+  {
+    number: 55,
+    name: 'goals on plans, holidays, trips and projects: what a goal belongs to, its own cost lines, and when its plan was settled',
+    // A goal (money_goals) can belong to a plan (a holiday's or trip's year is a plan too) as well as to a project (project_id, since 33), or to nothing.
+    // `settled_on` is the day the person answered where a ended plan's leftover goes, or what covers a shortfall: asked once, never moved by itself.
+    // A goal's own lines are the costs the person types; `cents` empty means no price yet, and `hidden_from` is a person who must not see the line or its amount.
+    statements: [
+      `ALTER TABLE money_goals ADD COLUMN plan_id INTEGER`,
+      `ALTER TABLE money_goals ADD COLUMN settled_on TEXT`,
+      `CREATE TABLE money_goal_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        goal_id INTEGER NOT NULL REFERENCES money_goals(id) ON DELETE CASCADE,
+        label TEXT NOT NULL,
+        cents INTEGER CHECK(cents IS NULL OR cents >= 0),
+        hidden_from INTEGER,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_money_goal_lines ON money_goal_lines(goal_id)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

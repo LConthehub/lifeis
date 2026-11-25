@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import Icon from '../components/Icon';
 import { money } from '../components/Budget';
+import { PlanGoal } from '../components/Goals';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, fromDateInput, toDateInput } from '../components/ui';
 import { Heading, Hint, Remove, Tick } from './Holidays';
 
@@ -241,6 +242,7 @@ function YearBody({ year, options, act, reload }) {
       {has('hunting') && <Harvest year={year} post={post} del={del} />}
       {year.gear.length > 0 && <After year={year} put={put} />}
       <Cost year={year} />
+      <PlanGoal kind="plan" id={year.plan_id} />
       <Ending year={year} post={post} reload={reload} />
     </div>
   );

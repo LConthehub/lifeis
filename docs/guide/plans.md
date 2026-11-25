@@ -28,6 +28,10 @@ When a plan is over, its page shows **What happened**: what was eaten, worked on
 
 Holidays that come back each year and outdoor trips are plans too, with more built in. See [Holidays](holidays.html) and [Outdoor trips](trips.html).
 
+### Goal and cost
+
+A plan can have its own goal. Its **Goal and cost** card adds up the food from your store prices, the costs of projects on it and lines you type, and says how many things have no price yet. Start a goal and the budget suggests an amount to set aside each month. See [Money](money.html).
+
 ## Projects
 
 A project is something you make or do: a dress, a shed, a garden bed. Open **Projects** and choose **+ New project**. Give it a name, what kind of project it is (the hints change to suit it, such as screws for woodworking and zippers for sewing), where it is at, and a day you want it done by.

@@ -5,6 +5,7 @@ import Icon from '../components/Icon';
 import Picture from '../components/Picture';
 import { shrink } from '../components/shrink';
 import { money } from '../components/Budget';
+import { PlanGoal } from '../components/Goals';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, fromDateInput, toDateInput } from '../components/ui';
 import { photoAddress } from './Plans';
 
@@ -292,6 +293,7 @@ function YearBody({ year, options, act, reload }) {
       <People year={year} options={options} post={post} put={put} del={del} role="card" />
       <Gifts year={year} options={options} post={post} put={put} del={del} />
       <Budget year={year} put={put} />
+      <PlanGoal kind="plan" id={year.plan_id} />
       <Decor year={year} options={options} post={post} put={put} del={del} act={act} mode="down" />
       <Ending year={year} past={past} post={post} reload={reload} />
     </div>

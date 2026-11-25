@@ -5,6 +5,7 @@
  * happens, in a category or in none. Each category then says what is left this month, and so does the month
  * as a whole. What was paid on a project is an entry too (tagged with the project, made when the cost is paid, and
  * changed only from the project), so it is counted once: the Projects line is drawn from those entries.
+ * Spending tagged to a plan with a goal comes out of that goal, so the categories and the month leave it out (budget.ts).
  * A trip to a store (core/src/trips.ts) makes entries tagged with the trip, so a charge the bank brings in later
  * for the same store and amount, on a close day, is recognized as that trip and not counted again.
  *
@@ -17,6 +18,7 @@
  */
 import { atomic, type Db, type Queries } from './db.ts';
 import { shown } from './displayName.ts';
+import { goalEntryIds } from './goalFigures.ts';
 import { Problem } from './problem.ts';
 import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
 import { addDays, clean, dayNumber, dayOrNull, labelKey, stamp, todayOf, type Clock } from './small.ts';
@@ -220,10 +222,11 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
       const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(given ?? '') ? given! : todayOf(clock).slice(0, 7);
       const within = [`${month}-01`, `${month}-31`];
       const sign = await db.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'shopping_currency'", [owner]);
+      const goalIds = await goalEntryIds(db, owner);
       const rows = await db.all<{ id: number; name: string; monthly_cents: number; owner_id: number; owner: string; spent: number }>(
         `SELECT c.id, c.name, c.monthly_cents, c.owner_id, ${shown('u')} AS owner,
-                COALESCE((SELECT SUM(e.cents) FROM money_entries e WHERE e.category_id = c.id AND e.day BETWEEN ? AND ?), 0) AS spent
-         FROM money_categories c JOIN users u ON u.id = c.owner_id WHERE c.id IN (${SEEN}) ORDER BY c.sort_order, c.id`, [...within, ...seen]);
+                COALESCE((SELECT SUM(e.cents) FROM money_entries e WHERE e.category_id = c.id AND e.day BETWEEN ? AND ?${goalIds.size > 0 ? ` AND e.id NOT IN (${[...goalIds].map(() => '?').join(',')})` : ''}), 0) AS spent
+         FROM money_categories c JOIN users u ON u.id = c.owner_id WHERE c.id IN (${SEEN}) ORDER BY c.sort_order, c.id`, [...within, ...goalIds, ...seen]);
       const shares = await db.all<{ category_id: number; id: number; username: string; name: string }>(
         `SELECT s.category_id, u.id, u.username, ${shown('u')} AS name FROM money_shares s JOIN users u ON u.id = s.user_id WHERE s.category_id IN (${SEEN}) ORDER BY u.username`, seen);
       const categories = rows.map((c): Category => ({
@@ -247,7 +250,7 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
          ORDER BY COALESCE(p.due_on, '9999'), p.id, k.sort_order, k.id`, [owner]))
         .map((c): ComingCost => ({ project_id: c.project_id, project: c.project, label: c.label, cents: c.cents, month: c.due_on ? c.due_on.slice(0, 7) : null }))
         .filter((c) => month >= thisMonth && (c.month ?? thisMonth) === month);
-      const uncategorised = entries.filter((e) => e.category_id === null).reduce((sum, e) => sum + e.cents, 0);
+      const uncategorised = entries.filter((e) => e.category_id === null && !goalIds.has(e.id)).reduce((sum, e) => sum + e.cents, 0);
       const onProjects = lines.reduce((sum, l) => sum + l.cents, 0);
       const planned = categories.reduce((sum, c) => sum + c.monthly_cents, 0);
       const spent = categories.reduce((sum, c) => sum + c.spent, 0) + uncategorised + onProjects;

@@ -31,7 +31,7 @@ function Savings({ project, onChange }) {
       {budget.saved ? (
         <p className="rounded-lg bg-life-50 px-3 py-2 text-gray-800 dark:bg-life-800 dark:text-life-50">
           Saved so far <span className="font-semibold tabular-nums" data-saved>{money(budget.saved.cents, sign)}</span> of {money(budget.saved.target, sign)}.{' '}
-          <Link to="/money/goals" className="underline">Savings goals</Link>{' '}
+          <Link to="/money/goals" className="underline">Goals</Link>{' '}
           <button type="button" onClick={() => act(axios.put(`/api/projects/${project.id}/goal`, { goal_id: null }))} className="min-h-[44px] text-xs text-gray-500 underline">Stop saving for it</button>
         </p>
       ) : (

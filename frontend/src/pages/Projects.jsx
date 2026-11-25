@@ -4,6 +4,7 @@ import Icon, { Dots } from '../components/Icon';
 import axios from 'axios';
 import { hintsFor, kindChoices } from '../projectKinds';
 import Budget from '../components/Budget';
+import { PlanGoal } from '../components/Goals';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
@@ -202,6 +203,7 @@ export function ProjectPage() {
         </section>
 
         <Budget project={project} onChange={setProject} />
+        <PlanGoal key={project.budget.saved ? 'goal' : 'none'} kind="project" id={project.id} onlyWithGoal />
 
         <section className={cardClass}>
           <div className="mb-1 flex items-center gap-2">

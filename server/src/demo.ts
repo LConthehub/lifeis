@@ -15,7 +15,7 @@
 import { randomBytes } from 'node:crypto';
 import { statSync } from 'node:fs';
 import {
-  calendar, homeServices, inventory, kitchen, life, manual, media, mediaLists, money, outdoorTrips, packing, pets, projects, upkeep, type Db,
+  budget, calendar, goals, holidays, homeServices, inventory, kitchen, life, manual, media, mediaLists, money, outdoorTrips, packing, pets, projects, upkeep, type Db,
 } from '../../core/src/index.ts';
 import { AREAS } from '../../core/src/life.ts';
 import { addDays } from '../../core/src/small.ts';
@@ -200,6 +200,23 @@ async function fill(db: Db, me: number): Promise<void> {
   await spend.addEntry({ label: 'Farmers market', cents: 4250, category_id: groceries.id, day: day(-2) });
   await spend.addEntry({ label: 'Weekly grocery run', cents: 11830, category_id: groceries.id, day: day(-5) });
   await spend.addEntry({ label: 'Furnace filters (pack of 4)', cents: 3999, category_id: house.id, day: day(-6) });
+
+  // ---- income, a bill, and a holiday with its own goal ----
+  const plan = budget(db, me);
+  await plan.addIncome({ name: 'Paycheck', cents: 210000, every: 'twice_monthly' });
+  await plan.addBill({ name: 'Rent', cents: 135000, every_n: 1, every_unit: 'month', first_due: `${today().slice(0, 7)}-01` });
+  const winter = await holidays(db, me).create({ name: 'Winter gathering', rule: { kind: 'fixed', month: 12, day: 20 } });
+  const winterPlan = winter.years[0]!.plan_id;
+  const gifts = holidays(db, me);
+  await gifts.addGift(winterPlan, { who: 'Maya', idea: 'A warm scarf' });
+  await gifts.addGift(winterPlan, { who: 'Sam', idea: 'A chess clock' });
+  await gifts.addGift(winterPlan, { who: 'Grandpa', idea: 'A photo book' });
+  const wanted = (await gifts.year(winterPlan)).gifts;
+  await gifts.updateGift(wanted[0]!.id, { cents: 3500 });
+  await gifts.updateGift(wanted[1]!.id, { cents: 4800 });
+  const winterGoal = await goals(db, me).start({ plan_id: winterPlan, target_cents: 60000 });
+  await goals(db, me).addLine(winterGoal.id, { label: 'Wrapping paper and cards', cents: 2200 });
+  await plan.putAside(winterGoal.id, { cents: 15000 });
 
   // ---- planning ----
   const cal = calendar(db, me);

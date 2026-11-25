@@ -2,7 +2,7 @@
  * The addresses for Life is spending (/api/money). What they do is core/'s money.ts; this only reads what
  * was sent and passes it on.
  */
-import { budget, importStatement, lookOverStatement, money, readStatement, simplefin, type Db } from '../../core/src/index.ts';
+import { budget, goals, importStatement, lookOverStatement, money, readStatement, simplefin, type Db } from '../../core/src/index.ts';
 import type { Reach } from './connectionRoutes.ts';
 import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
 
@@ -22,6 +22,11 @@ const incomeFrom = (body: Body) => ({
 const goalFrom = (body: Body) => ({
   name: read.maybeText(body, 'name'), target_cents: read.maybeNumber(body, 'target_cents'), by_day: read.maybeText(body, 'by_day'),
   ...(sent(body, 'project_id') ? { project_id: read.maybeWhole(body, 'project_id') } : {}),
+  ...(sent(body, 'plan_id') ? { plan_id: read.maybeWhole(body, 'plan_id') } : {}),
+});
+const lineFrom = (body: Body) => ({
+  label: read.maybeText(body, 'label'), cents: read.maybeNumber(body, 'cents'),
+  ...(sent(body, 'hidden_from') ? { hidden_from: read.maybeWhole(body, 'hidden_from') } : {}),
 });
 const billFrom = (body: Body) => ({
   name: read.maybeText(body, 'name'), cents: read.maybeNumber(body, 'cents'), every_n: read.maybeWhole(body, 'every_n'), every_unit: read.maybeText(body, 'every_unit'),
@@ -52,6 +57,7 @@ export function moneyRoutes(db: Db, bank?: Reach & { allowLocal?: boolean }): Ro
   // Reading bank accounts through SimpleFIN (core/'s simplefin.ts). Its access address is opened only inside core and is never in an answer.
   const bankReading = (c: Context) => simplefin(db, c.user.id, c.clock, bank?.fetcher, { sealer: bank?.sealer, allowLocal: bank?.allowLocal });
   const planning = (c: Context) => budget(db, c.user.id, c.clock);
+  const goalTools = (c: Context) => goals(db, c.user.id, c.clock);
   return [
     // A statement downloaded from a bank or card, looked over and then brought in. Read here, sent nowhere. See bankStatement.ts.
     ['GET', at('money/simplefin'), async (c) => ({ json: await bankReading(c).state() })],
@@ -74,6 +80,18 @@ export function moneyRoutes(db: Db, bank?: Reach & { allowLocal?: boolean }): Ro
     ['DELETE', at('money/income/:id'), async (c) => (await planning(c).removeIncome(c.id), { status: 204 })],
     ['GET', at('money/bills'), async (c) => ({ json: await planning(c).bills() })],
     ['POST', at('money/bills'), async (c) => ({ status: 201, json: await planning(c).addBill(billFrom(c.body)) })],
+    ['GET', at('money/safe'), async (c) => ({ json: await planning(c).safe(c.query.get('month')) })],
+    // A plan's or project's own goal, what it adds up to, and the safe number as it is priced. See goals.ts.
+    ['GET', at('money/goals/for-plan/:id'), async (c) => ({ json: await goalTools(c).forPlan(c.id, c.user.id) })],
+    ['GET', at('money/goals/for-project/:id'), async (c) => ({ json: await goalTools(c).forProject(c.id, c.user.id) })],
+    ['POST', at('money/goals/start'), async (c) => ({ status: 201, json: await goalTools(c).start({
+      plan_id: read.maybeWhole(c.body, 'plan_id'), project_id: read.maybeWhole(c.body, 'project_id'), target_cents: read.maybeNumber(c.body, 'target_cents'),
+      ...(sent(c.body, 'by_day') ? { by_day: read.maybeText(c.body, 'by_day') } : {}) }) })],
+    ['PUT', at('money/goals/lines/:id'), async (c) => (await goalTools(c).updateLine(c.id, lineFrom(c.body)), { status: 204 })],
+    ['DELETE', at('money/goals/lines/:id'), async (c) => (await goalTools(c).removeLine(c.id), { status: 204 })],
+    ['POST', at('money/goals/:id/lines'), async (c) => ({ status: 201, json: await goalTools(c).addLine(c.id, lineFrom(c.body)) })],
+    ['POST', at('money/goals/:id/settle'), async (c) => (await planning(c).settleGoal(c.id, {
+      action: read.maybeText(c.body, 'action'), to_goal_id: read.maybeWhole(c.body, 'to_goal_id'), from_goal_id: read.maybeWhole(c.body, 'from_goal_id') }), { status: 204 })],
     ['GET', at('money/goals'), async (c) => ({ json: await planning(c).goals() })],
     ['POST', at('money/goals'), async (c) => ({ status: 201, json: await planning(c).addGoal(goalFrom(c.body)) })],
     ['DELETE', at('money/goals/saved/:id'), async (c) => (await planning(c).removeSaved(c.id), { status: 204 })],

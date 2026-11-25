@@ -1062,6 +1062,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
+  await database.db.run('DROP TABLE money_goal_lines');
   await database.db.run('ALTER TABLE media DROP COLUMN stars');
   await database.db.run('DROP TABLE personal_keys');
   await database.db.run('DROP TABLE item_shares');
@@ -1312,6 +1313,23 @@ it('the budget answers over the web: income, bills from upkeep, goals, the month
   expect((await admin.delete(`/api/money/goals/${goal.json.id}`)).status).toBe(204);
   expect((await admin.delete(`/api/money/income/${pay.json.id}`)).status).toBe(204);
   expect((await admin.get('/api/money/goals')).json).toEqual([]);
+
+  // A plan's own goal: its cost adds up, the goal is made, a line is typed, and the safe number is on the plan and on the budget.
+  const plan = (await admin.post('/api/plans', { name: 'Beach week', start_day: '2046-06-10' })).json.id;
+  expect((await admin.post('/api/money/goals/start', { plan_id: plan })).status).toBe(422); // nothing priced and no amount
+  const made = await admin.post('/api/money/goals/start', { plan_id: plan, target_cents: 80000 });
+  expect(made.status).toBe(201);
+  expect((await admin.post('/api/money/goals/start', { plan_id: plan, target_cents: 100 })).status).toBe(409);
+  expect((await admin.post(`/api/money/goals/${made.json.id}/lines`, { label: 'Cabin', cents: 50000 })).status).toBe(201);
+  expect((await admin.post(`/api/money/goals/${made.json.id}/lines`, { label: 'Ferry' })).status).toBe(201);
+  const panel = (await admin.get(`/api/money/goals/for-plan/${plan}`)).json;
+  expect(panel.cost).toMatchObject({ total: 50000, unknown: 1, unknown_words: '1 thing has no price yet' });
+  expect(panel.goal).toMatchObject({ name: 'Beach week', target_cents: 80000, plan_id: plan, progress: { state: 'on_track' } });
+  expect((await admin.get('/api/money/safe?month=2046-03')).json).toMatchObject({ month: '2046-03', goals: { lines: [{ name: 'Beach week' }] } });
+  expect((await other.get(`/api/money/goals/for-plan/${plan}`)).status).toBe(404);
+  expect((await other.post(`/api/money/goals/${made.json.id}/settle`, { action: 'leave' })).status).toBe(404);
+  expect((await admin.post(`/api/money/goals/${made.json.id}/settle`, { action: 'leave' })).status).toBe(409); // not over, so nothing is asked
+  expect((await admin.delete(`/api/money/goals/lines/${panel.cost.lines[0].line_id}`)).status).toBe(204);
 });
 
 it('licenses are kept over the web, with a renewal that follows them, and the number only where asked for', async () => {

@@ -74,6 +74,10 @@ Under **Take down**, tick each decoration as it comes down and again when it is 
 
 The budget card shows what was spent against your target. It counts spending tagged with the holiday's name in the year around the day. A gift marked as bought, with its cost, is counted too. See [Tags](tags.html).
 
+## Goal and cost
+
+Each year has a **Goal and cost** card. It adds up what Life Is already knows: the menu priced from your store prices and the gifts that have a price. You can type lines of your own too. Anything with no price says so, like "3 things have no price yet". Start a goal for the total and the budget shows what to set aside each month. A gift for someone who signs in to Life Is is left out of what they see, until the day has passed.
+
 ## Finish the year
 
 Under **How it went**, write a note on how it went, and a note for next year, such as "Less stuffing. Start the pie the day before." Choose **Finish this year**. Your note is kept for next year, and next year is started from this one. Nothing is deleted.

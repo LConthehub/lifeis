@@ -4,6 +4,7 @@ import Icon from '../components/Icon';
 import axios from 'axios';
 import { shrink } from '../components/shrink';
 import Picture from '../components/Picture';
+import { PlanGoal } from '../components/Goals';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, fromDateInput } from '../components/ui';
 
@@ -209,6 +210,7 @@ export function PlanPage() {
           {cost.priced > 0 && <p className="mt-0.5 text-xs text-gray-500 dark:text-life-300">Rough: one of each at the size you last bought, with nothing taken off for what's already in the pantry.</p>}
         </div>
       )}
+      <PlanGoal kind="plan" id={plan.id} />
       {short.length > 0 && plan.when !== 'past' && (
         <ul className="space-y-1 rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">
           {short.map((i) => <li key={i.id}>{i.label}: {i.short}</li>)}

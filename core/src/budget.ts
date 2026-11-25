@@ -15,10 +15,17 @@
  * spent), less what was put into goals. Categories and what was spent in
  * them follow the same sharing as in money.ts: a shared category counts for everyone it is shared with.
  *
+ * A goal can belong to a plan (a holiday's or trip's year is a plan), to a project, or to nothing. Spending tagged to a
+ * plan comes out of its own goal and is left out of the month's spending, so it is counted once. What a month asks
+ * of a goal is shown beside it, to check off when set aside; a goal that has fallen behind asks more of the months
+ * left, and says so. "Safe to spend" is the month's income, less bills, less what goals ask this month, less what
+ * was spent so far.
+ *
  * Money is whole cents. An amount "per month" is rounded to the nearest cent.
  */
 import { atomic, type Db, type Queries } from './db.ts';
 import { Problem } from './problem.ts';
+import { goalEntryIds, fmt, monthlyAsk, pace, planSpending, progressOf, type Progress } from './goalFigures.ts';
 import { spendingByTag, span, type TagSpend } from './tags.ts';
 import { upkeep, addInterval, type Job } from './upkeep.ts';
 import { clean, dayNumber, dayOrNull, stamp, todayOf, type Clock } from './small.ts';
@@ -27,12 +34,24 @@ export const INCOME_EVERY = ['weekly', 'biweekly', 'twice_monthly', 'monthly', '
 export type IncomeEvery = (typeof INCOME_EVERY)[number];
 export type IncomeInput = { name?: string | null; cents?: number | null; every?: string | null; start_day?: string | null; end_day?: string | null };
 export type IncomeLine = { id: number; name: string; cents: number; every: IncomeEvery; start_day: string | null; end_day: string | null; per_month: number };
-export type GoalInput = { name?: string | null; target_cents?: number | null; by_day?: string | null; /** A project this is saved up for. Left out: unchanged. */ project_id?: number | null };
+export type GoalInput = { name?: string | null; target_cents?: number | null; by_day?: string | null; /** A project this is saved up for. Left out: unchanged. */ project_id?: number | null; /** A plan this is for (only when making a goal). */ plan_id?: number | null };
 export type Saved = { id: number; day: string; cents: number };
+/** Asked once when what a goal was for is over: where the leftover goes, or what covers a shortfall. Nothing moves until it is answered. */
+export type GoalQuestion = { kind: 'leftover' | 'short'; cents: number; words: string };
 export type Goal = {
   id: number; name: string; target_cents: number; by_day: string | null;
   /** The project it is saved up for, when it is. */
   project_id: number | null; project: string | null;
+  /** The plan (a holiday's or trip's year too) it is for, when it is. */
+  plan_id: number | null; plan: string | null;
+  /** What has been spent against it (spending tagged to its plan). */
+  spent: number;
+  /** What it asks of this month, how much was put toward it this month, and whether that covers the ask (to check off). */
+  ask: number; set_aside: number; checked: boolean;
+  /** The even share a month if it had never fallen behind, how far behind it is now, and whether that raised this month's ask. */
+  even: number | null; behind: number; raised: boolean;
+  progress: Progress;
+  question: GoalQuestion | null; settled_on: string | null;
   saved: number; left: number; done: boolean;
   /** What it takes each month from now to the day, when there is a day. Null with no day, or once it has passed. */
   per_month: number | null;
@@ -42,6 +61,12 @@ export type Goal = {
 };
 export type BillLine = { job_id: number; name: string; cents: number; every: { n: number; unit: string } | null; per_month: number; next_day: string | null; autopay: boolean; needs_date: boolean };
 export type BillInput = { name?: string | null; cents?: number | null; every_n?: number | null; every_unit?: string | null; first_due?: string | null; autopay?: boolean };
+/** The month's income, less bills, less what goals ask this month, less what was spent so far. Spending counted against a plan's goal is not counted again. */
+export type Safe = {
+  month: string; currency: string; income: number; bills: number;
+  goals: { total: number; lines: { id: number; name: string; cents: number }[] };
+  spent: number; safe: number; words: string;
+};
 export type Budget = {
   month: string;
   currency: string;
@@ -58,6 +83,9 @@ export type Budget = {
   past: boolean;
   saved: { total: number; goals: { id: number; name: string; cents: number }[] };
   left_over: number;
+  /** Spending counted against plans' goals this month: in the goals, not in "spent". */
+  goals_spent: number;
+  safe: Safe;
   by_tag: TagSpend[];
 };
 export type YearMonth = { month: string; income: number; bills: number; planned: number; spent: number; /** Of spent: what went on projects. */ projects: number; /** Planned on projects, not yet paid. */ coming: number; spending: number; saved: number; left: number };
@@ -176,24 +204,47 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
 
   // ---------- goals ----------
   async function goalList(q: Queries, only?: number): Promise<Goal[]> {
-    const rows = await q.all<{ id: number; name: string; target_cents: number; by_day: string | null; project_id: number | null; project: string | null }>(
-      `SELECT g.id, g.name, g.target_cents, g.by_day, g.project_id, p.name AS project FROM money_goals g LEFT JOIN projects p ON p.id = g.project_id AND p.owner_id = g.owner_id
+    const rows = await q.all<{ id: number; name: string; target_cents: number; by_day: string | null; project_id: number | null; project: string | null; project_status: string | null; plan_id: number | null; plan_name: string | null; plan_end: string | null; settled_on: string | null; created_at: string }>(
+      `SELECT g.id, g.name, g.target_cents, g.by_day, g.project_id, p.name AS project, p.status AS project_status, g.plan_id, pl.name AS plan_name, pl.end_day AS plan_end, g.settled_on, g.created_at
+       FROM money_goals g LEFT JOIN projects p ON p.id = g.project_id AND p.owner_id = g.owner_id LEFT JOIN plans pl ON pl.id = g.plan_id AND pl.owner_id = g.owner_id
        WHERE g.owner_id = ? ${only !== undefined ? 'AND g.id = ?' : ''} ORDER BY g.by_day IS NULL, g.by_day, g.name COLLATE NOCASE, g.id`, only !== undefined ? [owner, only] : [owner]);
     const puts = await q.all<Saved & { goal_id: number }>(
       'SELECT s.id, s.goal_id, s.day, s.cents FROM money_goal_saved s JOIN money_goals g ON g.id = s.goal_id WHERE g.owner_id = ? ORDER BY s.day DESC, s.id DESC', [owner]);
     const here = today();
+    const thisMonth = here.slice(0, 7);
+    const sign = await currency();
+    const spends = await planSpending(q, owner);
     return rows.map((g) => {
       const mine = puts.filter((p) => p.goal_id === g.id).map(({ id, day, cents: c }) => ({ id, day, cents: c }));
       const saved = mine.reduce((n, p) => n + p.cents, 0);
       const left = Math.max(0, g.target_cents - saved);
       const late = g.by_day !== null && g.by_day < here && left > 0;
+      const savedBefore = mine.filter((p) => p.day < `${thisMonth}-01`).reduce((n, p) => n + p.cents, 0);
+      const setAside = mine.filter((p) => p.day >= `${thisMonth}-01` && p.day <= lastOf(thisMonth)).reduce((n, p) => n + p.cents, 0);
+      const ask = monthlyAsk(g.target_cents, savedBefore, g.by_day, thisMonth, late);
+      const { even, behind: slip } = pace(g.target_cents, g.by_day, g.created_at.slice(0, 7), thisMonth, savedBefore);
+      const behind = left > 0 && !late ? slip : 0;
+      const spent = (spends.get(g.id) ?? []).reduce((n, e) => n + e.cents, 0);
+      const rest = saved - spent;
+      const ended = (g.plan_id !== null && g.plan_end !== null && g.plan_end < here) || (g.project_id !== null && (g.project_status === 'done' || g.project_status === 'dropped'));
+      const what = g.plan_name ?? g.project ?? g.name;
+      const question: GoalQuestion | null = ended && g.settled_on === null && rest !== 0
+        ? (rest > 0
+          ? { kind: 'leftover', cents: rest, words: `${what} is over. ${fmt(sign, rest)} is left in its goal. Where should it go?` }
+          : { kind: 'short', cents: -rest, words: `${what} is over, and ${fmt(sign, -rest)} more was spent than was set aside. What should cover it?` })
+        : null;
       let per: number | null = null;
       if (g.by_day !== null && left > 0 && !late) {
         // Months from this one to the day's, counting this one; the day's own month is the last to put something in.
         const months = Math.max(1, (Number(g.by_day.slice(0, 4)) - Number(here.slice(0, 4))) * 12 + Number(g.by_day.slice(5, 7)) - Number(here.slice(5, 7)) + 1);
         per = Math.ceil(left / months);
       }
-      return { id: g.id, name: g.name, target_cents: g.target_cents, by_day: g.by_day, project_id: g.project_id, project: g.project, saved, left, done: left === 0, per_month: per, late, puts: mine };
+      return {
+        id: g.id, name: g.name, target_cents: g.target_cents, by_day: g.by_day, project_id: g.project_id, project: g.project, plan_id: g.plan_id, plan: g.plan_name, spent,
+        ask, set_aside: setAside, checked: ask > 0 && setAside >= ask, even, behind, raised: even !== null && behind > 0 && ask > even,
+        progress: progressOf(sign, { target: g.target_cents, put: saved, spent, behind }), question, settled_on: g.settled_on,
+        saved, left, done: left === 0, per_month: per, late, puts: mine,
+      };
     });
   }
   async function ownGoal(q: Queries, id: number) {
@@ -205,6 +256,20 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
     const target = cents(input.target_cents, 'The target');
     if (target <= 0) throw new Problem(422, 'The target should be more than zero');
     return { name, target, by: dayOrNull(input.by_day) };
+  }
+  /** A plan of the person's own, or null for none. One plan has one goal. */
+  async function ownPlan(q: Queries, id: number | null | undefined): Promise<number | null> {
+    if (id === null || id === undefined) return null;
+    if (!(await q.get('SELECT id FROM plans WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Not found');
+    if (await q.get('SELECT id FROM money_goals WHERE plan_id = ? AND owner_id = ?', [id, owner])) throw new Problem(409, 'That plan already has a goal');
+    return id;
+  }
+  /** Put money in or out of a goal. Taking out more than is in it is refused. */
+  async function putIn(tx: Queries, id: number, amount: number, day: string | null | undefined) {
+    await ownGoal(tx, id);
+    const have = (await tx.get<{ n: number }>('SELECT COALESCE(SUM(cents), 0) AS n FROM money_goal_saved WHERE goal_id = ?', [id]))!.n;
+    if (have + amount < 0) throw new Problem(422, "There isn't that much in it to take out");
+    return { id: (await tx.run('INSERT INTO money_goal_saved (goal_id, day, cents, created_at) VALUES (?, ?, ?, ?)', [id, dayOrNull(day) ?? today(), amount, now()])).lastId };
   }
   /** A project of the person's own, or null for none. */
   async function ownProject(q: Queries, id: number | null | undefined): Promise<number | null> {
@@ -229,12 +294,14 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
     return db.all<{ id: number; name: string; monthly_cents: number }>(`SELECT c.id, c.name, c.monthly_cents FROM money_categories c WHERE c.id IN (${SEEN}) ORDER BY c.sort_order, c.id`, [owner, owner]);
   }
   /** What was spent, by month, in a stretch of days: entries in categories seen and the person's own in none. What was paid on a project is an entry too. */
+  const notIn = (ids: Set<number>, column: string) => (ids.size > 0 ? ` AND ${column} NOT IN (${[...ids].map(() => '?').join(',')})` : '');
   async function spentByMonth(from: string, to: string): Promise<Map<string, number>> {
     const out = new Map<string, number>();
+    const goalIds = await goalEntryIds(db, owner);
     const add = (rows: { m: string; n: number }[]) => { for (const r of rows) out.set(r.m, (out.get(r.m) ?? 0) + r.n); };
     add(await db.all<{ m: string; n: number }>(
       `SELECT SUBSTR(e.day, 1, 7) AS m, SUM(e.cents) AS n FROM money_entries e
-       WHERE e.day BETWEEN ? AND ? AND ((e.category_id IS NULL AND e.owner_id = ?) OR e.category_id IN (${SEEN})) AND e.id NOT IN (${BILL_PAID}) GROUP BY m`, [from, to, owner, owner, owner]));
+       WHERE e.day BETWEEN ? AND ? AND ((e.category_id IS NULL AND e.owner_id = ?) OR e.category_id IN (${SEEN})) AND e.id NOT IN (${BILL_PAID})${notIn(goalIds, 'e.id')} GROUP BY m`, [from, to, owner, owner, owner, ...goalIds]));
     return out;
   }
   /** Of what was spent, by month, what went on projects. */
@@ -262,6 +329,27 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
     return db.all<{ id: number; name: string; cents: number; month: string }>(
       `SELECT g.id, g.name, SUM(s.cents) AS cents, SUBSTR(s.day, 1, 7) AS month FROM money_goal_saved s JOIN money_goals g ON g.id = s.goal_id
        WHERE g.owner_id = ? AND s.day BETWEEN ? AND ? GROUP BY g.id, month ORDER BY g.name COLLATE NOCASE`, [owner, from, to]);
+  }
+
+  /** What the goals ask of a month: for this month or one to come, each goal's share; for a month gone by, what was put toward them. */
+  async function goalAsks(month: string): Promise<Safe['goals']> {
+    const here = today().slice(0, 7);
+    const lines: Safe['goals']['lines'] = [];
+    for (const g of await goalList(db)) {
+      // This month: what was asked, or more when more was already put by (that money has gone out of the month either way).
+      const cents = month < here
+        ? g.puts.filter((p) => p.day.slice(0, 7) === month).reduce((n, p) => n + p.cents, 0)
+        : month === here ? Math.max(g.ask, g.set_aside)
+        : monthlyAsk(g.target_cents, g.puts.filter((p) => p.day < `${month}-01`).reduce((n, p) => n + p.cents, 0), g.by_day, month, g.late);
+      if (cents !== 0) lines.push({ id: g.id, name: g.name, cents });
+    }
+    return { total: lines.reduce((n, l) => n + l.cents, 0), lines };
+  }
+  async function safeOf(month: string, income: number, bills: number, spent: number): Promise<Safe> {
+    const sign = await currency();
+    const goals = await goalAsks(month);
+    const safe = income - bills - goals.total - spent;
+    return { month, currency: sign, income, bills, goals, spent, safe, words: safe < 0 ? `Over by ${fmt(sign, -safe)}` : `${fmt(sign, safe)} safe to spend` };
   }
 
   return {
@@ -293,7 +381,8 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
     async addGoal(input: GoalInput): Promise<{ id: number }> {
       const g = checkedGoal(input);
       const project = await ownProject(db, input.project_id);
-      return { id: (await db.run('INSERT INTO money_goals (owner_id, name, target_cents, by_day, project_id, created_at) VALUES (?, ?, ?, ?, ?, ?)', [owner, g.name, g.target, g.by, project, now()])).lastId };
+      const plan = await ownPlan(db, input.plan_id);
+      return { id: (await db.run('INSERT INTO money_goals (owner_id, name, target_cents, by_day, project_id, plan_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [owner, g.name, g.target, g.by, project, plan, now()])).lastId };
     },
     async updateGoal(id: number, input: GoalInput): Promise<void> {
       const g = checkedGoal(input);
@@ -310,11 +399,33 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
     async putAside(id: number, input: { day?: string | null; cents?: number | null }): Promise<{ id: number }> {
       const amount = cents(input.cents, 'The amount', true);
       if (amount === 0) throw new Problem(422, 'The amount should not be zero');
-      return atomic(db, async (tx) => {
-        await ownGoal(tx, id);
-        const have = (await tx.get<{ n: number }>('SELECT COALESCE(SUM(cents), 0) AS n FROM money_goal_saved WHERE goal_id = ?', [id]))!.n;
-        if (have + amount < 0) throw new Problem(422, "There isn't that much in it to take out");
-        return { id: (await tx.run('INSERT INTO money_goal_saved (goal_id, day, cents, created_at) VALUES (?, ?, ?, ?)', [id, dayOrNull(input.day) ?? today(), amount, now()])).lastId };
+      return atomic(db, (tx) => putIn(tx, id, amount, input.day));
+    },
+    /**
+     * Answer the question asked once when a plan or project is over. Nothing moves until this is called. A leftover can be
+     * given back to the month ("return"), moved to another goal ("move", with `to_goal_id`), or left where it is ("leave").
+     * A shortfall can be covered from another goal ("cover", with `from_goal_id`) or left to the month ("leave").
+     */
+    async settleGoal(id: number, input: { action?: string | null; to_goal_id?: number | null; from_goal_id?: number | null }): Promise<void> {
+      await ownGoal(db, id);
+      const goal = (await goalList(db, id))[0]!;
+      const q = goal.question;
+      if (!q) throw new Problem(409, 'Nothing is waiting to be answered for that goal');
+      const other = input.action === 'move' ? input.to_goal_id : input.action === 'cover' ? input.from_goal_id : null;
+      await atomic(db, async (tx) => {
+        if (q.kind === 'leftover' && input.action === 'return') await putIn(tx, id, -q.cents, null);
+        else if (q.kind === 'leftover' && input.action === 'move') {
+          if (!other || other === id) throw new Problem(400, 'Pick the goal it should go to');
+          await ownGoal(tx, other);
+          await putIn(tx, id, -q.cents, null);
+          await putIn(tx, other, q.cents, null);
+        } else if (q.kind === 'short' && input.action === 'cover') {
+          if (!other || other === id) throw new Problem(400, 'Pick the goal that should cover it');
+          await ownGoal(tx, other);
+          await putIn(tx, other, -q.cents, null);
+          await putIn(tx, id, q.cents, null);
+        } else if (input.action !== 'leave') throw new Problem(400, 'Choose what to do with it');
+        await tx.run('UPDATE money_goals SET settled_on = ? WHERE id = ?', [today(), id]);
       });
     },
     async removeSaved(savedId: number): Promise<void> {
@@ -359,8 +470,10 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
       const spentHere = (await spentByMonth(from, to)).get(month) ?? 0;
       const onProjects = (await onProjectsByMonth(from, to)).get(month) ?? 0;
       const coming = month >= today().slice(0, 7) ? (await comingByMonth()).get(month) ?? 0 : 0;
+      const goalIds = await goalEntryIds(db, owner);
+      const goalsSpent = [...(await planSpending(db, owner)).values()].flat().filter((e) => e.day >= from && e.day <= to).reduce((n, e) => n + e.cents, 0);
       const inCategory = await db.all<{ category_id: number; n: number }>(
-        `SELECT category_id, SUM(cents) AS n FROM money_entries WHERE category_id IN (${SEEN}) AND day BETWEEN ? AND ? AND id NOT IN (${BILL_PAID}) GROUP BY category_id`, [owner, owner, from, to]);
+        `SELECT category_id, SUM(cents) AS n FROM money_entries WHERE category_id IN (${SEEN}) AND day BETWEEN ? AND ? AND id NOT IN (${BILL_PAID})${notIn(goalIds, 'id')} GROUP BY category_id`, [owner, owner, from, to, ...goalIds]);
       const planned = cats.reduce((n, c) => n + c.monthly_cents, 0);
       const puts = (await savedByGoal(from, to)).filter((g) => g.cents !== 0);
       const total = (xs: { cents: number }[]) => xs.reduce((n, x) => n + x.cents, 0);
@@ -377,8 +490,15 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
         spent: spentHere, projects: { spent: onProjects, coming }, spending, past,
         saved: { total: saved, goals: puts.map((g) => ({ id: g.id, name: g.name, cents: g.cents })) },
         left_over: incomeTotal - bills - spending - saved,
+        goals_spent: goalsSpent,
+        safe: await safeOf(month, incomeTotal, bills, spentHere),
         by_tag: await spendingByTag(db, owner, from, to),
       };
+    },
+
+    /** The month's safe-to-spend number and its four lines. This month when left out. */
+    async safe(given?: string | null): Promise<Safe> {
+      return (await this.month(given)).safe;
     },
 
     /** Twelve months of income, bills, spending and saving, and what each leaves over. A year is "2046"; this one when left out. */

@@ -61,13 +61,23 @@ Money paid on [projects](plans.html#projects) is already in the spending. Money 
 
 Bills count from the month each was written down. For months still to come, spending is the larger of what you planned and what was spent. Months gone by count only what was spent.
 
-## Savings goals
+## Goals
 
 On **Goals**, add a goal: what it is for, how much it takes, and a day to reach it if there is one. Then:
 
 - **Put money in** when you set some aside. **Take money out** when you use it.
 - Each goal shows how much is saved, how much is left, and, if it has a day, what a month needs to reach it. If the day has passed, it says so.
 - The money you put in this month shows in the month's budget.
+
+Under each goal is a flat bar with plain words: "$120 of $400, on track", "behind by $40", "over by $15" or "done".
+
+A goal with a day shows what this month asks. On the month's budget, press **Set aside** to check it off; that puts the money toward the goal. If you fall behind, the later months ask more, and it says so.
+
+A goal can belong to a plan, a holiday, a trip or a project, or to nothing. Spending you tag with a plan's tag comes out of that plan's goal. The month leaves it out, so it is counted once.
+
+When a plan is over, Life Is asks once where the leftover goes, or what covers a shortfall. Nothing moves until you answer.
+
+**Safe to spend** is on the month's budget and on each plan. It is the month's income, less bills, less what goals ask this month, less what you have spent so far. Tap it to see the four lines.
 
 This only changes what Life Is says is saved. It does not move any money at your bank.
 

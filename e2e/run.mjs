@@ -51,6 +51,7 @@ const SUITE = [
   { specs: ['spending'] },
   { specs: ['budget'], account: TRIAL },
   { specs: ['budget-trips'], account: TRIAL },
+  { specs: ['goals'], account: TRIAL },
   { specs: ['receipts'], account: TRIAL },
   { specs: ['export'] },
   { specs: ['backup'], phone: true },

@@ -262,6 +262,8 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
         if (!(await tx.get('SELECT id FROM plans WHERE id = ? AND owner_id = ?', [id, owner]))) return;
         for (const item of await tx.all<{ meal_plan_id: number | null }>('SELECT meal_plan_id FROM plan_items WHERE plan_id = ?', [id])) await offWeek(tx, item.meal_plan_id);
         await tx.run('DELETE FROM plans WHERE id = ? AND owner_id = ?', [id, owner]);
+        // Its goal stays, with what was put toward it: it just belongs to nothing now.
+        await tx.run('UPDATE money_goals SET plan_id = NULL WHERE plan_id = ? AND owner_id = ?', [id, owner]);
         await unlink(tx, 'plan', id);
       });
     },
