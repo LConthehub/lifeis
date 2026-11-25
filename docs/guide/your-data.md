@@ -43,7 +43,7 @@ All of them are listed in one place: **Settings › Connections**. The phone app
 
 **Export everything** (Settings › Your data, under Import and export) makes one zip of it all. Recipes export as a zip on their own. The home inventory prints or saves as a PDF. A backup holds everything.
 
-**Bring in from HomeBox.** On Things, choose **Bring in from HomeBox** and pick the CSV that HomeBox exports. You see the kinds, places and tags first, and nothing is kept until you say so. Bringing in the same file again adds nothing.
+**Bring in from HomeBox.** On Things, choose **Bring in from HomeBox** and pick the CSV that HomeBox exports. You see the kinds, places and tags first, and nothing is kept until you say so. Bringing in the same file again adds nothing. [Your home](home.html#bringing-in-from-homebox) says what is brought across.
 
 ## Sharing inside a household
 

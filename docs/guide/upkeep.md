@@ -4,7 +4,7 @@ blurb: Jobs, bills, renewals and chores, and how Life Is tells you what is due.
 ---
 # Upkeep
 
-**Upkeep** (in **organized**) is one list of everything that comes round again, in four kinds.
+**Upkeep** (in **tidy**) is one list of everything that comes round again, in four kinds.
 
 | Kind | For | When you have done it |
 |---|---|---|
@@ -37,23 +37,15 @@ Give a bill its usual amount and Life Is tells you what your bills and renewals 
 
 ### In the budget
 
-The budget under **budgeted** reads your bills from here, so there is one list. Add a bill from **Income and bills** and it is added to Upkeep too; open it there to change it or mark it paid.
-
-The budget also keeps:
-
-- **Income:** what comes in (a paycheck, a pension, a gift), how often, and a first and last day if it has them. It is shown as an amount a month.
-- **Savings goals:** a target, a day to reach it if there is one, and the money you put toward it. Take money out with a minus. Life Is says what is left and what a month takes. It does not move any money.
-- **The month:** income, bills due, planned spending, what went into goals, and what is left over.
-- **The year:** twelve months side by side, and the totals. Bills count from the month you wrote them down.
-- **Spending by tag:** a tag shows what was spent with it, with the tags inside it, for a month or a year, and on the tag's own page.
-
-If you mark a bill paid and put it in the month's spending, the budget counts it once, as the bill. Income and goals are yours alone. A spending category you share is counted for everyone it is shared with.
+The budget under **balanced** reads your bills from here, so there is one list. Add a bill from **Income and bills** and it is added to Upkeep too; open it there to change it or mark it paid. The [Money guide](money.html) covers the rest of the budget.
 
 ## Chores, and children
 
 A chore is worth points to whoever does it. **Chores this week** counts them for everyone.
 
 People without a sign-in of their own can be added by name alone, under **Chores**. Give them chores, and choose who did one when you mark it done. Set what a point is worth and the board shows what each has earned.
+
+For the fridge, choose **Print a chore chart**. It makes a sheet for this week or next, with each person's chores and a box to check for each day one is due. You pick whose chores go on it, and whether everyone shares a page or each child gets one. Points and what they are worth are on it for you to add up. Routines given to a household member show on it too. See [Routines and the chore chart](routines.html).
 
 ## Sharing a job
 

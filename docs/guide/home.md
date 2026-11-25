@@ -4,7 +4,7 @@ blurb: Places, things, records for your insurer, filling a shelf by scanning, pe
 ---
 # Your home
 
-The **organized** section holds what you own, where it is, what it is for, and where it has been. It also holds the records that go with each thing, your pets, and a House Manual for a sitter. Jobs that come round again are in [Upkeep](upkeep.html).
+The **tidy** section holds what you own, where it is, what it is for, and where it has been. It also holds the records that go with each thing, your pets, your [licenses](licenses.html) and a House Manual for a sitter. Jobs that come round again are in [Upkeep](upkeep.html). Its tabs are Things, Places, Upkeep, Pets, Licenses and House Manual.
 
 ## Places
 
@@ -17,6 +17,28 @@ Wherever Life Is asks "Where it is", the list ends with **A new place…**, so y
 You make your own **kinds** (Fabric, Tools, Board games) and give each the fields you care about: a fabric's width, a game's number of players. Ready-made sets get you started, and every part of them can be changed.
 
 Each thing has a page of its own with a photo, where it is, what it is for, its records, and its history.
+
+### Your own fields
+
+Kinds give every thing of that kind the same fields. When one thing needs something no other has, choose **Change** on the thing and use **Add a field of your own**. Give it a name and a value, such as "Paint color: Sage". It shows on that thing's page, and search finds it.
+
+### Asset numbers
+
+Each thing gets an asset number when you add it, such as `000-012`. The numbers count up from the last one. The number shows on the thing's page and in the home inventory, and it is printed on the thing's sticker. The Find box on the Things page finds a thing by its number.
+
+### Insured
+
+On a thing, check **Insured** if your insurance covers it. The home inventory can then be limited to just those things.
+
+### Things you no longer have
+
+When you sell something, give it away, throw it out, or it is stolen, open it and choose **No longer have it**. Pick what happened and the day. You can say who it went to, and for a sale, what you got. The thing leaves your lists and totals, but its record is kept. To see those things, choose **No longer have** on the Things page.
+
+Changed your mind, or marked the wrong one? Open it and choose **I have it again**.
+
+### Bringing in from HomeBox
+
+If you keep your things in HomeBox, export its inventory as a CSV file. On Things, choose **Bring in from HomeBox** and pick the file. The file is read on your own Life Is and sent nowhere. You see what is in it first: how many things, which kinds, places and tags are new, which things will go under "No longer have", and any asset numbers that were already taken and will get the next free number. Nothing is kept until you say so. Bringing in the same file again adds nothing.
 
 ## Filling a place
 
@@ -39,7 +61,7 @@ Looking a barcode up asks an outside catalog, so it is off until you turn it on.
 Life Is prints small stickers with a code your camera reads.
 
 - **Place stickers** go on a shelf, a box or a bin. Scan one to see what is inside.
-- **Thing stickers** go on things with no barcode of their own. Print a sheet of blank ones, stick them on, and say what each is on when you scan it.
+- **Thing stickers** go on things with no barcode of their own. Print a sheet of blank ones, stick them on, and say what each is on when you scan it. A sticker for a thing you already have shows its name and its asset number.
 
 Only someone signed in to your Life Is sees anything. To anyone else a sticker is an address that asks them to sign in.
 
@@ -70,9 +92,13 @@ Beside the records, keep the thing's papers: a **receipt**, the **manual**, a **
 
 Search finds a thing by its serial or model number, which is what a repair shop asks for on the phone. A warranty about to end appears in your [morning reminder](upkeep.html#what-comes-due) a month ahead, a week ahead, the day before and on the day, so there is time to claim.
 
+If a thing is a car, Life Is can also look for safety recalls on it. See [Licenses and recalls](licenses.html#recall-alerts).
+
 ### The home inventory
 
 On the Things page, **Home inventory** lists everything room by room, with what each is worth, its serial number, and whether there is a photo and a receipt to show for it. It says how many things still have no value, so you know what is left to do.
+
+Before you print, choose what goes in it: all rooms or only the ones you pick, only things worth at least an amount, things with no value or not, **Only insured things**, photos, and one room per page. **Download as a spreadsheet (CSV)** gives a row for each thing with its room, model, serial number, purchase, cost, worth, warranty, asset number and whether it is insured. Photos and papers are not in the spreadsheet.
 
 **Press Print or save as PDF, and keep a copy somewhere other than home.** An inventory that burns with the house helps nobody.
 

@@ -314,7 +314,7 @@ ${androidSection}
 const RELEASED = false;
 const IMAGE = 'ghcr.io/lconthehub/lifeis:latest';
 // The order the guides are listed in.
-const GUIDES = ['getting-started', 'install', 'home', 'upkeep', 'kitchen', 'collection', 'bank-reading', 'phone', 'your-data', 'troubleshooting'];
+const GUIDES = ['getting-started', 'install', 'home', 'upkeep', 'licenses', 'kitchen', 'money', 'routines', 'plans', 'holidays', 'trips', 'tags', 'collection', 'mail', 'bank-reading', 'phone', 'your-data', 'troubleshooting'];
 // Pages that were folded into another guide. Each old address stays, as a small page that sends the reader on.
 const MOVED = { records: ['home', 'receipts-serial-numbers-and-warranties'], 'pets-and-manual': ['home', 'pets'], reminders: ['upkeep', 'what-comes-due'] };
 
