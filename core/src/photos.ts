@@ -50,7 +50,7 @@ export function photoLibrary(db: Db, owner: number, _clock: Clock = () => new Da
   }
   async function library(): Promise<{ url: string; key: string }> {
     const saved = await kept();
-    if (!saved) throw new Problem(400, 'No photo library is connected. Connect Immich in Settings, under "Outside services".');
+    if (!saved) throw new Problem(400, 'No photo library is connected. Connect Immich in Settings, under "Connections".');
     const key = need().sealer.unseal(saved.key);
     if (key === null) throw new Problem(400, "The photo library's key can't be opened any more. Enter it again in Settings.");
     return { url: saved.url, key };

@@ -203,7 +203,7 @@ export default function BulkScan({ lookUp, ignoreCode, defaultType = 'film', onD
         <div key={offer.which} className="space-y-2 rounded-lg border border-life-200 p-3 text-sm text-gray-700 dark:border-life-700 dark:text-life-100">
           <p>Life Is can fill in what these are, by asking {offer.name}, one barcode at a time. <span className="font-medium">What it's sent:</span> {offer.sends}</p>
           <button type="button" onClick={() => turnOn(offer)} disabled={turning} className={`${quietButtonClass} min-h-[44px]`}>{turning ? 'Turning it on…' : 'Turn that on and look them up'}</button>
-          <p className="text-xs text-gray-500 dark:text-life-300">It stays on for next time. Turn it off in Settings, under Outside services.</p>
+          <p className="text-xs text-gray-500 dark:text-life-300">It stays on for next time. Turn it off in Settings, under Connections.</p>
         </div>
       ))}
       {added > 0 && <p role="status" className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-700 dark:text-life-50">Added {added} to the collection.</p>}

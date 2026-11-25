@@ -11,7 +11,16 @@ const AREAS = [
   ['calendar', 'The calendar', 'the next 30 days; other calendars you follow go only as “busy”'],
 ];
 
-/** Settings → Outside services: the assistant, off until turned on, with what it sends said plainly. */
+// Where the Ask box shows, once the assistant is on. Kept with the assistant's other settings, per person.
+const PLACES = [
+  ['home', 'On Home only'],
+  ['everywhere', 'On every page'],
+  ['nowhere', 'Nowhere (it can still read handwritten recipe cards)'],
+];
+// Tells any Ask box on screen that the assistant's settings changed, so it shows or hides at once.
+const changed = (data) => { window.dispatchEvent(new CustomEvent('lifeis:assistant', { detail: data })); return data; };
+
+/** Settings → Connections, behind More: the assistant, off until turned on, with what it sends said plainly. */
 export function AssistantService() {
   const [a, setA] = useState(null);
   const [form, setForm] = useState(null);
@@ -31,7 +40,7 @@ export function AssistantService() {
   const save = async (e) => {
     e.preventDefault();
     setBusy(true); setMessage('');
-    try { const { data } = await axios.put('/api/assistant', { ...form, key: form.key || undefined }); setA(data); setForm(null); } catch (err) { setMessage(errorMessage(err, "Couldn't save that")); }
+    try { const { data } = await axios.put('/api/assistant', { ...form, key: form.key || undefined }); setA(changed(data)); setForm(null); } catch (err) { setMessage(errorMessage(err, "Couldn't save that")); }
     setBusy(false);
   };
   const look = async () => {
@@ -41,7 +50,11 @@ export function AssistantService() {
       setModels((await axios.post('/api/assistant/models')).data.models);
     } catch (err) { setMessage(errorMessage(err, "Couldn't reach it")); }
   };
-  const off = async () => setA((await axios.put('/api/assistant', { enabled: false })).data);
+  const off = async () => setA(changed((await axios.put('/api/assistant', { enabled: false })).data));
+  const place = async (show) => {
+    setMessage('');
+    try { setA(changed((await axios.put('/api/assistant', { show })).data)); } catch (err) { setMessage(errorMessage(err, "Couldn't save that")); }
+  };
 
   return (
     <div className="py-3" data-assistant-settings>
@@ -59,6 +72,18 @@ export function AssistantService() {
             : <span className="mr-auto break-all">Using <span className="font-medium">{a.model || 'the default model'}</span> at {a.url}</span>)}
           <button type="button" onClick={start} className={quietButtonClass}>{a.enabled ? 'Change' : 'Set it up'}</button>
           {a.enabled && <button type="button" onClick={off} className={quietButtonClass}>Turn off</button>}
+          {a.enabled && (
+            <fieldset className="w-full pt-2" data-ask-place>
+              <legend className="text-sm font-medium text-gray-700 dark:text-life-100">Where the Ask box shows</legend>
+              {PLACES.map(([key, label]) => (
+                <label key={key} className="flex min-h-[44px] items-center gap-2 text-sm text-gray-800 dark:text-life-50">
+                  <input type="radio" name="ask-place" checked={(a.show || 'home') === key} onChange={() => place(key)} className="accent-life-600" />
+                  {label}
+                </label>
+              ))}
+              {message && <p className="text-sm text-red-600" role="alert">{message}</p>}
+            </fieldset>
+          )}
         </div>
       ) : (
         <form onSubmit={save} className="mt-2 space-y-3 rounded-lg bg-life-50/60 p-3 dark:bg-life-800">
@@ -132,14 +157,20 @@ export function AssistantService() {
 }
 
 /** On the front page, once the assistant is on: ask, read the answer, and see exactly what was sent. */
-export function AskCard() {
+export function AskCard({ place = 'home', className = '' }) {
   const [a, setA] = useState(null);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  useEffect(() => { axios.get('/api/assistant').then(({ data }) => setA(data)).catch(() => {}); }, []);
-  if (!a?.enabled) return null;
+  useEffect(() => {
+    axios.get('/api/assistant').then(({ data }) => setA(data)).catch(() => {});
+    const heard = (e) => setA(e.detail);
+    window.addEventListener('lifeis:assistant', heard);
+    return () => window.removeEventListener('lifeis:assistant', heard);
+  }, []);
+  const show = a?.show || 'home';
+  if (!a?.enabled || show === 'nowhere' || (place === 'everywhere' && show !== 'everywhere')) return null;
   const ask = async (e) => {
     e.preventDefault();
     setBusy(true); setError(''); setAnswer(null);
@@ -147,7 +178,7 @@ export function AskCard() {
     setBusy(false);
   };
   return (
-    <section className="rounded-2xl bg-card/90 p-4 shadow-sm ring-1 ring-life-100 dark:bg-life-900/70 dark:ring-life-700" data-ask>
+    <section className={`${className} rounded-2xl bg-card/90 p-4 shadow-sm ring-1 ring-life-100 dark:bg-life-900/70 dark:ring-life-700`} data-ask={place}>
       <form onSubmit={ask} className="flex gap-2">
         <input value={question} onChange={(e) => setQuestion(e.target.value)} aria-label="Ask about your household" placeholder="Ask about your household…" className={`${inputClass} flex-1`} />
         <button type="submit" disabled={busy || !question.trim()} className={buttonClass}>{busy ? 'Thinking…' : 'Ask'}</button>

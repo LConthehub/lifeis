@@ -27,20 +27,27 @@ await wide.goto(base + '/settings'); await wide.waitForTimeout(1500);
 const menu = wide.getByRole('navigation', { name: 'Settings' });
 const groups = await menu.getByRole('link').allInnerTexts();
 say('a menu of groups beside the settings: ' + groups.map((g) => g.trim()).join(' | '), groups.length === 6);
+say('the menu never says AI', !/\bAI\b/.test(await menu.innerText()));
 say('the first group shows by itself, not the whole long page', (await wide.locator('[data-settings-group] > div[id]').count()) === 5);
 const found = [];
 for (let i = 0; i < groups.length; i += 1) {
   await menu.getByRole('link').nth(i).click(); await wide.waitForTimeout(1200);
+  if (await wide.locator('[data-settings-more]').isVisible()) { await wide.locator('[data-settings-more]').click(); await wide.waitForTimeout(800); }
   found.push(...await wide.locator('[data-settings-group] > div[id]').evaluateAll((all) => all.map((d) => d.id)));
 }
 say('every setting from the old page is still there: ' + found.length, EXPECTED.every((id) => found.includes(id)) && found.length === EXPECTED.length);
-await menu.getByRole('link', { name: /Connections/ }).click(); await wide.waitForTimeout(1500);
+await wide.goto(base + '/settings/connections'); await wide.waitForTimeout(1500);
+say('Connections ends with a More button, and says nothing of AI until it is pressed', await wide.locator('[data-settings-more]').isVisible() && !/\bAI\b/.test(await wide.locator('main').innerText()));
+const jump = wide.locator('[data-settings-jump]');
+say('a long group has links to its parts at the top', (await jump.getByRole('link').count()) === 7 && !/AI assistant/.test(await jump.innerText()));
+await jump.getByRole('link', { name: 'Recall alerts' }).click(); await wide.waitForTimeout(1200);
+say('a link there goes to that part', wide.url().endsWith('/settings/connections#recalls') && await wide.locator('#recalls').isVisible());
 await wide.screenshot({ path: shots + '/settings-wide.png', fullPage: true });
 await menu.getByLabel('Find a setting').fill('ollama');
 const hit = menu.getByRole('button', { name: /AI assistant/ });
 say('the search finds a setting by what it is about', await hit.isVisible());
 await hit.click(); await wide.waitForTimeout(1500);
-say('and goes to it: ' + new URL(wide.url()).pathname + new URL(wide.url()).hash, wide.url().endsWith('/settings/connections#assistant'));
+say('and goes to it: ' + new URL(wide.url()).pathname + new URL(wide.url()).hash, wide.url().endsWith('/settings/connections#assistant') && await wide.locator('[data-assistant-settings]').isVisible());
 await wide.goto(base + '/settings#calendar-link'); await wide.waitForTimeout(1500);
 say('an old link to a section still finds it: ' + new URL(wide.url()).pathname, wide.url().includes('/settings/calendars#calendar-link') && await wide.locator('#calendar-link').isVisible());
 
@@ -63,7 +70,7 @@ say('empty goes back to the sign-in name', /uses your sign-in name/.test(await w
 const phone = await signedIn(390, 844);
 await phone.goto(base + '/settings'); await phone.waitForTimeout(1500);
 const list = phone.locator('[data-settings-groups]');
-say('on a phone, a list of groups to tap into', (await list.getByRole('link').count()) === 6 && (await phone.locator('[data-settings-group] > div[id]').isVisible().catch(() => false)) === false);
+say('on a phone, a list of groups to tap into', (await list.getByRole('link').count()) === 6 && !/\bAI\b/.test(await phone.locator('main').innerText()) && (await phone.locator('[data-settings-group] > div[id]').isVisible().catch(() => false)) === false);
 await phone.screenshot({ path: shots + '/settings-phone-list.png' });
 await list.getByRole('link', { name: /Account/ }).click(); await phone.waitForTimeout(1500);
 say('tapping one opens it, with a way back', /Password/.test(await phone.locator('main').innerText()) && await phone.getByRole('link', { name: '‹ All settings' }).isVisible());
@@ -72,5 +79,12 @@ const width = await phone.evaluate(() => document.documentElement.scrollWidth);
 say('nothing runs off the side of the phone: ' + width, width <= 390);
 await phone.getByRole('link', { name: '‹ All settings' }).click(); await phone.waitForTimeout(800);
 say('and back to the list', await list.isVisible());
+await phone.goto(base + '/settings/connections'); await phone.waitForTimeout(1500);
+const chips = await phone.locator('[data-settings-jump] a').evaluateAll((all) => all.map((a) => a.getBoundingClientRect().height));
+say('on a phone the links to the parts are big enough to tap: ' + chips.join(','), chips.length === 7 && chips.every((h) => h >= 44));
+say('and nothing runs off the side: ' + await phone.evaluate(() => document.documentElement.scrollWidth), (await phone.evaluate(() => document.documentElement.scrollWidth)) <= 390);
+await phone.screenshot({ path: shots + '/settings-phone-connections.png' });
+await phone.locator('[data-settings-more]').scrollIntoViewIfNeeded(); await phone.waitForTimeout(400);
+await phone.screenshot({ path: shots + '/settings-phone-more.png' });
 console.log(bad.length ? 'PROBLEMS SEEN:\n' + [...new Set(bad)].join('\n') : 'no page errors');
 await browser.close();

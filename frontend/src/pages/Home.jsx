@@ -439,7 +439,7 @@ function CardChooser({ choices, onDone }) {
           </label>
         ))}
       </div>
-      <p className="text-xs text-gray-500 dark:text-life-300">Cards only appear for the sections you use. Change those in Settings, under "What Life Is looks after". The weather and email are outside services: turn them on in Settings, under "Outside services".</p>
+      <p className="text-xs text-gray-500 dark:text-life-300">Cards only appear for the sections you use. Change those in Settings, under "What Life Is looks after". The weather and email are outside services: turn them on in Settings, under "Connections".</p>
       <div className="text-right"><button type="button" onClick={save} className={buttonClass}>Save</button></div>
     </div>
   );

@@ -352,7 +352,7 @@ function ScanToFind({ onAdd }) {
           <div className="space-y-2 rounded-lg border border-life-200 p-3 text-sm text-gray-700 dark:border-life-700 dark:text-life-100">
             <p>Life Is can fill in what this is for you, by asking {found.offer.name}. <span className="font-medium">What it's sent:</span> {found.offer.sends}</p>
             <button type="button" onClick={turnOn} disabled={busy} className={quietButtonClass}>{busy ? 'Looking…' : 'Turn that on and look it up'}</button>
-            <p className="text-xs text-gray-500 dark:text-life-300">It stays on for next time. Turn it off in Settings, under Outside services.</p>
+            <p className="text-xs text-gray-500 dark:text-life-300">It stays on for next time. Turn it off in Settings, under Connections.</p>
           </div>
         )}
         {found.hint && <p className="text-xs text-gray-500 dark:text-life-300">{found.hint}</p>}

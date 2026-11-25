@@ -118,7 +118,7 @@ export function lookups(db: Db, owner: number, _clock: Clock = () => new Date(),
   /** The saved key, opened: only for this person, and only while TMDB is on. */
   const filmKey = async (): Promise<string> => {
     if (!fetcher) throw new Problem(400, "This copy of Life Is isn't set up to reach outside services");
-    if (!(await isOn(FILMS))) throw new Problem(400, 'Looking films and shows up on TMDB is turned off. Turn it on in Settings, under "Outside services".');
+    if (!(await isOn(FILMS))) throw new Problem(400, 'Looking films and shows up on TMDB is turned off. Turn it on in Settings, under "Connections".');
     const sealed = (await db.get<{ value: string | null }>('SELECT value FROM user_settings WHERE user_id = ? AND key = ?', [owner, FILMS_KEY]))?.value;
     if (!sealed) throw new Problem(400, 'Type your TMDB key in Settings first.');
     const plain = tools.sealer?.unseal(sealed);
@@ -154,7 +154,7 @@ export function lookups(db: Db, owner: number, _clock: Clock = () => new Date(),
   /** A poster's picture, fetched through Life Is: nothing but the file name TMDB gave goes after its image address. */
   const picture = async (path: string, size: string): Promise<{ type: string; bytes: Uint8Array }> => {
     if (!POSTER_PATH.test(path) || !POSTER_SIZES.includes(size)) throw new Problem(400, "That isn't a poster");
-    if (!fetcher || !(await isOn(FILMS))) throw new Problem(400, 'Looking films and shows up on TMDB is turned off. Turn it on in Settings, under "Outside services".');
+    if (!fetcher || !(await isOn(FILMS))) throw new Problem(400, 'Looking films and shows up on TMDB is turned off. Turn it on in Settings, under "Connections".');
     let answer: Answer;
     try { answer = await fetcher(`${images}${size}${path}`, { Accept: 'image/*' }); } catch { throw new Problem(400, "image.tmdb.org couldn't be reached just now"); }
     const type = answer.type?.split(';')[0]?.trim() ?? '';
@@ -287,7 +287,7 @@ export function lookups(db: Db, owner: number, _clock: Clock = () => new Date(),
     async title(read: string): Promise<FoundTitle | null> {
       const barcode = read.replace(/[\s-]/g, '');
       if (!/^\d{8,14}$/.test(barcode)) throw new Problem(400, "That isn't a product's barcode");
-      if (!fetcher || !(await isOn(TITLES))) throw new Problem(400, 'Looking films, music and games up is turned off. Turn it on in Settings, under "Outside services".');
+      if (!fetcher || !(await isOn(TITLES))) throw new Problem(400, 'Looking films, music and games up is turned off. Turn it on in Settings, under "Connections".');
       // A shop's own number means nothing anywhere else: asking would only bring back something unrelated.
       if (shopsOwnBarcode(barcode)) return null;
       const ask = async (url: string, who: string): Promise<Record<string, unknown> | null> => {
@@ -330,7 +330,7 @@ export function lookups(db: Db, owner: number, _clock: Clock = () => new Date(),
     async product(read: string): Promise<FoundProduct | null> {
       const barcode = read.replace(/[\s-]/g, '');
       if (!/^\d{6,14}$/.test(barcode)) throw new Problem(400, "That isn't a grocery's barcode");
-      if (!fetcher || !(await isOn(GROCERIES))) throw new Problem(400, 'Looking groceries up is turned off. Turn it on in Settings, under "Outside services".');
+      if (!fetcher || !(await isOn(GROCERIES))) throw new Problem(400, 'Looking groceries up is turned off. Turn it on in Settings, under "Connections".');
       let answer: Answer;
       try {
         answer = await fetcher(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json?fields=product_name,brands,quantity`, { Accept: 'application/json', 'User-Agent': 'LifeIs/0.1 (self-hosted household app)' });
@@ -355,7 +355,7 @@ export function lookups(db: Db, owner: number, _clock: Clock = () => new Date(),
     async book(read: string): Promise<FoundBook | null> {
       const isbn = isbnOf(read);
       if (!isbn) throw new Problem(400, "That isn't a book's barcode");
-      if (!fetcher || !(await on())) throw new Problem(400, 'Looking books up is turned off. Turn it on in Settings, under "Outside services".');
+      if (!fetcher || !(await on())) throw new Problem(400, 'Looking books up is turned off. Turn it on in Settings, under "Connections".');
       let answer: Answer;
       try {
         answer = await fetcher(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`, { Accept: 'application/json' });

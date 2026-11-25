@@ -63,6 +63,7 @@ const DoAction = lazyPage(() => import('./pages/DoAction'));
 import { LifeFirstRun } from './components/LifeAreas';
 import Search from './components/Search';
 import AccessNote from './components/AccessNote';
+import { AskCard } from './components/Assistant';
 import Art, { Stripe } from './components/Art';
 import PageLoading from './components/PageLoading';
 import lazyPage from './lazyPage';
@@ -173,6 +174,8 @@ function Shell({ user, demo = false, onLogout }) {
           </p>
         )}
         <AccessNote show={Boolean(section) && section.word !== 'eating' && pathname !== '/' && !pathname.startsWith('/settings')} pathname={pathname} />
+        {/* Only for someone who turned the assistant on and chose "on every page". Home has its own. */}
+        {pathname !== '/' && !pathname.startsWith('/settings') && <AskCard place="everywhere" className="mb-4 print:hidden" />}
         <Suspense fallback={<PageLoading />}>
         <Routes>
           <Route path="/" element={<Home user={user} />} />

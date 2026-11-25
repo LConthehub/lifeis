@@ -49,9 +49,8 @@ const GROUPS = [
   },
   {
     id: 'connections', label: 'Connections', icon: 'link',
-    hint: 'Life Is keeps what you write on this computer and works without any of these. Each one is off until you turn it on, says exactly what it sends, and can be turned off again. This list is all of them.',
+    hint: 'Life Is keeps what you write on this computer and works without any of these. Each one is off until you turn it on, says exactly what it sends, and can be turned off again. This list, with More at the bottom, is all of them. The one other time Life Is reaches out is when you paste a recipe\'s web address: it fetches that one page.',
     sections: [
-      { id: 'assistant', title: 'AI assistant', words: 'ai llm ollama lm studio chatgpt claude gemini model ask question', render: () => <Plain><AssistantService /></Plain> },
       { id: 'weather', title: 'Weather', words: 'forecast open-meteo town place', render: () => <Plain><WeatherService /></Plain> },
       { id: 'mail', title: 'Email', words: 'imap smtp inbox mail gmail icloud', render: () => <Plain><MailService /></Plain> },
       { id: 'lookups', title: 'Barcode and title lookups', words: 'isbn book grocery film music game album dvd blu-ray vinyl scan open library food facts musicbrainz upcitemdb tmdb movie database show poster director key', render: () => <Plain><BookLookupService /></Plain> },
@@ -59,7 +58,9 @@ const GROUPS = [
       { id: 'media', title: 'Jellyfin or Emby', words: 'media server films shows music jellyfin emby', render: () => <MediaServers /> },
       { id: 'bank', title: 'Bank accounts (SimpleFIN)', words: 'bank account simplefin spending transactions read import card checking credit union token bridge', render: () => <Plain><BankReadingService /></Plain> },
       { id: 'recalls', title: 'Recall alerts', words: 'car vehicle recall nhtsa safety make model year vin', render: () => <Plain><RecallAlertsService /></Plain> },
-      { id: 'recipe-web', title: 'Recipes from a website', words: 'import url link page photo ocr', render: () => <RecipesFromWeb /> },
+      // Behind "More" on purpose (owner, Nov 25, 2026): many people want a space free of AI. It is there for
+      // whoever looks (More, or searching), and opens by itself once it is on.
+      { id: 'assistant', title: 'AI assistant', more: true, words: 'ai llm ollama lm studio chatgpt claude gemini model ask question', render: () => <Plain><AssistantService /></Plain> },
     ],
   },
   {
@@ -82,10 +83,14 @@ const GROUPS = [
       { id: 'last-copy', title: 'Your copy', words: 'last copy made backup download how long ago lost phone remind digest', render: () => <CopyNotice hasBackup={onDevice()} /> },
       { id: 'backup', title: 'Backups', words: 'backup restore export file passphrase drive icloud', when: onDevice, render: () => <DeviceBackup /> },
       { id: 'your-files', title: 'Import and export', words: 'download everything export import bring in zip csv spreadsheet open files data stays with you portable pictures merge', render: () => <YourFiles hasBackup={onDevice()} /> },
+      { id: 'recipe-web', title: 'Recipes from a website', words: 'import url link page photo ocr', render: () => <RecipesFromWeb /> },
       { id: 'recipes-out', title: 'Download recipes', words: 'export nextcloud cookbook zip', when: () => !inApp(), render: () => <RecipesOut /> },
     ],
   },
 ];
+
+// A group with this many sections or more gets a row of links to them at the top.
+const JUMP_AT = 4;
 
 function Titled({ icon, title, hint, children }) {
   return (
@@ -207,7 +212,7 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
                     <Icon of={g.icon} size={22} />
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium">{g.label}</span>
-                      <span className="block truncate text-xs text-gray-500 dark:text-life-300">{g.sections.map((s) => s.title).join(', ')}</span>
+                      <span className="block truncate text-xs text-gray-500 dark:text-life-300">{g.sections.filter((s) => !s.more).map((s) => s.title).join(', ')}</span>
                     </span>
                     <span className="text-gray-400" aria-hidden="true">›</span>
                   </Link>
@@ -240,13 +245,42 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
           <Link to="/settings" className="inline-flex items-center gap-1 text-sm text-life-600 hover:underline dark:text-life-200 md:hidden">‹ All settings</Link>
           <h2 className="flex items-center gap-2 text-lg font-semibold text-life-800 dark:text-life-50"><Icon of={shown.icon} size={20} />{shown.label}</h2>
           {shown.hint && <p className="text-sm text-gray-600 dark:text-life-100">{shown.hint}</p>}
-          {shown.sections.map((s) => (
+          {shown.sections.filter((s) => !s.more).length >= JUMP_AT && (
+            <nav aria-label="On this page" data-settings-jump className="flex flex-wrap gap-2">
+              {shown.sections.filter((s) => !s.more).map((s) => (
+                <Link key={s.id} to={`/settings/${shown.id}#${s.id}`}
+                  onClick={() => document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth' })}
+                  className="inline-flex min-h-[44px] items-center rounded-full border border-life-200 px-3 text-sm text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100 dark:hover:bg-life-800">
+                  {s.title}
+                </Link>
+              ))}
+            </nav>
+          )}
+          {shown.sections.filter((s) => !s.more).map((s) => (
             <div key={s.id} id={s.id} className="scroll-mt-24">{s.render({ user, onLogout, onLifeChanged })}</div>
           ))}
+          <More key={shown.id} sections={shown.sections.filter((s) => s.more)} wanted={hash} render={(s) => s.render({ user, onLogout, onLifeChanged })} />
         </div>
       </div>
     </div>
   );
+}
+
+/** What a group keeps out of sight: one plain "More" button. Opens by itself when a link or search asks for one of
+ *  them, or when the assistant is already on (someone who uses it shouldn't have to dig). */
+function More({ sections, wanted, render }) {
+  const [open, setOpen] = useState(false);
+  const asked = sections.some((s) => s.id === wanted);
+  const holdsAssistant = sections.some((s) => s.id === 'assistant');
+  useEffect(() => {
+    if (!holdsAssistant) return;
+    axios.get('/api/assistant').then(({ data }) => { if (data?.enabled) setOpen(true); }).catch(() => {});
+  }, [holdsAssistant]);
+  if (!sections.length) return null;
+  if (!open && !asked) {
+    return <button type="button" onClick={() => setOpen(true)} className={`${quietButtonClass} min-h-[44px]`} data-settings-more>More</button>;
+  }
+  return sections.map((s) => <div key={s.id} id={s.id} className="scroll-mt-24">{render(s)}</div>);
 }
 
 function KeptHere() {

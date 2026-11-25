@@ -55,6 +55,8 @@ await page.evaluate(async () => {
 await page.goto(base + '/'); await wait(1500);
 say('nothing to ask on the front page while the assistant is off', (await page.locator('[data-ask]').count()) === 0);
 await page.goto(base + '/settings/connections'); await wait(1500);
+say('Connections keeps the assistant out of sight behind More', (await page.locator('[data-assistant-settings]').count()) === 0 && !/\bAI\b/.test(await page.locator('main').innerText()));
+await page.locator('[data-settings-more]').click(); await wait(800);
 const card = page.locator('[data-assistant-settings]');
 say('Settings lists the assistant as off, and says what it sends', /Off/.test(await card.innerText()) && /Only when you ask a question/.test(await card.innerText()));
 await card.getByRole('button', { name: 'Set it up' }).click(); await wait(400);
@@ -90,6 +92,21 @@ await page.screenshot({ path: shots + '/assistant-answer.png', fullPage: true })
 const sent = JSON.stringify(received.at(-1));
 say('the model got the kitchen and the question', received.at(-1).model === 'llama3.2' && /Omelette/.test(sent) && /What can I make for dinner/.test(sent));
 say('and nothing from the parts not ticked', !/Secret gift|Necklace/.test(sent));
+
+// Where the Ask box shows: Home only at first, then every page, then nowhere.
+await page.goto(base + '/money'); await wait(1500);
+say('at first the Ask box is on Home only', (await page.locator('[data-ask]').count()) === 0);
+await page.goto(base + '/settings/connections'); await wait(1500);
+const placing = page.locator('[data-ask-place]');
+say('once on, the assistant is open without pressing More, with where the Ask box shows', await placing.isVisible() && (await page.locator('[data-settings-more]').count()) === 0);
+await placing.getByRole('radio', { name: 'On every page' }).click(); await wait(800);
+await page.goto(base + '/money'); await wait(1500);
+say('on every page: it shows on another page too', await page.locator('[data-ask="everywhere"]').isVisible());
+await page.screenshot({ path: shots + '/assistant-every-page.png' });
+await page.goto(base + '/settings/connections'); await wait(1500);
+await page.locator('[data-ask-place]').getByRole('radio', { name: /^Nowhere/ }).click(); await wait(800);
+await page.goto(base + '/'); await wait(1500);
+say('nowhere: not even on Home', (await page.locator('[data-ask]').count()) === 0);
 
 // A handwritten card: the model copies it out, and the person checks it before it becomes a recipe.
 await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'tasty', exact: true }).click(); await wait();

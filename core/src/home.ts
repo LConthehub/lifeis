@@ -24,7 +24,7 @@ import { weather, type Forecast, type WeatherPlace } from './weather.ts';
 
 /**
  * The cards, in the order they show, and the section each belongs to. A card with no section is for everyone.
- * The weather and email are only offered once they have been turned on (in Settings, under "Outside services"),
+ * The weather and email are only offered once they have been turned on (in Settings, under "Connections"),
  * and plans, coupons and routines only once there is one, so a card never sits there about something a person doesn't use.
  * The email card's messages aren't in the summary: the page asks for those apart (they come from the provider).
  */

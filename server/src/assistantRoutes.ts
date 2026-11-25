@@ -21,6 +21,7 @@ export function assistantRoutes(db: Db, tools?: AssistantTools): Route[] {
         ...(sent(c.body, 'key') ? { key: read.maybeText(c.body, 'key') } : {}),
         ...(sent(c.body, 'clear_key') ? { clear_key: read.yesNo(c.body, 'clear_key') } : {}),
         ...(sent(c.body, 'areas') ? { areas: read.texts(c.body, 'areas') } : {}),
+        ...(sent(c.body, 'show') ? { show: read.maybeText(c.body, 'show') ?? undefined } : {}),
       }),
     })],
     ['POST', /^\/api\/assistant\/models$/, async (c) => ({ json: { models: await helper(c).models() } })],

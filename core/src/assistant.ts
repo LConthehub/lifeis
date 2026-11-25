@@ -72,10 +72,15 @@ export type AssistantStatus = {
   /** Whether nothing leaves home: the phone's own model, or an address on this computer or your own network. */
   local: boolean;
   areas: Area[];
+  /** Where the Ask box shows: on Home only, on every page, or nowhere (it can still read handwritten recipes). */
+  show: Show;
   service: typeof ASSISTANT_SERVICE;
 };
-export type AssistantInput = { source?: string; enabled?: boolean; url?: string | null; model?: string | null; cloud_ok?: boolean; key?: string | null; clear_key?: boolean; areas?: string[] };
-type Kept = { source: Source; enabled: boolean; url: string; model: string; cloud_ok: boolean; key: string | null; areas: Area[] };
+export const SHOW_PLACES = ['home', 'everywhere', 'nowhere'] as const;
+export type Show = typeof SHOW_PLACES[number];
+const isShow = (v: unknown): v is Show => (SHOW_PLACES as readonly unknown[]).includes(v);
+export type AssistantInput = { source?: string; enabled?: boolean; url?: string | null; model?: string | null; cloud_ok?: boolean; key?: string | null; clear_key?: boolean; areas?: string[]; show?: string };
+type Kept = { source: Source; enabled: boolean; url: string; model: string; cloud_ok: boolean; key: string | null; areas: Area[]; show: Show };
 
 /** This computer, your own network, or your Tailscale network. */
 export function isLocal(address: string): boolean {
@@ -115,13 +120,14 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
       enabled: saved.enabled === true, url: typeof saved.url === 'string' ? saved.url : DEFAULT_URL, model: typeof saved.model === 'string' ? saved.model : '',
       cloud_ok: saved.cloud_ok === true, key: typeof saved.key === 'string' ? saved.key : null,
       areas: Array.isArray(saved.areas) ? saved.areas.filter((a): a is Area => (AREAS as readonly string[]).includes(a)) : ['kitchen'],
+      show: isShow(saved.show) ? saved.show : 'home',
     };
   }
   const keep = (k: Kept) => db.run(
     'INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value', [owner, SETTING, JSON.stringify(k)]);
   const shown = (k: Kept): AssistantStatus => ({
     available: Boolean(tools?.fetcher || tools?.phone), enabled: k.enabled, source: k.source, phone: tools?.phone ? { name: tools.phone.name } : null,
-    url: k.url, model: k.model, cloud_ok: k.cloud_ok, key_saved: k.key !== null, local: k.source === 'phone' || isLocal(k.url), areas: k.areas, service: ASSISTANT_SERVICE,
+    url: k.url, model: k.model, cloud_ok: k.cloud_ok, key_saved: k.key !== null, local: k.source === 'phone' || isLocal(k.url), areas: k.areas, show: k.show, service: ASSISTANT_SERVICE,
   });
   const need = () => {
     if (!tools?.fetcher) throw new Problem(400, "This copy of Life Is isn't set up to reach outside services");
@@ -229,11 +235,13 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
       if (source === 'address' && !isLocal(url) && !cloudOk) {
         throw new Problem(400, "That address isn't on this computer or your own network. Check the box to allow a cloud AI, knowing what you ask about leaves this computer.");
       }
+      if (input.show !== undefined && !isShow(input.show)) throw new Problem(400, 'Where the Ask box shows is home, everywhere or nowhere');
       const typedKey = clean(input.key, 500);
       const next: Kept = {
         source, enabled: input.enabled ?? before.enabled, url, model: input.model === undefined || input.model === null ? before.model : input.model.trim().slice(0, 120), cloud_ok: cloudOk,
         key: input.clear_key ? null : typedKey ? sealer().seal(typedKey) : before.key,
         areas: input.areas === undefined ? before.areas : [...new Set(input.areas)].filter((a): a is Area => (AREAS as readonly string[]).includes(a)),
+        show: isShow(input.show) ? input.show : before.show,
       };
       await keep(next);
       return shown(next);
@@ -268,7 +276,7 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
       if (!/^image\/(jpeg|png|webp)$/.test(type) || !/^[A-Za-z0-9+/]+=*$/.test(data)) throw new Problem(400, 'Choose a photo (JPEG or PNG)');
       if (data.length * 0.75 > MAX_PICTURE_BYTES) throw new Problem(400, 'That photo is too large to send. Take it again a little further back.');
       const k = await kept();
-      if (!k.enabled) throw new Problem(409, 'Turn the assistant on in Settings, under "Outside services"');
+      if (!k.enabled) throw new Problem(409, 'Turn the assistant on in Settings, under "Connections"');
       if (k.source === 'phone') throw new Problem(409, "The phone's built-in AI can't look at photos. Choose a model at an address in Settings to read handwriting.");
       if (!isLocal(k.url) && !k.cloud_ok) throw new Problem(409, "The assistant's address isn't on this computer or your network, and a cloud AI hasn't been allowed");
       const got = await call(k, '/chat/completions', JSON.stringify({
@@ -288,7 +296,7 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
       const question = clean(given, 1000);
       if (!question) throw new Problem(400, 'Ask a question');
       const k = await kept();
-      if (!k.enabled) throw new Problem(409, 'Turn the assistant on in Settings, under "Outside services"');
+      if (!k.enabled) throw new Problem(409, 'Turn the assistant on in Settings, under "Connections"');
       if (k.source === 'address' && !isLocal(k.url) && !k.cloud_ok) throw new Problem(409, "The assistant's address isn't on this computer or your network, and a cloud AI hasn't been allowed");
       if (k.areas.length === 0) throw new Problem(409, 'The assistant has been given nothing to look at. Check what it may see in Settings.');
       const prompt = (data: Record<string, unknown>) => `Facts:\n${JSON.stringify(data)}\n\nQuestion: ${question}`;

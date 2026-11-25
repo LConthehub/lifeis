@@ -54,6 +54,16 @@ it('is off until turned on, starts with the kitchen only, and refuses a cloud AI
   expect(assistant(db, ana, clock).status()).resolves.toMatchObject({ available: false });
 });
 
+it('keeps where the Ask box shows: Home at first, then every page or nowhere, and nothing else', async () => {
+  const me = helper(ana);
+  expect((await me.status()).show).toBe('home');
+  expect((await me.save({ show: 'everywhere' })).show).toBe('everywhere');
+  expect((await me.save({ areas: ['kitchen'] })).show).toBe('everywhere');
+  expect((await me.save({ show: 'nowhere' })).show).toBe('nowhere');
+  await expect(me.save({ show: 'sometimes' })).rejects.toMatchObject({ status: 400 });
+  expect((await me.status()).show).toBe('nowhere');
+});
+
 it('answers from the ticked parts only, says what it sent, and leaves out its thinking', async () => {
   const cook = kitchen(db, ana, clock);
   await cook.createRecipe({ title: 'Omelette', ingredients_text: '3 eggs\n1 tbsp butter', steps_text: 'Whisk and fry.', tags: ['quick'] });
