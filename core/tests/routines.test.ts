@@ -562,3 +562,27 @@ it('upgrades from the version before workouts: routines and ticks stay, as plain
   expect(back).toMatchObject({ name: 'Morning', kind: 'plain' });
   expect((await mine().today())[0]!.steps[0]).toMatchObject({ ticked: true, tracks: false, last: null, kept: null });
 });
+
+it('a restore keeps a workout\'s history: each tick with its day, when, who and numbers, so last time still reads; twice adds nothing', async () => {
+  const w = await workout();
+  const steps = w.times[0]!.steps;
+  day = '2046-03-03';
+  await mine().tick(steps[0]!.id, true, null, { sets: 3, reps: 10, weight: 22.5, weight_unit: 'lb' });
+  await mine().tick(steps[2]!.id, true);
+  day = '2046-03-05';
+  await mine().tick(steps[0]!.id, true, null, { sets: 4, reps: 8, weight: 25, weight_unit: 'lb' });
+  const files = (await splitDownload((await exportEverything(db, owner, clock)).bytes)).files;
+  expect(files['routine-ticks.csv']).toContain('22.5');
+  await mine().remove(w.id); // lost, then restored
+  expect((await bringInDownload(db, owner, files, ['routines'], clock)).kinds[0]).toMatchObject({ ok: true, fresh: 1 });
+  day = '2046-03-06';
+  const back = (await mine().today())[0]!.steps;
+  expect(back[0]!.last).toMatchObject({ day: '2046-03-05', words: '4 x 8 at 25 lb' });
+  expect(back[2]!.last).toBeNull();
+  const h = await mine().history((await mine().list()).find((x) => x.mine)!.id);
+  expect(h.steps[0]!.entries.map((e) => e.words)).toEqual(['4 x 8 at 25 lb', '3 x 10 at 22.5 lb']);
+  const count = async () => (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM routine_ticks'))!.n;
+  const before = await count();
+  await bringInDownload(db, owner, files, ['routines'], clock);
+  expect(await count()).toBe(before);
+});
