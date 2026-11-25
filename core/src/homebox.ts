@@ -24,7 +24,7 @@ import { assetLabel, assetNumber, type FieldInput } from './inventory.ts';
 import { Problem } from './problem.ts';
 import { clean, dayNumber, labelKey, stamp, todayOf, type Clock } from './small.ts';
 import { setByNames } from './tags.ts';
-import { STARTERS, type StarterKind } from './starters.ts';
+import { STARTERS, guardOfKindName, type StarterKind } from './starters.ts';
 import * as units from './units.ts';
 
 const MAX_ROWS = 5000;
@@ -307,8 +307,8 @@ export function importHomebox(db: Db, owner: number, clock: Clock, sheet: Homebo
     let kindsMade = 0;
     for (const kind of new Map(fresh.map((p) => [p.kind.name, p.kind])).values()) {
       if (kindIds.has(labelKey(kind.name))) continue;
-      const made = await tx.run('INSERT INTO kinds (owner_id, name, key, icon, unit, activity, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [owner, kind.name, labelKey(kind.name), kind.icon, units.canonical(clean(kind.unit, 20)), clean(activityOf.get(kind.name), 60), at]);
+      const made = await tx.run('INSERT INTO kinds (owner_id, name, key, icon, unit, activity, guard, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [owner, kind.name, labelKey(kind.name), kind.icon, units.canonical(clean(kind.unit, 20)), clean(activityOf.get(kind.name), 60), guardOfKindName(kind.name), at]);
       kindIds.set(labelKey(kind.name), made.lastId);
       kindsMade += 1;
       for (const [order, f] of kind.fields.entries()) {

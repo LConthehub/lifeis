@@ -9,6 +9,8 @@ export type StarterKind = {
   name: string; icon: string; unit?: string; fields: FieldInput[];
   /** What the things of this kind are for: the name of a kind of project ("Car & mechanics"), so they show up as gear on one. */
   activity?: string;
+  /** Private things: 'firearm' (a gun, in the printable list) or 'ammo'. Kept out of the Home page, reminders, the assistant and the home report. */
+  guard?: 'firearm' | 'ammo';
 };
 /** `group` is the plain heading the Things page files this set's kinds under. */
 export type Starter = { slug: string; name: string; about: string; group: string; kinds: StarterKind[] };
@@ -27,7 +29,7 @@ const link = (name: string): FieldInput => ({ name, type: 'link' });
 const ACTIVITY_OF_SET: Record<string, string | undefined> = {
   sewing: 'Sewing', cookware: 'Cooking & baking', knitting: 'Yarn crafts', woodworking: 'Woodworking', gardening: 'Gardening',
   clothing: undefined, home: 'Home repair', car: 'Car & mechanics', art: 'Art & crafts', electronics: 'Electronics & computers',
-  music: 'Music', outdoors: 'Outdoors', writing: 'Writing & study',
+  music: 'Music', outdoors: 'Outdoors', writing: 'Writing & study', hunting: 'Outdoors',
 };
 
 const SETS: Starter[] = [
@@ -217,15 +219,36 @@ const SETS: Starter[] = [
       { name: 'Bikes', icon: '🚲', fields: [text('Maker'), text('Model'), text('Frame size'), text('Serial number'), text('Whose'), date('Last serviced')] },
     ],
   },
+  {
+    slug: 'hunting',
+    name: 'Hunting and shooting',
+    about: 'Guns, ammunition and hunting gear. Guns and ammunition are private to you, and shared only with people you pick.',
+    group: 'Hunting and shooting',
+    kinds: [
+      // The model, serial number, where and when it was bought, the price, the photo and the receipt are a thing's home records.
+      { name: 'Firearms', icon: '🎯', guard: 'firearm', fields: [
+        choice('Type', 'Rifle', 'Shotgun', 'Handgun', 'Muzzleloader', 'Air gun', 'Bow and crossbow'), text('Maker'), text('Caliber or gauge') ] },
+      { name: 'Ammunition', icon: '📦', unit: 'rounds', guard: 'ammo', fields: [text('Caliber or gauge'), text('Brand'), text('Load')] },
+      { name: 'Hunting gear', icon: '🦌', fields: [
+        choice('Type', 'Blind or stand', 'Clothing', 'Optics', 'Call', 'Knife', 'Pack', 'Game bags', 'Other'), text('Brand'), text('Size') ] },
+    ],
+  },
 ];
+
+/** The private kind a name is, if it is one of the hunting set's ("Firearms", "Ammunition"), however it was made. */
+export function guardOfKindName(name: string): 'firearm' | 'ammo' | null {
+  const key = labelKey(name);
+  const hunting = STARTERS.find((starter) => starter.slug === 'hunting');
+  return hunting?.kinds.find((kind) => kind.guard && labelKey(kind.name) === key)?.guard ?? null;
+}
 
 export const STARTERS: Starter[] = SETS.map((set) => ({
   ...set,
-  kinds: set.kinds.map((kind) => (ACTIVITY_OF_SET[set.slug] ? { ...kind, activity: ACTIVITY_OF_SET[set.slug] } : kind)),
+  kinds: set.kinds.map((kind) => (ACTIVITY_OF_SET[set.slug] && !kind.guard ? { ...kind, activity: ACTIVITY_OF_SET[set.slug] } : kind)),
 }));
 
 /** The headings the Things page uses, in the order it shows them. Kinds that fit no set go under "Other", last. */
-export const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garage', 'Garden', 'Outdoors', 'Electronics', 'Music', 'Writing and study', 'Around the house', 'Clothes and linens'] as const;
+export const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garage', 'Garden', 'Outdoors', 'Hunting and shooting', 'Electronics', 'Music', 'Writing and study', 'Around the house', 'Clothes and linens'] as const;
 
 /** Which heading a kind belongs under, by its name (capitals and spacing don't matter), or null if no ready-made set has it. */
 export function groupOfKind(name: string): string | null {

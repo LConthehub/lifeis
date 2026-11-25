@@ -45,7 +45,7 @@ When the year is over, choose **Start next year's trip**. It starts from this ye
 Everything under hunting is private to you. Other people in the house see only the trip's name and days.
 
 - **Seasons.** The same as fishing.
-- **Ammunition check.** On the bring list, give ammunition a caliber, such as .308 or 12 gauge. Life Is finds ammunition of that caliber among your things and says whether you have enough for what you bring.
+- **Ammunition check.** On the bring list, give ammunition a caliber, such as .308 or 12 gauge. Life Is counts the rounds kept for that caliber under Ammunition in Things, and says whether you have enough for what you bring. **Add my hunting gear** also puts your guns on the list, and an ammunition line for each gun's caliber or gauge.
 - **Harvest log.** Write the animal in your own words, the day, the place in words, the tag number and the weight. Meat can go **To the freezer**.
 
-Life Is has no records of firearms. Only the ammunition among your things is counted.
+Guns and ammunition come from the Hunting and shooting set in Things. They are private to you, and nothing about them is shown to anyone else.

@@ -169,7 +169,7 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
     if (areas.includes('things')) {
       const places = placePaths(await db.all('SELECT id, parent_id, name, note FROM places WHERE owner_id = ?', [owner]));
       out.things = (await db.all<{ name: string; kind: string; quantity: number | null; unit: string | null; place_id: number | null }>(
-        'SELECT i.name, k.name AS kind, i.quantity, i.unit, i.place_id FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.owner_id = ? AND i.gone_on IS NULL ORDER BY k.name, i.name', [owner]))
+        'SELECT i.name, k.name AS kind, i.quantity, i.unit, i.place_id FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.owner_id = ? AND i.gone_on IS NULL AND k.guard IS NULL ORDER BY k.name, i.name', [owner]))
         .map((t) => ({ name: t.name, kind: t.kind, ...(t.quantity !== null ? { amount: [t.quantity, t.unit].filter((x) => x !== null).join(' ') } : {}), ...(t.place_id !== null && places.has(t.place_id) ? { where: places.get(t.place_id) } : {}) }));
     }
     if (areas.includes('projects')) {

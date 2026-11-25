@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Icon, { Dots } from '../components/Icon';
 import axios from 'axios';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
@@ -10,7 +10,7 @@ import { money } from '../components/Records';
 import HomeboxIn from '../components/HomeboxIn';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 // The headings kinds sit under, in the order shown. Which heading a kind belongs to comes with the kind (its `group`).
-const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garage', 'Garden', 'Outdoors', 'Electronics', 'Music', 'Around the house', 'Clothes and linens'];
+const KIND_GROUPS = ['Cooking', 'Crafts', 'Workshop', 'Garage', 'Garden', 'Outdoors', 'Hunting and shooting', 'Electronics', 'Music', 'Around the house', 'Clothes and linens'];
 
 const OTHER = 'Other';
 
@@ -57,6 +57,23 @@ function Starters({ onAdded }) {
   );
 }
 
+/** Guns and ammunition other people chose to share with this person: to look at, never to change. */
+function SharedWithYou({ shared }) {
+  if (shared.length === 0) return null;
+  return (
+    <section className={cardClass} aria-label="Shared with you" data-shared>
+      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Shared with you</h2>
+      <ul className="divide-y divide-life-50 dark:divide-life-700">
+        {shared.map((t) => (
+          <li key={t.id}><Link to={`/things/shared/${t.id}`} className="flex min-h-[44px] items-center gap-2 py-2 text-sm text-gray-800 hover:underline dark:text-life-50">
+            <span className="flex-1">{t.name}<span className="block text-xs text-gray-500 dark:text-life-300">{t.kind} · from {t.owner}</span></span><span className="text-sm text-gray-500 dark:text-life-300">{t.amount}</span>
+          </Link></li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** Everything you keep: by kind, found by a word, with where it is and how much is free. */
 export default function Things() {
   const [kinds, setKinds] = useState(null);
@@ -68,11 +85,14 @@ export default function Things() {
   const [tag, setTag] = useState('');
   const [showGone, setShowGone] = useState(false);   // the "No longer have" list: sold, given away, thrown out, stolen
   const sel = useSelecting();
+  const navigate = useNavigate();
+  const [shared, setShared] = useState([]);   // guns and ammunition other people chose to share with this person
   const [editing, setEditing] = useState(null);
   const load = useCallback(() => {
+    axios.get('/api/things/shared').then(({ data }) => setShared(data)).catch(() => setShared([]));
     axios.get('/api/things/kinds').then(({ data }) => setKinds(data)).catch(() => setKinds([]));
     axios.get('/api/things/places').then(({ data }) => setPlaces(data)).catch(() => {});
-    axios.get('/api/things/items', { params: { tag: tag || undefined, gone: showGone ? 1 : undefined } }).then(({ data }) => setItems(data)).catch(() => setItems([]));
+    axios.get('/api/things/items', { params: { tag: tag || undefined, gone: showGone ? 1 : undefined, guarded: 1 } }).then(({ data }) => setItems(data)).catch(() => setItems([]));
   }, [tag, showGone]);
   useEffect(() => { load(); }, [load]);
   if (!kinds) return null;
@@ -81,6 +101,7 @@ export default function Things() {
     return (
       <div className="space-y-4">
         <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">Things</h1>
+        <SharedWithYou shared={shared} />
         <div className={cardClass}>
           <p className="text-sm text-gray-700 dark:text-life-100">Keep track of anything: fabric, yarn, tools, seeds, board games. First say what kinds of things you keep.
             Start from a ready-made set and change it to suit you, or <Link to="/things/kinds" className="underline">make your own kind</Link> from nothing.</p>
@@ -123,6 +144,7 @@ export default function Things() {
         return (
           <section key={k.id} className={cardClass}>
             <Heading className="mb-1 font-semibold text-life-800 dark:text-life-50">{k.icon ? `${k.icon} ` : ''}{k.name}</Heading>
+            {k.guard && <p className="mb-1 text-xs text-gray-500 dark:text-life-300" data-private>Private to you. Only people you pick can see these.</p>}
             <ul className="divide-y divide-life-50 dark:divide-life-700">
               {here.map((item) => {
                 const details = k.fields.map((f) => shown(f, item.values[f.id])).filter(Boolean).slice(0, 4);
@@ -164,10 +186,12 @@ export default function Things() {
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Things</h1>
         {items.length > 0 && <Link to="/things/report" className={quietButtonClass}><Icon of="home" /> Home inventory</Link>}
+        {kinds.some((k) => k.guard === 'firearm') && <Link to="/things/guns/print" className={quietButtonClass}><Icon of="paper" /> List of guns</Link>}
         <HomeboxIn onDone={load} />
         <Link to="/things/kinds" className="px-1 py-2 text-sm text-life-600 underline dark:text-life-200">Manage kinds</Link>
         <button type="button" onClick={() => setEditing({ kind_id: chosenKind ?? inGroup[0].id })} className={buttonClass}>+ Add</button>
       </div>
+      <SharedWithYou shared={shared} />
       {low.length > 0 && <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">Running low: {low.join(', ')}.</p>}
       {grouped ? (
         <>
@@ -208,7 +232,7 @@ export default function Things() {
       ) : cards(inGroup, 'h2')}
       {editing && (
         <Modal title={editing.id ? editing.name : 'Add a thing'} onClose={() => setEditing(null)}>
-          <ItemForm item={editing} kinds={kinds} places={places} onPlaces={setPlaces} onDone={() => { setEditing(null); load(); }} />
+          <ItemForm item={editing} kinds={kinds} places={places} onPlaces={setPlaces} onDone={(saved) => { setEditing(null); load(); if (saved?.guard === 'firearm' && !editing.id) navigate(`/things/${saved.id}`); }} />
         </Modal>
       )}
     </div>
@@ -244,6 +268,8 @@ export function ItemForm({ item, kinds, places, onPlaces, onDone }) {
     low_at: item.low_at ?? '', note: item.note || '', values: { ...(item.values || {}) },
     activities: (item.activities || []).join(', '), barcode: item.barcode || '',
     insured: Boolean(item.insured), own: (item.own_fields || []).map((f) => ({ ...f })),
+    model: item.records?.model || '', serial: item.records?.serial || '', bought_on: item.records?.bought_on || '', bought_at: item.records?.bought_at || '',
+    price: item.records?.price_cents != null ? (item.records.price_cents / 100).toFixed(2) : '',
   });
   const [tags, setTags] = useState(item.tag_list || []);
   const [error, setError] = useState('');
@@ -260,10 +286,17 @@ export function ItemForm({ item, kinds, places, onPlaces, onDone }) {
       place_id: form.place_id === '' ? null : Number(form.place_id), low_at: form.low_at === '' ? null : Number(form.low_at), note: form.note || null, values,
       activities: commaList(form.activities), barcode: form.barcode || null,
       insured: form.insured, own_fields: form.own.filter((f) => f.name.trim() || f.value.trim()) };
+    if (kind.guard === 'firearm') {
+      const price = form.price.trim() === '' ? null : Math.round(Number(form.price.replace(/[^0-9.]/g, '')) * 100);
+      if (Number.isNaN(price)) { setError('The price is a number, like 649.00'); return; }
+      // A serial number kept but not sent with the list this form came from is left as it is.
+      body.records = { model: form.model || null, bought_on: form.bought_on || null, bought_at: form.bought_at || null, price_cents: price,
+        ...(item.serial_kept && !item.records?.serial ? {} : { serial: form.serial || null }) };
+    }
     try {
       const { data } = item.id ? await axios.put(`/api/things/items/${item.id}`, body) : await axios.post('/api/things/items', { ...body, kind_id: kind.id });
       await saveTags('thing', data.id, tags);
-      onDone();
+      onDone(data);
     } catch (err) {
       setError(errorMessage(err, "Couldn't save"));
     }
@@ -302,6 +335,16 @@ export function ItemForm({ item, kinds, places, onPlaces, onDone }) {
             </Field>
           ))}
         </div>
+      )}
+      {kind.guard === 'firearm' && (
+        <fieldset className="grid grid-cols-2 gap-3 border-t border-life-100 pt-3 dark:border-life-700" data-gun-records>
+          <legend className="text-xs font-medium text-gray-600 dark:text-life-200">The gun's records (private to you)</legend>
+          <Field label="Model"><input value={form.model} onChange={set('model')} className={inputClass} /></Field>
+          <Field label="Serial number"><input value={form.serial} onChange={set('serial')} autoComplete="off" className={inputClass} /></Field>
+          <Field label="Bought on"><input type="date" value={form.bought_on} onChange={set('bought_on')} className={inputClass} /></Field>
+          <Field label="Bought from"><input value={form.bought_at} onChange={set('bought_at')} placeholder="The store, or who from" className={inputClass} /></Field>
+          <Field label="What it cost"><input inputMode="decimal" value={form.price} onChange={set('price')} placeholder="0.00" className={inputClass} /></Field>
+        </fieldset>
       )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="What it's for (with commas between)"><input value={form.activities} onChange={set('activities')} placeholder={!item.id && kind.activity ? `${kind.activity}, from its kind` : 'Sewing, Camping'} className={inputClass} /></Field>

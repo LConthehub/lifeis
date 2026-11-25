@@ -23,9 +23,10 @@
  * list (kitchen.ts), the pantry and freezer (kitchen.ts), jobs (upkeep.ts), the calendar, licenses, tags and
  * spending (tags.ts), and the morning round (reminders.ts).
  *
- * The seam for later: guns and ammunition records do not exist yet. Until they do, the hunting bring list is
- * filled from things of the kind "Hunting gear" (or for the activity Hunting), and ammunition on hand is found
- * among the things by caliber. A firearms part adds its own entry to GEAR_SOURCES and changes `ammoOnHand`.
+ * Guns and ammunition (the "Hunting and shooting" set in Things, private to the person) feed the hunting part: the
+ * bring list is filled from the kinds "Firearms" and "Hunting gear" (or things for the activity Hunting), a gun's
+ * caliber or gauge adds an ammunition line to bring, and the ammunition check counts the rounds kept for each caliber.
+ * Nothing about a gun leaves the person's own trip, and a hunting part is never shown to anyone else.
  */
 import { atomic, type Db, type Queries } from './db.ts';
 import { dateInYear } from './holidayDates.ts';
@@ -49,23 +50,22 @@ const MAX_ROWS = 400;
 const SPEND_BEFORE = 90;
 const SPEND_AFTER = 45;
 
-/**
- * Where a part's bring list can be filled from: things of these kinds, or for these activities. Firearms and
- * ammunition records will add their own source here.
- */
+/** Where a part's bring list can be filled from: things of these kinds, or for these activities. */
 export const GEAR_SOURCES: { part: Part; kinds: string[]; activities: string[] }[] = [
   { part: 'camping', kinds: ['Camping gear'], activities: ['Camping'] },
   { part: 'fishing', kinds: ['Fishing tackle'], activities: ['Fishing'] },
-  { part: 'hunting', kinds: ['Hunting gear'], activities: ['Hunting'] },
+  { part: 'hunting', kinds: ['Hunting gear', 'Firearms'], activities: ['Hunting'] },
 ];
 
 /**
- * How many rounds of a caliber are on hand, or null when none are kept. For now this reads the person's things:
- * those whose name has the caliber in it (".308", "12 gauge"). When ammunition records exist, they answer here.
+ * How many rounds of a caliber are on hand, or null when none are kept. The ammunition records answer first (their
+ * caliber or gauge, as typed: ".308" finds ".308 Win"); other things whose name has the caliber in it count after that.
  */
 export async function ammoOnHand(inv: Inventory, caliber: string): Promise<number | null> {
   const key = labelKey(caliber);
   if (!key) return null;
+  const kept = (await inv.ammoByCaliber()).filter((a) => labelKey(a.caliber).includes(key) || key.includes(labelKey(a.caliber)));
+  if (kept.length > 0) return kept.reduce((n, a) => n + a.rounds, 0);
   const found = (await inv.listItems()).filter((t) => labelKey(t.name).includes(key) && t.quantity !== null);
   return found.length === 0 ? null : found.reduce((n, t) => n + (t.quantity ?? 0), 0);
 }
@@ -239,7 +239,7 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
   async function gearOf(planId: number): Promise<Gear[]> {
     const rows = await db.all<GearRow>(`SELECT ${GEAR_COLUMNS} FROM outdoor_gear WHERE plan_id = ? ORDER BY sort_order, id`, [planId]);
     if (rows.length === 0) return [];
-    const mine = new Map((await things().listItems()).map((t) => [t.id, t]));
+    const mine = new Map((await things().listItems({ guarded: true })).map((t) => [t.id, t]));
     return rows.map(({ packed, returned, after_done, ...g }) => {
       const t = g.thing_id !== null ? mine.get(g.thing_id) : undefined;
       return { ...g, label: t?.name ?? g.label, packed: packed === 1, returned: returned === 1, after_done: after_done === 1, have: t ? t.amount : null, low: t?.low ?? false, place: t?.place ?? null };
@@ -299,7 +299,7 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
       const bringing = g.quantity ?? 0;
       const short = have === null ? null : Math.max(0, bringing - have);
       out.push({ caliber: g.caliber!, bringing, have, short,
-        words: have === null ? `No ${g.caliber} ammunition is among your things. Count what you have.` : short! > 0 ? `You bring ${bringing} and have ${have}: ${short} short.` : `You bring ${bringing} and have ${have}.` });
+        words: have === null ? `No ${g.caliber} ammunition is kept in Things yet. Add it under Ammunition.` : short! > 0 ? `You bring ${bringing} and have ${have}: ${short} short.` : `You bring ${bringing} and have ${have}.` });
     }
     return out;
   }
@@ -416,7 +416,7 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
   return {
     /** The things a trip can use: every one of the person's things, for the pickers. */
     async options(): Promise<{ things: { id: number; name: string; kind: string; amount: string; low: boolean }[] }> {
-      return { things: (await things().listItems()).map((t: Item) => ({ id: t.id, name: t.name, kind: t.kind, amount: t.amount, low: t.low })) };
+      return { things: (await things().listItems({ guarded: true })).map((t: Item) => ({ id: t.id, name: t.name, kind: t.kind, amount: t.amount, low: t.low })) };
     },
 
     async list(): Promise<TripSummary[]> {
@@ -539,12 +539,22 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
       const source = GEAR_SOURCES.find((s) => s.part === part)!;
       const have = new Set((await db.all<{ thing_id: number | null }>('SELECT thing_id FROM outdoor_gear WHERE plan_id = ? AND part = ?', [planId, part])).map((r) => r.thing_id));
       let added = 0;
-      for (const t of await things().listItems()) {
+      const calibers = new Set((await db.all<{ caliber: string | null }>('SELECT caliber FROM outdoor_gear WHERE plan_id = ? AND part = ? AND caliber IS NOT NULL', [planId, part])).map((r) => labelKey(r.caliber ?? '')));
+      const guns = part === 'hunting' ? new Map((await things().guns()).filter((g) => !g.gone).map((g) => [g.id, g.caliber])) : new Map<number, string | null>();
+      for (const t of await things().listItems({ guarded: true })) {
         const fits = source.kinds.some((k) => labelKey(k) === labelKey(t.kind)) || t.activities.some((a) => source.activities.some((s) => labelKey(s) === labelKey(a)));
         if (!fits || have.has(t.id)) continue;
         await roomFor('outdoor_gear', planId);
         await db.run('INSERT INTO outdoor_gear (plan_id, part, thing_id, label, quantity, note, sort_order) VALUES (?, ?, ?, ?, NULL, NULL, ?)', [planId, part, t.id, t.name, await nextOrder(planId)]);
         added += 1;
+        // A gun's caliber or gauge puts ammunition for it on the list, to say how many to bring (the ammunition check counts what is kept).
+        const caliber = clean(guns.get(t.id), 40);
+        if (caliber && !calibers.has(labelKey(caliber))) {
+          calibers.add(labelKey(caliber));
+          await roomFor('outdoor_gear', planId);
+          await db.run('INSERT INTO outdoor_gear (plan_id, part, thing_id, label, quantity, caliber, note, sort_order) VALUES (?, ?, NULL, ?, NULL, ?, NULL, ?)', [planId, part, `${caliber} ammunition`, caliber, await nextOrder(planId)]);
+          added += 1;
+        }
       }
       return { ...(await yearView(planId)), added };
     },

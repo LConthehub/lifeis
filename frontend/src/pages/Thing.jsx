@@ -159,6 +159,8 @@ export default function Thing() {
 
       <Records item={item} onChanged={(saved) => (saved ? setItem(saved) : load())} />
 
+      {item.guard && <Sharing item={item} />}
+
       {jobs.length > 0 && (
         <section className={cardClass} aria-label="Upkeep">
           <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Upkeep</h2>
@@ -209,6 +211,38 @@ export default function Thing() {
   );
 }
 
+/** Who can see a gun or ammunition: only the person who keeps it, and the people picked here. Each pick is kept as it is made. */
+function Sharing({ item }) {
+  const [state, setState] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => { axios.get(`/api/things/items/${item.id}/sharing`).then(({ data }) => setState(data)).catch(() => setState(false)); }, [item.id]);
+  if (state === null || state === false) return null;
+  const toggle = async (id) => {
+    setError('');
+    const people = state.people.includes(id) ? state.people.filter((p) => p !== id) : [...state.people, id];
+    try { setState({ ...state, ...(await axios.put(`/api/things/items/${item.id}/sharing`, { people })).data }); } catch (err) { setError(errorMessage(err, "Couldn't change who sees it")); }
+  };
+  return (
+    <section className={`${cardClass} space-y-1`} aria-label="Who can see this" data-sharing>
+      <h2 className="font-semibold text-life-800 dark:text-life-50">Who can see this</h2>
+      <p className="text-sm text-gray-600 dark:text-life-100">
+        {state.people.length === 0 ? 'Only you. It is kept out of search, the Home page and every report, and nobody else in the house can see it.'
+          : 'You, and the people ticked below. They can look at it, with its photo and serial number, but not change it.'}
+      </p>
+      {state.choices.length === 0 ? <p className="text-sm text-gray-500 dark:text-life-300">Nobody else has signed in here.</p> : (
+        <ul>
+          {state.choices.map((c) => (
+            <li key={c.id}><label className="flex min-h-[44px] items-center gap-2 text-sm text-gray-800 dark:text-life-50">
+              <input type="checkbox" checked={state.people.includes(c.id)} onChange={() => toggle(c.id)} className="h-5 w-5 flex-none accent-life-600" /> {c.name}
+            </label></li>
+          ))}
+        </ul>
+      )}
+      {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+    </section>
+  );
+}
+
 /** Dollars as typed ("1,200", "$50.5") to whole cents; null when nothing is typed, NaN when it is not an amount. */
 const centsOf = (text) => {
   const t = String(text).replace(/[$,\s]/g, '');
@@ -233,12 +267,12 @@ function GoneForm({ item, onDone }) {
       <div className="grid grid-cols-2 gap-3">
         <Field label="What happened">
           <select value={form.how} onChange={set('how')} className={`${inputClass} min-h-[44px]`}>
-            <option value="sold">Sold</option><option value="given">Given away</option><option value="thrown">Thrown out</option><option value="stolen">Stolen</option>
+            <option value="sold">Sold</option><option value="given">Given away</option>{!item.guard && <option value="thrown">Thrown out</option>}<option value="stolen">Stolen</option>
           </select>
         </Field>
         <Field label="Which day"><input type="date" required value={form.day} onChange={set('day')} className={`${inputClass} min-h-[44px]`} /></Field>
       </div>
-      <Field label="Who to (if you want to say)"><input value={form.to} onChange={set('to')} maxLength={200} placeholder="a neighbor, the thrift store…" className={`${inputClass} min-h-[44px]`} /></Field>
+      <Field label={item.guard ? 'Who to, or a note (a name, a report number)' : 'Who to (if you want to say)'}><input value={form.to} onChange={set('to')} maxLength={200} placeholder={item.guard ? 'a name, a report number…' : 'a neighbor, the thrift store…'} className={`${inputClass} min-h-[44px]`} /></Field>
       {form.how === 'sold' && <Field label="Sold for (dollars)"><input inputMode="decimal" value={form.price} onChange={set('price')} placeholder="50" className={`${inputClass} min-h-[44px]`} /></Field>}
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
       <div className="flex justify-end"><button type="submit" className={`${buttonClass} min-h-[44px]`}>Keep it</button></div>

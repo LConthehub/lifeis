@@ -357,6 +357,20 @@ export default function Home({ user }) {
           </Card>
         )}
 
+        {shows('things') && s.ammo?.length > 0 && (
+          <Card title="Ammunition running low" to="/things">
+            <ul className="space-y-1 text-sm">
+              {s.ammo.map((t) => (
+                <li key={t.id} className="flex items-baseline gap-2">
+                  <span className="flex-1 text-gray-800 dark:text-life-50"><Link to={`/things/${t.id}`} className="hover:underline">{t.name}</Link>{t.caliber && <span className="text-xs text-gray-500 dark:text-life-300"> {t.caliber}</span>}</span>
+                  <Flag>low: {t.amount}</Flag>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1 text-xs text-gray-500 dark:text-life-300">Only you see this.</p>
+          </Card>
+        )}
+
         {shows('collection') && (
           <Card title="Collection" to="/media">
             {s.collection.total === 0 ? <Quiet>Nothing in the collection yet.</Quiet> : (

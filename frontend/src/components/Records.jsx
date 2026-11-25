@@ -11,6 +11,17 @@ const centsOf = (text) => (String(text).trim() === '' ? null : Math.round(Number
 const KINDS = [['receipt', 'Receipt', 'receipt'], ['manual', 'Manual', 'book'], ['warranty', 'Warranty', 'warranty'], ['other', 'Something else', 'paper']];
 const base64 = (buffer) => { let s = ''; const b = new Uint8Array(buffer); for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(s); };
 
+/** A serial number kept out of sight until it is tapped for (a gun's), and out of sight again when tapped once more. */
+export function Serial({ value }) {
+  const [shown, setShown] = useState(false);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2" data-serial>
+      <span className="font-mono break-all" data-serial-text>{shown ? value : '••••••••'}</span>
+      <button type="button" onClick={() => setShown((on) => !on)} aria-pressed={shown} className="min-h-[44px] rounded-lg px-2 text-sm text-life-600 underline dark:text-life-200">{shown ? 'Hide' : 'Show'}</button>
+    </span>
+  );
+}
+
 /** How long a warranty has left, in words, and whether that's pressing. */
 export function warrantyText(item) {
   const d = item.warranty_days;
@@ -70,7 +81,7 @@ export default function Records({ item, onChanged }) {
       {editing ? <RecordsForm item={item} onDone={(saved) => { setEditing(false); if (saved) onChanged?.(saved); }} /> : any ? (
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm sm:grid-cols-3">
           {[['Bought', [r.bought_on && dayText(r.bought_on), r.bought_at].filter(Boolean).join(', ')], ['Paid', money(r.price_cents)], ['Worth now', money(r.value_cents)],
-            ['Model', r.model], ['Serial number', r.serial]].filter(([, v]) => v).map(([label, value]) => (
+            ['Model', r.model], ['Serial number', r.serial && item.guard ? <Serial key="serial" value={r.serial} /> : r.serial]].filter(([, v]) => v).map(([label, value]) => (
             <div key={label}><dt className="text-xs text-gray-500 dark:text-life-300">{label}</dt><dd className="break-words text-gray-800 dark:text-life-50">{value}</dd></div>
           ))}
           {warranty && <div className="col-span-2 sm:col-span-3"><dd className={`text-sm ${warranty.tone}`}><Icon of="warranty" /> {warranty.text}</dd></div>}

@@ -2,7 +2,7 @@
  * The addresses for the things you keep (/api/things) and the projects that use them (/api/projects).
  * What they do is core/'s inventory.ts and projects.ts; this only reads what was sent and passes it on.
  */
-import { importHomebox, inventory, lookOverHomebox, readHomebox, packing, pets, projects, upkeep, whatIsThis, MAX_PET_PHOTO, MAX_DOCUMENT, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
+import { importHomebox, inventory, sharedPhoto, sharedWithMe, lookOverHomebox, readHomebox, packing, pets, projects, upkeep, whatIsThis, MAX_PET_PHOTO, MAX_DOCUMENT, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
 import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -166,10 +166,25 @@ export function makingRoutes(db: Db): Route[] {
       return {
         json: await things(c).listItems({
           kind_id: queryNumber(c.query, 'kind_id'), place_id: queryNumber(c.query, 'place_id'), q, low: c.query.get('low') === '1', tag: queryNumber(c.query, 'tag'),
-          gone: c.query.get('gone') === '1',
+          gone: c.query.get('gone') === '1', guarded: c.query.get('guarded') === '1',
         }),
       };
     }],
+    // Guns and ammunition: private to the person, and shared only with the people they pick. See core/'s inventory.ts.
+    ['GET', at('things/guns'), async (c) => ({ json: await things(c).guns() })],
+    ['GET', at('things/shared'), async (c) => ({ json: await sharedWithMe(db, c.user.id, c.clock) })],
+    ['GET', at('things/shared/:id/photo'), async (c) => {
+      const photo = await sharedPhoto(db, c.user.id, c.id);
+      if (!photo) return { status: 404, json: { detail: 'Not found' } };
+      return { body: photo.bytes, headers: { 'Content-Type': photo.type, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } };
+    }],
+    ['GET', at('things/shared/:id'), async (c) => {
+      const one = (await sharedWithMe(db, c.user.id, c.clock, c.id))[0];
+      if (!one) return { status: 404, json: { detail: 'Not found' } };
+      return { json: one };
+    }],
+    ['GET', at('things/items/:id/sharing'), async (c) => ({ json: await things(c).sharing(c.id) })],
+    ['PUT', at('things/items/:id/sharing'), async (c) => ({ json: await things(c).shareWith(c.id, read.wholes(c.body, 'people')) })],
     ['POST', at('things/items'), async (c) => {
       const kind = read.maybeWhole(c.body, 'kind_id');
       if (kind === null) throw notUnderstood('kind_id');

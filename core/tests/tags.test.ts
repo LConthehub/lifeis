@@ -57,6 +57,8 @@ it('carries the old recipe tags over: one top-level tag for each word, each owne
   const other = await person('other');
   // Put the database back to how version 38 left it, with recipes that have a comma list of tags.
   // Version 51 comes last, then 50, then 49, then 48, then 47.
+  await db.run('DROP TABLE item_shares');
+  await db.run('ALTER TABLE kinds DROP COLUMN guard');
   for (const table of ['home_service_pins', 'home_service_people', 'home_services']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE media_list_items');
   await db.run('DROP TABLE media_lists');

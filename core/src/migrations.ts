@@ -1692,6 +1692,21 @@ export const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    number: 52,
+    name: 'guns and ammunition: private kinds, and who a private thing is shared with',
+    // A kind with a `guard` ('firearm' or 'ammo') holds private things: kept out of the Home page, the reminders, the assistant, the
+    // home report and a general search, and shared only with the people chosen for each one (item_shares).
+    statements: [
+      `ALTER TABLE kinds ADD COLUMN guard TEXT`,
+      `CREATE TABLE item_shares (
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (item_id, user_id)
+      )`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

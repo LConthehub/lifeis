@@ -87,7 +87,7 @@ export async function vehiclesOf(db: Db, owner: number, clock: Clock = () => new
   const found: Found = { vehicles: [], needs: [] };
   const now = clock();
   for (const [kindId, f] of carKinds) {
-    const things = await db.all<{ id: number; name: string }>('SELECT id, name FROM items WHERE owner_id = ? AND kind_id = ? AND gone_on IS NULL ORDER BY name COLLATE NOCASE, id', [owner, kindId]);
+    const things = await db.all<{ id: number; name: string }>('SELECT id, name FROM items WHERE owner_id = ? AND kind_id = ? AND gone_on IS NULL AND kind_id NOT IN (SELECT id FROM kinds WHERE guard IS NOT NULL) ORDER BY name COLLATE NOCASE, id', [owner, kindId]);
     for (const thing of things) {
       const values = await db.all<{ field_id: number; value: string }>('SELECT field_id, value FROM item_values WHERE item_id = ? AND field_id IN (?, ?, ?)', [thing.id, f.make!, f.model!, f.year!]);
       const of = (id: number) => values.find((v) => v.field_id === id)?.value;

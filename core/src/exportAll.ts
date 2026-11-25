@@ -21,6 +21,7 @@ import { csvRows } from './bookList.ts';
 import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { addressFrom, chosenNames, SERVICE_COLORS, SERVICE_ICONS, servicesSeenBy } from './homeServices.ts';
 import { noteHistory } from './history.ts';
+import { guardOfKindName } from './starters.ts';
 import { assetLabel, assetNumber, GONE_HOW, placePaths } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
 import { BUILT_IN_NAMES, LIST_TYPES, TO_WATCH } from './mediaLists.ts';
@@ -1006,8 +1007,8 @@ const importers: Record<string, Importer> = {
       if (!name) continue;
       let kind = kinds.get(labelKey(name));
       if (!kind) {
-        const id = (await c.tx.run('INSERT INTO kinds (owner_id, name, key, icon, unit, activity, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [c.owner, name, labelKey(name), clean(cellOf(row, 'Icon'), 16), units.canonical(clean(cellOf(row, 'Usual unit'), 20)), clean(cellOf(row, 'For activity'), 60), c.at])).lastId;
+        const id = (await c.tx.run('INSERT INTO kinds (owner_id, name, key, icon, unit, activity, guard, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [c.owner, name, labelKey(name), clean(cellOf(row, 'Icon'), 16), units.canonical(clean(cellOf(row, 'Usual unit'), 20)), clean(cellOf(row, 'For activity'), 60), guardOfKindName(name), c.at])).lastId;
         kind = { id, fields: new Map() };
         kinds.set(labelKey(name), kind);
         madeNow.add(id);
@@ -1046,7 +1047,7 @@ const importers: Record<string, Importer> = {
       const kindName = clean(cellOf(row, 'Kind'), 80) ?? 'Things';
       let kind = kinds.get(labelKey(kindName));
       if (!kind) {
-        const id = (await c.tx.run('INSERT INTO kinds (owner_id, name, key, created_at) VALUES (?, ?, ?, ?)', [c.owner, kindName, labelKey(kindName), c.at])).lastId;
+        const id = (await c.tx.run('INSERT INTO kinds (owner_id, name, key, guard, created_at) VALUES (?, ?, ?, ?, ?)', [c.owner, kindName, labelKey(kindName), guardOfKindName(kindName), c.at])).lastId;
         kind = { id, fields: new Map() };
         kinds.set(labelKey(kindName), kind);
         madeKinds += 1;

@@ -923,7 +923,7 @@ it('a kind carries the activity its things are for, and one button adds it to th
   const notions = kinds.find((k: { name: string }) => k.name === 'Odds and ends');
   expect(notions.activity).toBe('Sewing');
   expect(notions.group).toBeNull();
-  expect(Object.keys(notions).sort()).toEqual(['activity', 'fields', 'group', 'icon', 'id', 'items', 'name', 'unit']);
+  expect(Object.keys(notions).sort()).toEqual(['activity', 'fields', 'group', 'guard', 'icon', 'id', 'items', 'name', 'unit']);
   expect((await admin.post('/api/things/items', { kind_id: notions.id, name: 'Thread', activities: [] })).json.activities).toEqual(['Sewing']);
   const hatchet = (await admin.post('/api/things/items', { kind_id: notions.id, name: 'Hatchet', activities: ['Camping'] })).json;
   expect(hatchet.activities).toEqual(['Camping']);
@@ -1008,10 +1008,62 @@ it('things answer over the web: no longer have it and undoing it, insured, asset
   expect((await other.post(`/api/things/items/${tv.id}/gone`, { how: 'sold' })).status).toBe(404);
 });
 
+it('a gun and its ammunition over the web: private to the person, serial only with the thing, shared with one person only, and a printable list of their own', async () => {
+  const admin = await owner();
+  const ana = await member(admin, 'ana');
+  const bob = await member(admin, 'bob');
+  await ana.post('/api/things/starters', { slug: 'hunting' });
+  const kinds = (await ana.get('/api/things/kinds')).json as { id: number; name: string; guard: string | null }[];
+  expect(kinds.filter((k) => k.guard).map((k) => k.name).sort()).toEqual(['Ammunition', 'Firearms']);
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2]).toString('base64');
+  const gun = (await ana.post('/api/things/items', { kind_id: kinds.find((k) => k.name === 'Firearms')!.id, name: 'Deer rifle', records: { serial: 'ZX-90417-Q', model: 'American' } })).json;
+  expect((await ana.put(`/api/things/items/${gun.id}/photo`, { data: jpeg })).status).toBe(200);
+  const rounds = (await ana.post('/api/things/items', { kind_id: kinds.find((k) => k.name === 'Ammunition')!.id, name: 'Soft point', quantity: 5, low_at: 10 })).json;
+
+  // The serial is with the thing, never in a list.
+  expect((await ana.get(`/api/things/items/${gun.id}`)).json.records.serial).toBe('ZX-90417-Q');
+  const listed = await ana.get('/api/things/items?guarded=1');
+  expect(listed.json.map((t: { name: string }) => t.name).sort()).toEqual(['Deer rifle', 'Soft point']);
+  expect(JSON.stringify(listed.json)).not.toContain('ZX-90417-Q');
+  expect((await ana.get('/api/things/items')).json).toEqual([]);
+  expect(JSON.stringify((await ana.get('/api/home')).json)).toContain('Soft point'); // her own private card
+  expect((await ana.get('/api/search?q=rifle')).json).toEqual([]);
+
+  // Nobody else gets it: not the person in charge, not another member.
+  for (const other of [admin, bob]) {
+    expect([(await other.get(`/api/things/items/${gun.id}`)).status, (await other.get(`/api/things/items/${gun.id}/photo`)).status]).toEqual([404, 404]);
+    expect((await other.get(`/api/things/shared/${gun.id}`)).status).toBe(404);
+    expect((await other.get(`/api/things/shared/${gun.id}/photo`)).status).toBe(404);
+    expect((await other.get('/api/things/shared')).json).toEqual([]);
+    expect((await other.get('/api/things/guns')).json).toEqual([]);
+    expect((await other.put(`/api/things/items/${gun.id}/sharing`, { people: [] })).status).toBe(404);
+    expect(JSON.stringify((await other.get('/api/home')).json)).not.toMatch(/Deer rifle|Soft point/);
+  }
+  // Shared with bob: bob sees it, read-only; the person in charge still does not.
+  const choices = (await ana.get(`/api/things/items/${gun.id}/sharing`)).json;
+  const bobId = choices.choices.find((c: { name: string }) => c.name === 'bob').id;
+  expect((await ana.put(`/api/things/items/${gun.id}/sharing`, { people: [bobId] })).json.people).toEqual([bobId]);
+  expect((await bob.get('/api/things/shared')).json.map((t: { name: string }) => t.name)).toEqual(['Deer rifle']);
+  expect(JSON.stringify((await bob.get('/api/things/shared')).json)).not.toContain('ZX-90417-Q');
+  expect((await bob.get(`/api/things/shared/${gun.id}`)).json.records.serial).toBe('ZX-90417-Q');
+  expect((await bob.get(`/api/things/shared/${gun.id}/photo`)).status).toBe(200);
+  expect((await bob.get(`/api/things/shared/${rounds.id}`)).status).toBe(404);
+  expect((await bob.put(`/api/things/items/${gun.id}`, { name: 'Mine now' })).status).toBe(404);
+  expect((await admin.get('/api/things/shared')).json).toEqual([]);
+  expect((await bob.get('/api/things/guns')).json).toEqual([]);
+
+  // Her printable list, with the serial, and after it is sold the record stays.
+  expect((await ana.post(`/api/things/items/${gun.id}/gone`, { how: 'sold', day: '2040-01-02', to: 'A friend' })).status).toBe(200);
+  const printed = (await ana.get('/api/things/guns')).json;
+  expect(printed.map((g: { name: string; serial: string; gone: { how: string } }) => [g.name, g.serial, g.gone.how])).toEqual([['Deer rifle', 'ZX-90417-Q', 'sold']]);
+});
+
 it('a database from before things and projects is upgraded, with a copy saved first', async () => {
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
+  await database.db.run('DROP TABLE item_shares');
+  await database.db.run('ALTER TABLE kinds DROP COLUMN guard');
   for (const table of ['home_service_pins', 'home_service_people', 'home_services', 'media_list_items', 'media_lists', 'item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }

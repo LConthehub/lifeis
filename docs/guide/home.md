@@ -16,6 +16,8 @@ Wherever Life Is asks "Where it is", the list ends with **A new place…**, so y
 
 You make your own **kinds** (Fabric, Tools, Board games) and give each the fields you care about: a fabric's width, a game's number of players. Ready-made sets get you started, and every part of them can be changed.
 
+The ready-made **Hunting and shooting** set adds Firearms, Ammunition and Hunting gear, and is off until you add it. Guns and ammunition are private to you: nobody else can see them unless you pick them on the gun's page, and they stay out of search, the Home page, the home inventory and the assistant. **List of guns** on the Things page prints your guns with their serial numbers and photos.
+
 Each thing has a page of its own with a photo, where it is, what it is for, its records, and its history.
 
 ### Your own fields

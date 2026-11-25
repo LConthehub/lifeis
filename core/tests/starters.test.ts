@@ -97,7 +97,7 @@ it('every ready-made kind that is for an activity names one of the kinds of proj
   for (const starter of STARTERS) {
     for (const kind of starter.kinds) {
       if (kind.activity) expect(known, `${starter.slug}: ${kind.name}`).toContain(kind.activity.toLowerCase());
-      else expect(starter.slug, `${kind.name} has no activity`).toBe('clothing');
+      else expect(kind.guard ? 'clothing' : starter.slug, `${kind.name} has no activity`).toBe('clothing'); // private kinds (guns) are never gear for a project
     }
   }
   const of = (slug: string) => [...new Set(STARTERS.find((s) => s.slug === slug)!.kinds.map((k) => k.activity))];

@@ -12,11 +12,12 @@
  * `inventory(db, owner)` is one person's things: everything it reads and writes is theirs.
  */
 import { atomic, type Db, type Queries, type Value } from './db.ts';
+import { shown } from './displayName.ts';
 import { historyOf, noteHistory, noteMove, placePath, type HistoryEntry } from './history.ts';
 import { Problem } from './problem.ts';
 import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
 import { clean, dayNumber, dayOrNull, inOrder, labelKey, pictureType, rounded, stamp, todayOf, type Clock } from './small.ts';
-import { STARTERS, groupOfKind, type Starter } from './starters.ts';
+import { STARTERS, groupOfKind, guardOfKindName, type Starter } from './starters.ts';
 import * as units from './units.ts';
 
 export const FIELD_TYPES = ['text', 'number', 'choice', 'yesno', 'date', 'link'] as const;
@@ -31,14 +32,18 @@ const MAX_OWN_FIELDS = 30;
 
 export type FieldInput = { name: string; type: FieldType; unit?: string | null; choices?: string[] };
 export type Field = { id: number; kind_id: number; name: string; type: FieldType; unit: string | null; choices: string[]; sort_order: number };
+/** What makes a kind private: guns ('firearm') and ammunition ('ammo'). Its things are the person's alone, and shared only with people they pick. */
+export type Guard = 'firearm' | 'ammo';
 export type Kind = {
   id: number; name: string; icon: string | null; unit: string | null; fields: Field[]; items: number;
   /** The heading it sits under on the things page ("Cooking", "Crafts"), worked out from its name; null for one of the person's own. */
   group: string | null;
   /** The activity its things are usually for ("Sewing"): a new thing of this kind starts out with it. Null when none. */
   activity: string | null;
+  /** Set for a kind of private things (guns, ammunition); null for every other kind. */
+  guard: Guard | null;
 };
-export type KindInput = { name: string; icon?: string | null; unit?: string | null; activity?: string | null; fields?: FieldInput[] };
+export type KindInput = { name: string; icon?: string | null; unit?: string | null; activity?: string | null; fields?: FieldInput[]; guard?: Guard | null };
 
 export type Place = { id: number; parent_id: number | null; name: string; note: string | null; path: string; items: number };
 export type PlaceInput = { name: string; parent_id?: number | null; note?: string | null };
@@ -98,6 +103,10 @@ export type Item = {
   kind_id: number;
   kind: string;
   icon: string | null;
+  /** 'firearm' or 'ammo' when it is one of the person's private things; null otherwise. */
+  guard: Guard | null;
+  /** For a private thing: whether a serial number is kept. In a list it is never in `records`; it comes with the thing itself. */
+  serial_kept: boolean;
   name: string;
   quantity: number | null;
   unit: string | null;
@@ -136,7 +145,7 @@ export type Item = {
   updated_at: string;
 };
 
-type KindRow = { id: number; name: string; icon: string | null; unit: string | null; activity: string | null };
+type KindRow = { id: number; name: string; icon: string | null; unit: string | null; activity: string | null; guard: Guard | null };
 type FieldRow = Omit<Field, 'choices'> & { choices: string | null };
 type PlaceRow = { id: number; parent_id: number | null; name: string; note: string | null };
 /** A place and what its sticker carries. */
@@ -164,7 +173,7 @@ export function stickerCode(read: string): string | null {
   const m = /(?:^|\/p\/)([2-9A-HJ-NP-Za-hj-np-z]{10})\/?$/.exec(read.trim());
   return m ? m[1]!.toUpperCase() : null;
 }
-type ItemRow = Omit<Item, 'tag_list' | 'amount' | 'place' | 'low' | 'values' | 'set_aside' | 'free' | 'photo' | 'activities' | 'records' | 'warranty_days' | 'asset_no' | 'insured' | 'gone' | 'own_fields'> & { photo: number } & Records
+type ItemRow = Omit<Item, 'tag_list' | 'amount' | 'place' | 'low' | 'values' | 'set_aside' | 'free' | 'photo' | 'activities' | 'records' | 'serial_kept' | 'warranty_days' | 'asset_no' | 'insured' | 'gone' | 'own_fields'> & { photo: number } & Records
   & { asset_n: number; insured: number; gone_on: string | null; gone_how: string | null; gone_to: string | null; gone_cents: number | null };
 
 /** The code out of a scanned thing's sticker: a web address ending in /t/ and the code. Null when it isn't one. */
@@ -304,7 +313,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
   // ==================== KINDS AND THEIR FIELDS ====================
 
   async function kindRow(q: Queries, id: number): Promise<KindRow> {
-    const row = await q.get<KindRow>('SELECT id, name, icon, unit, activity FROM kinds WHERE id = ? AND owner_id = ?', [id, owner]);
+    const row = await q.get<KindRow>('SELECT id, name, icon, unit, activity, guard FROM kinds WHERE id = ? AND owner_id = ?', [id, owner]);
     if (!row) throw new Problem(404, 'Not found');
     return row;
   }
@@ -315,7 +324,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
 
   async function kinds(q: Queries): Promise<Kind[]> {
     const rows = await q.all<KindRow & { items: number }>(
-      `SELECT k.id, k.name, k.icon, k.unit, k.activity, (SELECT COUNT(*) FROM items i WHERE i.kind_id = k.id AND i.gone_on IS NULL) AS items
+      `SELECT k.id, k.name, k.icon, k.unit, k.activity, k.guard, (SELECT COUNT(*) FROM items i WHERE i.kind_id = k.id AND i.gone_on IS NULL) AS items
        FROM kinds k WHERE k.owner_id = ? ORDER BY k.name COLLATE NOCASE`, [owner]);
     const out: Kind[] = [];
     for (const row of rows) out.push({ ...row, group: groupOfKind(row.name), fields: await fieldsOf(q, row.id) });
@@ -359,8 +368,10 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     if (await q.get('SELECT id FROM kinds WHERE owner_id = ? AND key = ?', [owner, labelKey(name)])) {
       throw new Problem(409, `You already have a kind called "${name}"`);
     }
-    const made = await q.run('INSERT INTO kinds (owner_id, name, key, icon, unit, activity, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [owner, name, labelKey(name), clean(input.icon, 16), units.canonical(clean(input.unit, 20)), clean(input.activity, 60), now()]);
+    // A kind called "Firearms" or "Ammunition" is private however it was made (by hand, from a download or from HomeBox).
+    const guard = input.guard ?? guardOfKindName(name);
+    const made = await q.run('INSERT INTO kinds (owner_id, name, key, icon, unit, activity, guard, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [owner, name, labelKey(name), clean(input.icon, 16), units.canonical(clean(input.unit, 20)), clean(input.activity, 60), guard, now()]);
     for (const field of input.fields ?? []) await addFieldIn(q, made.lastId, field);
     return made.lastId;
   }
@@ -453,9 +464,13 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
   type Which = 'here' | 'gone' | 'any';
   const whichSql = (which: Which) => (which === 'here' ? ' AND i.gone_on IS NULL' : which === 'gone' ? ' AND i.gone_on IS NOT NULL' : '');
 
-  async function items(q: Queries, where = '', args: Value[] = [], which: Which = 'here'): Promise<Item[]> {
+  /**
+   * The things asked for. A private thing's serial number is left out of lists (`reveal` false) and given with the one thing:
+   * it is shown only when the person taps for it.
+   */
+  async function items(q: Queries, where = '', args: Value[] = [], which: Which = 'here', reveal = false): Promise<Item[]> {
     const rows = await q.all<ItemRow>(
-      `SELECT i.id, i.kind_id, k.name AS kind, k.icon, i.name, i.quantity, i.unit, i.place_id, i.low_at, i.note, i.code, i.barcode,
+      `SELECT i.id, i.kind_id, k.name AS kind, k.icon, k.guard AS guard, i.name, i.quantity, i.unit, i.place_id, i.low_at, i.note, i.code, i.barcode,
               i.bought_on, i.bought_at, i.price_cents, i.value_cents, i.serial, i.model, i.warranty_until,
               i.asset_no AS asset_n, i.insured, i.gone_on, i.gone_how, i.gone_to, i.gone_cents,
               (SELECT COUNT(*) FROM item_documents d WHERE d.item_id = i.id) AS documents,
@@ -486,7 +501,8 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       const setAside = rounded(aside.get(row.id) ?? 0, 4);
       return {
         ...row,
-        records: { bought_on, bought_at, price_cents, value_cents, serial, model, warranty_until },
+        records: { bought_on, bought_at, price_cents, value_cents, serial: row.guard && !reveal ? null : serial, model, warranty_until },
+        serial_kept: Boolean(serial),
         asset_no: assetLabel(asset_n),
         insured: Boolean(insured),
         gone: gone_on ? { on: gone_on, how: gone_how ?? 'thrown', to: gone_to, cents: gone_cents } : null,
@@ -505,7 +521,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
   }
 
   async function item(q: Queries, id: number): Promise<Item> {
-    const found = (await items(q, 'AND i.id = ?', [id], 'any'))[0];
+    const found = (await items(q, 'AND i.id = ?', [id], 'any', true))[0];
     if (!found) throw new Problem(404, 'Not found');
     return found;
   }
@@ -566,6 +582,20 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     return row;
   }
 
+  /** A thing of a private kind that is the person's own, or 404: only these can be shared. */
+  async function privateItem(q: Queries, id: number): Promise<void> {
+    const row = await q.get<{ guard: string | null }>('SELECT k.guard FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.id = ? AND i.owner_id = ?', [id, owner]);
+    if (!row) throw new Problem(404, 'Not found');
+    if (!row.guard) throw new Problem(400, 'Only guns and ammunition can be shared this way: other things stay with you');
+  }
+
+  /** The caliber or gauge typed on each ammunition record, by the thing's id. */
+  async function ammoCalibers(): Promise<Map<number, string>> {
+    return new Map((await db.all<{ item_id: number; value: string }>(
+      `SELECT v.item_id, v.value FROM item_values v JOIN kind_fields f ON f.id = v.field_id JOIN items i ON i.id = v.item_id JOIN kinds k ON k.id = i.kind_id
+       WHERE i.owner_id = ? AND k.guard = 'ammo' AND f.key = 'caliber or gauge' AND v.value != ''`, [owner])).map((r) => [r.item_id, r.value.trim()]));
+  }
+
   /** A thing's own columns, checked, in the order the SQL below names them (after the kind). */
   async function itemValues(q: Queries, input: ItemInput, kind: KindRow): Promise<Value[]> {
     const name = clean(input.name, 200);
@@ -584,7 +614,8 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
    * shelf in the sewing room is in the sewing room. All money is whole cents added as whole numbers.
    */
   async function homeReportIn(options: ReportOptions): Promise<HomeReport> {
-    const all = await items(db);
+    // Guns and ammunition are never in this report: it is the one that gets handed to an insurer or a bank. Guns have their own list.
+    const all = await items(db, 'AND k.guard IS NULL');
     const rows = await placeRows(db);
     const byId = new Map(rows.map((row) => [row.id, row]));
     const roomOfPlace = (placeId: number | null): PlaceRow | null => {
@@ -837,8 +868,9 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     // ---------- things ----------
 
     /** The person's things: all of them, or of one kind, in one place (and the places inside it), or matching some words. */
-    async listItems(find: { kind_id?: number | null; place_id?: number | null; q?: string | null; low?: boolean; tag?: number | null; gone?: boolean } = {}): Promise<Item[]> {
-      let where = '';
+    async listItems(find: { kind_id?: number | null; place_id?: number | null; q?: string | null; low?: boolean; tag?: number | null; gone?: boolean; guarded?: boolean } = {}): Promise<Item[]> {
+      // Private things (guns, ammunition) are only here when asked for: the Things page asks, nothing else does.
+      let where = find.guarded ? '' : ' AND k.guard IS NULL';
       const args: Value[] = [];
       if (find.kind_id != null) {
         where += ' AND i.kind_id = ?';
@@ -1108,6 +1140,80 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       return { name: shown, things, projects: projects.map(({ id, name: n, status }) => ({ id, name: n, status })) };
     },
 
+    // ---------- guns and ammunition: private things ----------
+
+    /** Who a private thing is shared with, and who it could be shared with. Only for the person it belongs to. */
+    async sharing(id: number): Promise<{ people: number[]; choices: { id: number; name: string }[] }> {
+      await privateItem(db, id);
+      return {
+        people: (await db.all<{ user_id: number }>('SELECT user_id FROM item_shares WHERE item_id = ? ORDER BY user_id', [id])).map((r) => r.user_id),
+        choices: await db.all<{ id: number; name: string }>(`SELECT u.id, ${shown('u')} AS name FROM users u WHERE u.id != ? ORDER BY name COLLATE NOCASE, u.id`, [owner]),
+      };
+    },
+
+    /** Share a private thing with exactly these people (an empty list: with nobody). */
+    shareWith(id: number, people: number[]): Promise<{ people: number[] }> {
+      return atomic(db, async (tx) => {
+        await privateItem(tx, id);
+        const wanted = [...new Set(people)];
+        if (wanted.length > 50 || !wanted.every((p) => Number.isInteger(p) && p > 0)) throw new Problem(400, 'Pick people from the list');
+        for (const person of wanted) {
+          if (person === owner || !(await tx.get('SELECT id FROM users WHERE id = ?', [person]))) throw new Problem(400, 'Pick people from the list');
+        }
+        await tx.run('DELETE FROM item_shares WHERE item_id = ?', [id]);
+        for (const person of wanted) await tx.run('INSERT INTO item_shares (item_id, user_id, created_at) VALUES (?, ?, ?)', [id, person, now()]);
+        return { people: wanted.sort((a, b) => a - b) };
+      });
+    },
+
+    /** The person's own guns, here and gone, with everything an insurer or the police ask for: for the printable list. */
+    async guns(): Promise<GunLine[]> {
+      const found = await items(db, "AND k.guard = 'firearm'", [], 'any', true);
+      const names = new Map((await db.all<{ id: number; name: string }>('SELECT f.id, f.name FROM kind_fields f JOIN kinds k ON k.id = f.kind_id WHERE k.owner_id = ?', [owner])).map((f) => [f.id, labelKey(f.name)]));
+      const receipts = new Set((await db.all<{ item_id: number }>(
+        "SELECT DISTINCT d.item_id FROM item_documents d JOIN items i ON i.id = d.item_id WHERE i.owner_id = ? AND d.kind = 'receipt'", [owner])).map((r) => r.item_id));
+      return found.map((t) => {
+        const named = (key: string) => {
+          const hit = Object.entries(t.values).find(([fieldId]) => names.get(Number(fieldId)) === key);
+          return hit ? String(hit[1]) : null;
+        };
+        return {
+          id: t.id, name: t.name, type: named('type'), maker: named('maker'), model: t.records.model, caliber: named('caliber or gauge'), serial: t.records.serial,
+          bought_on: t.records.bought_on, bought_at: t.records.bought_at, price_cents: t.records.price_cents, place: t.place, photo: t.photo, receipt: receipts.has(t.id),
+          note: t.note, asset_no: t.asset_no, gone: t.gone,
+        };
+      }).sort((a, b) => Number(Boolean(a.gone)) - Number(Boolean(b.gone)) || a.name.localeCompare(b.name) || a.id - b.id);
+    },
+
+    /** Ammunition that has reached its "running low" amount: the private card on the person's Home page. */
+    async ammoLow(): Promise<{ id: number; name: string; amount: string; caliber: string | null }[]> {
+      const caliberOf = await ammoCalibers();
+      return (await items(db, "AND k.guard = 'ammo'")).filter((t) => t.low).map((t) => ({ id: t.id, name: t.name, amount: t.amount, caliber: caliberOf.get(t.id) ?? null }));
+    },
+
+    /** The rounds on hand for each caliber or gauge (one count for each way of writing it), from the ammunition records. */
+    async ammoByCaliber(): Promise<{ caliber: string; rounds: number }[]> {
+      const caliberOf = await ammoCalibers();
+      const total = new Map<string, { caliber: string; rounds: number }>();
+      for (const t of await items(db, "AND k.guard = 'ammo'")) {
+        const caliber = caliberOf.get(t.id);
+        if (!caliber || t.quantity === null) continue;
+        const one = total.get(labelKey(caliber)) ?? { caliber, rounds: 0 };
+        one.rounds += t.quantity;
+        total.set(labelKey(caliber), one);
+      }
+      return [...total.values()].sort((a, b) => a.caliber.localeCompare(b.caliber));
+    },
+
+    /**
+     * Things shared with someone, as they are shown to that person: read-only, with no serial number until it is asked for.
+     * `ids` must already be known to be shared with the viewer (see sharedWithMe).
+     */
+    async sharedView(ids: number[], reveal: boolean): Promise<Item[]> {
+      if (ids.length === 0) return [];
+      return (await items(db, `AND i.id IN (${ids.map(() => '?').join(', ')})`, ids, 'any', reveal)).map((t) => ({ ...t, code: null, barcode: null, own_fields: [], tag_list: [], insured: false }));
+    },
+
     /** Remove a thing. Projects that used it keep its name on their list. */
     async deleteItem(id: number): Promise<void> {
       await db.run('DELETE FROM items WHERE id = ? AND owner_id = ?', [id, owner]);
@@ -1117,3 +1223,48 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
 }
 
 export type Inventory = ReturnType<typeof inventory>;
+
+/** One gun as the printable list shows it. */
+export type GunLine = {
+  id: number; name: string; type: string | null; maker: string | null; model: string | null; caliber: string | null; serial: string | null;
+  bought_on: string | null; bought_at: string | null; price_cents: number | null; place: string | null; photo: boolean; receipt: boolean;
+  note: string | null; asset_no: string; gone: Gone | null;
+};
+
+/** A private thing as someone it was shared with sees it: read-only. */
+export type SharedThing = {
+  id: number; owner: string; name: string; kind: string; icon: string | null; guard: Guard; amount: string; place: string | null; note: string | null;
+  fields: { name: string; value: string }[]; records: { model: string | null; serial: string | null; bought_on: string | null; bought_at: string | null; price_cents: number | null };
+  serial_kept: boolean; photo: boolean; gone: Gone | null;
+};
+
+/**
+ * What other people have shared with this person. Only the things chosen for them: nothing else of anyone's is reachable here.
+ * With `id`, that one thing, with its serial number (asked for by tapping); in a list, never a serial number.
+ */
+export async function sharedWithMe(db: Db, viewer: number, clock: Clock = () => new Date(), id?: number): Promise<SharedThing[]> {
+  const rows = await db.all<{ id: number; owner_id: number; owner: string }>(
+    `SELECT i.id, i.owner_id, ${shown('o')} AS owner FROM item_shares s JOIN items i ON i.id = s.item_id JOIN users o ON o.id = i.owner_id
+     WHERE s.user_id = ?${id === undefined ? '' : ' AND i.id = ?'} ORDER BY i.name COLLATE NOCASE, i.id`, id === undefined ? [viewer] : [viewer, id]);
+  const out: SharedThing[] = [];
+  for (const owner of new Set(rows.map((r) => r.owner_id))) {
+    const inv = inventory(db, owner, clock);
+    const fieldNames = new Map((await db.all<{ id: number; name: string }>('SELECT f.id, f.name FROM kind_fields f JOIN kinds k ON k.id = f.kind_id WHERE k.owner_id = ?', [owner])).map((f) => [f.id, f.name]));
+    for (const t of await inv.sharedView(rows.filter((r) => r.owner_id === owner).map((r) => r.id), id !== undefined)) {
+      if (!t.guard) continue;
+      out.push({
+        id: t.id, owner: rows.find((r) => r.id === t.id)!.owner, name: t.name, kind: t.kind, icon: t.icon, guard: t.guard, amount: t.amount, place: t.place, note: t.note,
+        fields: Object.entries(t.values).map(([fid, value]) => ({ name: fieldNames.get(Number(fid)) ?? '', value: String(value) })).filter((f) => f.name),
+        records: { model: t.records.model, serial: t.records.serial, bought_on: t.records.bought_on, bought_at: t.records.bought_at, price_cents: t.records.price_cents },
+        serial_kept: t.serial_kept, photo: t.photo, gone: t.gone,
+      });
+    }
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id);
+}
+
+/** The photo of a thing shared with this person, or null. Nothing of anyone else's can be reached through here. */
+export async function sharedPhoto(db: Db, viewer: number, id: number): Promise<{ type: string; bytes: Uint8Array } | null> {
+  return (await db.get<{ type: string; bytes: Uint8Array }>(
+    'SELECT p.type, p.bytes FROM item_photos p JOIN item_shares s ON s.item_id = p.item_id WHERE p.item_id = ? AND s.user_id = ?', [id, viewer])) ?? null;
+}

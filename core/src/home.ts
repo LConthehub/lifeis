@@ -62,6 +62,8 @@ export type HomeSummary = {
   /** The home service links the person pinned, and may still see. */
   services: ServiceView[];
   things: { low: { id: number; name: string; amount: string; kind: string }[]; total: number };
+  /** Ammunition running low: only on the person's own Home page, and only when they keep ammunition. Never in anything shared. */
+  ammo: { id: number; name: string; amount: string; caliber: string | null }[];
   /** Upkeep late, due or coming up soon, most pressing first. */
   upkeep: { id: number; name: string; state: DueState; days_left: number | null; reading_left: number | null; reading_unit: string | null; who: string | null }[];
   collection: {
@@ -125,7 +127,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
         day, cards,
         choices: offered.map((card) => ({ key: card.key, label: card.label, shown: !out.includes(card.key) })),
         days: [], kitchen: { meals: [], to_buy: 0, short: [], use_up: null }, pantry: { low: [], expiring: [] }, projects: [],
-        services: [], things: { low: [], total: 0 }, upkeep: [], collection: { total: 0, wanted: 0, lent: [], lately: [] },
+        services: [], things: { low: [], total: 0 }, ammo: [], upkeep: [], collection: { total: 0, wanted: 0, lent: [], lately: [] },
         dates: [], plans: [], holidays: [], coupons: { currency: '$', soon: [] }, weather: null,
         week: { start: day, end: day, events: null, meals_planned: null, meals_cooked: null, sessions: null, minutes: null, enjoyed: null },
       };
@@ -165,6 +167,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
         const all = await inventory(db, owner, clock).listItems();
         summary.things = { total: all.length, low: all.filter((item) => item.low).map(({ id, name, amount, kind }) => ({ id, name, amount, kind })).slice(0, 12) };
       }
+      if (shows('things')) summary.ammo = await inventory(db, owner, clock).ammoLow();
       if (shows('services')) summary.services = await homeServices(db, owner, clock).pinned();
       if (shows('upkeep')) {
         summary.upkeep = (await upkeep(db, owner, clock).list()).filter((j) => ['overdue', 'due', 'soon'].includes(j.due.state)).slice(0, 8)

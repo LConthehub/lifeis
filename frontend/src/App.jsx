@@ -36,6 +36,8 @@ const FillPlace = lazyPage(() => import('./pages/FillPlace'));
 const Thing = lazyPage(() => import('./pages/Thing'));
 const Activities = lazyPage(() => import('./pages/Activities'));
 const HomeReport = lazyPage(() => import('./pages/HomeReport'));
+const GunList = lazyPage(() => import('./pages/GunList'));
+const SharedThing = lazyPage(() => import('./pages/SharedThing'));
 const WalkThrough = lazyPage(() => import('./pages/WalkThrough'));
 const PetsPage = lazyPage(() => import('./pages/Pets'));
 const PetPage = lazyPage(() => import('./pages/Pets').then((m) => ({ default: m.PetPage })));
@@ -193,6 +195,8 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/things/upkeep/:id" element={<JobPage />} />
           <Route path="/things/stickers" element={<ThingStickersPage />} />
           <Route path="/things/report" element={<HomeReport />} />
+          <Route path="/things/guns/print" element={<GunList />} />
+          <Route path="/things/shared/:id" element={<SharedThing />} />
           <Route path="/things/packing" element={<PackingPage />} />
           <Route path="/manual" element={<ManualPage />} />
           <Route path="/manual/services" element={<HomeServicesPage />} />
