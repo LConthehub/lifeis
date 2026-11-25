@@ -244,6 +244,8 @@ function Shell({ user, demo = false, onLogout }) {
         </Suspense>
         </div>
       </main>
+      {/* Where a page puts its printouts: beside <main>, so the screen's own page holds only what is seen. */}
+      <div id="print-root" />
       {/* Phones: the heart and "Life is" (Home) and the sections along the bottom, an icon over each word, always
           on screen and in reach of a thumb. Hidden from the sm breakpoint up, where the drop-down in the header does it. */}
       <nav aria-label="Home and sections" className="safe-bottom fixed inset-x-0 bottom-0 z-30 bg-life-bar text-white shadow-[0_-2px_8px_rgba(0,0,0,0.15)] sm:hidden print:hidden">

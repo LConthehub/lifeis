@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ART } from '../art';
 import Picture from '../components/Picture';
 import { minutesText } from '../components/ui';
@@ -178,12 +179,14 @@ export default function RecipeSheets({ way, recipe, servings, photo }) {
     (document.fonts?.ready ?? Promise.resolve()).then(() => { if (live && host.current) setCards(packCards(recipe, servings, host.current)); });
     return () => { live = false; };
   }, [recipe, servings]);
-  return (
+  // Out of <main>, so the screen's page holds only its own pictures; the sheets are shown only on paper.
+  return createPortal(
     <>
       <div ref={host} className="rc-measure print:hidden" aria-hidden="true" />
       <div className="recipe-print hidden print:block" data-way={way}>
         {way === 'card' ? <RecipeCards r={recipe} servings={servings} cards={cards} /> : <RecipePageSheet r={recipe} servings={servings} photo={photo} />}
       </div>
-    </>
+    </>,
+    document.getElementById('print-root') ?? document.body,
   );
 }
