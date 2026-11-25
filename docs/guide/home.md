@@ -108,7 +108,9 @@ Before you print, choose what goes in it: all rooms or only the ones you pick, o
 
 Each pet has a profile: what they are, their breed and birthday, their vet with a number you can tap to call, their microchip number, what they eat, and notes such as allergies. Add a photo, and note their weight from time to time: Life Is shows the change since last time.
 
-A pet's **care** is upkeep that belongs to them. Pick from what suits their kind (heartworm prevention for a dog, the litter box for a cat) or add anything else. Say when it was last done and Life Is knows when it is next due. Care works like any other job in [Upkeep](upkeep.html): it shows in your morning reminder and on the calendar, and each time it was done is kept.
+A pet's **care** is upkeep that belongs to them. Pick from what suits their kind (heartworm prevention for a dog, the litter box for a cat) or add anything else. Say when it was last done and Life Is knows when it is next due. Care works like any other job in [Upkeep](upkeep.html): it shows in your morning reminder and on the calendar, and each time it was done is kept. Monthly meds belong here.
+
+A pet can also have a day-to-day **routine**, such as feed, fresh water and walk. It shows on every person's front page, and anyone can tick a step so everyone sees who did it and when. See [Routines for a pet](routines.html#routines-for-a-pet).
 
 ## The House Manual
 

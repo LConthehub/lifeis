@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
-import { waitText } from '../components/Routines';
+import { Checklists, waitText } from '../components/Routines';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 
 /**
@@ -17,11 +17,11 @@ const blankStep = () => ({ id: null, words: '', rule: 'daily', weekdays: [], nig
 const blankTime = (name = '') => ({ id: null, name, at: '', steps: [blankStep()] });
 
 /** What a routine becomes in the form. */
-function formOf(r, me) {
-  if (!r) return { name: '', who: 'me', cycle_length: '', points: '', note: '', times: [blankTime('Morning')] };
+function formOf(r, me, startWho = 'me') {
+  if (!r) return { name: '', who: startWho, cycle_length: '', points: '', note: '', times: [blankTime('Morning')] };
   return {
     name: r.name, cycle_length: r.cycle_length ?? '', points: r.points ?? '', note: r.note ?? '',
-    who: r.for_member !== null ? `m${r.for_member}` : r.for_user === me ? 'me' : r.for_user !== null ? `u${r.for_user}` : 'everyone',
+    who: r.for_pet != null ? `p${r.for_pet}` : r.for_member !== null ? `m${r.for_member}` : r.for_user === me ? 'me' : r.for_user !== null ? `u${r.for_user}` : 'everyone',
     times: r.times.map((t) => ({
       id: t.id, name: t.name, at: t.at ?? '',
       steps: t.steps.map((s) => ({ id: s.id, words: s.words, rule: s.rule, weekdays: s.weekdays, night: s.night ?? '', item_id: s.item_id ?? '', wait_seconds: s.wait_seconds ?? '' })),
@@ -35,6 +35,7 @@ function bodyOf(f, me) {
     name: f.name, cycle_length: f.cycle_length === '' ? null : Number(f.cycle_length),
     for_user: f.who === 'me' ? me : f.who.startsWith('u') ? Number(f.who.slice(1)) : null,
     for_member: f.who.startsWith('m') ? Number(f.who.slice(1)) : null,
+    for_pet: /^p\d+$/.test(f.who) ? Number(f.who.slice(1)) : null,
     points: f.who.startsWith('m') && f.points !== '' ? Number(f.points) : null, note: f.note.trim() || null,
     times: f.times.map((t) => ({
       id: t.id, name: t.name, at: t.at || null,
@@ -90,8 +91,8 @@ function StepEditor({ step, cycle, items, onChange, onRemove, canRemove }) {
   );
 }
 
-function RoutineForm({ routine, me, people, items, onDone, onGone }) {
-  const [f, setF] = useState(() => formOf(routine, me));
+export function RoutineForm({ routine, me, people, items, onDone, onGone, startWho }) {
+  const [f, setF] = useState(() => formOf(routine, me, startWho));
   const [tags, setTags] = useState(routine?.tag_list ?? []);
   const [error, setError] = useState('');
   const [sure, setSure] = useState(false);
@@ -124,6 +125,7 @@ function RoutineForm({ routine, me, people, items, onDone, onGone }) {
           <option value="everyone">Everyone's: shows on every front page</option>
           {people.users.filter((u) => u.id !== me).map((u) => <option key={`u${u.id}`} value={`u${u.id}`}>{u.name}'s: shows on their front page</option>)}
           {people.members.map((m) => <option key={`m${m.id}`} value={`m${m.id}`}>{m.name} (household): shows on the chore chart</option>)}
+          {(people.pets ?? []).map((p) => <option key={`p${p.id}`} value={`p${p.id}`}>{p.name} (pet): shows on every front page</option>)}
         </select>
       </Field>
       {forMember && (
@@ -176,7 +178,7 @@ function RoutineForm({ routine, me, people, items, onDone, onGone }) {
   );
 }
 
-const timeLine = (t) => `${t.name}${t.at_words ? ` at ${t.at_words}` : ''}: ${t.steps.length} ${t.steps.length === 1 ? 'step' : 'steps'}, ${t.last7} of the last 7 days`;
+export const timeLine = (t) => `${t.name}${t.at_words ? ` at ${t.at_words}` : ''}: ${t.steps.length} ${t.steps.length === 1 ? 'step' : 'steps'}, ${t.last7} of the last 7 days`;
 
 export default function RoutinesPage() {
   const [list, setList] = useState(null);
@@ -202,7 +204,7 @@ export default function RoutinesPage() {
     setError('');
     try { await axios.post('/api/routines/starters', { slug }); load(); } catch (err) { setError(errorMessage(err, "Couldn't add it")); }
   };
-  const offered = starters.filter((s) => !s.have);
+  const offered = starters.filter((s) => !s.have && !s.pet);
   const done = () => { setModal(null); load(); };
 
   return (
@@ -227,7 +229,7 @@ export default function RoutinesPage() {
               <PickBox sel={sel} id={r.id} name={r.name} />
               <div className="min-w-0 flex-1">
                 <h2 className="break-words font-semibold text-life-800 dark:text-life-50">{r.name}</h2>
-                <p className="text-xs text-gray-500 dark:text-life-300">{r.who_kind === 'me' ? 'For you' : r.who_kind === 'everyone' ? 'For everyone' : r.who_kind === 'member' ? `For ${r.who}, on the chore chart` : `For ${r.who}`}{r.cycle_length ? ` · ${r.cycle_length}-night cycle` : ''}{r.points ? ` · ${r.points} points a time` : ''}</p>
+                <p className="text-xs text-gray-500 dark:text-life-300">{r.who_kind === 'me' ? 'For you' : r.who_kind === 'everyone' ? 'For everyone' : r.who_kind === 'member' ? `For ${r.who}, on the chore chart` : r.who_kind === 'pet' ? `For ${r.who}, on every front page` : `For ${r.who}`}{r.cycle_length ? ` · ${r.cycle_length}-night cycle` : ''}{r.points ? ` · ${r.points} points a time` : ''}</p>
               </div>
               {r.mine && <button type="button" onClick={() => setModal({ routine: r })} className={`${quietButtonClass} min-h-[44px]`} aria-label={`Change ${r.name}`}>Change</button>}
             </div>
@@ -261,5 +263,92 @@ export default function RoutinesPage() {
         </Modal>
       )}
     </div>
+  );
+}
+
+/**
+ * A pet's routines, on the pet's page: today's checklists (anyone can tick; each tick says who and when), the routines
+ * themselves to change, and ready-made ones to add ("Dog, daily"). Monthly meds are the pet's care, not routines.
+ */
+export function PetRoutines({ pet }) {
+  const [times, setTimes] = useState(null);
+  const [mine, setMine] = useState([]);
+  const [starters, setStarters] = useState([]);
+  const [people, setPeople] = useState({ users: [], members: [], pets: [], me: 0 });
+  const [items, setItems] = useState([]);
+  const [food, setFood] = useState('');
+  const [modal, setModal] = useState(null);
+  const [error, setError] = useState('');
+  const load = useCallback(() => {
+    axios.get('/api/routine-day', { params: { pet: pet.id } }).then(({ data }) => setTimes(data)).catch(() => setTimes([]));
+    axios.get('/api/routines').then(({ data }) => setMine(data.filter((r) => r.for_pet === pet.id))).catch(() => {});
+    axios.get('/api/routines/starters', { params: { pet: pet.id } }).then(({ data }) => setStarters(data)).catch(() => {});
+  }, [pet.id]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    axios.get('/api/routines/people').then(({ data }) => setPeople(data)).catch(() => {});
+    axios.get('/api/things/items').then(({ data }) => setItems((Array.isArray(data) ? data : []).map((i) => ({ id: i.id, name: i.name })).sort((a, b) => a.name.localeCompare(b.name)))).catch(() => {});
+  }, []);
+  if (times === null) return null;
+  const offered = starters.filter((s) => s.pet && !s.have && (pet.species === 'dog' || pet.species === 'cat' ? s.pet === pet.species : true));
+  const add = async (slug) => {
+    setError('');
+    try { await axios.post('/api/routines/starters', { slug, for_pet: pet.id, food: food === '' ? null : Number(food) }); load(); } catch (err) { setError(errorMessage(err, "Couldn't add it")); }
+  };
+  const done = () => { setModal(null); load(); };
+  return (
+    <>
+      <Checklists times={times} setTimes={setTimes} />
+      <section className={`${cardClass} space-y-2`} aria-label="Routines" data-pet-routines>
+        <div className="flex flex-wrap items-baseline gap-2">
+          <h2 className="mr-auto font-semibold text-life-800 dark:text-life-50">Routines</h2>
+          <button type="button" onClick={() => setModal({ routine: null })} className="min-h-[44px] px-2 text-sm text-life-600 hover:underline dark:text-life-200">+ Make your own</button>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-life-300">A routine for {pet.name} shows on everyone's front page. Anyone can tick a step, and then everyone sees who did it and when. Monthly meds and flea treatment are in Care above, where Life Is reminds you.</p>
+        {mine.length > 0 && (
+          <ul className="divide-y divide-life-50 dark:divide-life-700">
+            {mine.map((r) => (
+              <li key={r.id} className="py-2" data-routine={r.name}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="min-w-0 flex-1 break-words text-sm font-medium text-gray-800 dark:text-life-50">{r.name}</span>
+                  <button type="button" onClick={() => setModal({ routine: r })} className={`${quietButtonClass} min-h-[44px]`} aria-label={`Change ${r.name}`}>Change</button>
+                </div>
+                <ul className="text-xs text-gray-600 dark:text-life-200">
+                  {r.times.map((t) => <li key={t.id}>{timeLine(t)}{t.steps.some((s) => s.item) ? ` · uses ${[...new Set(t.steps.filter((s) => s.item).map((s) => s.item))].join(', ')}` : ''}</li>)}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+        {offered.length > 0 && (
+          <div className="border-t border-life-50 pt-2 dark:border-life-700" role="group" aria-label={`Add a routine for ${pet.name}`}>
+            <p className="text-sm font-medium text-gray-800 dark:text-life-50">Add a routine for {pet.name}</p>
+            <label className="mt-1 block text-xs text-gray-600 dark:text-life-200">The food the feed steps use (so it can be marked running low)
+              <select value={food} onChange={(e) => setFood(e.target.value)} aria-label="Food" className={`${control} mt-1`}>
+                <option value="">None yet</option>
+                {items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </select>
+            </label>
+            <ul className="mt-1 divide-y divide-life-50 dark:divide-life-700">
+              {offered.map((s) => (
+                <li key={s.slug} className="flex flex-wrap items-center gap-2 py-2" data-starter={s.slug}>
+                  <div className="min-w-0 flex-1">
+                    <span className="block break-words text-sm text-gray-800 dark:text-life-50">{s.name}</span>
+                    <span className="block text-xs text-gray-500 dark:text-life-300">{s.times.map((t) => `${t.name}: ${t.steps.map((x) => x.words.toLowerCase()).join(', ')}`).join(' · ')}</span>
+                  </div>
+                  <button type="button" onClick={() => add(s.slug)} className={`${quietButtonClass} min-h-[44px]`} aria-label={`Add ${s.name} for ${pet.name}`}>Add</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+      </section>
+      {modal && (
+        <Modal title={modal.routine ? `Change ${modal.routine.name}` : `New routine for ${pet.name}`} wide onClose={() => setModal(null)}>
+          <RoutineForm routine={modal.routine} me={people.me} people={people} items={items} startWho={`p${pet.id}`} onDone={done} onGone={done} />
+        </Modal>
+      )}
+    </>
   );
 }

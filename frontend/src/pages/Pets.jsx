@@ -6,6 +6,7 @@ import Picture from '../components/Picture';
 import { shrink } from '../components/shrink';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput } from '../components/ui';
 import { DueBadge, scheduleText } from './Upkeep';
+import { PetRoutines } from './Routines';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 
 const ICONS = { dog: 'dog', cat: 'cat', rabbit: 'rabbit', bird: 'bird', fish: 'fish' };
@@ -106,7 +107,7 @@ export function PetPage() {
   };
   const done = async (job) => { await axios.post(`/api/things/upkeep/${job.id}/done`, {}); load(); };
   const remove = async () => {
-    if (!window.confirm(`Remove ${pet.name}, with their care and weights?`)) return;
+    if (!window.confirm(`Remove ${pet.name}, with their care, routines and weights?`)) return;
     await axios.delete(`/api/things/pets/${id}`);
     navigate('/things/pets');
   };
@@ -164,6 +165,8 @@ export function PetPage() {
           </div>
         )}
       </section>
+
+      <PetRoutines pet={pet} />
 
       <Weights pet={pet} onChanged={setPet} onRemoved={load} />
       <p className="text-right"><button type="button" onClick={remove} className="text-xs text-red-600 hover:underline">Remove {pet.name}</button></p>

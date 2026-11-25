@@ -117,8 +117,15 @@ export function pets(db: Db, owner: number, clock: Clock = () => new Date()) {
 
     /** Remove a pet, with its care and its weights. */
     async remove(id: number): Promise<void> {
-      await db.run('DELETE FROM pets WHERE id = ? AND owner_id = ?', [id, owner]);
-      await unlink(db, 'pet', id);
+      await atomic(db, async (tx) => {
+        // The pet's routines go with them, and their tags.
+        for (const r of await tx.all<{ id: number }>('SELECT r.id FROM routines r JOIN pets p ON p.id = r.for_pet WHERE p.id = ? AND p.owner_id = ?', [id, owner])) {
+          await tx.run('DELETE FROM routines WHERE id = ?', [r.id]);
+          await unlink(tx, 'routine', r.id);
+        }
+        await tx.run('DELETE FROM pets WHERE id = ? AND owner_id = ?', [id, owner]);
+        await unlink(tx, 'pet', id);
+      });
     },
 
     /** The care that suits this pet and isn't already theirs. */

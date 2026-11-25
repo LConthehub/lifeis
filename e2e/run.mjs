@@ -77,6 +77,7 @@ const SUITE = [
   { specs: ['grocery-line-scan'], account: TRIAL },
   { specs: ['prep'], account: TRIAL },
   { specs: ['routines'], account: TRIAL },
+  { specs: ['pet-routines'], account: TRIAL },
   { specs: ['holidays'], account: TRIAL },
   { specs: ['trips'], account: TRIAL },
   { specs: ['tags'], account: TRIAL },

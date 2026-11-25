@@ -15,7 +15,7 @@
 import { randomBytes } from 'node:crypto';
 import { statSync } from 'node:fs';
 import {
-  budget, calendar, goals, holidays, homeServices, inventory, kitchen, life, manual, media, mediaLists, money, outdoorTrips, packing, pets, projects, upkeep, type Db,
+  budget, calendar, goals, holidays, homeServices, inventory, kitchen, life, manual, media, mediaLists, money, outdoorTrips, packing, pets, projects, routines, upkeep, type Db,
 } from '../../core/src/index.ts';
 import { AREAS } from '../../core/src/life.ts';
 import { addDays } from '../../core/src/small.ts';
@@ -161,6 +161,9 @@ async function fill(db: Db, me: number): Promise<void> {
   const biscuit = await animals.create({ name: 'Biscuit', species: 'dog', breed: 'Beagle mix', born_on: day(-365 * 4 - 60), vet_name: 'Oak Lane Veterinary Clinic', vet_phone: '555 0100', microchip: '985112004512345', food: 'One cup, morning and evening', note: 'Scared of fireworks. No chicken treats.' });
   await animals.addCare(biscuit.id, { name: 'Vaccinations', every_n: 1, every_unit: 'year', last_done: day(-340) });
   await animals.addCare(biscuit.id, { name: 'Flea and tick treatment', every_n: 1, every_unit: 'month', last_done: day(-33) });
+  // Biscuit's morning: anyone in the house can tick it, and the feed step uses the dog food, so it can be marked running low.
+  const dogFood = await things.createItem({ kind_id: household, name: 'Dog food', quantity: 3, unit: 'cup', low_at: 2, place_id: kitchenRoom });
+  await routines(db, me).create({ name: 'Dog, daily', for_pet: biscuit.id, times: [{ name: 'Morning', steps: [{ words: 'Feed 1 cup', item_id: dogFood.id }, { words: 'Walk' }] }] });
   await animals.addWeight(biscuit.id, { value: 27.5, unit: 'lb', day: day(-90) });
   await animals.addWeight(biscuit.id, { value: 28.2, unit: 'lb', day: day(-5) });
   const pepper = await animals.create({ name: 'Pepper', species: 'cat', born_on: day(-365 * 7), vet_name: 'Oak Lane Veterinary Clinic', vet_phone: '555 0100', food: 'Half a can twice a day; dry food always out' });

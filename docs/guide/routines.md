@@ -14,6 +14,7 @@ A routine is a checklist for part of a day: morning, bedtime, after school, a we
    - **Everyone's** shows on every front page.
    - **A person's** shows on their front page.
    - **A household member** (someone without a sign-in, such as a child) shows on the chore chart.
+   - **A pet** shows on every front page and on the pet's page. See [Routines for a pet](#routines-for-a-pet).
 3. Give each **time of day** a name, such as Morning or Evening. You can have up to six. A time can have a clock time. With one, Life Is reminds you then, in the ways your reminders already go. See [Upkeep](upkeep.html#how-you-are-told).
 4. Add the steps. For each step you can choose:
    - **Every day**, or **Some days of the week** (check the days).
@@ -22,6 +23,19 @@ A routine is a checklist for part of a day: morning, bedtime, after school, a we
 5. Press **Save**.
 
 For a routine for a household member, you can also set the **chore points** each finished time is worth.
+
+## Routines for a pet
+
+A pet can have a routine, such as a dog's morning: feed, fresh water, walk. It shows on **every** person's front page, headed with the pet's name, like "Biscuit: Morning". It also shows on the pet's own page.
+
+1. Open the pet's page (in **Pets**) and look under **Routines**. Under **Add a routine for** the pet's name, choose **Add** on **Dog, daily** or **Cat, daily**. They are plain steps to copy, and every part is yours to change. Or choose **+ Make your own**.
+2. To use the pet's food, pick it under **Food** before you add. The feed steps then use it. Or open the routine with **Change** and choose **A thing it uses** on a step.
+3. Anyone who signs in to this Life Is can tick a step. Each tick keeps who ticked it and when, and everyone then reads it under the step, such as "Done at 7:10 AM by Sam". So nobody feeds the dog twice. Someone without a sign-in who ticks on your screen is kept under your name.
+4. On a feed step that uses the food, **running low** puts the food on the grocery list. Life Is does not count the food down.
+
+Each time of day shows "5 of the last 7 days". It never counts a streak.
+
+Only the person who made the routine can change or delete it. Monthly meds and flea treatment are not routines. They are the pet's care, and Life Is reminds you when they are due. Taking a pet away takes its routines too.
 
 ## A cycle
 

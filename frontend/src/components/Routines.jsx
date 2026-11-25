@@ -19,6 +19,13 @@ export const lastText = (t) => `${t.last7} of the last 7 days`;
 export const waitText = (s) => (s % 60 === 0 ? `${s / 60} min` : s < 60 ? `${s} sec` : `${Math.floor(s / 60)} min ${s % 60} sec`);
 const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
+/** "Done at 7:10 AM by Sam" for a ticked step: who and when, so nobody does it twice. Not shown for a person's own routine. */
+export function doneLine(step, time) {
+  if (!step.ticked || !step.by || time.who_kind === 'me') return null;
+  const when = step.at ? new Date(step.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
+  return `Done${when ? ` at ${when}` : ''} by ${step.by}`;
+}
+
 /** Ticks one step, or takes the tick back. Gives the time as it now is. */
 const tickStep = (step, done) => axios.put(`/api/routine-day/steps/${step.id}`, { done }).then(({ data }) => data);
 const finishTime = (time, done) => axios.put(`/api/routine-day/times/${time.id}`, { done }).then(({ data }) => data);
@@ -30,7 +37,7 @@ function RunningLow({ step }) {
   const mark = async () => {
     try {
       const { data } = await axios.post(`/api/routine-day/steps/${step.id}/low`);
-      setSaid(data.added ? `${data.name} is on your grocery list` : `${data.name} is already on your list`);
+      setSaid(data.added ? `${data.name} is on the grocery list` : `${data.name} is already on the list`);
     } catch (err) { setSaid(errorMessage(err, "Couldn't do that")); }
   };
   return (
@@ -65,7 +72,10 @@ export function TimeChecklist({ time, onChange, onGo }) {
             <button type="button" role="checkbox" aria-checked={s.ticked} disabled={busy} onClick={() => run(() => tickStep(s, !s.ticked))}
               className="flex min-h-[44px] w-full items-center gap-3 rounded-xl py-1 text-left hover:bg-life-50 dark:hover:bg-life-700">
               <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 text-sm font-bold ${s.ticked ? 'border-life-600 bg-life-600 text-white' : 'border-life-400 text-transparent dark:border-life-300'}`}><Icon of="done" size={16} /></span>
-              <span className={`min-w-0 flex-1 break-words text-sm text-gray-800 dark:text-life-50 ${s.ticked ? 'text-gray-500 line-through dark:text-life-300' : ''}`}>{s.words}</span>
+              <span className="min-w-0 flex-1">
+                <span className={`block break-words text-sm text-gray-800 dark:text-life-50 ${s.ticked ? 'text-gray-500 line-through dark:text-life-300' : ''}`}>{s.words}</span>
+                {doneLine(s, time) && <span data-done-by className="block text-xs text-gray-600 dark:text-life-200">{doneLine(s, time)}</span>}
+              </span>
               {s.wait_seconds && <span className="shrink-0 text-xs text-gray-500 dark:text-life-300">wait {waitText(s.wait_seconds)}</span>}
             </button>
             <RunningLow step={s} />
@@ -146,6 +156,7 @@ export function GoThrough({ time: start, onChange, onClose }) {
             <p className="text-sm text-gray-600 dark:text-life-200" data-step-count>Step {at + 1} of {time.steps.length}{time.night ? ` · night ${time.night} of ${time.cycle_length}` : ''}</p>
             <div className="flex flex-1 flex-col justify-center gap-4" data-step>
               <p className={`break-words text-3xl font-semibold leading-snug ${step.ticked ? 'text-gray-500 line-through dark:text-life-300' : 'text-gray-900 dark:text-life-50'}`}>{step.words}</p>
+              {doneLine(step, time) && <p className="text-base text-gray-700 dark:text-life-100" data-done-by>{doneLine(step, time)}</p>}
               {step.wait_seconds && (
                 <div className="space-y-2 rounded-2xl bg-life-50/70 p-3 dark:bg-life-700/60" data-wait>
                   <p className="text-base text-gray-800 dark:text-life-50">Wait {waitText(step.wait_seconds)} after this step.</p>

@@ -3,9 +3,12 @@
  * "Evening"), each with an optional clock time and its own steps.
  *
  * Whose: a routine belongs to one person with a sign-in (`for_user`), to a household member without one
- * (`for_member`, like the children on the chore chart), or to everyone (neither). A person's own routines show
- * only on their front page; a household member's show on the chore chart (and can earn chore points); everyone's
- * show for all.
+ * (`for_member`, like the children on the chore chart), to a pet (`for_pet`), or to everyone (none of them). A
+ * person's own routines show only on their front page; a household member's show on the chore chart (and can earn
+ * chore points); everyone's, and a pet's, show for all (a pet's with the pet's name, and on the pet's page).
+ *
+ * Each tick keeps who ticked it and when, so anyone else who can see the routine reads "Done at 7:10 by Sam" and
+ * nobody does the step twice.
  *
  * Step days: each step is every day (the usual), on chosen weekdays, or on one night of a cycle whose length the
  * routine sets (a four-night skin cycle). A cycle waits for you: it moves on only when that time was finished,
@@ -61,6 +64,8 @@ export type RoutineInput = {
   /** A person with a sign-in. Neither this nor `for_member`: everyone. */
   for_user?: number | null;
   for_member?: number | null;
+  /** One of the owner's pets. Only one of `for_user`, `for_member` and `for_pet`. */
+  for_pet?: number | null;
   /** How many nights the cycle has, 2 to 14, or none. */
   cycle_length?: number | null;
   /** What finishing one time of it is worth to a household member, in chore points. */
@@ -80,8 +85,8 @@ export type Routine = {
   id: number; name: string; owner_id: number;
   /** Whether it is the viewer's own to change. */
   mine: boolean;
-  for_user: number | null; for_member: number | null;
-  who_kind: 'me' | 'person' | 'member' | 'everyone';
+  for_user: number | null; for_member: number | null; for_pet: number | null;
+  who_kind: 'me' | 'person' | 'member' | 'pet' | 'everyone';
   /** "You", "Sam", "Everyone". */
   who: string;
   cycle_length: number | null; points: number | null; note: string | null;
@@ -90,12 +95,16 @@ export type Routine = {
 };
 
 /** One time of one routine on one day: the steps that fall that day, and which are ticked. */
-export type DayStep = Step & { ticked: boolean };
+export type DayStep = Step & {
+  ticked: boolean;
+  /** Who ticked it ("you" for the viewer, else their name) and when (a UTC stamp), when ticked. */
+  by: string | null; at: string | null;
+};
 export type DayTime = {
   id: number; routine_id: number; routine: string; name: string;
   /** How to head it: the routine's name, then the time's unless they are the same word. */
   title: string;
-  who_kind: Routine['who_kind']; who: string; member_id: number | null;
+  who_kind: Routine['who_kind']; who: string; member_id: number | null; pet_id: number | null;
   day: string; at: string | null; at_words: string | null;
   /** Which night of the cycle this day is, or null without a cycle. */
   night: number | null; cycle_length: number | null;
@@ -104,9 +113,11 @@ export type DayTime = {
   total: number; done: number; finished: boolean; last7: number;
 };
 
-export type Starter = { slug: string; name: string; about: string; cycle_length: number | null; times: { name: string; steps: StepInput[] }[] };
+/** A step of a ready-made routine. `feed` marks the step that uses the pet's food, so a thing can be linked to it. */
+export type StarterStep = StepInput & { feed?: boolean };
+export type Starter = { slug: string; name: string; about: string; cycle_length: number | null; /** The kind of pet it is for, when it is for a pet. */ pet?: 'dog' | 'cat'; times: { name: string; steps: StarterStep[] }[] };
 
-const everyDay = (words: string, extra: Partial<StepInput> = {}): StepInput => ({ words, rule: 'daily', ...extra });
+const everyDay = (words: string, extra: Partial<StarterStep> = {}): StarterStep => ({ words, rule: 'daily', ...extra });
 const onNight = (night: number, words: string, extra: Partial<StepInput> = {}): StepInput => ({ words, rule: 'cycle', night, ...extra });
 
 /** Plain steps to start from. Nothing medical: they are only words, and every part can be changed. */
@@ -128,6 +139,14 @@ export const ROUTINE_STARTERS: Starter[] = [
   { slug: 'skincare', name: 'Skincare', about: 'A morning and an evening.', cycle_length: null, times: [
     { name: 'Morning', steps: [everyDay('Wash your face'), everyDay('Moisturizer'), everyDay('Sunscreen')] },
     { name: 'Evening', steps: [everyDay('Wash your face'), everyDay('Moisturizer')] },
+  ] },
+  { slug: 'dog-daily', name: 'Dog, daily', about: 'Food, water and walks.', cycle_length: null, pet: 'dog', times: [
+    { name: 'Morning', steps: [everyDay('Feed', { feed: true }), everyDay('Fresh water'), everyDay('Walk')] },
+    { name: 'Evening', steps: [everyDay('Feed', { feed: true }), everyDay('Walk')] },
+  ] },
+  { slug: 'cat-daily', name: 'Cat, daily', about: 'Food, water and the litter box.', cycle_length: null, pet: 'cat', times: [
+    { name: 'Morning', steps: [everyDay('Feed', { feed: true }), everyDay('Fresh water')] },
+    { name: 'Evening', steps: [everyDay('Feed', { feed: true }), everyDay('Litter box')] },
   ] },
   { slug: 'skin-cycle', name: '4-night skin cycle', about: 'One step a night for four nights, then round again. It only moves on when you finish the evening.', cycle_length: 4, times: [{ name: 'Evening', steps: [
     everyDay('Wash your face'),
@@ -188,14 +207,14 @@ export function daysFromText(text: string): Pick<StepInput, 'rule' | 'weekdays' 
 // ---------- reading ----------
 
 type RoutineRow = {
-  id: number; owner_id: number; name: string; for_user: number | null; for_member: number | null; cycle_length: number | null;
-  points: number | null; note: string | null; user_name: string | null; member_name: string | null;
+  id: number; owner_id: number; name: string; for_user: number | null; for_member: number | null; for_pet: number | null; cycle_length: number | null;
+  points: number | null; note: string | null; user_name: string | null; member_name: string | null; pet_name: string | null;
 };
 type StepRow = { id: number; words: string; rule: StepRule; weekdays: string | null; night: number | null; item_id: number | null; item: string | null; wait_seconds: number | null };
 
-const BASE = `SELECT r.id, r.owner_id, r.name, r.for_user, r.for_member, r.cycle_length, r.points, r.note, ${shown('fu')} AS user_name, hm.name AS member_name
-  FROM routines r LEFT JOIN users fu ON fu.id = r.for_user LEFT JOIN household_members hm ON hm.id = r.for_member`;
-/** What a person may see and tick: their own, ones made for them, and everyone's. */
+const BASE = `SELECT r.id, r.owner_id, r.name, r.for_user, r.for_member, r.for_pet, r.cycle_length, r.points, r.note, ${shown('fu')} AS user_name, hm.name AS member_name, pt.name AS pet_name
+  FROM routines r LEFT JOIN users fu ON fu.id = r.for_user LEFT JOIN household_members hm ON hm.id = r.for_member LEFT JOIN pets pt ON pt.id = r.for_pet`;
+/** What a person may see and tick: their own, ones made for them, and everyone's (a pet's routine is everyone's). */
 const VISIBLE = '(r.owner_id = ? OR r.for_user = ? OR (r.for_user IS NULL AND r.for_member IS NULL))';
 
 const asStep = (r: StepRow, cycle: number | null): Step => {
@@ -221,10 +240,10 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
          WHERE s.time_id = ? ORDER BY s.sort_order, s.id`, [t.id]);
       times.push({ id: t.id, name: t.name, at: t.at_time, at_words: t.at_time ? clockWords(t.at_time) : null, steps: steps.map((s) => asStep(s, row.cycle_length)), last7: await last7Of(q, t.id, day) });
     }
-    const kind = row.for_member !== null ? 'member' : row.for_user === viewer ? 'me' : row.for_user !== null ? 'person' : 'everyone';
+    const kind = row.for_pet !== null ? 'pet' : row.for_member !== null ? 'member' : row.for_user === viewer ? 'me' : row.for_user !== null ? 'person' : 'everyone';
     return {
-      id: row.id, name: row.name, owner_id: row.owner_id, mine: row.owner_id === viewer, for_user: row.for_user, for_member: row.for_member, who_kind: kind,
-      who: kind === 'member' ? row.member_name ?? 'Household' : kind === 'me' ? 'You' : kind === 'person' ? row.user_name ?? 'Someone' : 'Everyone',
+      id: row.id, name: row.name, owner_id: row.owner_id, mine: row.owner_id === viewer, for_user: row.for_user, for_member: row.for_member, for_pet: row.for_pet, who_kind: kind,
+      who: kind === 'pet' ? row.pet_name ?? 'Pet' : kind === 'member' ? row.member_name ?? 'Household' : kind === 'me' ? 'You' : kind === 'person' ? row.user_name ?? 'Someone' : 'Everyone',
       cycle_length: row.cycle_length, points: row.points, note: row.note, times, tag_list: [],
     };
   }
@@ -267,15 +286,20 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
   async function timeDay(q: Queries, r: Routine, t: Time, day: string): Promise<DayTime> {
     const night = await nightOf(q, r.cycle_length, t, day);
     const due = t.steps.filter((s) => fallsOn(s, day, night));
-    const ticked = new Set<number>();
+    const ticked = new Map<number, { by: string | null; at: string | null }>();
     if (due.length) {
-      for (const k of await q.all<{ step_id: number }>(`SELECT step_id FROM routine_ticks WHERE day = ? AND step_id IN (${due.map(() => '?').join(',')})`, [day, ...due.map((s) => s.id)])) ticked.add(k.step_id);
+      for (const k of await q.all<{ step_id: number; by_user: number | null; by_name: string | null; ticked_at: string | null }>(
+        `SELECT k.step_id, k.by_user, ${shown('bu')} AS by_name, k.ticked_at FROM routine_ticks k LEFT JOIN users bu ON bu.id = k.by_user
+         WHERE k.day = ? AND k.step_id IN (${due.map(() => '?').join(',')})`, [day, ...due.map((s) => s.id)])) {
+        ticked.set(k.step_id, { by: k.by_user === viewer ? 'you' : k.by_name, at: k.ticked_at });
+      }
     }
     const done = due.filter((s) => ticked.has(s.id)).length;
     return {
-      id: t.id, routine_id: r.id, routine: r.name, name: t.name, title: labelKey(r.name) === labelKey(t.name) ? r.name : `${r.name}: ${t.name}`,
-      who_kind: r.who_kind, who: r.who, member_id: r.for_member, day, at: t.at, at_words: t.at_words, night, cycle_length: r.cycle_length, points: r.for_member !== null ? r.points : null,
-      steps: due.map((s) => ({ ...s, ticked: ticked.has(s.id) })), total: due.length, done, finished: due.length > 0 && done === due.length, last7: t.last7,
+      id: t.id, routine_id: r.id, routine: r.name, name: t.name,
+      title: r.for_pet !== null ? `${r.who}: ${t.name}` : labelKey(r.name) === labelKey(t.name) ? r.name : `${r.name}: ${t.name}`,
+      who_kind: r.who_kind, who: r.who, member_id: r.for_member, pet_id: r.for_pet, day, at: t.at, at_words: t.at_words, night, cycle_length: r.cycle_length, points: r.for_member !== null ? r.points : null,
+      steps: due.map((s) => ({ ...s, ticked: ticked.has(s.id), by: ticked.get(s.id)?.by ?? null, at: ticked.get(s.id)?.at ?? null })), total: due.length, done, finished: due.length > 0 && done === due.length, last7: t.last7,
     };
   }
 
@@ -307,7 +331,9 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
     if (!name) throw new Problem(400, 'Give the routine a name, like "Morning"');
     const forUser = input.for_user ?? null;
     const forMember = input.for_member ?? null;
-    if (forUser !== null && forMember !== null) throw new Problem(400, 'A routine is for one person, or for everyone');
+    const forPet = input.for_pet ?? null;
+    if ([forUser, forMember, forPet].filter((x) => x !== null).length > 1) throw new Problem(400, 'A routine is for one person, one pet, or for everyone');
+    if (forPet !== null && !(await q.get('SELECT 1 AS one FROM pets WHERE id = ? AND owner_id = ?', [forPet, owner]))) throw new Problem(404, "That pet isn't yours");
     if (forUser !== null && !(await q.get('SELECT 1 AS one FROM users WHERE id = ?', [forUser]))) throw new Problem(404, "That person isn't here");
     if (forMember !== null && !(await q.get('SELECT 1 AS one FROM household_members WHERE id = ? AND owner_id = ?', [forMember, owner]))) throw new Problem(404, "That person isn't in your household");
     const cycle = input.cycle_length ?? null;
@@ -315,7 +341,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
     const points = input.points ?? null;
     if (points !== null && !(Number.isInteger(points) && points >= 0 && points <= 1000)) throw new Problem(400, 'Points are a whole number, up to 1000');
     const times = input.times !== undefined ? input.times : existing === null ? [] : null;
-    if (times === null) return { name, forUser, forMember, cycle, points: forMember !== null ? points : null, note: clean(input.note, 1000), times: null };
+    if (times === null) return { name, forUser, forMember, forPet, cycle, points: forMember !== null ? points : null, note: clean(input.note, 1000), times: null };
     if (times.length < 1) throw new Problem(400, 'Add at least one time, like "Morning"');
     if (times.length > MAX_TIMES) throw new Problem(400, `A routine holds ${MAX_TIMES} times at most`);
     const seenNames = new Set<string>();
@@ -354,7 +380,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
       }
       out.push({ id: t.id ?? null, name: timeName, at, steps: tidySteps });
     }
-    return { name, forUser, forMember, cycle, points: forMember !== null ? points : null, note: clean(input.note, 1000), times: out };
+    return { name, forUser, forMember, forPet, cycle, points: forMember !== null ? points : null, note: clean(input.note, 1000), times: out };
   }
 
   type Tidy = Awaited<ReturnType<typeof tidy>>;
@@ -401,8 +427,8 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
     const t = await tidy(q, viewer, input, null);
     const next = (await q.get<{ n: number | null }>('SELECT MAX(sort_order) AS n FROM routines WHERE owner_id = ?', [viewer]))?.n ?? -1;
     const made = await q.run(
-      'INSERT INTO routines (owner_id, name, for_user, for_member, cycle_length, points, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [viewer, t.name, t.forUser, t.forMember, t.cycle, t.points, t.note, next + 1, at, at]);
+      'INSERT INTO routines (owner_id, name, for_user, for_member, for_pet, cycle_length, points, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [viewer, t.name, t.forUser, t.forMember, t.forPet, t.cycle, t.points, t.note, next + 1, at, at]);
     await writeTimes(q, made.lastId, t.times!);
     return made.lastId;
   }
@@ -439,8 +465,8 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
       await atomic(db, async (tx) => {
         const row = await owned(tx, id);
         const t = await tidy(tx, viewer, input, row);
-        await tx.run('UPDATE routines SET name = ?, for_user = ?, for_member = ?, cycle_length = ?, points = ?, note = ?, updated_at = ? WHERE id = ?',
-          [t.name, t.forUser, t.forMember, t.cycle, t.points, t.note, now(), id]);
+        await tx.run('UPDATE routines SET name = ?, for_user = ?, for_member = ?, for_pet = ?, cycle_length = ?, points = ?, note = ?, updated_at = ? WHERE id = ?',
+          [t.name, t.forUser, t.forMember, t.forPet, t.cycle, t.points, t.note, now(), id]);
         if (t.times) await writeTimes(tx, id, t.times);
         await settleToday(tx, id);
       });
@@ -457,19 +483,22 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
     },
 
     /** The ready-made routines, and whether each is already kept. */
-    async starters(): Promise<(Starter & { have: boolean })[]> {
-      const kept = new Set((await db.all<{ name: string }>('SELECT name FROM routines WHERE owner_id = ?', [viewer])).map((r) => labelKey(r.name)));
+    async starters(forPet?: number | null): Promise<(Starter & { have: boolean })[]> {
+      // A pet's ready-made routines are kept for that pet; the rest are kept by name for the viewer.
+      const kept = new Set((await db.all<{ name: string }>('SELECT name FROM routines WHERE owner_id = ? AND for_pet IS ?', [viewer, forPet ?? null])).map((r) => labelKey(r.name)));
       return ROUTINE_STARTERS.map((s) => ({ ...s, have: kept.has(labelKey(s.name)) }));
     },
 
     /** Copies a ready-made routine to the viewer, for them. It is theirs to change. */
-    async addStarter(slug: string, forUser?: number | null, forMember?: number | null): Promise<Routine> {
+    async addStarter(slug: string, forUser?: number | null, forMember?: number | null, forPet?: number | null, food?: number | null): Promise<Routine> {
       const s = ROUTINE_STARTERS.find((x) => x.slug === slug);
       if (!s) throw new Problem(404, 'Not found');
+      if (s.pet && forPet == null) throw new Problem(400, `${s.name} is for a pet: pick which one`);
       const made = await this.create({
         name: s.name, cycle_length: s.cycle_length,
-        for_user: forMember != null ? null : forUser ?? viewer, for_member: forMember ?? null,
-        times: s.times.map((t) => ({ name: t.name, steps: t.steps.map((x) => ({ ...x })) })),
+        for_user: forMember != null || forPet != null ? null : forUser ?? viewer, for_member: forPet != null ? null : forMember ?? null, for_pet: forPet ?? null,
+        // The step that feeds the pet can use their food (a thing), so it can be marked running low from there.
+        times: s.times.map((t) => ({ name: t.name, steps: t.steps.map(({ feed, ...x }) => ({ ...x, item_id: feed && food != null ? food : null })) })),
       });
       return made;
     },
@@ -478,10 +507,11 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
      * What is on today for the viewer's own front page: routines for them and for everyone, each time with the
      * steps that fall today. A time with nothing today (a Sunday-only reset on a Tuesday) is left out.
      */
-    async today(dayGiven?: string | null): Promise<DayTime[]> {
+    async today(dayGiven?: string | null, pet?: number | null): Promise<DayTime[]> {
       const day = dayGiven ?? today();
       dayNumber(day);
-      const rows = await db.all<RoutineRow>(`${BASE} WHERE ${VISIBLE} AND r.for_member IS NULL AND (r.for_user = ? OR r.for_user IS NULL) ORDER BY r.sort_order, r.name COLLATE NOCASE, r.id`, [viewer, viewer, viewer]);
+      const rows = await db.all<RoutineRow>(`${BASE} WHERE ${VISIBLE} AND r.for_member IS NULL AND (r.for_user = ? OR r.for_user IS NULL)${pet != null ? ' AND r.for_pet = ?' : ''} ORDER BY r.sort_order, r.name COLLATE NOCASE, r.id`,
+        pet != null ? [viewer, viewer, viewer, pet] : [viewer, viewer, viewer]);
       const out: DayTime[] = [];
       for (const row of rows) {
         const r = await whole(db, row, day);
@@ -525,7 +555,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
         const t = r.times.find((x) => x.id === found.time_id)!;
         const view = await timeDay(tx, r, t, day);
         if (!view.steps.some((s) => s.id === stepId)) throw new Problem(400, "That step isn't for that day");
-        if (done) await tx.run('INSERT OR IGNORE INTO routine_ticks (step_id, day, by_user) VALUES (?, ?, ?)', [stepId, day, viewer]);
+        if (done) await tx.run('INSERT OR IGNORE INTO routine_ticks (step_id, day, by_user, ticked_at) VALUES (?, ?, ?, ?)', [stepId, day, viewer, now()]);
         else await tx.run('DELETE FROM routine_ticks WHERE step_id = ? AND day = ?', [stepId, day]);
         return refinish(tx, r, t, day);
       });
@@ -541,7 +571,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
         const t = r.times.find((x) => x.id === timeId)!;
         const view = await timeDay(tx, r, t, day);
         if (done) {
-          for (const s of view.steps) await tx.run('INSERT OR IGNORE INTO routine_ticks (step_id, day, by_user) VALUES (?, ?, ?)', [s.id, day, viewer]);
+          for (const s of view.steps) await tx.run('INSERT OR IGNORE INTO routine_ticks (step_id, day, by_user, ticked_at) VALUES (?, ?, ?, ?)', [s.id, day, viewer, now()]);
         } else if (t.steps.length) {
           await tx.run(`DELETE FROM routine_ticks WHERE day = ? AND step_id IN (${t.steps.map(() => '?').join(',')})`, [day, ...t.steps.map((s) => s.id)]);
         }

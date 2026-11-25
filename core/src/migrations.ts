@@ -1756,6 +1756,17 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_money_goal_lines ON money_goal_lines(goal_id)`,
     ],
   },
+  {
+    number: 56,
+    name: 'pet routines: a routine can be a pet\'s, and each tick keeps when it was made',
+    // A routine can belong to a pet (routines.for_pet), shown on the pet's page and on every person's front page; only one of for_user, for_member
+    // and for_pet is set (checked in code). No REFERENCES: a pet's routines are taken away in code when the pet is removed. A tick already kept
+    // who made it (by_user); now it keeps when (ticked_at, a UTC stamp), so the others read "Done at 7:10 by Sam". Ticks from before have none.
+    statements: [
+      `ALTER TABLE routines ADD COLUMN for_pet INTEGER`,
+      `ALTER TABLE routine_ticks ADD COLUMN ticked_at TEXT`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

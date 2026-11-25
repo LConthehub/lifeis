@@ -484,16 +484,16 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     (await all('SELECT id, name FROM household_members WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id')).map((m) => [str(m.name), str(earned.get(m.id as number)?.n ?? 0), str(earned.get(m.id as number)?.points ?? 0)]));
 
   // ---------- routines ----------
-  const routineRows = await all('SELECT r.id, r.name, r.cycle_length, r.points, r.note, u.username AS signin, m.name AS member FROM routines r LEFT JOIN users u ON u.id = r.for_user LEFT JOIN household_members m ON m.id = r.for_member WHERE r.owner_id = ? ORDER BY r.sort_order, r.id');
+  const routineRows = await all('SELECT r.id, r.name, r.cycle_length, r.points, r.note, u.username AS signin, m.name AS member, p.name AS pet FROM routines r LEFT JOIN users u ON u.id = r.for_user LEFT JOIN household_members m ON m.id = r.for_member LEFT JOIN pets p ON p.id = r.for_pet WHERE r.owner_id = ? ORDER BY r.sort_order, r.id');
   const routineSteps = await all(`SELECT t.routine_id, t.name AS time_name, t.at_time, s.words, s.rule, s.weekdays, s.night, i.name AS thing, s.wait_seconds
     FROM routine_steps s JOIN routine_times t ON t.id = s.time_id JOIN routines r ON r.id = t.routine_id LEFT JOIN items i ON i.id = s.item_id
     WHERE r.owner_id = ? ORDER BY r.sort_order, r.id, t.sort_order, t.id, s.sort_order, s.id`);
   const routineById = new Map(routineRows.map((r) => [r.id as number, r]));
-  out.csv('routines.csv', ['Routine', 'For (sign-in)', 'For (household)', 'Cycle nights', 'Points', 'Notes', 'Time', 'At', 'Step', 'Days', 'Thing', 'Wait (seconds)'],
+  out.csv('routines.csv', ['Routine', 'For (sign-in)', 'For (household)', 'For (pet)', 'Cycle nights', 'Points', 'Notes', 'Time', 'At', 'Step', 'Days', 'Thing', 'Wait (seconds)'],
     routineSteps.map((s) => {
       const r = routineById.get(s.routine_id as number)!;
       const weekdays = str(s.weekdays).split(',').map(Number).filter((n) => n >= 1 && n <= 7);
-      return [str(r.name), str(r.signin), str(r.member), str(r.cycle_length), str(r.points), str(r.note), str(s.time_name), str(s.at_time), str(s.words),
+      return [str(r.name), str(r.signin), str(r.member), str(r.pet), str(r.cycle_length), str(r.points), str(r.note), str(s.time_name), str(s.at_time), str(s.words),
         daysAsText({ rule: str(s.rule) as StepRule, weekdays, night: num(s.night) }), str(s.thing), str(s.wait_seconds)];
     }));
   out.csv('routine-history.csv', ['Routine', 'Time', 'Day finished', 'Night of the cycle', 'Points'],
@@ -1402,6 +1402,7 @@ const importers: Record<string, Importer> = {
     const things = new Map((await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM items WHERE owner_id = ? ORDER BY id DESC', [c.owner])).map((i) => [labelKey(i.name), i.id]));
     const people = new Map((await c.tx.all<{ id: number; username: string }>('SELECT id, username FROM users')).map((u) => [u.username.toLowerCase(), u.id]));
     const members = new Map((await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM household_members WHERE owner_id = ?', [c.owner])).map((m) => [labelKey(m.name), m.id]));
+    const pets = new Map((await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM pets WHERE owner_id = ? ORDER BY id DESC', [c.owner])).map((p) => [labelKey(p.name), p.id]));
     const kept = new Set((await c.tx.all<{ name: string }>('SELECT name FROM routines WHERE owner_id = ?', [c.owner])).map((r) => labelKey(r.name)));
     const history = tableOf(c.files, 'routine-history.csv')?.rows ?? [];
     // One row for each step: the steps of a routine are the rows that share its name, in the order they come.
@@ -1424,9 +1425,16 @@ const importers: Record<string, Importer> = {
       let forUser = signin ? people.get(signin.toLowerCase()) ?? null : null;
       // A routine for someone who isn't here stays the importer's own, rather than becoming everyone's.
       if (signin && forUser === null) { forUser = c.owner; lost = true; }
+      // A pet's routine is linked to the pet of that name (the pets come in first); a pet that isn't here makes it everyone's, which is said.
+      const petName = clean(cellOf(first, 'For (pet)'), 60);
+      let forPet: number | null = null;
+      if (petName && forUser === null) {
+        forPet = pets.get(labelKey(petName)) ?? null;
+        if (forPet === null) lost = true;
+      }
       const memberName = clean(cellOf(first, 'For (household)'), 60);
       let forMember: number | null = null;
-      if (memberName && forUser === null) {
+      if (memberName && forUser === null && forPet === null) {
         forMember = members.get(labelKey(memberName)) ?? null;
         if (forMember === null) {
           forMember = (await c.tx.run('INSERT INTO household_members (owner_id, name, created_at) VALUES (?, ?, ?)', [c.owner, memberName, c.at])).lastId;
@@ -1438,8 +1446,8 @@ const importers: Record<string, Importer> = {
       const cycle = cycleSaid !== null && cycleSaid >= 2 && cycleSaid <= 14 ? cycleSaid : null;
       const pointsSaid = wholeOf(cellOf(first, 'Points'));
       next += 1;
-      const made = await c.tx.run('INSERT INTO routines (owner_id, name, for_user, for_member, cycle_length, points, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [c.owner, g.name, forUser, forMember, cycle, forMember !== null && pointsSaid !== null && pointsSaid >= 0 && pointsSaid <= 1000 ? pointsSaid : null, clean(cellOf(first, 'Notes'), 1000), next, c.at, c.at]);
+      const made = await c.tx.run('INSERT INTO routines (owner_id, name, for_user, for_member, for_pet, cycle_length, points, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, g.name, forUser, forMember, forPet, cycle, forMember !== null && pointsSaid !== null && pointsSaid >= 0 && pointsSaid <= 1000 ? pointsSaid : null, clean(cellOf(first, 'Notes'), 1000), next, c.at, c.at]);
       const timeIds = new Map<string, number>();
       const perTime = new Map<number, number>();
       for (const row of g.rows) {

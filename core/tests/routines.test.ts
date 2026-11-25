@@ -9,8 +9,10 @@ import { LATEST, migrate } from '../src/migrations.ts';
 import { reminders } from '../src/reminders.ts';
 import { daysAsText, daysFromText, daysWords, fallsOn, isoWeekday, ROUTINE_STARTERS, routines, routinesDue, weekdaysWords } from '../src/routines.ts';
 import { search } from '../src/search.ts';
+import { stamp } from '../src/small.ts';
 import { tags } from '../src/tags.ts';
 import { upkeep } from '../src/upkeep.ts';
+import { pets } from '../src/pets.ts';
 import { memoryDb } from './memoryDb.ts';
 
 let db: Db;
@@ -296,7 +298,7 @@ it('can be tagged, filtered by tag, found by search, and its links go when it is
 });
 
 it('offers ready-made routines, once each by name', async () => {
-  expect(ROUTINE_STARTERS.map((s) => s.slug)).toEqual(['morning', 'bedtime', 'after-school', 'weekly-reset', 'skincare', 'skin-cycle']);
+  expect(ROUTINE_STARTERS.map((s) => s.slug)).toEqual(['morning', 'bedtime', 'after-school', 'weekly-reset', 'skincare', 'dog-daily', 'cat-daily', 'skin-cycle']);
   const skin = await mine().addStarter('skincare');
   expect(skin.times.map((t) => [t.name, t.steps.length])).toEqual([['Morning', 3], ['Evening', 2]]);
   expect((await mine().starters()).filter((s) => s.have).map((s) => s.slug)).toEqual(['skincare']);
@@ -338,4 +340,94 @@ it('goes into the download with its history, and comes back in for someone else'
   // Bringing it in again adds nothing.
   const again = await bringInDownload(db, bob, files, ['routines'], clock);
   expect(again.kinds[0]).toMatchObject({ key: 'routines', ok: true, fresh: 0, already: 2 });
+});
+
+it('shows a pet routine to every person, with the pet name, while a person routine stays with its person', async () => {
+  const biscuit = await pets(db, owner, clock).create({ name: 'Biscuit', species: 'dog' });
+  const r = await mine().addStarter('dog-daily', null, null, biscuit.id);
+  expect([r.who_kind, r.who, r.for_pet, r.for_user, r.times.map((t) => t.name)]).toEqual(['pet', 'Biscuit', biscuit.id, null, ['Morning', 'Evening']]);
+  await mine().create({ name: 'Mine', for_user: owner, times: [{ name: 'Morning', steps: [{ words: 'Private' }] }] });
+  const titles = async (who: number) => (await mine(who).today()).map((t) => t.title);
+  expect(await titles(owner)).toEqual(['Biscuit: Morning', 'Biscuit: Evening', 'Mine: Morning']);
+  expect(await titles(partner)).toEqual(['Biscuit: Morning', 'Biscuit: Evening']);
+  // The pet's page asks for only its own.
+  expect((await mine(partner).today(undefined, biscuit.id)).map((t) => t.pet_id)).toEqual([biscuit.id, biscuit.id]);
+  expect(await mine(owner).today(undefined, biscuit.id + 99)).toEqual([]);
+  // Only one owner: a routine is for a person, a pet, or everyone.
+  await expect(mine().create({ name: 'Both', for_user: owner, for_pet: biscuit.id, times: [{ name: 'A', steps: [{ words: 'x' }] }] })).rejects.toEqual(problem(400));
+  const other = pets(db, partner, clock);
+  const theirs = await other.create({ name: 'Nibbles' });
+  await expect(mine().create({ name: 'Not mine', for_pet: theirs.id, times: [{ name: 'A', steps: [{ words: 'x' }] }] })).rejects.toEqual(problem(404));
+  // The two feed steps use the food when one is given, and the starter needs a pet.
+  await expect(mine().addStarter('cat-daily')).rejects.toEqual(problem(400));
+});
+
+it('keeps who ticked a step and when, so the next person reads it and nobody does it twice', async () => {
+  const biscuit = await pets(db, owner, clock).create({ name: 'Biscuit', species: 'dog' });
+  const kind = (await inventory(db, owner, clock).createKind({ name: 'Pet', icon: '🐕' }))[0]!.id;
+  const food = await inventory(db, owner, clock).createItem({ kind_id: kind, name: 'Dog food' });
+  const r = await mine().addStarter('dog-daily', null, null, biscuit.id, food.id);
+  const morning = r.times[0]!;
+  expect(morning.steps.map((s) => [s.words, s.item])).toEqual([['Feed', 'Dog food'], ['Fresh water', null], ['Walk', null]]);
+  await mine(partner).tick(morning.steps[0]!.id, true);
+  const theirView = (await mine(owner).today())[0]!;
+  const fed = theirView.steps[0]!;
+  expect([fed.ticked, fed.by, fed.at]).toEqual([true, 'partner', stamp(clock())]);
+  expect(theirView.steps[1]).toMatchObject({ ticked: false, by: null, at: null });
+  // The person who did it sees "you".
+  expect((await mine(partner).today())[0]!.steps[0]!.by).toBe('you');
+  // A chosen display name is what others read.
+  await db.run("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'display_name', 'Sam')", [partner]);
+  expect((await mine(owner).today())[0]!.steps[0]!.by).toBe('Sam');
+  // Finishing the whole time keeps who and when for the rest.
+  const done = await mine(owner).finish(morning.id, true);
+  expect(done.steps.map((s) => s.by)).toEqual(['Sam', 'you', 'you']);
+  expect(done.last7).toBe(1);
+  // Taking a tick back clears who and when.
+  const back = await mine(owner).tick(morning.steps[2]!.id, false);
+  expect(back.steps[2]).toMatchObject({ ticked: false, by: null, at: null });
+  // The feed step can be marked running low from the step by anyone, and it goes on the owner's grocery list.
+  expect(await mine(partner).low(morning.steps[0]!.id)).toMatchObject({ name: 'Dog food', added: true });
+});
+
+it('takes a pet routine away with the pet', async () => {
+  const biscuit = await pets(db, owner, clock).create({ name: 'Biscuit', species: 'dog' });
+  await mine().addStarter('dog-daily', null, null, biscuit.id);
+  await pets(db, owner, clock).remove(biscuit.id);
+  expect(await mine().list()).toEqual([]);
+});
+
+it('keeps the pet link in the download and when it is brought in, and leaves a routine for a pet that is not here as everyone own', async () => {
+  const biscuit = await pets(db, owner, clock).create({ name: 'Biscuit', species: 'dog' });
+  await mine().addStarter('dog-daily', null, null, biscuit.id);
+  const { files } = await splitDownload((await exportEverything(db, owner, clock)).bytes);
+  expect(files['routines.csv']).toContain('For (pet)');
+  const bob = await person('bob');
+  const done = await bringInDownload(db, bob, files, ['pets', 'routines'], clock);
+  for (const k of done.kinds) expect(k.ok, `${k.key}: ${k.problem}`).toBe(true);
+  const theirs = (await mine(bob).list()).filter((x) => x.mine);
+  expect(theirs.map((x) => [x.name, x.who_kind, x.who])).toEqual([['Dog, daily', 'pet', 'Biscuit']]);
+  expect(theirs[0]!.for_pet).not.toBe(biscuit.id);
+  expect(theirs[0]!.times.map((t) => t.steps.length)).toEqual([3, 2]);
+  // Reading it twice adds nothing.
+  expect((await bringInDownload(db, bob, files, ['routines'], clock)).kinds[0]).toMatchObject({ key: 'routines', fresh: 0, already: 1 });
+  // Without the pets, it comes in as everyone's, and the count of what could not be linked says so.
+  const carol = await person('carol');
+  const lonely = await bringInDownload(db, carol, files, ['routines'], clock);
+  expect(lonely.kinds[0]).toMatchObject({ key: 'routines', fresh: 1, unlinked: 1 });
+  expect((await mine(carol).list()).filter((x) => x.mine).map((x) => x.who_kind)).toEqual(['everyone']);
+});
+
+it('upgrades from the version before pet routines: routines and ticks kept, ticks without a time, new ones with', async () => {
+  const r = await mine().create({ name: 'Morning', times: [{ name: 'Morning', steps: [{ words: 'One' }, { words: 'Two' }] }] });
+  await mine().tick(r.times[0]!.steps[0]!.id, true);
+  await db.run('ALTER TABLE routines DROP COLUMN for_pet');
+  await db.run('ALTER TABLE routine_ticks DROP COLUMN ticked_at');
+  await db.run('PRAGMA user_version = 55');
+  expect(await migrate(db)).toBe(LATEST);
+  const before = (await mine(partner).today())[0]!;
+  expect(before.steps.map((s) => [s.ticked, s.by, s.at])).toEqual([[true, 'owner', null], [false, null, null]]);
+  expect(before.who_kind).toBe('everyone');
+  await mine(partner).tick(before.steps[1]!.id, true);
+  expect((await mine(owner).today())[0]!.steps[1]).toMatchObject({ by: 'partner', at: stamp(clock()) });
 });
