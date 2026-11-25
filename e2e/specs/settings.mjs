@@ -5,7 +5,7 @@ const PASS = 'trial-only-password-8031';
 const browser = await chromium.launch({ ...browserChoice, headless: true });
 const bad = [];
 const say = (what, ok) => console.log((ok ? 'ok   ' : 'FAIL ') + what);
-const EXPECTED = ['your-name', 'life', 'tags', 'mail-page', 'look', 'reminders', 'calendar-link', 'other-calendars', 'assistant', 'weather', 'mail', 'bank', 'lookups', 'recalls', 'photos', 'media', 'recipe-web', 'idle', 'password', 'security', 'keys', 'people', 'sign-out', 'last-copy', 'your-files', 'recipes-out'];
+const EXPECTED = ['your-name', 'life', 'tags', 'mail-page', 'look', 'reminders', 'calendar-link', 'other-calendars', 'assistant', 'ai-apps', 'weather', 'mail', 'bank', 'lookups', 'recalls', 'photos', 'media', 'recipe-web', 'idle', 'password', 'security', 'keys', 'people', 'sign-out', 'last-copy', 'your-files', 'recipes-out'];
 
 async function signedIn(width, height) {
   const context = await browser.newContext({ viewport: { width, height } });

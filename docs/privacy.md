@@ -77,6 +77,12 @@ A personal key lets a shortcut on your phone, such as one you build in Apple's S
 
 The key is shown once, when you make it. Your Life Is keeps only a scrambled form of it, the key's name, what it may do, and the last day it was used. You can turn a key off or delete it at any time, and it stops working at once. Life Is sends nothing to anyone because of a key: the request goes from your phone to your own Life Is. Siri turns your speech into text on your device or on Apple's side, as it always does, and that is covered by Apple's own privacy information, not by this policy.
 
+### Use Life Is from your AI app (only on a Life Is you host)
+
+This lets an AI app you already use, such as Claude, read parts of your Life Is and add a few safe things. It sends something only when the AI app asks. Then what Life Is holds in the sections you ticked for that connection goes to the company that makes that AI app (Anthropic, for Claude), through that company's servers. That company's own privacy policy covers what it does with it. Nothing is sent at any other time.
+
+It is off until the person in charge turns it on, and each person then connects their own and ticks what it may see. It is offered only on a Life Is you host, never in the app while it keeps everything on your phone. It never includes guns or ammunition, measures, gifts, passwords and keys, the house manual or mail. It can add only a grocery line, a calendar event, a reminder or a title on a list, and only with its own tick. It never changes or deletes anything. You can change or cut off a connection at any time, and the person in charge can turn the whole thing off. Either stops it at once.
+
 Each connection in the second table is off until you turn it on, says what it sends, and connects your computer directly to the service you name. Settings, under Connections, lists them all.
 
 The phone app can also show its own morning reminders as notifications made on the device. Nothing is sent for those.

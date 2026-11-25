@@ -1810,9 +1810,55 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_measure_entries ON measure_entries(measure_id, day)`,
     ],
   },
+  {
+    number: 58,
+    name: 'use Life Is from an AI app: the apps that registered, each person\'s connections, and a log of what they read and added',
+    // ai_clients is an AI app that registered itself (OAuth client registration). ai_connections is one person's allowing of one app: the sections
+    // it may read (a comma list, empty at first), whether it may add things, and the hashes of its sign-in code and tokens (only SHA-256 hashes are kept,
+    // never a token). A connection that is cut off, unused for 90 days, or ended by the household switch keeps its row, so the log still names it:
+    // ended_at is set and every hash is cleared. ai_log is one line per thing read or added, kept 90 days; added_ids lets an add be undone.
+    // No data from another section is copied here: the log holds only a plain sentence and the ids of rows the connection itself added.
+    statements: [
+      `CREATE TABLE ai_clients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        redirect_uris TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE TABLE ai_connections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        client_id TEXT NOT NULL,
+        app_name TEXT NOT NULL,
+        name TEXT NOT NULL,
+        sections TEXT NOT NULL,
+        may_add INTEGER NOT NULL DEFAULT 0,
+        code_hash TEXT, code_challenge TEXT, code_redirect TEXT, code_expires_at TEXT,
+        access_hash TEXT, access_expires_at TEXT,
+        refresh_hash TEXT, old_refresh_hash TEXT, old_refresh_until TEXT,
+        created_at TEXT NOT NULL,
+        last_used_on TEXT,
+        ended_at TEXT
+      )`,
+      `CREATE INDEX idx_ai_connections_owner ON ai_connections(owner_id)`,
+      `CREATE TABLE ai_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        connection_id INTEGER NOT NULL REFERENCES ai_connections(id) ON DELETE CASCADE,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        at TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        what TEXT NOT NULL,
+        added_kind TEXT,
+        added_ids TEXT,
+        undone_at TEXT
+      )`,
+      `CREATE INDEX idx_ai_log_owner ON ai_log(owner_id, id)`,
+    ],
+  },
 ];
 
-export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;
+export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;
 
 export async function currentVersion(db: Db): Promise<number> {
   const row = await db.get<{ user_version: number }>('PRAGMA user_version');

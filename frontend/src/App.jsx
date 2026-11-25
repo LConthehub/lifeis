@@ -59,6 +59,7 @@ const IncomePage = lazyPage(() => import('./pages/Budgeting').then((m) => ({ def
 const YearPage = lazyPage(() => import('./pages/Budgeting').then((m) => ({ default: m.YearPage })));
 const TagsPage = lazyPage(() => import('./pages/Tags'));
 const TagPage = lazyPage(() => import('./pages/Tags').then((m) => ({ default: m.TagPage })));
+const Connect = lazyPage(() => import('./pages/Connect'));
 const DoAction = lazyPage(() => import('./pages/DoAction'));
 import { LifeFirstRun } from './components/LifeAreas';
 import Search from './components/Search';
@@ -140,6 +141,8 @@ function Shell({ user, demo = false, onLogout }) {
   const showing = SECTIONS.filter((s) => !life || life.sections.includes(s.word) || (s.word === 'making' && life.sections.includes('planning')) || s === section);
   const tabs = section ? section.tabs : [];
   const exact = (to) => ['/recipes', '/things', '/projects', '/media', '/calendar', '/plans', '/manual'].includes(to);
+  // The page an AI app sends a person to stands alone, without the menu bar.
+  if (pathname === '/connect') return <main className="safe-sides mx-auto max-w-5xl px-3 py-4"><Suspense fallback={<PageLoading />}><Connect /></Suspense></main>;
   return (
     <div className="safe-sides min-h-screen">
       <header className="safe-top sticky top-0 z-30 bg-life-bar text-white shadow-sm print:hidden">
@@ -239,6 +242,7 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/money/year" element={<YearPage />} />
           <Route path="/money/goals" element={<GoalsPage />} />
           <Route path="/money/income" element={<IncomePage />} />
+          <Route path="/connect" element={<Connect />} />
           <Route path="/do/:id" element={<DoAction />} />
           <Route path="/settings" element={<Settings user={user} onLogout={onLogout} onLifeChanged={setLife} />} />
           <Route path="/settings/:group" element={<Settings user={user} onLogout={onLogout} onLifeChanged={setLife} />} />

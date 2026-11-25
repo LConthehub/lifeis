@@ -14,6 +14,7 @@ import * as auth from './auth.ts';
 import { sealerFromEnvironment, secondStepOn } from './secondStep.ts';
 import { securityRoutes } from './securityRoutes.ts';
 import { keyRoutes, voiceRoutes } from './keyRoutes.ts';
+import { connectorPublic, connectorRoutes } from './connectorRoutes.ts';
 import { bearer, REFUSED, useKey, type KeyUse } from './personalKeys.ts';
 import type { MailTools } from './mailRoutes.ts';
 import { notUnderstood, read, readBody, MAX_PAPER_BODY_BYTES, Refusal, type Context, type Reply, type Route } from './http.ts';
@@ -222,6 +223,9 @@ export function createApp(options: Options) {
     ...keyRoutes(db, { clock, demo: Boolean(options.demo) }),
     ...voiceRoutes(db),
 
+    // Use Life Is from your AI app: this person's connections (connectorRoutes.ts). The public addresses an AI app uses are in handle().
+    ...connectorRoutes(db, { clock, demo: Boolean(options.demo) }),
+
     ['GET', /^\/api\/account$/, account],
     ['PUT', /^\/api\/account$/, async (c) => {
       const minutes = read.maybeWhole(c.body, 'idle_minutes');
@@ -309,6 +313,8 @@ export function createApp(options: Options) {
     });
   }
 
+  const connectorAddresses = connectorPublic(db, { clock, demo: Boolean(options.demo) });
+
   return async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     let url: URL;
     try {
@@ -328,6 +334,10 @@ export function createApp(options: Options) {
     try {
       if (api) {
         reply = await answerApi(req, url, path);
+      } else if (connectorAddresses.owns(path)) {
+        // An AI app's own addresses: no cookie is read, and the cross-site check of /api doesn't apply (a token is the only key).
+        const host = req.headers.host ? String(req.headers.host).slice(0, 200) : undefined;
+        reply = await connectorAddresses.answer(req, path, { ip: clientIp(req), origin: host && /^[\w.\-:[\]]+$/.test(host) ? `${isHttps(req) ? 'https' : 'http'}://${host}` : undefined });
       } else if (feed && (req.method === 'GET' || req.method === 'HEAD')) {
         const host = String(req.headers.host ?? '');
         const text = await feedFor(db, feed[1]!, clock, /^[\w.\-:[\]]+$/.test(host) ? `${isHttps(req) ? 'https' : 'http'}://${host}` : '');
@@ -368,7 +378,9 @@ export function createApp(options: Options) {
       body = Buffer.from(JSON.stringify(reply.json), 'utf8');
       headers['Content-Type'] = 'application/json';
     }
-    if (body) headers['Content-Length'] = String(body.length);
+    // The MCP addresses go out chunked, with no length: on this PC the Avast shield mangles a response with a Content-Length
+    // when the request ends in /mcp, and a chunked one is just as good to every client.
+    if (body && !/\/mcp$/i.test(path)) headers['Content-Length'] = String(body.length);
     res.writeHead(reply.status ?? 200, headers);
     res.end(req.method === 'HEAD' ? undefined : body);
     // Whatever of the request wasn't read (a refused upload, say) is dropped, so the connection can be reused.

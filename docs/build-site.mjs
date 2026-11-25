@@ -317,7 +317,10 @@ ${androidSection}
 const RELEASED = false;
 const IMAGE = 'ghcr.io/lconthehub/lifeis:latest';
 // The order the guides are listed in.
-const GUIDES = ['getting-started', 'install', 'home', 'upkeep', 'licenses', 'kitchen', 'money', 'routines', 'plans', 'holidays', 'trips', 'tags', 'collection', 'mail', 'bank-reading', 'phone', 'siri', 'your-data', 'troubleshooting'];
+const GUIDES = ['getting-started', 'install', 'home', 'upkeep', 'licenses', 'kitchen', 'money', 'routines', 'plans', 'holidays', 'trips', 'tags', 'collection', 'mail', 'bank-reading', 'phone', 'siri', 'ai-app', 'your-data', 'troubleshooting'];
+// Guides that have a page but stay out of the list, the side menu and the "Next" links: AI is kept out of sight for people who
+// want none of it (owner, Nov 25, 2026). They are reached from Your data, the privacy policy and the app's own Settings.
+const QUIET = ['ai-app'];
 // Pages that were folded into another guide. Each old address stays, as a small page that sends the reader on.
 const MOVED = { records: ['home', 'receipts-serial-numbers-and-warranties'], 'pets-and-manual': ['home', 'pets'], reminders: ['upkeep', 'what-comes-due'] };
 
@@ -328,6 +331,7 @@ const guides = GUIDES.filter((slug) => existsSync(path.join(guideDir, `${slug}.m
   const meta = Object.fromEntries(front.split('\n').map((l) => /^(\w+):\s*(.+)$/.exec(l)).filter(Boolean).map((m) => [m[1], m[2]]));
   return { slug, title: meta.title ?? slug, blurb: meta.blurb ?? '', body: html(text) };
 });
+const listed = guides.filter((g) => !QUIET.includes(g.slug));
 for (const file of readdirSync(guideDir)) {
   if (file.endsWith('.md') && !GUIDES.includes(file.slice(0, -3))) console.warn(`docs/guide/${file} is not listed in GUIDES, so it has no page`);
 }
@@ -403,13 +407,13 @@ const docPage = (guide) => `<!doctype html>
 <div class="bands" aria-hidden="true"></div>
 <div class="layout">
 <nav class="menu" aria-label="Guides">
-${guides.map((g) => `  <a href="${g.slug}.html"${g.slug === guide.slug ? ' aria-current="page"' : ''}>${safe(g.title)}</a>`).join('\n')}
+${listed.map((g) => `  <a href="${g.slug}.html"${g.slug === guide.slug ? ' aria-current="page"' : ''}>${safe(g.title)}</a>`).join('\n')}
 </nav>
 <main>
 ${guide.body.replace('{{builder}}', BUILDER).replace('{{steps}}', STEPS).replace('{{released}}', NOT_YET)}
 <script src="copy.js"></script>
 ${guide.slug === 'install' ? '<script src="setup.js"></script>' : ''}
-<p class="next">${(() => { const next = guides[guides.indexOf(guide) + 1]; return next && guide.slug !== 'index' ? `Next: <a href="${next.slug}.html">${safe(next.title)}</a>` : ''; })()}</p>
+<p class="next">${(() => { const next = listed.includes(guide) ? listed[listed.indexOf(guide) + 1] : undefined; return next && guide.slug !== 'index' ? `Next: <a href="${next.slug}.html">${safe(next.title)}</a>` : ''; })()}</p>
 </main>
 </div>
 <footer><a href="../">Life Is</a> · <a href="../compare">Compare</a> · <a href="../privacy">Privacy policy</a> · <a href="mailto:hello@lifeis.living">hello@lifeis.living</a></footer>
@@ -422,7 +426,7 @@ mkdirSync(docsOut, { recursive: true });
 for (const guide of guides) writeFileSync(path.join(docsOut, `${guide.slug}.html`), docPage(guide));
 writeFileSync(path.join(docsOut, 'index.html'), docPage({ slug: 'index', title: 'Guides', blurb: 'How Life Is works, part by part.',
   body: `<h1>Guides</h1>\n<p>How Life Is works, part by part. New here? Start with the first one, or <a href="https://demo.lifeis.living">try the demo</a> and come back when you have a question.</p>\n<div class="cards">\n${
-    guides.map((g) => `  <a href="${g.slug}.html"><b>${safe(g.title)}</b><span>${safe(g.blurb)}</span></a>`).join('\n')}\n</div>` }));
+    listed.map((g) => `  <a href="${g.slug}.html"><b>${safe(g.title)}</b><span>${safe(g.blurb)}</span></a>`).join('\n')}\n</div>` }));
 for (const [old, [slug, section]] of Object.entries(MOVED)) {
   const to = `${slug}.html#${section}`;
   writeFileSync(path.join(docsOut, `${old}.html`), `<!doctype html>

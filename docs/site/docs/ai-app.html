@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="Let an AI app you already use, like Claude, read parts of your Life Is and add a few safe things, with your say on each one.">
+<title>Use Life Is from your AI app · Life Is</title>
+<link rel="icon" href="../icon.png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="../icon-dark.png" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../"><img src="../icon.png" alt=""> Life Is</a>
+  <a href="./">Guides</a>
+  <a class="pill" href="https://demo.lifeis.living">Try the demo</a>
+</header>
+<div class="bands" aria-hidden="true"></div>
+<div class="layout">
+<nav class="menu" aria-label="Guides">
+  <a href="getting-started.html">Get started</a>
+  <a href="install.html">Install with Docker</a>
+  <a href="home.html">Your home</a>
+  <a href="upkeep.html">Upkeep</a>
+  <a href="licenses.html">Licenses and recalls</a>
+  <a href="kitchen.html">The kitchen</a>
+  <a href="money.html">Money and budget</a>
+  <a href="routines.html">Routines and the chore chart</a>
+  <a href="plans.html">Plans and projects</a>
+  <a href="holidays.html">Holidays</a>
+  <a href="trips.html">Outdoor trips</a>
+  <a href="tags.html">Tags</a>
+  <a href="collection.html">Films, music and books</a>
+  <a href="mail.html">Mail</a>
+  <a href="bank-reading.html">Reading your bank</a>
+  <a href="phone.html">On your phone</a>
+  <a href="siri.html">Siri and Shortcuts</a>
+  <a href="your-data.html">Your data</a>
+  <a href="troubleshooting.html">Troubleshooting</a>
+</nav>
+<main>
+<h1 id="use-life-is-from-your-ai-app">Use Life Is from your AI app</h1>
+<p>This lets an AI app you already use, such as Claude, look at parts of your Life Is and add a few safe things when you ask it to. It is off until the person in charge turns it on, and you choose what each connection may see.</p>
+<p>This is not the built-in assistant in Settings. That one sits inside Life Is. This one lets your own AI app come in from outside. Life Is needs no key from you for it. The AI app uses your own plan with its company.</p>
+<h2 id="what-you-need">What you need</h2>
+<ul><li><strong>A Life Is someone hosts, at an https web address the internet can reach.</strong> It does not work in the phone app while it keeps everything on the phone, because there is no server for the AI app to reach. It does not work on an address that only works on a home network. Life Is never opens anything up to the internet by itself. If your Life Is is not reachable yet, <a href="phone.html#reaching-a-life-is-at-home">On your phone</a> shows ways to do that.</li><li><strong>An AI app that can add a custom connector.</strong> Only Claude has been tested. Other apps that use the same open connector standard should work, but they have not been tested.</li></ul>
+<h2 id="turn-it-on">Turn it on</h2>
+<ol><li>The person in charge opens <strong>Settings</strong>, then <strong>Connections</strong>, then <strong>More</strong>, and finds <strong>Use Life Is from your AI app</strong>.</li><li>They turn it on for the household. Nothing is shared yet. It only lets each person make their own connection.</li></ol>
+<p>Settings shows a reason if your address cannot work, such as an address that is not https.</p>
+<h2 id="connect-claude">Connect Claude</h2>
+<p>Each person connects their own.</p>
+<ol><li>In <strong>Settings</strong>, then <strong>Connections</strong>, then <strong>More</strong>, copy the address shown under <strong>Use Life Is from your AI app</strong>. It ends in <code>/mcp</code>.</li><li>In Claude, add a custom connector and paste that address.</li><li>Claude sends you to Life Is. Sign in to Life Is if it asks.</li><li>Give the connection a name, like <code>Claude on my iPad</code>.</li><li>Tick what it may see. Everything starts unticked.</li><li>Tick <strong>It may add things</strong> only if you want that.</li><li>Choose <strong>Allow</strong>. Choose <strong>Don't allow</strong> to say no.</li></ol>
+<p>The page tells you what will be sent, and to whom, before you choose.</p>
+<h2 id="what-it-can-read">What it can read</h2>
+<p>Only the sections you tick for that connection, and only what you can see yourself:</p>
+<ul><li><strong>Kitchen:</strong> the grocery list, the week's meals, the pantry, and recipes.</li><li><strong>Calendar:</strong> events and plans coming up. Meals, chores and project dates show there only when their own section is ticked too.</li><li><strong>Things:</strong> what you own and where it is.</li><li><strong>Projects:</strong> your projects.</li><li><strong>Lists:</strong> your lists of films, shows, books and music.</li><li><strong>Money:</strong> this month's spending. This one carries its own warning on the page.</li></ul>
+<h2 id="what-it-can-add">What it can add</h2>
+<p>Only when you tick <strong>It may add things</strong> and also tick the section it belongs to:</p>
+<ul><li>A line on the grocery list (Kitchen).</li><li>A calendar event (Calendar).</li><li>A reminder (Calendar).</li><li>A title on a list (Lists).</li></ul>
+<p>Each thing it adds is marked "Added by" and the connection's name. It <strong>never</strong> changes or deletes anything.</p>
+<h2 id="what-it-never-reaches">What it never reaches</h2>
+<p>Whatever you tick, it never reaches guns and ammunition, measures, gifts, passwords and keys, the house manual, or mail. Other calendars you follow show only as "busy".</p>
+<h2 id="the-log-and-undo">The log, and undo</h2>
+<p>Under <strong>Use Life Is from your AI app</strong> in Settings, the log lists what each connection read and added, with the date. It shows the newest 100 lines and keeps them for 90 days. Next to something it added, <strong>Undo</strong> takes it out again, if it is still there.</p>
+<h2 id="change-it-or-cut-it-off">Change it or cut it off</h2>
+<ul><li><strong>Change a connection:</strong> rename it, or tick and untick sections and the add tick. It takes effect at once.</li><li><strong>Cut it off:</strong> it stops working at once. The log keeps its name, so you can still see what it did.</li><li><strong>The household switch:</strong> when the person in charge turns it off, every connection ends at once. Nobody's AI app can reach Life Is until it is turned on and people connect again.</li><li><strong>Not used for 90 days:</strong> a connection ends by itself. Each connection shows the day it will end if it is not used again.</li><li><strong>Who sees what:</strong> you see only your own connections and log. The person in charge cannot see anyone else's.</li></ul>
+<p>Each person may have up to 10 live connections.</p>
+<h2 id="what-is-sent-and-to-whom">What is sent, and to whom</h2>
+<p>Only when your AI app asks, what Life Is holds in the sections ticked for that connection goes to the company that makes the app (Anthropic, for Claude), through that company's servers. That company's own privacy policy covers what it does with it. Nothing is sent at any other time. See the <a href="../privacy#use-life-is-from-your-ai-app-only-on-a-life-is-you-host">privacy policy</a>.</p>
+<h2 id="for-people-who-run-their-own-life-is">For people who run their own Life Is</h2>
+<p>Requests come from the AI company's servers, not from the person's device. So the address must be reachable from the internet. These paths must be reachable: <code>/mcp</code>, <code>/connect</code>, <code>/oauth/</code> and <code>/.well-known/</code>. Everything else can stay closed. Anthropic publishes the address range its requests come from, and a reverse proxy can allow just that range for those paths.</p>
+<script src="copy.js"></script>
+
+<p class="next"></p>
+</main>
+</div>
+<footer><a href="../">Life Is</a> · <a href="../compare">Compare</a> · <a href="../privacy">Privacy policy</a> · <a href="mailto:hello@lifeis.living">hello@lifeis.living</a></footer>
+</body>
+</html>

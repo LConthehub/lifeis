@@ -30,6 +30,7 @@ Life Is works without the internet. A few things reach outside, and each one is 
 | Photos from Immich, and media and book servers (on a Life Is you run) | Only to the servers you name, with the key you give. Life Is only reads, and changes nothing there |
 | Film and show look-ups from TMDB (on a Life Is you run) | The title you type, with your own key |
 | A personal key, for Siri Shortcuts (on a Life Is you run) | Nothing. A key only lets your own phone ask your own Life Is for a few things, with the key. Life Is sends nothing anywhere because of one. See [Siri and Shortcuts](siri.html) |
+| Use Life Is from your AI app (on a Life Is you run) | Only when your AI app asks: what is in the sections you ticked for that connection, to the company that makes the app (Anthropic, for Claude). See [Use Life Is from your AI app](ai-app.html) |
 | Reading your bank | Only on a Life Is you run, and only when you press Read now. Your setup token once, then a read-only request for the accounts you chose. Nothing of yours is sent. See [Reading your bank](bank-reading.html) |
 
 All of them are listed in one place: **Settings › Connections**. The phone app can also show its own morning reminders, made on the phone, with nothing sent. The [privacy policy](../privacy) has the full list.
@@ -37,6 +38,10 @@ All of them are listed in one place: **Settings › Connections**. The phone app
 ## Personal keys
 
 A personal key lets one shortcut on your phone, like Siri, read or add a few things in your Life Is without signing in. Keys are **off until you make one** (Settings, Account & sign-in, Personal keys), work only on a Life Is you run, and are shown once: Life Is keeps only a scrambled form. Each key does only what you ticked, sees only what you can see, and never reaches guns or ammunition, measures, hidden gifts, money or mail. You can turn a key off or delete it at any time, and it stops working at once. Life Is keeps the name, the list of what it may do and the last day it was used, and nothing else about its use. Keys are not in your export. See [Siri and Shortcuts](siri.html).
+
+## Use Life Is from your AI app
+
+This lets an AI app you use, such as Claude, read the parts you tick and add a few safe things. It is **off until the person in charge turns it on** (Settings, Connections, More), and works only on a Life Is someone hosts. It sends something only when the AI app asks: what is in the ticked sections goes to the company that makes the app, through its servers, and that company's privacy policy covers the rest. It never reaches guns or ammunition, measures, gifts, passwords and keys, the house manual or mail. To stop it, cut off a connection, or have the person in charge turn it off, and it stops at once. The connections and the log are kept in Life Is, with the rest of your data. They are not in the download of everything. See [Use Life Is from your AI app](ai-app.html).
 
 ## Keeping a copy
 

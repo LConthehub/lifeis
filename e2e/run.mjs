@@ -60,6 +60,7 @@ const SUITE = [
   { specs: ['security'] },
   { specs: ['keys'] },
   { specs: ['assistant'] },
+  { specs: ['connector'] },
   { specs: ['home'], account: TRIAL, online: true },
   { specs: ['calendar-link'], account: TRIAL },
   { specs: ['collection'], account: TRIAL },

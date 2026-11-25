@@ -7,6 +7,7 @@ import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessa
 import { LifeAreasPicker } from '../components/LifeAreas';
 import { chooseAgain, inApp, linkedServer, onDevice, serverOrigin } from '../where';
 import Art from '../components/Art';
+import { ConnectorService } from '../components/Connector';
 import { AssistantService } from '../components/Assistant';
 import { RemindersSettings } from '../components/Reminders';
 import { RecallAlertsService } from '../components/Recalls';
@@ -61,6 +62,7 @@ const GROUPS = [
       // Behind "More" on purpose (owner, Nov 25, 2026): many people want a space free of AI. It is there for
       // whoever looks (More, or searching), and opens by itself once it is on.
       { id: 'assistant', title: 'AI assistant', more: true, words: 'ai llm ollama lm studio chatgpt claude gemini model ask question', render: () => <Plain><AssistantService /></Plain> },
+      { id: 'ai-apps', title: 'Use Life Is from your AI app', more: true, when: server, words: 'ai claude chatgpt connector connect app assistant mcp', render: () => <Plain><ConnectorService /></Plain> },
     ],
   },
   {
@@ -272,10 +274,15 @@ function More({ sections, wanted, render }) {
   const [open, setOpen] = useState(false);
   const asked = sections.some((s) => s.id === wanted);
   const holdsAssistant = sections.some((s) => s.id === 'assistant');
+  const holdsApps = sections.some((s) => s.id === 'ai-apps');
   useEffect(() => {
     if (!holdsAssistant) return;
     axios.get('/api/assistant').then(({ data }) => { if (data?.enabled) setOpen(true); }).catch(() => {});
   }, [holdsAssistant]);
+  useEffect(() => {
+    if (!holdsApps || onDevice()) return;
+    axios.get('/api/connector').then(({ data }) => { if (data?.connections?.length) setOpen(true); }).catch(() => {});
+  }, [holdsApps]);
   if (!sections.length) return null;
   if (!open && !asked) {
     return <button type="button" onClick={() => setOpen(true)} className={`${quietButtonClass} min-h-[44px]`} data-settings-more>More</button>;
