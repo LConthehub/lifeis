@@ -9,6 +9,7 @@ import { upkeep, type DueState } from './upkeep.ts';
 import { calendar, type Entry, type YearlyDate } from './calendar.ts';
 import type { Fetcher } from './connections.ts';
 import type { Db } from './db.ts';
+import { homeServices, type ServiceView } from './homeServices.ts';
 import { holidays, type HolidayCard } from './holidays.ts';
 import { inventory } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
@@ -40,6 +41,7 @@ export const CARDS = [
   { key: 'projects', label: 'Projects underway', section: 'making' },
   { key: 'upkeep', label: 'Upkeep: jobs due around the home', section: 'keeping' },
   { key: 'things', label: 'Things running low', section: 'keeping' },
+  { key: 'services', label: 'Home services: the links you pinned', section: 'keeping' },
   { key: 'collection', label: 'Collection: lent out, and lately watched, read or heard', section: 'enjoying' },
   { key: 'week', label: 'This week in numbers', section: null },
 ] as const satisfies readonly { key: string; label: string; section: Section | null }[];
@@ -57,6 +59,8 @@ export type HomeSummary = {
   kitchen: { meals: PlannedMeal[]; to_buy: number; short: EquipmentShortage[]; use_up: { soon: string[]; suggestion: { recipe_id: number; title: string; uses: string[] } | null } | null };
   pantry: { low: string[]; expiring: { name: string; days_left: number }[] };
   projects: ProjectSummary[];
+  /** The home service links the person pinned, and may still see. */
+  services: ServiceView[];
   things: { low: { id: number; name: string; amount: string; kind: string }[]; total: number };
   /** Upkeep late, due or coming up soon, most pressing first. */
   upkeep: { id: number; name: string; state: DueState; days_left: number | null; reading_left: number | null; reading_unit: string | null; who: string | null }[];
@@ -108,11 +112,12 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
       const any = async (sql: string) => Boolean(await db.get(sql, [owner]));
       const hasPlans = await any('SELECT 1 AS n FROM plans WHERE owner_id = ? LIMIT 1');
       const hasHolidays = await any('SELECT 1 AS n FROM holidays WHERE owner_id = ? LIMIT 1');
+      const hasServices = (await homeServices(db, owner, clock).pinned()).length > 0;
       const hasCoupons = await any('SELECT 1 AS n FROM coupons WHERE owner_id = ? AND used_on IS NULL LIMIT 1');
       // Routines for this person (or for everyone); a household member's show on the chore chart instead.
       const hasRoutines = Boolean(await db.get('SELECT 1 AS n FROM routines WHERE for_member IS NULL AND (for_user = ? OR for_user IS NULL) AND (owner_id = ? OR for_user = ? OR for_user IS NULL) LIMIT 1', [owner, owner, owner]));
       const offered = CARDS.filter((card) => (card.key === 'weather' ? place !== null : card.key === 'mail' ? hasMail : card.key === 'routines' ? hasRoutines
-        : (card.section === null || sections.includes(card.section)) && (card.key !== 'plans' || hasPlans) && (card.key !== 'holidays' || hasHolidays) && (card.key !== 'coupons' || hasCoupons)));
+        : (card.section === null || sections.includes(card.section)) && (card.key !== 'plans' || hasPlans) && (card.key !== 'holidays' || hasHolidays) && (card.key !== 'coupons' || hasCoupons) && (card.key !== 'services' || hasServices)));
       const cards = offered.map((card) => card.key).filter((key) => !out.includes(key));
       const shows = (key: CardKey) => cards.includes(key);
 
@@ -120,7 +125,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
         day, cards,
         choices: offered.map((card) => ({ key: card.key, label: card.label, shown: !out.includes(card.key) })),
         days: [], kitchen: { meals: [], to_buy: 0, short: [], use_up: null }, pantry: { low: [], expiring: [] }, projects: [],
-        things: { low: [], total: 0 }, upkeep: [], collection: { total: 0, wanted: 0, lent: [], lately: [] },
+        services: [], things: { low: [], total: 0 }, upkeep: [], collection: { total: 0, wanted: 0, lent: [], lately: [] },
         dates: [], plans: [], holidays: [], coupons: { currency: '$', soon: [] }, weather: null,
         week: { start: day, end: day, events: null, meals_planned: null, meals_cooked: null, sessions: null, minutes: null, enjoyed: null },
       };
@@ -160,6 +165,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
         const all = await inventory(db, owner, clock).listItems();
         summary.things = { total: all.length, low: all.filter((item) => item.low).map(({ id, name, amount, kind }) => ({ id, name, amount, kind })).slice(0, 12) };
       }
+      if (shows('services')) summary.services = await homeServices(db, owner, clock).pinned();
       if (shows('upkeep')) {
         summary.upkeep = (await upkeep(db, owner, clock).list()).filter((j) => ['overdue', 'due', 'soon'].includes(j.due.state)).slice(0, 8)
           .map((j) => ({ id: j.id, name: j.name, state: j.due.state, days_left: j.due.days_left, reading_left: j.due.reading_left, reading_unit: j.reading_unit,

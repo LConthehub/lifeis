@@ -19,6 +19,7 @@
  */
 import { csvRows } from './bookList.ts';
 import { atomic, type Db, type Queries, type Value } from './db.ts';
+import { addressFrom, chosenNames, SERVICE_COLORS, SERVICE_ICONS, servicesSeenBy } from './homeServices.ts';
 import { noteHistory } from './history.ts';
 import { assetLabel, assetNumber, GONE_HOW, placePaths } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
@@ -72,6 +73,7 @@ export const KINDS: KindInfo[] = [
   { key: 'upkeep', label: 'Upkeep jobs, bills, renewals and chores, with when each was done', file: 'upkeep.csv', importable: true, matched: 'by name (and pet)' },
   { key: 'routines', label: 'Routines, with their times and steps, and the days each time was finished', file: 'routines.csv', importable: true, matched: 'by name' },
   { key: 'manual', label: 'The house manual', file: 'house-manual.csv', importable: true, matched: 'by part and title' },
+  { key: 'services', label: 'Home services: your links, and who sees each', file: 'home-services.csv', importable: true, matched: 'by name and address' },
   { key: 'licenses', label: 'Licenses and permits', file: 'licenses.csv', importable: true, matched: 'by name and holder' },
   { key: 'collection', label: 'The collection: titles, copies and what was watched or read', file: 'collection.csv', importable: true, matched: 'by title and type' },
   { key: 'lists', label: 'Lists of titles: To watch, read or hear, and the ones you made, in their order and whether they are shared', file: 'lists.csv', importable: true, matched: 'a list by its name; a title on it by title and type' },
@@ -516,6 +518,18 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     (await all('SELECT name, category, holder, number, issuer, issued_on, expires_on, note FROM licenses WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id'))
       .map((l) => [str(l.name), str(l.category), str(l.holder), str(l.number), str(l.issuer), str(l.issued_on), str(l.expires_on), str(l.note)]));
 
+  // ---------- home services ----------
+  // The links this person may see. The person in charge also gets who sees each and which are for guests; anyone else is not told that.
+  const inCharge = Boolean(await q.get('SELECT 1 AS yes FROM users WHERE id = ? AND is_admin = 1', [owner]));
+  const pinnedIds = new Set((await all('SELECT service_id FROM home_service_pins WHERE user_id = ?')).map((p) => p.service_id as number));
+  const serviceRows: Cell[][] = [];
+  for (const s of await servicesSeenBy(q, owner)) {
+    serviceRows.push([s.name, s.url, s.url_at, str(s.url2), str(s.url2_at), s.icon, s.color, str(s.grp), s.sort_order, str(s.note),
+      inCharge ? ({ everyone: 'Everyone', chosen: 'Chosen people', me: 'Only the person in charge' })[s.who] : '', inCharge ? (await chosenNames(q, s.id)).join('; ') : '',
+      inCharge ? yes(s.guests) : '', pinnedIds.has(s.id) ? 'yes' : 'no']);
+  }
+  out.csv('home-services.csv', ['Name', 'Address', 'Address works', 'Second address', 'Second works', 'Icon', 'Color', 'Group', 'Order', 'Notes', 'Who sees it', 'Chosen people', 'Shown to guests', 'On my Home page'], serviceRows);
+
   // ---------- the collection ----------
   const titles = await all('SELECT id, type, title, creator, year, summary, genres, minutes, wanted, listed_only, note FROM media WHERE owner_id = ? ORDER BY title COLLATE NOCASE, id');
   const titleOf = new Map(titles.map((t) => [t.id as number, t]));
@@ -754,6 +768,7 @@ const FILE_ABOUT: [string, string][] = [
   ['routines.csv', 'Routines: one row for each step, with its time of day, which days it falls on and the thing it uses. routine-history.csv has the days each time was finished.'],
   ['pets.csv', 'Your pets.'],
   ['pet-weights.csv', 'Your pets’ weights over time. Their care is in upkeep.csv, with the pet’s name.'],
+  ['home-services.csv', 'Your home services: links to programs at home, with their addresses (no passwords), and who sees each. Only the links you may see are in it.'],
   ['house-manual.csv', 'The house manual. Entries marked private in the Private column are included: this is your own copy.'],
   ['licenses.csv', 'Licenses and permits, with their numbers. The numbers are included because this file is yours alone; keep it as carefully as the license itself.'],
   ['collection.csv', 'The titles in your collection (films, shows, music, books, games).'],
@@ -1483,6 +1498,52 @@ const importers: Record<string, Importer> = {
     return d;
   },
 
+  async services(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'home-services.csv');
+    if (!t) return d;
+    // Only the person in charge adds links, so for anyone else they are left alone.
+    const inCharge = Boolean(await c.tx.get('SELECT 1 AS yes FROM users WHERE id = ? AND is_admin = 1', [c.owner]));
+    const people = new Map((await c.tx.all<{ id: number; username: string }>('SELECT id, username FROM users')).map((u) => [u.username.toLowerCase(), u.id]));
+    const seen = new Seen((await c.tx.all<{ name: string; url: string }>('SELECT name, url FROM home_services')).map((s) => `${labelKey(s.name)}
+${s.url.toLowerCase()}`));
+    let next = (await c.tx.get<{ next: number }>('SELECT COALESCE(MAX(sort_order) + 1, 0) AS next FROM home_services'))?.next ?? 0;
+    for (const [at, row] of t.rows.entries()) {
+      const name = clean(cellOf(row, 'Name'), 80);
+      if (!name) { skip(d, at, 'it has no name'); continue; }
+      if (!inCharge) { skip(d, at, 'only the person in charge can bring in these links'); continue; }
+      let url: string;
+      let url2: string | null = null;
+      try {
+        url = addressFrom(cellOf(row, 'Address'));
+        if (cellOf(row, 'Second address')) url2 = addressFrom(cellOf(row, 'Second address'), 'The second address');
+      } catch (problem) { skip(d, at, problem instanceof Problem ? problem.message : 'its address is not one'); continue; }
+      d.found += 1;
+      if (seen.take(`${labelKey(name)}
+${url.toLowerCase()}`)) { d.already += 1; continue; }
+      let first = ['any', 'home', 'away'].includes(cellOf(row, 'Address works').toLowerCase()) ? cellOf(row, 'Address works').toLowerCase() : 'any';
+      let second: string | null = url2 ? (cellOf(row, 'Second works').toLowerCase() === 'home' ? 'home' : 'away') : null;
+      if (second && first === 'any') first = second === 'home' ? 'away' : 'home';
+      if (second && first === second) second = first === 'home' ? 'away' : 'home';
+      const who = cellOf(row, 'Who sees it').toLowerCase().startsWith('chosen') ? 'chosen' : cellOf(row, 'Who sees it').toLowerCase().startsWith('only') ? 'me' : 'everyone';
+      const order = wholeOf(cellOf(row, 'Order'));
+      const made = await c.tx.run('INSERT INTO home_services (name, url, url_at, url2, url2_at, icon, color, grp, sort_order, note, who, guests, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [name, url, first, url2, second, (SERVICE_ICONS as readonly string[]).includes(cellOf(row, 'Icon')) ? cellOf(row, 'Icon') : 'link',
+          (SERVICE_COLORS as readonly string[]).includes(cellOf(row, 'Color')) ? cellOf(row, 'Color') : 'brown', clean(cellOf(row, 'Group'), 40),
+          order !== null && order >= 0 && order <= 9999 ? order : next, clean(row.notes, 1000), who, yesOf(cellOf(row, 'Shown to guests')) ? 1 : 0, c.owner, c.at, c.at]);
+      next += 1;
+      if (who === 'chosen') {
+        for (const username of listOf(cellOf(row, 'Chosen people'))) {
+          const id = people.get(username.toLowerCase());
+          if (id !== undefined) await c.tx.run('INSERT OR IGNORE INTO home_service_people (service_id, user_id) VALUES (?, ?)', [made.lastId, id]);
+        }
+      }
+      if (yesOf(cellOf(row, 'On my Home page'))) await c.tx.run('INSERT OR IGNORE INTO home_service_pins (user_id, service_id, created_at) VALUES (?, ?, ?)', [c.owner, made.lastId, c.at]);
+      d.fresh += 1;
+    }
+    return d;
+  },
+
   async licenses(c) {
     const d = blank();
     const t = tableOf(c.files, 'licenses.csv');
@@ -2150,7 +2211,7 @@ ${mediaId}`);
     return d;
   },
 };
-const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'manual', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
+const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
 
 function rowsIn(files: Files, info: KindInfo): number {
   return tableOf(files, info.file)?.rows.length ?? 0;

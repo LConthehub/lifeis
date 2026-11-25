@@ -4,6 +4,7 @@ import axios from 'axios';
 import { onDevice } from '../where';
 import { AskCard } from '../components/Assistant';
 import AskBack from '../components/AskBack';
+import { Badge, Open } from '../components/ServiceLinks';
 import { StartCard } from '../components/Start';
 import { RoutinesCard } from '../components/Routines';
 import HolidayCard from '../components/HolidayCard';
@@ -318,6 +319,22 @@ export default function Home({ user }) {
                     <Link to={`/things/upkeep/${j.id}`} className="flex-1 text-gray-800 hover:underline dark:text-life-50">{j.name}{j.who && <span className="text-xs text-gray-500 dark:text-life-300"> · {j.who}</span>}</Link>
                     <Flag>{j.state === 'overdue' ? (j.days_left !== null && j.days_left < 0 ? `late ${-j.days_left} d` : 'past due') : j.state === 'due' ? 'today'
                       : j.days_left !== null ? `in ${j.days_left} d` : j.reading_left !== null ? `in ${j.reading_left.toLocaleString()}${j.reading_unit ? ` ${j.reading_unit}` : ''}` : 'soon'}</Flag>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        )}
+
+        {shows('services') && (
+          <Card title="Home services" to="/manual/services" link="All links">
+            {s.services.length === 0 ? <Quiet>Nothing pinned. Pin links on the Home services page.</Quiet> : (
+              <ul className="divide-y divide-life-50 dark:divide-life-700">
+                {s.services.map((v) => (
+                  <li key={v.id} className="flex flex-wrap items-center gap-3 py-2">
+                    <Badge icon={v.icon} color={v.color} size="h-10 w-10" />
+                    <span className="min-w-0 flex-1 basis-32 text-sm text-gray-800 dark:text-life-50">{v.name}{v.group && <span className="block text-xs text-gray-500 dark:text-life-300">{v.group}</span>}</span>
+                    <Open service={v} />
                   </li>
                 ))}
               </ul>

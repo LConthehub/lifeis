@@ -41,6 +41,7 @@ const PetsPage = lazyPage(() => import('./pages/Pets'));
 const PetPage = lazyPage(() => import('./pages/Pets').then((m) => ({ default: m.PetPage })));
 const LicensesPage = lazyPage(() => import('./pages/Licenses'));
 const ManualPage = lazyPage(() => import('./pages/Manual'));
+const HomeServicesPage = lazyPage(() => import('./pages/HomeServices'));
 const PackingPage = lazyPage(() => import('./pages/Packing'));
 const UpkeepPage = lazyPage(() => import('./pages/Upkeep'));
 const JobPage = lazyPage(() => import('./pages/Upkeep').then((m) => ({ default: m.JobPage })));
@@ -81,7 +82,7 @@ const SECTIONS = [
   { word: 'eating', shown: 'tasty', icon: 'recipe', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
     tabs: [['/recipes', 'Recipes'], ['/week', 'Week'], ['/groceries', 'Groceries'], ['/pantry', 'Pantry'], ['/prices', 'Prices']] },
   { word: 'keeping', shown: 'tidy', icon: 'thing', home: '/things', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || path.startsWith('/manual'),
-    tabs: [['/things', 'Things'], ['/things/places', 'Places'], ['/things/upkeep', 'Upkeep'], ['/things/pets', 'Pets'], ['/things/licenses', 'Licenses'], ['/manual', 'House Manual']] },
+    tabs: [['/things', 'Things'], ['/things/places', 'Places'], ['/things/upkeep', 'Upkeep'], ['/things/pets', 'Pets'], ['/things/licenses', 'Licenses'], ['/manual', 'House Manual'], ['/manual/services', 'Home services']] },
   { word: 'spending', shown: 'balanced', icon: 'bill', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month'], ['/money/year', 'Year'], ['/money/goals', 'Goals'], ['/money/income', 'Income and bills']] },
   // Everything with a date or a time to it.
   { word: 'making', shown: 'busy', icon: 'date', home: '/calendar', owns: (path) => ['/calendar', '/routines', '/projects', '/plans', '/things/activities'].some((p) => path.startsWith(p)),
@@ -194,6 +195,7 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/things/report" element={<HomeReport />} />
           <Route path="/things/packing" element={<PackingPage />} />
           <Route path="/manual" element={<ManualPage />} />
+          <Route path="/manual/services" element={<HomeServicesPage />} />
           <Route path="/things/licenses" element={<LicensesPage />} />
           <Route path="/things/pets" element={<PetsPage />} />
           <Route path="/things/pets/:id" element={<PetPage />} />

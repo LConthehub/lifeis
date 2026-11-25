@@ -1012,7 +1012,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['media_list_items', 'media_lists', 'item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['home_service_pins', 'home_service_people', 'home_services', 'media_list_items', 'media_lists', 'item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.
@@ -1613,4 +1613,59 @@ it('lists of titles answer over the web: private by default, shared with the hou
   expect(own.map((l: { name: string; count: number }) => [l.name, l.count])).toEqual([['Wanted', 1], ['To watch, read or hear', 1], ['Rainy day', 3]]);
   const again = (await other.post('/api/export/bring-in', { files: zip.files, kinds: ['collection', 'lists'] })).json;
   expect(again.kinds.map((k: { fresh: number }) => k.fresh)).toEqual([0, 0]);
+});
+
+it('home services over the web: who sees each link in the list, search, the Home card and the download; only the person in charge changes them; guests see the away address', async () => {
+  const admin = await owner();
+  const ana = await member(admin, 'ana');
+  const bob = await member(admin, 'bob');
+  const people = (await admin.get('/api/home-services')).json.people;
+  const anaId = people.find((p: { name: string }) => p.name === 'ana').id;
+  const jelly = await admin.post('/api/home-services', { name: 'Jellyfin', address: 'http://192.168.1.20:8096', address_at: 'home', address2: 'https://watch.example.com', address2_at: 'away', icon: 'media', color: 'plum', group: 'Watch', guests: true });
+  expect([jelly.status, jelly.json.services[0].address_at, jelly.json.services[0].address2_at]).toEqual([201, 'home', 'away']);
+  await admin.post('/api/home-services', { name: 'Photos', address: 'http://192.168.1.21:2283', who: 'chosen', people: [anaId] });
+  await admin.post('/api/home-services', { name: 'Router', address: 'http://192.168.1.1', who: 'me', note: 'Only for me' });
+  expect((await admin.post('/api/home-services', { name: 'Bad', address: 'http://me:secret@nas.local' })).status).toBe(400);
+
+  const seen = async (who: ReturnType<typeof visitor>) => (await who.get('/api/home-services')).json.services.map((s: { name: string }) => s.name);
+  expect([await seen(admin), await seen(ana), await seen(bob)]).toEqual([['Jellyfin', 'Photos', 'Router'], ['Jellyfin', 'Photos'], ['Jellyfin']]);
+  const routerId = (await admin.get('/api/home-services')).json.services[2].id;
+  const jellyId = jelly.json.services[0].id;
+
+  // Only the person in charge adds, changes or removes; a hidden link is not there for anyone else.
+  expect((await ana.post('/api/home-services', { name: 'Mine', address: 'http://x.example.com' })).status).toBe(403);
+  expect((await ana.put(`/api/home-services/${jellyId}`, { name: 'Mine', address: 'http://x.example.com' })).status).toBe(403);
+  expect((await ana.delete(`/api/home-services/${jellyId}`)).status).toBe(403);
+  expect((await ana.put(`/api/home-services/${routerId}/pin`)).status).toBe(404);
+  expect((await bob.put(`/api/home-services/${(await admin.get('/api/home-services')).json.services[1].id}/pin`)).status).toBe(404);
+
+  // Search, and the Home card.
+  expect((await admin.get('/api/search?q=router')).json.map((r: { kind: string }) => r.kind)).toEqual(['service']);
+  expect((await ana.get('/api/search?q=router')).json).toEqual([]);
+  expect((await bob.get('/api/search?q=photos')).json).toEqual([]);
+  expect((await ana.get('/api/search?q=photos')).json).toEqual([expect.objectContaining({ kind: 'service', title: 'Photos' })]);
+  expect((await bob.get('/api/home')).json.cards).not.toContain('services');
+  expect((await bob.put(`/api/home-services/${jellyId}/pin`)).json.services[0].pinned).toBe(true);
+  const card = (await bob.get('/api/home')).json;
+  expect([card.cards.includes('services'), card.services.map((s: { name: string }) => s.name)]).toEqual([true, ['Jellyfin']]);
+  expect((await ana.get('/api/home')).json.services).toEqual([]);
+
+  // The download holds only what the person may see; the person in charge's holds it all, and says who sees each.
+  const theirs = await splitDownload(new Uint8Array((await bob.get('/api/export/everything.zip')).bytes));
+  expect(theirs.files['home-services.csv']).toContain('Jellyfin');
+  expect(theirs.files['home-services.csv']).not.toMatch(/Router|Photos|192\.168\.1\.1,/);
+  const mine = await splitDownload(new Uint8Array((await admin.get('/api/export/everything.zip')).bytes));
+  expect(mine.files['home-services.csv']).toMatch(/Router[^\n]*Only the person in charge/);
+
+  // The shared house manual: only links for guests, and only the address that works away from home.
+  await admin.post('/api/home-services', { name: 'Printer', address: 'http://192.168.1.30', address_at: 'home', guests: true });
+  const share = (await admin.put('/api/manual/share', { days: 3 })).json.share;
+  const html = (await visitor().get(`/m/${share.token}`)).bytes.toString('utf8');
+  expect([html.includes('https://watch.example.com'), html.includes('Only works at home.'), html.includes('Printer')]).toEqual([true, true, true]);
+  for (const left of ['192.168.1.20', '192.168.1.30', '192.168.1.1', 'Router', 'Photos']) expect(html).not.toContain(left);
+
+  // Taking a link off someone takes it off their Home page; removing it takes it from everyone.
+  expect((await admin.put(`/api/home-services/${jellyId}`, { name: 'Jellyfin', address: 'http://192.168.1.20:8096', who: 'me' })).status).toBe(200);
+  expect((await bob.get('/api/home')).json.cards).not.toContain('services');
+  expect((await admin.delete(`/api/home-services/${routerId}`)).json.services.map((s: { name: string }) => s.name)).toEqual(['Jellyfin', 'Photos', 'Printer']);
 });

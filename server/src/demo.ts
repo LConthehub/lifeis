@@ -15,7 +15,7 @@
 import { randomBytes } from 'node:crypto';
 import { statSync } from 'node:fs';
 import {
-  calendar, inventory, kitchen, life, manual, media, mediaLists, money, outdoorTrips, packing, pets, projects, upkeep, type Db,
+  calendar, homeServices, inventory, kitchen, life, manual, media, mediaLists, money, outdoorTrips, packing, pets, projects, upkeep, type Db,
 } from '../../core/src/index.ts';
 import { AREAS } from '../../core/src/life.ts';
 import { addDays } from '../../core/src/small.ts';
@@ -175,6 +175,15 @@ async function fill(db: Db, me: number): Promise<void> {
   await book.addEntry({ section: 'house', title: 'Wi-Fi', body: 'Network: SampleHome\nPassword: made-up-for-the-demo' });
   await book.addEntry({ section: 'house', title: 'Alarm', body: 'A code would go here. It is marked private, so it never appears on a shared link.', private: true });
   await book.addEntry({ section: 'routines', title: 'Trash and recycling days', body: 'Trash on Tuesday. Recycling every other Friday.' });
+
+  // ---- home services ----
+  // The links belong to the person in charge (the demo's other account, which nobody signs in to), so the demo person sees them and pins one.
+  const inCharge = (await db.get<{ id: number }>('SELECT id FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1'))!.id;
+  const links = homeServices(db, inCharge);
+  const watch = (await links.create({ name: 'Media server', address: 'http://192.168.1.20:8096', address_at: 'home', address2: 'https://media.example.com', address2_at: 'away', icon: 'media', color: 'plum', group: 'Watch', note: 'Films and shows for the house.', guests: true })).services[0]!;
+  await links.create({ name: 'Photos', address: 'http://192.168.1.21:2283', icon: 'photo', color: 'green', group: 'Files', note: 'The family photo library.' });
+  await links.create({ name: 'Router', address: 'http://192.168.1.1', icon: 'settings', color: 'rust', group: 'House', who: 'me' });
+  await homeServices(db, me).pin(watch.id);
 
   // ---- packing ----
   const move = packing(db, me);

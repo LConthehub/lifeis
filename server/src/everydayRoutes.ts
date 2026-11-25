@@ -10,7 +10,7 @@
  */
 import { addDays, todayOf } from '../../core/src/small.ts';
 import { search, type SearchKind } from '../../core/src/index.ts';
-import { manual } from '../../core/src/index.ts';
+import { homeServices, manual } from '../../core/src/index.ts';
 import { prep, type PrepStepInput } from '../../core/src/index.ts';
 import { reminders, COVERS, EMAIL_SERVICE, NTFY_SERVICE, PUSH_SERVICE, type PushSender, type ReminderSettings } from '../../core/src/index.ts';
 import { displayName, home, life, lookups, MAX_THING_PHOTO, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
@@ -122,6 +122,13 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
   });
   const lookupState = async (c: Context) => ({ ...await finder(c).status(), service: BOOK_SERVICE, grocery_service: GROCERY_SERVICE, title_services: TITLE_SERVICES, film_service: FILM_SERVICE });
   const book = (c: Context) => manual(db, c.user.id, c.clock);
+  const services = (c: Context) => homeServices(db, c.user.id, c.clock);
+  const serviceFrom = (body: Body) => ({
+    name: read.maybeText(body, 'name'), address: read.maybeText(body, 'address'), address_at: read.maybeText(body, 'address_at'),
+    address2: read.maybeText(body, 'address2'), address2_at: read.maybeText(body, 'address2_at'), icon: read.maybeText(body, 'icon'), color: read.maybeText(body, 'color'),
+    group: read.maybeText(body, 'group'), order: read.maybeWhole(body, 'order'), note: read.maybeText(body, 'note'), who: read.maybeText(body, 'who'),
+    people: read.wholes(body, 'people'), guests: Object.hasOwn(body, 'guests') ? read.yesNo(body, 'guests') : false,
+  });
   const entryFrom = (body: Body) => ({
     section: read.text(body, 'section'), title: read.text(body, 'title'), body: read.maybeText(body, 'body'), phone: read.maybeText(body, 'phone'),
     place_id: read.maybeWhole(body, 'place_id'), private: Object.hasOwn(body, 'private') ? read.yesNo(body, 'private') : false,
@@ -201,6 +208,13 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ['DELETE', /^\/api\/manual\/entries\/(\d{1,15})$/, async (c) => ({ json: await book(c).removeEntry(c.id) })],
     ['PUT', /^\/api\/manual\/share$/, async (c) => ({ json: await book(c).shareFor(read.maybeWhole(c.body, 'days'), Object.hasOwn(c.body, 'pets') ? read.yesNo(c.body, 'pets') : true) })],
     ['DELETE', /^\/api\/manual\/share$/, async (c) => ({ json: await book(c).stopSharing() })],
+    // Home services: links to programs at home. The person in charge keeps them; each person pins the ones they want on their Home page. See core/'s homeServices.ts.
+    ['GET', /^\/api\/home-services$/, async (c) => ({ json: await services(c).list() })],
+    ['POST', /^\/api\/home-services$/, async (c) => ({ status: 201, json: await services(c).create(serviceFrom(c.body)) })],
+    ['PUT', /^\/api\/home-services\/(\d{1,15})$/, async (c) => ({ json: await services(c).update(c.id, serviceFrom(c.body)) })],
+    ['DELETE', /^\/api\/home-services\/(\d{1,15})$/, async (c) => ({ json: await services(c).remove(c.id) })],
+    ['PUT', /^\/api\/home-services\/(\d{1,15})\/pin$/, async (c) => ({ json: await services(c).pin(c.id) })],
+    ['DELETE', /^\/api\/home-services\/(\d{1,15})\/pin$/, async (c) => ({ json: await services(c).unpin(c.id) })],
 
     // One search across everything the person keeps. See core/'s search.ts.
     ['GET', /^\/api\/search$/, async (c) => ({ json: await search(db, c.user.id, c.query.get('q') ?? '', (c.query.get('kind') || null) as SearchKind | null) })],

@@ -8,6 +8,7 @@
  * never on it.
  */
 import type { Db } from './db.ts';
+import { guestServices, type SharedService } from './homeServices.ts';
 import { placePaths } from './inventory.ts';
 import { pets } from './pets.ts';
 import { Problem } from './problem.ts';
@@ -30,7 +31,7 @@ export type Manual = {
   share: { on: boolean; token: string | null; expires_on: string | null; pets: boolean };
 };
 /** What the shared link shows: no private entries, nothing that can be changed. */
-export type SharedManual = { sections: { title: string; entries: Omit<ManualEntry, 'private' | 'place_id' | 'id' | 'section'>[] }[]; pets: Omit<ManualPet, 'id'>[]; expires_on: string | null };
+export type SharedManual = { sections: { title: string; entries: Omit<ManualEntry, 'private' | 'place_id' | 'id' | 'section'>[] }[]; pets: Omit<ManualPet, 'id'>[]; services: SharedService[]; expires_on: string | null };
 
 const MAX_ENTRIES = 200;
 function newToken(): string {
@@ -136,6 +137,8 @@ export async function manualFor(db: Db, token: string, clock: Clock = () => new 
   return {
     sections: MANUAL_SECTIONS.map((s) => ({ title: s.title, entries: entries.filter((e) => e.section === s.id).map(({ title, body, phone, place }) => ({ title, body, phone, place })) })).filter((s) => s.entries.length),
     pets: row.pets === 1 ? (await petsOf(db, row.owner_id, clock)).map(({ id: _id, ...p }) => p) : [],
+    // Links marked for guests that the person sharing may see: only the address that works away from home.
+    services: await guestServices(db, row.owner_id),
     expires_on: row.expires_on,
   };
 }
@@ -150,19 +153,24 @@ export function manualHtml(m: SharedManual): string {
   const pet = (p: SharedManual['pets'][number]) => `<div class="e"><h3>${esc(p.name)}${p.species ? ` <small>${esc(p.species)}</small>` : ''}</h3>${
     p.food ? `<p><b>Food:</b> ${esc(p.food)}</p>` : ''}${p.vet_name || p.vet_phone ? `<p><b>Vet:</b> ${[p.vet_name ? esc(p.vet_name) : '', p.vet_phone ? tel(p.vet_phone) : ''].filter(Boolean).join(' · ')}</p>` : ''}${
     p.note ? `<p>${esc(p.note).replace(/\n/g, '<br>')}</p>` : ''}</div>`;
+  const service = (v: SharedService) => `<div class="e"><h3>${esc(v.name)}</h3>${
+    v.address ? `<p class="phone"><a href="${esc(v.address)}" rel="noopener noreferrer">${esc(v.address)}</a></p>` : '<p>Only works at home.</p>'}${v.note ? `<p>${esc(v.note).replace(/\n/g, '<br>')}</p>` : ''}</div>`;
+  const groups = [...new Set(m.services.map((v) => v.group ?? ''))];
+  const services = groups.map((g) => `${g ? `<h3 class="grp">${esc(g)}</h3>` : ''}${m.services.filter((v) => (v.group ?? '') === g).map(service).join('')}`).join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>House Manual</title><style>
 body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:0;background:#f4f8f7;color:#1c2b2a;line-height:1.45}
 main{max-width:40rem;margin:0 auto;padding:1.25rem 1rem 3rem}
 h1{font-size:1.5rem;margin:0 0 .25rem}h2{font-size:1.1rem;margin:1.75rem 0 .5rem;border-bottom:2px solid #1c5a55;padding-bottom:.2rem}
 h3{font-size:1rem;margin:0}small{font-weight:400;color:#5c6b6a}
 .e{background:#fff;border-radius:.75rem;padding:.75rem .9rem;margin:.5rem 0;box-shadow:0 1px 2px rgba(0,0,0,.06);break-inside:avoid}
-.e p{margin:.3rem 0 0}.where{color:#1c5a55}.phone a{font-size:1.15rem;font-weight:600}
+.grp{margin:.9rem 0 0;color:#5c6b6a}.e p{margin:.3rem 0 0}.where{color:#1c5a55}.phone a{font-size:1.15rem;font-weight:600}
 a{color:#1c5a55}.foot{color:#5c6b6a;font-size:.85rem;margin-top:2rem}
 @media print{body{background:#fff}.e{box-shadow:none;border:1px solid #ccc}}
 </style></head><body><main><h1>House Manual</h1><p class="foot" style="margin-top:0">Shared with you${m.expires_on ? `. This link works until ${esc(m.expires_on)}` : ''}.</p>
 ${m.sections.map((s) => `<h2>${esc(s.title)}</h2>${s.entries.map(entry).join('')}`).join('')}
 ${m.pets.length ? `<h2>Pets</h2>${m.pets.map(pet).join('')}` : ''}
-${!m.sections.length && !m.pets.length ? '<p>Nothing has been written here yet.</p>' : ''}
+${m.services.length ? `<h2>Home services</h2>${services}` : ''}
+${!m.sections.length && !m.pets.length && !m.services.length ? '<p>Nothing has been written here yet.</p>' : ''}
 <p class="foot">Made with Life Is. Nothing on this page can be changed from here.</p></main></body></html>`;
 }
 

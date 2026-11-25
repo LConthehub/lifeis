@@ -7,11 +7,12 @@
  * somewhere in an answer, in any order ("blue linen" finds "Linen, blue").
  */
 import type { Db, Value } from './db.ts';
+import { servicesSeenBy } from './homeServices.ts';
 import { placePaths } from './inventory.ts';
 import { Problem } from './problem.ts';
 import { idsWithAny, tagsMatching, tagsOnto, type TagKind } from './tags.ts';
 
-export const SEARCH_KINDS = ['tag', 'recipe', 'pantry', 'thing', 'place', 'title', 'list', 'project', 'job', 'pet', 'license', 'plan', 'event', 'routine'] as const;
+export const SEARCH_KINDS = ['tag', 'recipe', 'pantry', 'thing', 'place', 'title', 'list', 'service', 'project', 'job', 'pet', 'license', 'plan', 'event', 'routine'] as const;
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 export type SearchResult = { kind: SearchKind; id: number; icon: string; title: string; detail: string | null; link: string };
 
@@ -108,6 +109,12 @@ export async function search(db: Db, owner: number, query: string, only?: Search
        FROM media_list_items i JOIN media_lists l ON l.id = i.list_id JOIN media m ON m.id = i.media_id
        WHERE l.shared = 1 AND l.owner_id != ? AND ${w.sql} ORDER BY m.title COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
       out.push({ kind: 'list', id: -e.id, icon: MEDIA_ICONS[e.type] ?? '🗃', title: e.title, detail: join(e.creator, e.year, `On the shared list ${e.list}`), link: `/media/lists/${e.list_id}` });
+    }
+  }
+  if (wants('service')) {
+    // Home services by name, group and note: only the ones this person may see. A link someone cannot see is never here.
+    for (const s of (await servicesSeenBy(db, owner)).filter((r) => words.every((w) => [r.name, r.grp, r.note].some((t) => (t ?? '').toLowerCase().includes(w)))).slice(0, PER_KIND)) {
+      out.push({ kind: 'service', id: s.id, icon: '🔗', title: s.name, detail: join('Home services', s.grp), link: '/manual/services' });
     }
   }
   if (wants('project')) {

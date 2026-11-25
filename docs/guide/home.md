@@ -4,7 +4,7 @@ blurb: Places, things, records for your insurer, filling a shelf by scanning, pe
 ---
 # Your home
 
-The **tidy** section holds what you own, where it is, what it is for, and where it has been. It also holds the records that go with each thing, your pets, your [licenses](licenses.html) and a House Manual for a sitter. Jobs that come round again are in [Upkeep](upkeep.html). Its tabs are Things, Places, Upkeep, Pets, Licenses and House Manual.
+The **tidy** section holds what you own, where it is, what it is for, and where it has been. It also holds the records that go with each thing, your pets, your [licenses](licenses.html) and a House Manual for a sitter. Jobs that come round again are in [Upkeep](upkeep.html). Its tabs are Things, Places, Upkeep, Pets, Licenses, House Manual and Home services.
 
 ## Places
 
@@ -122,3 +122,15 @@ An entry can say where a thing is, using the places you already keep, and carry 
 Press **Print** and put it in a drawer. Or use **Share it by a link**, for a sitter. The link opens the manual on their phone with no sign-in. You choose how long it works: a day, a week, or until you turn it off. Making a new link stops the old one.
 
 Mark an entry **private**, such as an alarm code, and it is never on the shared link. The shared page is plain: nothing on it can be changed, and it shows nothing else of your Life Is.
+
+## Home services
+
+**Home services** is a tab next to the House Manual. It holds links to the programs you run at home: a media server, a photos app, the page for your router. Tap a link and it opens in a new tab (in the phone app, in the phone's own browser).
+
+The person in charge adds and changes the links. Each one has a name, an address, a color and an icon from the set Life Is already uses, and a note. You can add a second address and say which works **at home** and which works **away**; the link then has a button for each. You can also name a group (Watch, Files, House) and give an order.
+
+The person in charge picks who sees each link: **everyone**, **chosen people**, or **only me**. A link you cannot see is not there for you at all: not in the tab, not in search, not in your download. Each person can **pin** the links they use. Pinned links show on a **Home services** card on your Home page, which you can hide like any other card.
+
+Life Is only opens an address when you tap it. It does not look up logos or check whether a program is running. There is no place to keep a password, and an address with a name and password in it is refused: sign in on the page itself.
+
+Mark a link **Show to guests** and it is on the shared House Manual too, with only the address that works away from home. A link that only has a home address says it only works at home. Home services are in the download, and come back with **Bring it in** (the person in charge does that).

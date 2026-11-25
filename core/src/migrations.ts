@@ -1654,6 +1654,44 @@ export const MIGRATIONS: Migration[] = [
       `UPDATE media SET listed_only = 1 WHERE wanted = 1 AND NOT EXISTS (SELECT 1 FROM media_copies c WHERE c.media_id = media.id)`,
     ],
   },
+  {
+    number: 51,
+    name: 'home services: links to programs at home, who sees each, and what each person pins',
+    // Home services: links to the programs run at home. The person in charge keeps them; `who` says who sees each (everyone, the
+    // people listed in home_service_people, or only the person in charge). Each person pins the ones they want on their Home page.
+    // There is no place for a password. url_at says where the first address works (any, home or away); the second, if there is one, is home or away.
+    statements: [
+      `CREATE TABLE home_services (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        url_at TEXT NOT NULL DEFAULT 'any' CHECK (url_at IN ('any', 'home', 'away')),
+        url2 TEXT,
+        url2_at TEXT CHECK (url2_at IN ('home', 'away')),
+        icon TEXT NOT NULL DEFAULT 'link',
+        color TEXT NOT NULL DEFAULT 'brown',
+        grp TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        note TEXT,
+        who TEXT NOT NULL DEFAULT 'everyone' CHECK (who IN ('everyone', 'chosen', 'me')),
+        guests INTEGER NOT NULL DEFAULT 0,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE TABLE home_service_people (
+        service_id INTEGER NOT NULL REFERENCES home_services(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        PRIMARY KEY (service_id, user_id)
+      )`,
+      `CREATE TABLE home_service_pins (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        service_id INTEGER NOT NULL REFERENCES home_services(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, service_id)
+      )`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;
