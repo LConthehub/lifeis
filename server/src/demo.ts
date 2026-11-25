@@ -162,7 +162,8 @@ async function fill(db: Db, me: number): Promise<void> {
   await animals.addCare(biscuit.id, { name: 'Vaccinations', every_n: 1, every_unit: 'year', last_done: day(-340) });
   await animals.addCare(biscuit.id, { name: 'Flea and tick treatment', every_n: 1, every_unit: 'month', last_done: day(-33) });
   // Biscuit's morning: anyone in the house can tick it, and the feed step uses the dog food, so it can be marked running low.
-  const dogFood = await things.createItem({ kind_id: household, name: 'Dog food', quantity: 3, unit: 'cup', low_at: 2, place_id: kitchenRoom });
+  const petSupplies = (await things.createKind({ name: 'Pet supplies', icon: '🐾' })).find((x) => x.name === 'Pet supplies')!.id;
+  const dogFood = await things.createItem({ kind_id: petSupplies, name: 'Dog food', quantity: 3, unit: 'cup', low_at: 2, place_id: kitchenRoom });
   await routines(db, me).create({ name: 'Dog, daily', for_pet: biscuit.id, times: [{ name: 'Morning', steps: [{ words: 'Feed 1 cup', item_id: dogFood.id }, { words: 'Walk' }] }] });
   await animals.addWeight(biscuit.id, { value: 27.5, unit: 'lb', day: day(-90) });
   await animals.addWeight(biscuit.id, { value: 28.2, unit: 'lb', day: day(-5) });
