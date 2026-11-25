@@ -55,6 +55,7 @@ const SUITE = [
   { specs: ['backup'], phone: true },
   { specs: ['settings'] },
   { specs: ['security'] },
+  { specs: ['keys'] },
   { specs: ['assistant'] },
   { specs: ['home'], account: TRIAL, online: true },
   { specs: ['calendar-link'], account: TRIAL },

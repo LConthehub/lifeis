@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="Ask your iPhone for the grocery list, dinner and your day, and add to them by voice, with a personal key.">
+<title>Siri and Shortcuts · Life Is</title>
+<link rel="icon" href="../icon.png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="../icon-dark.png" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../"><img src="../icon.png" alt=""> Life Is</a>
+  <a href="./">Guides</a>
+  <a class="pill" href="https://demo.lifeis.living">Try the demo</a>
+</header>
+<div class="bands" aria-hidden="true"></div>
+<div class="layout">
+<nav class="menu" aria-label="Guides">
+  <a href="getting-started.html">Get started</a>
+  <a href="install.html">Install with Docker</a>
+  <a href="home.html">Your home</a>
+  <a href="upkeep.html">Upkeep</a>
+  <a href="licenses.html">Licenses and recalls</a>
+  <a href="kitchen.html">The kitchen</a>
+  <a href="money.html">Money and budget</a>
+  <a href="routines.html">Routines and the chore chart</a>
+  <a href="plans.html">Plans and projects</a>
+  <a href="holidays.html">Holidays</a>
+  <a href="trips.html">Outdoor trips</a>
+  <a href="tags.html">Tags</a>
+  <a href="collection.html">Films, music and books</a>
+  <a href="mail.html">Mail</a>
+  <a href="bank-reading.html">Reading your bank</a>
+  <a href="phone.html">On your phone</a>
+  <a href="siri.html" aria-current="page">Siri and Shortcuts</a>
+  <a href="your-data.html">Your data</a>
+  <a href="troubleshooting.html">Troubleshooting</a>
+</nav>
+<main>
+<h1 id="siri-and-shortcuts">Siri and Shortcuts</h1>
+<p>You can say "Hey Siri, what's for dinner" and hear the answer from your own Life Is. You make a <strong>personal key</strong>, then build a few shortcuts in the iPhone Shortcuts app that use it. Each takes about three minutes.</p>
+<h2 id="what-you-need">What you need</h2>
+<ul><li><strong>A Life Is you run.</strong> Keys work only on a Life Is on your own computer or server. They do not work in the phone app while it keeps everything on the phone, because there is no server for a shortcut to reach.</li><li><strong>An address your phone can reach over HTTPS.</strong> The address must start with <code>https://</code>, and your phone must be able to open it from where you are. <a href="phone.html#reaching-a-life-is-at-home">On your phone</a> shows ways to do that.</li><li><strong>The Shortcuts app</strong> on your iPhone. It comes with iOS.</li></ul>
+<h2 id="what-is-sent-and-where">What is sent, and where</h2>
+<p>Siri turns your voice into text on your phone or on Apple's side, as it always does. Apple's own privacy information says how. After that, the only thing that happens is a request from your phone to your Life Is, with your key.</p>
+<p>Nothing goes through Apple's servers for Life Is's part of it, or through any company's. Life Is sends nothing anywhere because of a key.</p>
+<h2 id="make-a-key">Make a key</h2>
+<ol><li>Open <strong>Settings</strong>, then <strong>Account &amp; sign-in</strong>, then <strong>Personal keys</strong>.</li><li>Choose <strong>Make a key</strong>.</li><li>Give it a name that says where it lives, like <code>Siri on my iPhone</code>.</li><li>Look at the list of what it may do. Uncheck anything you do not want this key to do.</li><li>Type your password and choose <strong>Make the key</strong>.</li><li>Press <strong>Copy</strong> next to the key and paste it into a note you can reach from your iPhone. <strong>Life Is shows it once.</strong> It keeps only a scrambled form, so it cannot show it again. If you lose it, make a new key and delete the old one.</li></ol>
+<p>Keys are off until you make one. Each key shows what it may do and the last day it was used. You can <strong>turn it off</strong> (it stops working at once and you can turn it back on) or <strong>delete</strong> it.</p>
+<h2 id="what-a-key-can-and-cannot-do">What a key can and cannot do</h2>
+<p>A key can do only what you tick. Today that is up to five things:</p>
+<ul><li>Read your grocery list.</li><li>Add things to your grocery list.</li><li>Read what is on today: events and chores due.</li><li>Read the week's meals, and what is for dinner.</li><li>Add a reminder to your calendar.</li></ul>
+<p>A key sees only what you can see. It <strong>never</strong> reaches guns or ammunition, measures, hidden gifts, money or mail, and it cannot open any other part of Life Is, make more keys, or sign in. Each key may be used 60 times a minute. Wrong keys are slowed down, the way wrong passwords are.</p>
+<h2 id="how-every-shortcut-is-built">How every shortcut is built</h2>
+<p>Each shortcut has the same middle step, <strong>Get Contents of URL</strong>. Tap <strong>Show More</strong> on it and set:</p>
+<ul><li><strong>URL:</strong> your address followed by the path for that shortcut. The Personal keys page shows your address; it ends with <code>/api/voice/</code>.</li><li><strong>Method:</strong> <code>GET</code> to read, <code>POST</code> to add.</li><li><strong>Headers:</strong> add one. Name: <code>Authorization</code>. Text: <code>Bearer </code> (with a space) and then your key, like <code>Bearer lik_AbC…</code>.</li><li><strong>Request Body</strong> (only for <code>POST</code>): <code>JSON</code>. Add a Text field and give it the name shown below.</li></ul>
+<p>Life Is answers in one short sentence of plain text. The last step of each shortcut is <strong>Speak Text</strong> with the <strong>Contents of URL</strong> in it. Choose <strong>Show Result</strong> instead if you would rather read it.</p>
+<p>Name each shortcut with the sentence you will say. That is what Siri listens for.</p>
+<h2 id="add-groceries">Add groceries</h2>
+<p>Say: "Hey Siri, add groceries." Siri asks what to add, and you say it.</p>
+<ol><li>Add <strong>Ask for Input</strong>. Set the type to <strong>Text</strong> and the question to <code>What do you want to add?</code></li><li>Add <strong>Get Contents of URL</strong>. URL: <code>…/api/voice/groceries</code>. Method: <code>POST</code>. Header: <code>Authorization</code>. Request Body: <code>JSON</code>, with one Text field named <code>text</code> whose value is <strong>Provided Input</strong> (choose it from the variables list).</li><li>Add <strong>Speak Text</strong> with <strong>Contents of URL</strong>.</li><li>Rename the shortcut to <code>Add groceries</code>.</li></ol>
+<p>Say "milk, eggs and pie crust". Life Is splits what you say at commas and at the word "and", so that is three things. It matches them to what you already have on the list, and does not add a thing twice. It answers "Added 3. That's 14 on the list."</p>
+<p>A thing with "and" in its name, like "mac and cheese", becomes two. Say "macaroni cheese" instead, or add it by hand.</p>
+<h2 id="what-do-i-need-from-the-store">What do I need from the store</h2>
+<ol><li>Add <strong>Get Contents of URL</strong>. URL: <code>…/api/voice/groceries</code>. Method: <code>GET</code>. Header: <code>Authorization</code>.</li><li>Add <strong>Speak Text</strong> with <strong>Contents of URL</strong>.</li><li>Rename it to <code>What do I need from the store</code>.</li></ol>
+<p>It answers "14 things. Milk, eggs, pie crust, and 11 more." To ask about one store, end the address with <code>?store=Costco</code> (use a store name you have in Life Is). Make a second shortcut for each store you want to ask about, named for it.</p>
+<h2 id="what-s-for-dinner">What's for dinner</h2>
+<ol><li>Add <strong>Get Contents of URL</strong>. URL: <code>…/api/voice/dinner</code>. Method: <code>GET</code>. Header: <code>Authorization</code>.</li><li>Add <strong>Speak Text</strong> with <strong>Contents of URL</strong>.</li><li>Rename it to <code>What's for dinner</code>.</li></ol>
+<p>It answers "Turkey chili. You still need sour cream." (what the pantry does not cover), or "Nothing planned for dinner." The key needs to be allowed to read the week's meals.</p>
+<h2 id="what-s-on-today">What's on today</h2>
+<ol><li>Add <strong>Get Contents of URL</strong>. URL: <code>…/api/voice/today</code>. Method: <code>GET</code>. Header: <code>Authorization</code>.</li><li>Add <strong>Speak Text</strong> with <strong>Contents of URL</strong>.</li><li>Rename it to <code>What's on today</code>.</li></ol>
+<p>It answers with today's events and the chores due, and with dinner too if the key may read the week's meals. When there is nothing, it says "Nothing on today."</p>
+<h2 id="add-a-reminder">Add a reminder</h2>
+<p>Say: "Hey Siri, add a reminder." Siri asks what, then when.</p>
+<ol><li>Add <strong>Ask for Input</strong> (type <strong>Text</strong>) with the question <code>What should I remind you of?</code></li><li>Add a second <strong>Ask for Input</strong> (type <strong>Text</strong>) with the question <code>When? Say today if there is no time.</code></li><li>Add <strong>Get Contents of URL</strong>. URL: <code>…/api/voice/reminders</code>. Method: <code>POST</code>. Header: <code>Authorization</code>. Request Body: <code>JSON</code>, with two Text fields: <code>text</code>, whose value is the first <strong>Provided Input</strong>, and <code>when</code>, whose value is the second one. (Tap the variable and rename the two inputs to tell them apart, like "What" and "When".)</li><li>Add <strong>Speak Text</strong> with <strong>Contents of URL</strong>.</li><li>Rename it to <code>Add a reminder</code>.</li></ol>
+<p>You can say things like "tomorrow at 3 PM", "Friday 9:30 AM", "in 3 days", "noon" or <code>2046-03-05 18:45</code>. It answers "Reminder added for tomorrow at 3 PM: call the dentist." The reminder is an item on your Life Is calendar. It shows on the calendar and in the morning reminders you have turned on. If Life Is cannot understand the time, it says so and adds nothing.</p>
+<h2 id="good-to-know">Good to know</h2>
+<ul><li><strong>The thing you want cannot be said in the same breath as the shortcut's name.</strong> You cannot say "Hey Siri, add groceries milk and eggs". Siri runs the shortcut, then asks the question, and you answer. Saying it in one breath would need an iPhone app of Life Is's own, and there is not one yet.</li><li><strong>No one-tap install links.</strong> Life Is does not offer downloadable shortcuts. A shortcut file has to be signed by Apple to be installed, and Life Is sends nothing to Apple. So you build each one by hand with the steps above.</li><li><strong>"That key isn't working."</strong> This is all Life Is says to a wrong, turned-off or deleted key. It does not say which, so a stranger learns nothing. Check the key is on in Settings, and that the header reads <code>Bearer</code>, a space, then the key.</li><li><strong>"That key isn't allowed to do that."</strong> The key is real but you did not tick that action. Delete it and make one that may, or make a second key.</li><li><strong>Making a second key</strong> for each device, like an iPad, lets you turn one off without the other.</li><li><strong>The key is a password for those five things.</strong> Anyone who has it can use it. Keep it in your notes app, not in a message you send.</li></ul>
+<script src="copy.js"></script>
+
+<p class="next">Next: <a href="your-data.html">Your data</a></p>
+</main>
+</div>
+<footer><a href="../">Life Is</a> · <a href="../privacy">Privacy policy</a> · <a href="mailto:hello@lifeis.living">hello@lifeis.living</a></footer>
+</body>
+</html>

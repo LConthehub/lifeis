@@ -281,11 +281,11 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
    * pantry's amount is taken off where its unit compares. Gives the lines to buy, and the ingredients the
    * pantry has "some" of (no amount), which are left off the list but named, so you can check the cupboard.
    */
-  async function shoppingNeeds(q: Queries, start: string, end: string) {
+  async function shoppingNeeds(q: Queries, start: string, end: string, only?: number) {
     type Slot = { ingredient: number; kind: string; base: number; unit: string | null; some: boolean };
     const need = new Map<string, Slot>();
     for (const meal of await planRows(q, start, end)) {
-      if (!meal.recipe_id || meal.cooked_on) continue;
+      if (!meal.recipe_id || meal.cooked_on || (only !== undefined && meal.id !== only)) continue;
       for (const line of await neededLines(q, meal.recipe_id, factorOf(meal))) {
         const kind = units.kindOf(line.unit);
         const key = `${line.ingredient_id}|${kind}`;
@@ -853,6 +853,13 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
         }));
         return putMeals(tx, items, described.missing);
       });
+    },
+
+    /** What one planned meal still needs that the pantry doesn't cover, by name. Nothing is changed. */
+    async needsForMeal(id: number): Promise<string[]> {
+      const meal = await db.get<{ day: string }>('SELECT day FROM meal_plan WHERE id = ? AND owner_id = ?', [id, owner]);
+      if (!meal) throw new Problem(404, 'Not found');
+      return (await shoppingNeeds(db, meal.day, meal.day, id)).buy.map((b) => b.label);
     },
 
     async deletePlan(id: number): Promise<void> {

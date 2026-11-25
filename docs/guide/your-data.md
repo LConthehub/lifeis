@@ -29,9 +29,14 @@ Life Is works without the internet. A few things reach outside, and each one is 
 | Calendar links you follow (on a Life Is you run) | A request for the calendar, about once an hour |
 | Photos from Immich, and media and book servers (on a Life Is you run) | Only to the servers you name, with the key you give. Life Is only reads, and changes nothing there |
 | Film and show look-ups from TMDB (on a Life Is you run) | The title you type, with your own key |
+| A personal key, for Siri Shortcuts (on a Life Is you run) | Nothing. A key only lets your own phone ask your own Life Is for a few things, with the key. Life Is sends nothing anywhere because of one. See [Siri and Shortcuts](siri.html) |
 | Reading your bank | Only on a Life Is you run, and only when you press Read now. Your setup token once, then a read-only request for the accounts you chose. Nothing of yours is sent. See [Reading your bank](bank-reading.html) |
 
 All of them are listed in one place: **Settings › Connections**. The phone app can also show its own morning reminders, made on the phone, with nothing sent. The [privacy policy](../privacy) has the full list.
+
+## Personal keys
+
+A personal key lets one shortcut on your phone, like Siri, read or add a few things in your Life Is without signing in. Keys are **off until you make one** (Settings, Account & sign-in, Personal keys), work only on a Life Is you run, and are shown once: Life Is keeps only a scrambled form. Each key does only what you ticked, sees only what you can see, and never reaches guns or ammunition, measures, hidden gifts, money or mail. You can turn a key off or delete it at any time, and it stops working at once. Life Is keeps the name, the list of what it may do and the last day it was used, and nothing else about its use. Keys are not in your export. See [Siri and Shortcuts](siri.html).
 
 ## Keeping a copy
 

@@ -114,3 +114,5 @@ export { exportEverything, lookAtDownload, bringInDownload, bringInPictures, spl
 export type { Everything, KindReport, Pending, Brought, PictureIn, ZipFile, KindInfo } from './exportAll.ts';
 export { outdoorTrips, PARTS as TRIP_PARTS, AFTER_TRIP, GEAR_SOURCES, ammoOnHand } from './outdoorTrips.ts';
 export type { OutdoorTrips, TripSummary as OutdoorTripSummary, YearView as OutdoorYearView, TripInput as OutdoorTripInput, SharedTrip as OutdoorSharedTrip, Gear as OutdoorGear, Part as OutdoorPart } from './outdoorTrips.ts';
+export { KEY_ACTIONS, isKeyAction, voice, splitGroceries, spokenList, spokenTime, spokenDay, readWhen } from './voice.ts';
+export type { KeyAction } from './voice.ts';

@@ -12,6 +12,7 @@ import { RemindersSettings } from '../components/Reminders';
 import { RecallAlertsService } from '../components/Recalls';
 import { BankReadingService } from '../components/BankReading';
 import { PeopleSignIn, SignInSecurity } from '../components/Security';
+import { PersonalKeys } from '../components/Keys';
 import YourFiles, { CopyNotice, noteCopyMade } from '../components/YourFiles';
 
 const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 120: '2 hours', 480: '8 hours', 0: 'Stay signed in' };
@@ -69,6 +70,7 @@ const GROUPS = [
       { id: 'idle', title: 'Signing out by itself', words: 'idle timeout log out automatic', when: server, render: () => <SignedOut /> },
       { id: 'password', title: 'Password', words: 'change password', when: server, render: () => <PasswordForm /> },
       { id: 'security', title: 'Sign-in security', words: 'two-step 2fa authenticator totp passkey recovery codes fingerprint face webauthn lock', when: server, render: () => <SignInSecurity /> },
+      { id: 'keys', title: 'Personal keys', words: 'siri shortcuts voice key keys iphone api token bearer ask speak', render: () => <PersonalKeys /> },
       { id: 'people', title: 'People in this Life Is', words: 'user account add family person locked out two-step passkey', when: (user) => server() && user.is_admin, render: () => <div className="space-y-4"><AddPerson /><PeopleSignIn /></div> },
       { id: 'sign-out', title: 'Sign out', words: 'log out leave', when: server, render: ({ user, onLogout }) => <Titled title="Sign out" hint={`Signed in as ${user.username}.`}><button type="button" onClick={onLogout} className={quietButtonClass}>Sign out</button></Titled> },
     ],

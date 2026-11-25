@@ -1707,6 +1707,26 @@ export const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    number: 53,
+    name: 'personal keys: named keys for a voice shortcut, each with a short list of what it may do',
+    // A personal key opens only the few things in `can` (a comma list of action names), for its owner, and only while `is_on`. The key itself
+    // is shown once and never kept: only its SHA-256 hash is (key_hash), and its last four letters (hint) so the person can tell keys apart.
+    statements: [
+      `CREATE TABLE personal_keys (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        key_hash TEXT NOT NULL UNIQUE,
+        hint TEXT NOT NULL,
+        can TEXT NOT NULL,
+        is_on INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        last_used_on TEXT
+      )`,
+      `CREATE INDEX idx_personal_keys_owner ON personal_keys(owner_id)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

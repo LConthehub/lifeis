@@ -98,6 +98,7 @@ export const KINDS: KindInfo[] = [
 export const LEFT_OUT: { what: string; why: string }[] = [
   { what: 'Your password', why: 'It is kept only as a scrambled form that cannot be turned back into it, and it is the one thing a download must never carry.' },
   { what: 'Two-step sign-in, passkeys and recovery codes', why: 'They are the keys to your account, so they stay where they were made. Set them up again on the new Life Is.' },
+  { what: 'Personal keys (for Siri Shortcuts)', why: 'A key is shown once and only a scrambled form is kept, so there is nothing to write down. Make new keys on the new Life Is.' },
   { what: 'Who is signed in where', why: 'Sign-ins belong to the place they were made.' },
   { what: 'The key of a media server, a book server or the photo library, an email password, and the assistant’s key', why: 'They are kept locked with a key that stays on this Life Is, so they could not be read anywhere else, and they should not travel in a file. Only the name and address of each is listed.' },
   { what: 'The access address of a bank connection (SimpleFIN)', why: 'It is a key to read your bank accounts, kept locked on this Life Is. Spending entries you brought in from the bank are in money-entries.csv like any other.' },

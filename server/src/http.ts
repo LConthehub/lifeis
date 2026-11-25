@@ -8,6 +8,7 @@
 import type { IncomingMessage } from 'node:http';
 import type { Kitchen } from '../../core/src/index.ts';
 import type * as auth from './auth.ts';
+import type { KeyUse } from './personalKeys.ts';
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024; // room for the largest paste the kitchen accepts
 
@@ -31,6 +32,8 @@ export type Context = {
   body: Body;
   /** The signed-in person. On the public addresses, where nobody may be signed in, this is never read. */
   user: auth.User;
+  /** On the voice addresses only: the personal key that was used, and what it may do. */
+  key?: KeyUse;
   kitchen: Kitchen;
   /** What the browser or app calls itself, kept with a sign-in so a person can tell their devices apart. */
   userAgent?: string;

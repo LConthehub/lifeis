@@ -71,6 +71,12 @@ Each of those services has its own privacy policy, and sees the internet address
 
 Reading bank accounts through SimpleFIN is off until you turn it on, and it is read only. It is offered only on a Life Is you host, never in the app while it keeps everything on your phone. The access address SimpleFIN gives you is kept sealed on your own server. It is never shown to a page, written to a log, or put in a download. You can disconnect at any time, which forgets it. SimpleFIN has its own privacy policy and sees the internet address the request comes from.
 
+### Personal keys, for voice shortcuts (only on a Life Is you host)
+
+A personal key lets a shortcut on your phone, such as one you build in Apple's Shortcuts app and run with Siri, ask your own Life Is for a few things: the grocery list, what is on today, the week's meals, adding groceries, and adding a reminder. Keys are off until you make one, are offered only on a Life Is you host (never in the app while it keeps everything on your phone), and each does only what you ticked for it. A key sees only what you can see, and never reaches guns or ammunition, measures, hidden gifts, money or mail.
+
+The key is shown once, when you make it. Your Life Is keeps only a scrambled form of it, the key's name, what it may do, and the last day it was used. You can turn a key off or delete it at any time, and it stops working at once. Life Is sends nothing to anyone because of a key: the request goes from your phone to your own Life Is. Siri turns your speech into text on your device or on Apple's side, as it always does, and that is covered by Apple's own privacy information, not by this policy.
+
 Each connection in the second table is off until you turn it on, says what it sends, and connects your computer directly to the service you name. Settings, under Connections, lists them all.
 
 The phone app can also show its own morning reminders as notifications made on the device. Nothing is sent for those.

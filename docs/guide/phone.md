@@ -42,4 +42,4 @@ Scanning barcodes and stickers uses the camera. The picture is read on the devic
 
 ## Short requests
 
-A shortcut on the app's icon, Siri or Google can add to the grocery list, note some spending, or tell you what is for dinner. Anything that adds waits for a tap, so a link alone can never change anything.
+A shortcut on the app's icon, Siri or Google can add to the grocery list, note some spending, or tell you what is for dinner. Anything that adds waits for a tap, so a link alone can never change anything. To use Siri with a Life Is you run, by voice and without opening the app, see [Siri and Shortcuts](siri.html).

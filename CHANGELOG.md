@@ -20,6 +20,11 @@ All notable changes to Life Is are listed here. The format follows [Keep a Chang
   entry per store. A bank charge that matches is not counted twice. "Still to get" uses the same store prices as the
   store card.
 - Privacy policy and Your data page now list every outside connection.
+- Personal keys and Siri Shortcuts (on a Life Is you run): a named key made in Settings, shown once and kept only as a hash,
+  that lets a shortcut on your phone read the grocery list, add groceries, read today and the week's meals, and add a
+  reminder, in short spoken sentences. A key can be turned off or deleted at once, sees only what its person can see, and
+  never reaches guns or ammunition, measures, hidden gifts, money or mail. A new guide, Siri and Shortcuts, builds the
+  five shortcuts step by step.
 
 ### Changed
 

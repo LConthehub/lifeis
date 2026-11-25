@@ -9,10 +9,12 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BlockList, isIP } from 'node:net';
 import { manualFor, manualHtml } from '../../core/src/index.ts';
 import type { PushSender } from '../../core/src/index.ts';
-import { atomic, feedFor, kitchen, Problem, type Db, type Sealer } from '../../core/src/index.ts';
+import { atomic, feedFor, kitchen, Problem, shownName, type Db, type Sealer } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
 import { sealerFromEnvironment, secondStepOn } from './secondStep.ts';
 import { securityRoutes } from './securityRoutes.ts';
+import { keyRoutes, voiceRoutes } from './keyRoutes.ts';
+import { bearer, REFUSED, useKey, type KeyUse } from './personalKeys.ts';
 import type { MailTools } from './mailRoutes.ts';
 import { notUnderstood, read, readBody, MAX_PAPER_BODY_BYTES, Refusal, type Context, type Reply, type Route } from './http.ts';
 import type { Reach } from './connectionRoutes.ts';
@@ -216,6 +218,10 @@ export function createApp(options: Options) {
 
     ...security.routes,
 
+    // Personal keys for a voice shortcut, and the few addresses a key opens (keyRoutes.ts).
+    ...keyRoutes(db, { clock, demo: Boolean(options.demo) }),
+    ...voiceRoutes(db),
+
     ['GET', /^\/api\/account$/, account],
     ['PUT', /^\/api\/account$/, async (c) => {
       const minutes = read.maybeWhole(c.body, 'idle_minutes');
@@ -275,7 +281,18 @@ export function createApp(options: Options) {
     }
     const token = cookie(req, auth.SESSION_COOKIE);
     let user: auth.User | null = null;
-    if (!PUBLIC_PATHS.has(path)) {
+    let key: KeyUse | undefined;
+    if (path.startsWith('/api/voice/')) {
+      // A voice address answers to a personal key and to nothing else (no cookie), as the person the key belongs to.
+      if (options.demo) throw new Refusal(403, "Voice keys don't work in the demo");
+      // Only for an address that is real, so a typo is not counted as a wrong key.
+      if (!routes.some(([m, pattern]) => m === method && pattern.test(path))) throw new Refusal(404, 'Not found');
+      key = await useKey(db, bearer(req.headers.authorization), clientIp(req), clock);
+      const owner = await db.get<{ id: number; username: string; name: string; is_admin: number }>(
+        `SELECT u.id, u.username, ${shownName('u')} AS name, u.is_admin FROM users u WHERE u.id = ?`, [key.owner]);
+      if (!owner) throw new Refusal(401, REFUSED);
+      user = { ...owner, is_admin: Boolean(owner.is_admin) };
+    } else if (!PUBLIC_PATHS.has(path)) {
       user = await auth.userForToken(db, token, clock, idleDefault, req.headers['x-background'] !== '1');
       if (!user) throw new Refusal(401, 'Not logged in');
     }
@@ -287,7 +304,7 @@ export function createApp(options: Options) {
     const theirClock = clockFor(req);
     return route[2]({
       path, userAgent: String(req.headers['user-agent'] ?? '') || undefined, query: url.searchParams, id: Number(route[1].exec(path)![1] ?? 0), body: SAFE_METHODS.has(method) ? {} : await readBody(req, /^\/api\/things\/items\/\d+\/documents$/.test(path) ? MAX_PAPER_BODY_BYTES : undefined),
-      user: signedIn, kitchen: kitchen(db, signedIn.id, theirClock), clock: theirClock, token, ip: clientIp(req), https: isHttps(req), local: isLocal(req),
+      user: signedIn, key, kitchen: kitchen(db, signedIn.id, theirClock), clock: theirClock, token, ip: clientIp(req), https: isHttps(req), local: isLocal(req),
       origin: req.headers.host ? `${isHttps(req) ? 'https' : 'http'}://${String(req.headers.host).slice(0, 200)}` : undefined,
     });
   }
@@ -330,7 +347,10 @@ export function createApp(options: Options) {
       }
     } catch (problem) {
       if (problem instanceof Problem || problem instanceof Refusal) {
-        reply = { status: problem.status, json: { detail: problem.message } };
+        // A voice shortcut speaks or shows whatever comes back, so a refusal there is a plain sentence, not a data format.
+        reply = path.startsWith('/api/voice/')
+          ? { status: problem.status, body: Buffer.from(problem.message, 'utf8'), headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+          : { status: problem.status, json: { detail: problem.message } };
       } else {
         (options.onError ?? console.error)(problem);
         reply = { status: 500, json: { detail: 'Something went wrong inside Life Is' } };
