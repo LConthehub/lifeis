@@ -222,9 +222,8 @@ docker compose up -d --build
   (`vault.ts`).
 - `frontend/`: the pages. React, Vite and Tailwind. The small icons are from Lucide (ISC license; the notice is in
   `docs/site-src/lucide-ISC.txt`), used by name through `frontend/src/components/Icon.jsx`.
-- `backend/`: the first version of the program, in Python. Docker no longer runs it. It is kept for now as the
-  reference `core/` is checked against: `python core/tests/golden.py` writes its answers down, and the tests
-  hold the TypeScript to them. The database file, its encryption and the passwords are the same in both.
+- The first version of the program was in Python. It was removed on Nov 25, 2026 and is still in the git history.
+  Its answers live on in `core/tests/*.golden.json`, which the tests hold the TypeScript to.
 - Tests: `docker compose -p lifeis-dev -f docker-compose.dev.yml run --rm tests`, or `npm test` in `core/` and
   in `server/` (after `npm install` in each).
 - Working on it: `docker compose -p lifeis-dev -f docker-compose.dev.yml up` (the program on port 8020, the

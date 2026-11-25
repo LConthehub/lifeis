@@ -58,7 +58,7 @@ it('units convert only within their kind', () => {
   expect([1.5, 1 / 3, 2.0, 0.25, 2.999, 1.37].map(nice)).toEqual(['1 1/2', '1/3', '2', '1/4', '3', '1.37']);
 });
 
-// The answers backend/units.py gives (python core/tests/golden.py writes them). Both must read amounts alike.
+// The answers the first, Python version gave (written once into units.golden.json; that version is in git history).
 describe('the same answers as backend/units.py', () => {
   it('ingredient lines', () => {
     for (const [line, expected] of golden.lines as [string, unknown][]) {

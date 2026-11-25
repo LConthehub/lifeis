@@ -61,7 +61,9 @@ bash scripts/deploy.sh --check    # the same, but runs every test first and stop
 ```
 
 The script builds the image before stopping anything, and puts the previous version back if the new one does not
-start. Never run the steps by hand unless the script fails, and never delete backups.
+start. Never run the steps by hand unless the script fails. After a good deploy the script keeps the 5 newest
+`before-*.tgz` backups and removes older ones (owner, Nov 25, 2026); never delete anything else in `private/backups`.
+Save deploy and test logs as `private/logs/<what>-<date>.log` and keep only the 5 newest there.
 
 ## Subagents
 

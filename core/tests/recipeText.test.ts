@@ -3,7 +3,7 @@ import { Problem } from '../src/problem.ts';
 import { minutes, readPasted, readSchemaOrg, splitLines } from '../src/recipeText.ts';
 import golden from './recipeText.golden.json';
 
-// The answers backend/kitchen.py gives (python core/tests/golden.py writes them). Both must read recipes alike.
+// The answers the first, Python version gave (written once into recipeText.golden.json; that version is in git history).
 
 /** What reading gave, or the words of the problem it raised. */
 function answer<T>(read: () => T): T | { problem: string } {

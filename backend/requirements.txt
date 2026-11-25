@@ -1,5 +1,0 @@
-fastapi==0.162.7
-uvicorn[standard]==0.54.0
-pydantic==2.14.3
-cryptography>=42          # sealed settings (AES-256-GCM)
-sqlcipher3-wheels==0.5.7  # the database file, encrypted (SQLCipher, AES-256)

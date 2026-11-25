@@ -6,7 +6,5 @@ frontend/dist-device
 frontend/public/ocr
 e2e
 docs/site/img
-**/__pycache__
-backend/data
 .git
 private

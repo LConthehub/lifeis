@@ -9,7 +9,8 @@
 # so the downtime is short) and the copy's size is checked. Then the new version starts. The copy is squeezed into
 # the final private/backups/before-<branch>-<stamp>.tgz AFTER the health check (or after the previous version is
 # back, if the new one failed), and the .tar is removed only once the .tgz is written and its size checked. If the
-# new version does not come up healthy the previous version is put back. Existing backups are never deleted.
+# new version does not come up healthy the previous version is put back. After a good deploy only the 5 newest
+# before-*.tgz backups are kept; nothing else in private/backups is ever deleted.
 # Run only when the owner has said to deploy.
 set -euo pipefail
 export MSYS_NO_PATHCONV=1
@@ -82,7 +83,15 @@ if ! healthy 8020; then
   fail "the new version did not start, and neither did the previous one; restore from $backup"
 fi
 docker logs lifeis-lifeis-1 2>&1 | grep -i "upgrad" | tail -1 || true
-compress_backup || echo "warning: the new version is running, but the backup is only the uncompressed copy: $backup" >&2
+if compress_backup; then
+  # Keep the 5 newest deploy backups (owner, Nov 25, 2026). Only finished before-*.tgz files count; a kept .tar, a
+  # .partial and anything else in the folder (such as the git history bundle) are never touched.
+  ls -1t private/backups/before-*.tgz 2>/dev/null | tail -n +6 | while read -r old; do
+    rm -f -- "$old" && echo "removed old backup: $old"
+  done
+else
+  echo "warning: the new version is running, but the backup is only the uncompressed copy: $backup" >&2
+fi
 
 say "Merging and pushing"
 if [ "$branch" != "main" ]; then
