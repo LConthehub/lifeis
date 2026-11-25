@@ -1,6 +1,6 @@
 ---
 title: Money and budget
-blurb: Spending by category, income and bills, savings goals, and the year at a glance.
+blurb: Spending by category, income and bills, goals, and the year at a glance.
 ---
 # Money and budget
 

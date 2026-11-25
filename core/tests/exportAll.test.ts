@@ -10,6 +10,7 @@ import { manual } from '../src/manual.ts';
 import { media } from '../src/media.ts';
 import { LATEST, migrate } from '../src/migrations.ts';
 import { budget } from '../src/budget.ts';
+import { goals } from '../src/goals.ts';
 import { money } from '../src/money.ts';
 import { pets } from '../src/pets.ts';
 import { prep } from '../src/prep.ts';
@@ -164,7 +165,7 @@ it('holds every kind of record for a person with some of each, in plain headings
   const present = names(zip);
   for (const file of ['README.txt', 'recipes.csv', 'meal-plan.csv', 'grocery-list.csv', 'pantry.csv', 'prices.csv', 'coupons.csv', 'places.csv', 'kinds.csv', 'things.csv', 'thing-papers.csv', 'thing-history.csv',
     'upkeep.csv', 'upkeep-history.csv', 'household.csv', 'pets.csv', 'pet-weights.csv', 'house-manual.csv', 'licenses.csv', 'collection.csv', 'copies.csv', 'collection-log.csv', 'events.csv',
-    'projects.csv', 'project-lines.csv', 'project-time.csv', 'project-costs.csv', 'plans.csv', 'plan-items.csv', 'plan-photos.csv', 'money-categories.csv', 'money-entries.csv', 'money-income.csv', 'money-goals.csv', 'money-goal-saved.csv', 'connections.csv', 'settings.csv', 'stores.csv', 'barcodes.csv', 'tags.csv']) {
+    'projects.csv', 'project-lines.csv', 'project-time.csv', 'project-costs.csv', 'plans.csv', 'plan-items.csv', 'plan-photos.csv', 'money-categories.csv', 'money-entries.csv', 'money-income.csv', 'money-goals.csv', 'money-goal-saved.csv', 'money-goal-lines.csv', 'connections.csv', 'settings.csv', 'stores.csv', 'barcodes.csv', 'tags.csv']) {
     expect(present, file).toContain(file);
   }
   // Every spreadsheet has a row for what was made.
@@ -596,4 +597,33 @@ it('what is new about things goes out and comes back in: asset numbers, insured,
   const again = await bringIn(bob, zip, ['things']);
   expect(again.kinds.find((k) => k.key === 'things')).toMatchObject({ found: 3, fresh: 0, already: 3 });
   expect(look([...(await mine.listItems()), ...(await mine.listItems({ gone: true }))])).toEqual(look(all));
+});
+
+it('a goal keeps its plan, its settled day and its own cost lines (with who they are hidden from) through a download and bringing it in, and reading twice adds nothing', async () => {
+  const plan = await plans(db, ana, clock).create({ name: 'Beach week', start_day: '2046-06-10', end_day: '2046-06-12' });
+  const tool = goals(db, ana, clock);
+  const made = await tool.start({ plan_id: plan.id, target_cents: 80000 });
+  await tool.addLine(made.id, { label: 'Cabin', cents: 50000 });
+  await tool.addLine(made.id, { label: 'Ferry', cents: null });
+  await tool.addLine(made.id, { label: 'Surprise', cents: 1500, hidden_from: bob });
+  await db.run("UPDATE money_goals SET settled_on = '2046-06-20' WHERE id = ?", [made.id]);
+  const zip = (await exportEverything(db, ana, clock)).bytes;
+  const files = (await splitDownload(zip)).files;
+  expect(files['money-goals.csv']).toContain('Beach week,800.00,2046-06-10,0.00,,Beach week,2046-06-10,2046-06-20');
+  expect(files['money-goal-lines.csv']).toContain('Beach week,Surprise,15.00,bob');
+  const importable = KINDS.filter((k) => k.importable).map((k) => k.key);
+  const first = await bringIn(bob, zip, importable);
+  for (const kind of first.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  const there = async () => ({
+    goal: await db.all('SELECT g.name, g.target_cents, g.settled_on, p.name AS plan, p.start_day FROM money_goals g JOIN plans p ON p.id = g.plan_id WHERE g.owner_id = ?', [bob]),
+    lines: await db.all('SELECT l.label, l.cents, u.username AS hidden FROM money_goal_lines l JOIN money_goals g ON g.id = l.goal_id LEFT JOIN users u ON u.id = l.hidden_from WHERE g.owner_id = ? ORDER BY l.id', [bob]),
+  });
+  const kept = await there();
+  expect(kept.goal).toEqual([{ name: 'Beach week', target_cents: 80000, settled_on: '2046-06-20', plan: 'Beach week', start_day: '2046-06-10' }]);
+  expect(kept.lines).toEqual([{ label: 'Cabin', cents: 50000, hidden: null }, { label: 'Ferry', cents: null, hidden: null }, { label: 'Surprise', cents: 1500, hidden: 'bob' }]);
+  // The hidden line is hidden from the person it was hidden from.
+  const bobsPlan = (await db.get<{ id: number }>('SELECT id FROM plans WHERE owner_id = ?', [bob]))!.id;
+  expect((await goals(db, bob, clock).forPlan(bobsPlan, bob)).cost.lines.map((l) => l.label)).toEqual(['Cabin', 'Ferry']);
+  await bringIn(bob, zip, importable);
+  expect(await there()).toEqual(kept);
 });

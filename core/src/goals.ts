@@ -12,6 +12,7 @@
  */
 import { budget, type Goal, type Safe } from './budget.ts';
 import type { Db } from './db.ts';
+import { shown } from './displayName.ts';
 import { fmt, monthlyAsk } from './goalFigures.ts';
 import { Problem } from './problem.ts';
 import { shopping } from './shopping.ts';
@@ -26,6 +27,8 @@ export type CostLine = {
   unknown: number;
   /** A typed line's own id, to change or remove it. */
   line_id: number | null;
+  /** For a typed line the owner hid from someone: who. */
+  hidden: string | null;
 };
 export type CostView = { lines: CostLine[]; total: number; unknown: number; unknown_words: string | null };
 export type GoalPanel = {
@@ -34,6 +37,8 @@ export type GoalPanel = {
   cost: CostView;
   goal: Goal | null;
   safe: Safe;
+  /** The other people who sign in to this Life Is, to hide a typed line from. */
+  people: { id: number; name: string }[];
   /** With no goal yet: what setting one at the cost, by the day, would ask of this month, and what would be safe to spend then. */
   if_set: { target: number; by_day: string; ask: number; safe: number; words: string } | null;
 };
@@ -74,19 +79,19 @@ export function goals(db: Db, owner: number, clock: Clock = () => new Date()) {
       if (one) {
         if (rows.length === 0) return;
         lines.push({ key: `project:${projectId}`, source: 'project', label: `Project: ${name}`, cents: rows.reduce((n, r) => n + (r.actual_cents ?? r.planned_cents ?? 0), 0),
-          unknown: rows.filter((r) => r.actual_cents === null && r.planned_cents === null).length, line_id: null });
+          unknown: rows.filter((r) => r.actual_cents === null && r.planned_cents === null).length, line_id: null, hidden: null });
       } else {
-        for (const r of rows) lines.push({ key: `cost:${r.id}`, source: 'project', label: r.label, cents: r.actual_cents ?? r.planned_cents ?? 0, unknown: r.actual_cents === null && r.planned_cents === null ? 1 : 0, line_id: null });
+        for (const r of rows) lines.push({ key: `cost:${r.id}`, source: 'project', label: r.label, cents: r.actual_cents ?? r.planned_cents ?? 0, unknown: r.actual_cents === null && r.planned_cents === null ? 1 : 0, line_id: null, hidden: null });
       }
     };
     if (subject.kind === 'plan') {
       const food = await shopping(db, owner, clock).planCost(subject.id);
-      if (food.ingredients > 0) lines.push({ key: 'food', source: 'food', label: 'Food, from store prices', cents: food.cents, unknown: food.unpriced.length, line_id: null });
+      if (food.ingredients > 0) lines.push({ key: 'food', source: 'food', label: 'Food, from store prices', cents: food.cents, unknown: food.unpriced.length, line_id: null, hidden: null });
       // A gift for a person who signs in to Life Is stays a surprise to them until the day has passed (holidays.ts): not in their list, not in their total.
       for (const g of await db.all<{ id: number; who: string; idea: string; cents: number | null; for_user: number | null }>(
         'SELECT id, who, idea, cents, for_user FROM holiday_gifts WHERE plan_id = ? ORDER BY sort_order, id', [subject.id])) {
         if (g.for_user !== null && g.for_user === viewer && (subject.end ?? '9999') >= today()) continue;
-        lines.push({ key: `gift:${g.id}`, source: 'gifts', label: `Gift for ${g.who}: ${g.idea}`, cents: g.cents ?? 0, unknown: g.cents === null ? 1 : 0, line_id: null });
+        lines.push({ key: `gift:${g.id}`, source: 'gifts', label: `Gift for ${g.who}: ${g.idea}`, cents: g.cents ?? 0, unknown: g.cents === null ? 1 : 0, line_id: null, hidden: null });
       }
       for (const p of await db.all<{ ref_id: number; label: string }>("SELECT ref_id, label FROM plan_items WHERE plan_id = ? AND kind = 'project' AND ref_id IS NOT NULL ORDER BY sort_order, id", [subject.id])) {
         await costsOfProject(p.ref_id, true, p.label);
@@ -95,10 +100,10 @@ export function goals(db: Db, owner: number, clock: Clock = () => new Date()) {
       await costsOfProject(subject.id, false, '');
     }
     if (goalId !== null) {
-      for (const l of await db.all<{ id: number; label: string; cents: number | null; hidden_from: number | null }>(
-        'SELECT id, label, cents, hidden_from FROM money_goal_lines WHERE goal_id = ? ORDER BY id', [goalId])) {
+      for (const l of await db.all<{ id: number; label: string; cents: number | null; hidden_from: number | null; hidden: string | null }>(
+        `SELECT l.id, l.label, l.cents, l.hidden_from, ${shown('u')} AS hidden FROM money_goal_lines l LEFT JOIN users u ON u.id = l.hidden_from WHERE l.goal_id = ? ORDER BY l.id`, [goalId])) {
         if (l.hidden_from !== null && l.hidden_from === viewer) continue;
-        lines.push({ key: `line:${l.id}`, source: 'typed', label: l.label, cents: l.cents ?? 0, unknown: l.cents === null ? 1 : 0, line_id: l.id });
+        lines.push({ key: `line:${l.id}`, source: 'typed', label: l.label, cents: l.cents ?? 0, unknown: l.cents === null ? 1 : 0, line_id: l.id, hidden: l.hidden });
       }
     }
     const unknown = lines.reduce((n, l) => n + l.unknown, 0);
@@ -135,7 +140,8 @@ export function goals(db: Db, owner: number, clock: Clock = () => new Date()) {
         const ask = monthlyAsk(cost.total, 0, subject.day, month);
         ifSet = { target: cost.total, by_day: subject.day, ask, safe: safe.safe - ask, words: `With a goal of ${fmt(safe.currency, cost.total)} by ${subject.day}, this month asks ${fmt(safe.currency, ask)} and ${fmt(safe.currency, Math.max(0, safe.safe - ask))} would be safe to spend${safe.safe - ask < 0 ? ' (short)' : ''}.` };
       }
-      return { subject: { kind: subject.kind, id: subject.id, name: subject.name, day: subject.day, over }, currency: safe.currency, cost, goal, safe, if_set: ifSet };
+      const people = await db.all<{ id: number; name: string }>(`SELECT u.id, ${shown('u')} AS name FROM users u WHERE u.id != ? ORDER BY u.username`, [owner]);
+      return { subject: { kind: subject.kind, id: subject.id, name: subject.name, day: subject.day, over }, currency: safe.currency, cost, goal, safe, people, if_set: ifSet };
     },
 
     /**

@@ -91,7 +91,7 @@ export function GoalQuestion({ goal, sign = '$', onDone }) {
 /** The goal of a plan (a holiday's or trip's year too) or a project: what it adds up to, the goal, what this month asks, and the safe number. */
 export function PlanGoal({ kind, id, onlyWithGoal = false, onChange }) {
   const [panel, setPanel] = useState(null);
-  const [line, setLine] = useState({ label: '', price: '' });
+  const [line, setLine] = useState({ label: '', price: '', hidden: '' });
   const [target, setTarget] = useState('');
   const [error, setError] = useState('');
   const load = useCallback(() => axios.get(`/api/money/goals/for-${kind}/${id}`).then(({ data }) => setPanel(data)).catch(() => setPanel(false)), [kind, id]);
@@ -107,7 +107,7 @@ export function PlanGoal({ kind, id, onlyWithGoal = false, onChange }) {
   const addLine = (e) => {
     e.preventDefault();
     if (!line.label.trim()) return;
-    act(axios.post(`/api/money/goals/${goal.id}/lines`, { label: line.label, cents: toCents(line.price) })).then(() => setLine({ label: '', price: '' }));
+    act(axios.post(`/api/money/goals/${goal.id}/lines`, { label: line.label, cents: toCents(line.price), hidden_from: line.hidden ? Number(line.hidden) : null })).then(() => setLine({ label: '', price: '', hidden: '' }));
   };
   return (
     <section className={`${cardClass} space-y-3`} aria-label="Goal and cost" data-plan-goal>
@@ -117,7 +117,7 @@ export function PlanGoal({ kind, id, onlyWithGoal = false, onChange }) {
         <ul className="divide-y divide-life-100 text-sm dark:divide-life-800" data-cost-lines>
           {cost.lines.map((l) => (
             <li key={l.key} className="flex items-center gap-2" data-cost-line={l.source}>
-              <span className="min-w-0 flex-1 py-2 text-gray-800 dark:text-life-50">{l.label}</span>
+              <span className="min-w-0 flex-1 py-2 text-gray-800 dark:text-life-50">{l.label}{l.hidden && <span className="ml-1 text-xs text-gray-500 dark:text-life-300" data-hidden-from>(hidden from {l.hidden})</span>}</span>
               <span className="tabular-nums text-gray-700 dark:text-life-100">{l.unknown > 0 && l.cents === 0 ? 'no price yet' : money(l.cents, sign)}</span>
               {l.line_id !== null && kind === 'plan' && <button type="button" aria-label={`Remove ${l.label}`} onClick={() => act(axios.delete(`/api/money/goals/lines/${l.line_id}`))} className="flex h-11 w-11 items-center justify-center text-gray-400 hover:text-red-600">✕</button>}
             </li>
@@ -130,6 +130,14 @@ export function PlanGoal({ kind, id, onlyWithGoal = false, onChange }) {
         <form onSubmit={addLine} className="flex flex-wrap items-end gap-2" aria-label="Add a line of your own">
           <label className="min-w-[8rem] flex-1 text-xs text-gray-600 dark:text-life-200">A cost of your own<input value={line.label} onChange={(e) => setLine({ ...line, label: e.target.value })} placeholder="Cabin, ferry…" className={`${inputClass} mt-1 min-h-[44px]`} /></label>
           <label className="w-28 text-xs text-gray-600 dark:text-life-200">Price<input inputMode="decimal" value={line.price} onChange={(e) => setLine({ ...line, price: e.target.value })} placeholder="not known" className={`${inputClass} mt-1 min-h-[44px]`} /></label>
+          {panel.people.length > 0 && (
+            <label className="min-w-[8rem] text-xs text-gray-600 dark:text-life-200">Hidden from
+              <select value={line.hidden} onChange={(e) => setLine({ ...line, hidden: e.target.value })} className={`${inputClass} mt-1 min-h-[44px]`}>
+                <option value="">No one</option>
+                {panel.people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </label>
+          )}
           <button type="submit" className={`${quietButtonClass} min-h-[44px]`}>Add</button>
         </form>
       )}

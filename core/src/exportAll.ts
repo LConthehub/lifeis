@@ -81,13 +81,13 @@ export const KINDS: KindInfo[] = [
   { key: 'lists', label: 'Lists of titles: To watch, read or hear, and the ones you made, in their order and whether they are shared', file: 'lists.csv', importable: true, matched: 'a list by its name; a title on it by title and type' },
   { key: 'events', label: 'Calendar events', file: 'events.csv', importable: true, matched: 'by title and day' },
   { key: 'money', label: 'Spending: categories and entries', file: 'money-entries.csv', importable: true, matched: 'by day, amount, label and category' },
-  { key: 'budget', label: 'Income and savings goals, with the money put toward each', file: 'money-income.csv', importable: true, matched: 'income by name, amount and how often; goals by name' },
   { key: 'stores', label: 'Your stores', file: 'stores.csv', importable: true, matched: 'by name' },
   { key: 'barcodes', label: 'Barcodes taught for groceries', file: 'barcodes.csv', importable: true, matched: 'by barcode' },
   { key: 'prices', label: 'Prices paid', file: 'prices.csv', importable: true, matched: 'by day, price, what and store' },
   { key: 'coupons', label: 'Coupons', file: 'coupons.csv', importable: true, matched: 'by name, store and code' },
   { key: 'projects', label: 'Projects, with their lines, time and costs', file: 'projects.csv', importable: true, matched: 'by name' },
   { key: 'plans', label: 'Plans, with their things to do and photos', file: 'plans.csv', importable: true, matched: 'by name and first day' },
+  { key: 'budget', label: 'Income and goals, with the money put toward each, what each is for, and its own cost lines', file: 'money-income.csv', importable: true, matched: 'income by name, amount and how often; goals by name' },
   { key: 'holidays', label: 'Holidays: how each finds its day, and what each year kept (guests, cards, gifts, decorations, countdown)', file: 'holidays.csv', importable: true, matched: 'by name; a year by its plan' },
   { key: 'trips', label: 'Outdoor trips: the parts each has on, and what each year kept (bring list, seasons, catch and harvest logs, site booking)', file: 'outdoor-trips.csv', importable: true, matched: 'by name; a year by its plan' },
   { key: 'tags', label: 'Tags, and what carries them', file: 'tags.csv', importable: true, matched: 'by path; a tag on something by that thing’s name' },
@@ -664,15 +664,20 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
       FROM money_entries e LEFT JOIN money_categories c ON c.id = e.category_id LEFT JOIN users cu ON cu.id = c.owner_id WHERE e.owner_id = ? AND e.project_id IS NULL ORDER BY e.day, e.id`))
       .map((e) => [str(e.label), dollars(e.cents), str(e.day), str(e.category), e.category !== null && e.category_owner !== owner ? str(e.category_by) : '', str(e.note)]));
 
-  // Income and savings goals (bills are upkeep jobs, in upkeep.csv).
+  // Income and goals (bills are upkeep jobs, in upkeep.csv).
   if (await hasTable(q, 'money_income')) {
     out.csv('money-income.csv', ['What', 'Amount', 'How often', 'First day', 'Last day'],
       (await all('SELECT name, cents, every, start_day, end_day FROM money_income WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id'))
         .map((i) => [str(i.name), dollars(i.cents), str(i.every).replace('_', ' '), str(i.start_day), str(i.end_day)]));
-    out.csv('money-goals.csv', ['Goal', 'Target', 'Reach it by', 'Saved so far', 'For project'],
+    out.csv('money-goals.csv', ['Goal', 'Target', 'Reach it by', 'Saved so far', 'For project', 'For plan', 'Plan starts', 'Settled on'],
       (await all(`SELECT g.name, g.target_cents, g.by_day, COALESCE((SELECT SUM(s.cents) FROM money_goal_saved s WHERE s.goal_id = g.id), 0) AS saved,
-          (SELECT p.name FROM projects p WHERE p.id = g.project_id AND p.owner_id = g.owner_id) AS project FROM money_goals g WHERE g.owner_id = ? ORDER BY g.id`))
-        .map((g) => [str(g.name), dollars(g.target_cents), str(g.by_day), signedDollars(g.saved), str(g.project)]));
+          (SELECT p.name FROM projects p WHERE p.id = g.project_id AND p.owner_id = g.owner_id) AS project,
+          (SELECT pl.name FROM plans pl WHERE pl.id = g.plan_id AND pl.owner_id = g.owner_id) AS plan, (SELECT pl.start_day FROM plans pl WHERE pl.id = g.plan_id AND pl.owner_id = g.owner_id) AS plan_day,
+          g.settled_on FROM money_goals g WHERE g.owner_id = ? ORDER BY g.id`))
+        .map((g) => [str(g.name), dollars(g.target_cents), str(g.by_day), signedDollars(g.saved), str(g.project), str(g.plan), str(g.plan_day), str(g.settled_on)]));
+    out.csv('money-goal-lines.csv', ['Goal', 'Line', 'Price', 'Hidden from'],
+      (await all('SELECT g.name AS goal, l.label, l.cents, u.username AS hidden FROM money_goal_lines l JOIN money_goals g ON g.id = l.goal_id LEFT JOIN users u ON u.id = l.hidden_from WHERE g.owner_id = ? ORDER BY l.goal_id, l.id'))
+        .map((l) => [str(l.goal), str(l.label), l.cents === null ? '' : dollars(l.cents), str(l.hidden)]));
     out.csv('money-goal-saved.csv', ['Goal', 'Day', 'Amount (below zero is taken out)'],
       (await all('SELECT g.name, s.day, s.cents FROM money_goal_saved s JOIN money_goals g ON g.id = s.goal_id WHERE g.owner_id = ? ORDER BY s.day, s.id'))
         .map((s) => [str(s.name), str(s.day), signedDollars(s.cents)]));
@@ -785,7 +790,7 @@ const FILE_ABOUT: [string, string][] = [
   ['outdoor-trips.csv', 'Outdoor trips: the parts each has on. outdoor-trip-years.csv has each year (its plan, the water, the site booking, notes for next year) and outdoor-trip-lists.csv has what each year kept: the bring list, seasons, the catch log and the harvest log.'],
   ['money-categories.csv', 'Your spending categories and what each is for a month.'],
   ['money-entries.csv', 'What you wrote down as spent.'],
-  ['money-income.csv', 'What comes in, and how often; money-goals.csv and money-goal-saved.csv for savings goals and what was put toward each. Bills are in upkeep.csv.'],
+  ['money-income.csv', 'What comes in, and how often; money-goals.csv and money-goal-saved.csv for goals (and the plan or project each is for) and what was put toward each; money-goal-lines.csv for the costs typed on a goal, with who each is hidden from. Bills are in upkeep.csv.'],
   ['connections.csv', 'Servers and accounts you connected: names and addresses only, never a key or a password.'],
   ['settings.csv', 'Your plain preferences.'],
   ['pictures/ and papers/', 'Every photo, cover and paper, in a folder named for what it belongs to. The spreadsheets say which file is whose.'],
@@ -2159,6 +2164,7 @@ ${mediaId}`);
     }
     const goalSeen = new Seen((await c.tx.all<{ name: string }>('SELECT name FROM money_goals WHERE owner_id = ?', [c.owner])).map((g) => labelKey(g.name)));
     const saved = tableOf(c.files, 'money-goal-saved.csv')?.rows ?? [];
+    const lines = tableOf(c.files, 'money-goal-lines.csv')?.rows ?? [];
     const filled = new Set<string>();
     for (const [at, row] of (goals?.rows ?? []).entries()) {
       const name = clean(cellOf(row, 'Goal'), 120);
@@ -2169,7 +2175,9 @@ ${mediaId}`);
       if (goalSeen.take(key)) { d.already += 1; continue; }
       const forProject = cellOf(row, 'For project');
       const project = forProject ? await c.tx.get<{ id: number }>('SELECT id FROM projects WHERE owner_id = ? AND name = ? COLLATE NOCASE ORDER BY id DESC LIMIT 1', [c.owner, forProject]) : undefined;
-      const made = await c.tx.run('INSERT INTO money_goals (owner_id, name, target_cents, by_day, project_id, created_at) VALUES (?, ?, ?, ?, ?, ?)', [c.owner, name, target, dayOf(cellOf(row, 'Reach it by')), project?.id ?? null, c.at]);
+      const forPlan = cellOf(row, 'For plan');
+      const plan = forPlan ? await c.tx.get<{ id: number }>('SELECT id FROM plans WHERE owner_id = ? AND name = ? COLLATE NOCASE AND start_day = ? AND id NOT IN (SELECT plan_id FROM money_goals WHERE plan_id IS NOT NULL) ORDER BY id LIMIT 1', [c.owner, forPlan, dayOf(cellOf(row, 'Plan starts')) ?? '']) : undefined;
+      const made = await c.tx.run('INSERT INTO money_goals (owner_id, name, target_cents, by_day, project_id, plan_id, settled_on, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [c.owner, name, target, dayOf(cellOf(row, 'Reach it by')), project?.id ?? null, plan?.id ?? null, dayOf(cellOf(row, 'Settled on')), c.at]);
       d.fresh += 1;
       // Each put-toward is told apart by the goal's name: of two goals with one name, only the first is given them.
       if (filled.has(key)) continue;
@@ -2179,6 +2187,17 @@ ${mediaId}`);
         const cents = signedCentsOf(cellOf(s, 'Amount (below zero is taken out)'));
         if (!day || cents === null || cents === 0) continue;
         await c.tx.run('INSERT INTO money_goal_saved (goal_id, day, cents, created_at) VALUES (?, ?, ?, ?)', [made.lastId, day, cents, c.at]);
+      }
+      // The costs typed on it. One hidden from a person this Life Is does not know is left out, never shown to everyone.
+      for (const l of lines.filter((r) => labelKey(cellOf(r, 'Goal')) === key)) {
+        const label = clean(cellOf(l, 'Line'), 200);
+        const priced = cellOf(l, 'Price');
+        const cents = priced === '' ? null : centsOf(priced);
+        if (!label || (priced !== '' && cents === null)) continue;
+        const hiddenName = cellOf(l, 'Hidden from');
+        const hidden = hiddenName ? await c.tx.get<{ id: number }>('SELECT id FROM users WHERE username = ? COLLATE NOCASE', [hiddenName]) : undefined;
+        if (hiddenName && !hidden) continue;
+        await c.tx.run('INSERT INTO money_goal_lines (goal_id, label, cents, hidden_from, created_at) VALUES (?, ?, ?, ?, ?)', [made.lastId, label, cents, hidden?.id ?? null, c.at]);
       }
     }
     return d;

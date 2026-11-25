@@ -38,7 +38,7 @@ intro: Five parts, and each finishes the sentence "Life is…". Use one, or all 
 <!-- Cards: icon | word that finishes "Life is" | text -->
 - 🍳 | tasty | Food. Recipes kept exactly as you wrote them, the meals for the week, a grocery list that knows your pantry, and what things cost at each store.
 - 🏠 | tidy | Home. Everything you own, room by room, with its receipt, manual and warranty, and a note when you sell it or give it away. Upkeep that comes due: the furnace filter, the oil change, the bills, the chores. Your pets, your licenses and a House Manual to hand a sitter.
-- 💵 | balanced | Money. A plan for the month by category, private unless you share it. Your income, your bills, savings goals and the whole year in one view.
+- 💵 | balanced | Money. A plan for the month by category, private unless you share it. Your income, your bills, goals and the whole year in one view.
 - 🧵 | busy | Everything with a date. One calendar for your dates, the week's meals and what is due. Routines, projects with what they use and the time on them, plans, holidays that come back each year, and camping, fishing and hunting trips.
 - 📚 | entertaining | Media. Books, films, music and games on every format, on the shelf or on your own server. Who has borrowed what, and what you watched or read and when.
 
