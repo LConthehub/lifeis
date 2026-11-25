@@ -26,6 +26,8 @@ export { calendar } from './calendar.ts';
 export type { Calendar, Entry, EntryKind, Event, EventInput, YearlyDate } from './calendar.ts';
 export { media, barcodeKey, FORMATS, MEDIA_TYPES } from './media.ts';
 export { mediaLists } from './mediaLists.ts';
+export { bringInLetterboxd, letterboxdFile, readLetterboxd, halvesOf } from './letterboxd.ts';
+export type { LetterboxdFile, LetterboxdReport } from './letterboxd.ts';
 export type { ListEntry, ListSummary, ListView, MediaLists } from './mediaLists.ts';
 export type { BarcodeMatch } from './media.ts';
 export type { Copy, CopyInput, LogEntry, LogInput, Media, MediaCollection, MediaInput, MediaSummary, MediaType } from './media.ts';

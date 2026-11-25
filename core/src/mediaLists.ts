@@ -47,6 +47,8 @@ export type ListEntry = {
   /** Only said to the list's owner: whether a copy is kept, and how many times it was watched, read or heard. */
   owned: boolean | null;
   times: number | null;
+  /** The list owner's own rating in half stars, said only to the owner (null when not rated, or not yours). */
+  stars: number | null;
   /** Whether the viewer can take it off (anyone who sees a list can, except on Wanted, which is only its owner's). */
   can_remove: boolean;
 };
@@ -117,14 +119,14 @@ export function mediaLists(db: Db, owner: number, clock: Clock = () => new Date(
   async function view(q: Queries, id: number): Promise<ListView> {
     const row = await visible(q, id);
     const own = row.owner_id === owner;
-    type Found = { media_id: number; title: string; type: string; creator: string | null; year: number | null; note: string | null; added_by: string | null; added_by_id: number | null; owned: number; times: number };
+    type Found = { stars: number | null; media_id: number; title: string; type: string; creator: string | null; year: number | null; note: string | null; added_by: string | null; added_by_id: number | null; owned: number; times: number };
     const found = row.builtin === WANTED
       ? await q.all<Found>(
-        `SELECT m.id AS media_id, m.title, m.type, m.creator, m.year, NULL AS note, NULL AS added_by, NULL AS added_by_id,
+        `SELECT m.id AS media_id, m.stars, m.title, m.type, m.creator, m.year, NULL AS note, NULL AS added_by, NULL AS added_by_id,
                 EXISTS (SELECT 1 FROM media_copies c WHERE c.media_id = m.id) AS owned, (SELECT COUNT(*) FROM media_log l WHERE l.media_id = m.id) AS times
          FROM media m WHERE m.owner_id = ? AND m.wanted = 1 ORDER BY m.title COLLATE NOCASE, m.year, m.id`, [row.owner_id])
       : await q.all<Found>(
-        `SELECT m.id AS media_id, m.title, m.type, m.creator, m.year, i.note, ${shown('a')} AS added_by, i.added_by AS added_by_id,
+        `SELECT m.id AS media_id, m.stars, m.title, m.type, m.creator, m.year, i.note, ${shown('a')} AS added_by, i.added_by AS added_by_id,
                 EXISTS (SELECT 1 FROM media_copies c WHERE c.media_id = m.id) AS owned, (SELECT COUNT(*) FROM media_log l WHERE l.media_id = m.id) AS times
          FROM media_list_items i JOIN media m ON m.id = i.media_id LEFT JOIN users a ON a.id = i.added_by
          WHERE i.list_id = ? ORDER BY i.sort_order, i.id`, [row.id]);
@@ -133,7 +135,7 @@ export function mediaLists(db: Db, owner: number, clock: Clock = () => new Date(
       entries: found.map((f): ListEntry => ({
         media_id: f.media_id, title: f.title, type: f.type, creator: f.creator, year: f.year, note: f.note,
         added_by: f.added_by_id !== null && f.added_by_id !== owner ? f.added_by : null,
-        owned: own ? f.owned === 1 : null, times: own ? f.times : null,
+        owned: own ? f.owned === 1 : null, times: own ? f.times : null, stars: own && f.stars !== null ? f.stars / 2 : null,
         can_remove: row.builtin === WANTED ? own : true,
       })),
     };

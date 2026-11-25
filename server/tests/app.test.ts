@@ -1062,6 +1062,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
+  await database.db.run('ALTER TABLE media DROP COLUMN stars');
   await database.db.run('DROP TABLE personal_keys');
   await database.db.run('DROP TABLE item_shares');
   await database.db.run('ALTER TABLE kinds DROP COLUMN guard');

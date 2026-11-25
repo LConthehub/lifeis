@@ -57,7 +57,24 @@ You can choose **Pick one I own** to add a title from your Collection. You can a
 
 A list is only yours unless you choose **Share with the household**. Then it belongs to the household: everyone who signs in can see it, add titles, take any off, change the order and mark a title watched. That goes in their own log, and the title comes off the list for everyone. Only you can rename it, stop sharing it or delete it. Deleting a list never removes a title: ones you do not own stay in search and can go on another list. A list you do not share is not seen by anyone else, in search or in their downloads.
 
-Lists are in the download of everything, and come back when you bring it in. Bringing the same file in twice adds nothing. Nothing on a list is sent anywhere.
+Lists and ratings are in the download of everything, and come back when you bring it in. Bringing the same file in twice adds nothing. Nothing on a list is sent anywhere.
+
+## Ratings
+
+Any title can have your own rating, from half a star to five stars, in half steps. Open the title and choose from **Your rating**. It is yours alone: nobody else sees it, not even on a list you share. The Collection can be sorted by **My rating, highest first**, and so can any list of yours (choose **Sort by my rating**). Titles you have not rated come last.
+
+## Letterboxd
+
+**Bringing in a Letterboxd download.** On Letterboxd, open Settings, then Data, and choose Export your data. On the **Lists** tab choose **From Letterboxd** and pick the zip you got (or its files one by one). The files are opened here, on your device or your own Life Is, and nothing is sent to Letterboxd or anywhere else. You see counts first, and nothing is kept until you choose **Bring it in**.
+
+- Every film you watched becomes a title. You do not own them, so they are not counted in your Collection (see Lists above). Each entry in your diary becomes a day in that title's log.
+- A film that Letterboxd says you watched, but that has no diary entry, gets one day: the day you logged it on Letterboxd.
+- Your watchlist goes on **To watch, read or hear**. Each Letterboxd list becomes a list of the same name, in the same order.
+- Star ratings are kept, half stars included. A review is kept word for word as the note of the day it was written for. A rating you already set here is not replaced.
+- Bringing the same download in again adds nothing. A film is matched by its Letterboxd link, or else by its name and year.
+- Posters and directors are not fetched. A film keeps its name, year and a link to it on Letterboxd.
+
+**Making a file for Letterboxd.** Open any list and choose **Make a Letterboxd file**. Life Is saves a CSV with the title, year, director if known and, on your own lists, your rating, the days you watched it and your reviews. On Letterboxd, use its Import your data page (it has a help page called Importing your data) and choose the file. Only films go in it. If the list also holds shows, music, books or games, they are left out, and Life Is says how many. On a list someone else shared with you, only titles and years go in the file, never their ratings or days.
 
 ## Lending and the log
 

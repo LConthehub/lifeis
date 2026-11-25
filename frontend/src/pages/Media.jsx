@@ -5,6 +5,7 @@ import axios from 'axios';
 import Scanner from '../components/Scanner';
 import PlacePicker from '../components/PlacePicker';
 import BookList from '../components/BookList';
+import StarRating from '../components/StarRating';
 import BulkScan from '../components/BulkScan';
 import CollectionSummary from '../components/CollectionSummary';
 import Art from '../components/Art';
@@ -607,6 +608,8 @@ export function MediaTitlePage() {
             <p className="text-sm text-gray-500 dark:text-life-300">
               <Dots parts={[<><Icon of={typeOf(title.type)[2]} /> {typeOf(title.type)[3]}</>, title.creator, title.year, title.minutes != null && minutesText(title.minutes), title.genres.join(', ')]} />
             </p>
+            <StarRating id={title.id} stars={title.stars} onSaved={setTitle} />
+            {title.ids?.letterboxd && /^https?:\/\//.test(title.ids.letterboxd) && <p className="mt-1 text-sm"><a href={title.ids.letterboxd} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center text-life-600 underline dark:text-life-200">On Letterboxd</a></p>}
             {title.wanted && <p className="mt-1"><span className="rounded bg-honey-100 px-1.5 text-xs text-honey-700">wanted</span></p>}
             {title.unowned && (
               <p className="mt-2 text-sm text-gray-700 dark:text-life-100" data-not-owned>
@@ -666,7 +669,7 @@ export function MediaTitlePage() {
                 <li key={entry.id} className="flex items-start gap-2 py-2">
                   <span className="flex-1">
                     <span className="block text-sm text-gray-800 dark:text-life-50">{entry.day}</span>
-                    <span className="block text-xs text-gray-500 dark:text-life-300">
+                    <span className="block whitespace-pre-wrap text-xs text-gray-500 dark:text-life-300">
                       {entry.project && <>while working on <Link to={`/projects/${entry.project_id}`} className="underline">{entry.project}</Link></>}
                       {entry.project && entry.note ? ' · ' : ''}{entry.note}
                     </span>

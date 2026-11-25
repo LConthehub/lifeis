@@ -370,9 +370,10 @@ it('the page keeps copies of these rules that give the same answers', async () =
   for (const c of [0, 5, 1299, 123456789, -250]) expect(page.dollarsText!(c), String(c)).toBe(dollarsText(c));
   await shelf.create({ type: 'film', title: 'The Thing', year: 1982 }, { format: 'VHS', cost_cents: 500, value_cents: 900 });
   await shelf.create({ type: 'film', title: 'Alien', year: 1979 }, { format: 'VHS', cost_cents: 700 });
-  await shelf.create({ type: 'film', title: 'Zodiac' });
+  const zodiac = await shelf.create({ type: 'film', title: 'Zodiac' });
+  await shelf.rate(zodiac.id, 3.5);
   const all = await shelf.list();
-  for (const how of ['title', 'creator', 'year', 'added', 'recent', 'value'] as const) {
+  for (const how of ['title', 'creator', 'year', 'added', 'recent', 'value', 'rating'] as const) {
     expect((page.sortTitles!(all, how) as { id: number }[]).map((m) => m.id), how).toEqual(sortTitles(all, how).map((m) => m.id));
   }
   expect(page.collectionTotals!(all)).toEqual(collectionTotals(all));

@@ -98,9 +98,9 @@ export function sortWords(title: string | null | undefined): string {
   return key.replace(/^(the|an|a)\s+(?=\S)/, '');
 }
 
-export const SORTS = ['title', 'creator', 'year', 'added', 'recent', 'value'] as const;
+export const SORTS = ['title', 'creator', 'year', 'added', 'recent', 'value', 'rating'] as const;
 export type SortHow = (typeof SORTS)[number];
-type Sortable = Pick<MediaSummary, 'id' | 'title' | 'creator' | 'year' | 'last_on' | 'worth_cents'> & { added_at: string };
+type Sortable = Pick<MediaSummary, 'id' | 'title' | 'creator' | 'year' | 'last_on' | 'worth_cents'> & { added_at: string; stars?: number | null };
 
 /** The titles in the order chosen. Ties fall back to title, then year, then id. Nothing is changed in the titles. */
 export function sortTitles<T extends Sortable>(titles: T[], how: SortHow): T[] {
@@ -121,6 +121,7 @@ export function sortTitles<T extends Sortable>(titles: T[], how: SortHow): T[] {
     added: by((t) => t.added_at, true),
     recent: by((t) => t.last_on, true),
     value: by((t) => t.worth_cents, true),
+    rating: by((t) => t.stars ?? null, true),
   }[how] ?? byTitle;
   return [...titles].sort(compare);
 }
@@ -218,6 +219,8 @@ export type MediaSummary = {
   minutes: number | null;
   cover: string | null;
   wanted: boolean;
+  /** The person's own rating, in half stars from 0.5 to 5, or null when not rated. */
+  stars: number | null;
   /** Not owned: only on a list, or wanted, with no copy yet. Such a title is left out of `list`. */
   unowned: boolean;
   /** The formats you have it on, each once: ["VHS", "Blu-ray"]. */
@@ -251,7 +254,7 @@ export type Media = MediaSummary & {
   updated_at: string;
 };
 
-type MediaRow = Omit<Media, 'genres' | 'wanted' | 'unowned' | 'formats' | 'pieces' | 'lent_to' | 'times' | 'last_on' | 'ids' | 'copies' | 'log' | 'added_at' | 'copy_count' | 'cost_cents' | 'worth_cents' | 'unvalued' | 'gain_cents' | 'tag_list'> & { genres: string | null; wanted: number; listed_only: number; ids: string | null };
+type MediaRow = Omit<Media, 'stars' | 'genres' | 'wanted' | 'unowned' | 'formats' | 'pieces' | 'lent_to' | 'times' | 'last_on' | 'ids' | 'copies' | 'log' | 'added_at' | 'copy_count' | 'cost_cents' | 'worth_cents' | 'unvalued' | 'gain_cents' | 'tag_list'> & { genres: string | null; wanted: number; listed_only: number; stars: number | null; ids: string | null };
 
 const list = (text: string | null) => (text ?? '').split(',').filter(Boolean);
 
@@ -280,7 +283,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
 
   async function owned(q: Queries, id: number): Promise<MediaRow> {
     const row = await q.get<MediaRow>(
-      'SELECT id, type, title, creator, year, summary, genres, minutes, cover, wanted, listed_only, ids, note, created_at, updated_at FROM media WHERE id = ? AND owner_id = ?', [id, owner]);
+      'SELECT id, type, title, creator, year, summary, genres, minutes, cover, wanted, listed_only, stars, ids, note, created_at, updated_at FROM media WHERE id = ? AND owner_id = ?', [id, owner]);
     if (!row) throw new Problem(404, 'Not found');
     return row;
   }
@@ -310,7 +313,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
     }
     return {
       id: row.id, type: row.type, title: row.title, creator: row.creator, year: row.year, genres: list(row.genres), minutes: row.minutes,
-      cover: row.cover, wanted: Boolean(row.wanted), unowned: row.listed_only === 1, formats, pieces,
+      cover: row.cover, wanted: Boolean(row.wanted), stars: row.stars === null ? null : row.stars / 2, unowned: row.listed_only === 1, formats, pieces,
       lent_to: copies.filter((copy) => copy.lent_to).map((copy) => copy.lent_to!),
       times: log.length, last_on: log[0]?.day ?? null,
       added_at: row.created_at, copy_count: copies.length,
@@ -446,7 +449,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
       if (find.wanted) where += ' AND wanted = 1';
       else where += ' AND listed_only = 0';
       const rows = await db.all<MediaRow>(
-        `SELECT id, type, title, creator, year, summary, genres, minutes, cover, wanted, listed_only, ids, note, created_at, updated_at FROM media
+        `SELECT id, type, title, creator, year, summary, genres, minutes, cover, wanted, listed_only, stars, ids, note, created_at, updated_at FROM media
          WHERE owner_id = ? ${where} ORDER BY title COLLATE NOCASE, year, id`, [owner, ...args]);
       const copies = await copiesOf(db, '', []);
       const log = await logOf(db, '', []);
@@ -617,6 +620,17 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
       const row = await db.get<{ type: string; bytes: Uint8Array }>(
         'SELECT c.type, c.bytes FROM media_covers c JOIN media m ON m.id = c.media_id WHERE c.media_id = ? AND m.owner_id = ?', [id, owner]);
       return row ? { type: row.type, bytes: row.bytes } : null;
+    },
+
+    /** The person's own rating of a title, in half stars from 0.5 to 5 (null takes it away). */
+    async rate(id: number, stars: number | null): Promise<Media> {
+      const halves = stars === null ? null : Math.round(stars * 2);
+      if (halves !== null && !(Number.isFinite(stars) && stars! * 2 === halves && halves >= 1 && halves <= 10)) throw new Problem(400, 'A rating is from half a star to five stars, in halves');
+      return atomic(db, async (tx) => {
+        await owned(tx, id);
+        await tx.run('UPDATE media SET stars = ? WHERE id = ?', [halves, id]);
+        return one(tx, id);
+      });
     },
 
     async removeLog(id: number): Promise<void> {

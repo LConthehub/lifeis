@@ -37,7 +37,7 @@ export const dollarsField = (cents) => (cents == null ? '' : (cents / 100).toFix
 
 export const SORTS = [
   ['title', 'Title, A to Z'], ['creator', 'Creator, A to Z'], ['year', 'Year, newest first'],
-  ['added', 'Recently added'], ['recent', 'Recently watched, read or played'], ['value', 'Value, highest first'],
+  ['added', 'Recently added'], ['recent', 'Recently watched, read or played'], ['value', 'Value, highest first'], ['rating', 'My rating, highest first'],
 ];
 
 const inOrder = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -61,6 +61,7 @@ export function sortTitles(titles, how) {
     added: by((t) => t.added_at ?? null, true),
     recent: by((t) => t.last_on ?? null, true),
     value: by((t) => t.worth_cents ?? null, true),
+    rating: by((t) => t.stars ?? null, true),
   }[how] ?? byTitle;
   return [...titles].sort(compare);
 }
@@ -83,6 +84,21 @@ export function sameTitles(titles, type, typed) {
   const key = labelKey(typed);
   return key ? titles.filter((t) => t.type === type && labelKey(t.title) === key) : [];
 }
+
+/** Half stars as plain text: 3.5 is "★★★½", 4 is "★★★★". Nothing for no rating. */
+export function starsText(stars) {
+  if (stars == null) return '';
+  const whole = Math.floor(stars);
+  return '★'.repeat(whole) + (stars - whole >= 0.5 ? '½' : '');
+}
+
+/** What the rating choices say: "Not rated", "½ star", "1 star", "1½ stars" ... "5 stars". Value is the number of stars, or '' for none. */
+export const STAR_CHOICES = [['', 'Not rated'], ...Array.from({ length: 10 }, (_, i) => {
+  const v = (i + 1) / 2;
+  const whole = Math.floor(v);
+  const words = `${whole === 0 ? '' : whole}${v % 1 ? '½' : ''}`;
+  return [String(v), `${words} ${v <= 1 ? 'star' : 'stars'}`];
+})];
 
 /** The decade a year is in, as 1980. */
 export const decadeOf = (year) => Math.floor(year / 10) * 10;

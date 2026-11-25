@@ -1727,6 +1727,15 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_personal_keys_owner ON personal_keys(owner_id)`,
     ],
   },
+  {
+    number: 54,
+    name: 'half-star ratings on titles',
+    // A person's own rating of a title, in half stars: 1 is half a star, 10 is five stars; null is not rated. A title belongs to one person,
+    // so a rating is theirs alone. (A Letterboxd link, when known, is kept with the title's other catalog ids.)
+    statements: [
+      `ALTER TABLE media ADD COLUMN stars INTEGER`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

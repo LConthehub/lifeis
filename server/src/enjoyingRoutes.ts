@@ -2,7 +2,7 @@
  * The addresses for the calendar (/api/calendar) and the collection of films, shows, music, books and games
  * (/api/media). What they do is core/'s calendar.ts and media.ts; this only reads what was sent and passes it on.
  */
-import { calendar, calendarFeed, followedCalendars, importBookList, media, mediaLists, readBookList, FOLLOW_SERVICE, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
+import { bringInLetterboxd, calendar, calendarFeed, followedCalendars, importBookList, letterboxdFile, media, mediaLists, Problem, readBookList, FOLLOW_SERVICE, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
 import { importMediaList, readMediaList } from '../../core/src/bookList.ts';
 import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
 
@@ -31,6 +31,20 @@ function titleFrom(body: Body) {
     ...(sent(body, 'wanted') ? { wanted: read.yesNo(body, 'wanted', false) } : {}),
     ...(sent(body, 'ids') ? { ids } : {}),
   };
+}
+
+/** The files of a Letterboxd download, as { "diary.csv": "text…" }: at most 5 MB in all. */
+function letterboxdFiles(body: Body): Record<string, string> {
+  const given = read.record(body, 'files');
+  const files: Record<string, string> = {};
+  let size = 0;
+  for (const [name, text] of Object.entries(given)) {
+    if (typeof text !== 'string') throw notUnderstood('files');
+    size += text.length;
+    if (size > 5 * 1024 * 1024) throw new Problem(422, 'That is more than 5 MB of Letterboxd files');
+    files[name.slice(0, 300)] = text;
+  }
+  return files;
 }
 
 const copyFrom = (body: Body) => ({
@@ -97,6 +111,10 @@ export function enjoyingRoutes(db: Db, follow?: FollowTools): Route[] {
     // Lists of titles (see core/ mediaLists.ts): the person's own, and ones shared with everyone who signs in.
     ['GET', at('media/lists'), async (c) => ({ json: await lists(c).all() })],
     ['POST', at('media/lists'), async (c) => ({ status: 201, json: await lists(c).create({ name: read.maybeText(c.body, 'name'), shared: read.yesNo(c.body, 'shared', false) }) })],
+    // Letterboxd files: the download in (read: counts and nothing saved; then saved), and a list out as a file Letterboxd's importer takes.
+    ['POST', at('media/letterboxd/read'), async (c) => ({ json: await bringInLetterboxd(db, c.user.id, letterboxdFiles(c.body), false, c.clock) })],
+    ['POST', at('media/letterboxd'), async (c) => ({ status: 201, json: await bringInLetterboxd(db, c.user.id, letterboxdFiles(c.body), true, c.clock) })],
+    ['GET', at('media/lists/:id/letterboxd'), async (c) => ({ json: await letterboxdFile(db, c.user.id, c.id, c.clock) })],
     ['GET', at('media/lists/:id'), async (c) => ({ json: await lists(c).get(c.id) })],
     ['PUT', at('media/lists/:id'), async (c) => ({
       json: await lists(c).update(c.id, { ...(sent(c.body, 'name') ? { name: read.maybeText(c.body, 'name') } : {}), ...(sent(c.body, 'shared') ? { shared: read.yesNo(c.body, 'shared', false) } : {}) }),
@@ -150,6 +168,7 @@ export function enjoyingRoutes(db: Db, follow?: FollowTools): Route[] {
       }),
     })],
 
+    ['PUT', at('media/:id/stars'), async (c) => ({ json: await shelf(c).rate(c.id, read.maybeNumber(c.body, 'stars')) })],
     ['POST', at('media/:id/log'), async (c) => ({
       status: 201,
       json: await shelf(c).log(c.id, { day: read.text(c.body, 'day'), note: read.maybeText(c.body, 'note'), session_id: read.maybeWhole(c.body, 'session_id') }),

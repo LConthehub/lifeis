@@ -24,6 +24,7 @@ import { noteHistory } from './history.ts';
 import { guardOfKindName } from './starters.ts';
 import { assetLabel, assetNumber, GONE_HOW, placePaths } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
+import { halvesOf } from './letterboxd.ts';
 import { BUILT_IN_NAMES, LIST_TYPES, TO_WATCH } from './mediaLists.ts';
 import { Problem } from './problem.ts';
 import { prepAsText, prepFromText, type PrepRule } from './prep.ts';
@@ -533,7 +534,7 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('home-services.csv', ['Name', 'Address', 'Address works', 'Second address', 'Second works', 'Icon', 'Color', 'Group', 'Order', 'Notes', 'Who sees it', 'Chosen people', 'Shown to guests', 'On my Home page'], serviceRows);
 
   // ---------- the collection ----------
-  const titles = await all('SELECT id, type, title, creator, year, summary, genres, minutes, wanted, listed_only, note FROM media WHERE owner_id = ? ORDER BY title COLLATE NOCASE, id');
+  const titles = await all('SELECT id, type, title, creator, year, summary, genres, minutes, wanted, listed_only, stars, ids, note FROM media WHERE owner_id = ? ORDER BY title COLLATE NOCASE, id');
   const titleOf = new Map(titles.map((t) => [t.id as number, t]));
   const covers = new Map<number, string>();
   for (const c of await all('SELECT c.media_id, c.type, c.bytes FROM media_covers c JOIN media m ON m.id = c.media_id WHERE m.owner_id = ?')) {
@@ -541,8 +542,8 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     if (bytes) covers.set(c.media_id as number, out.binary('pictures/covers', slug(str(titleOf.get(c.media_id as number)?.title), c.media_id as number), str(c.type), bytes));
   }
   // A title only on a list, or wanted, with no copy yet is in this file too (Not owned yet: yes), so it comes back; it is not part of what the collection counts.
-  out.csv('collection.csv', ['Title', 'Type', 'By', 'Year', 'About it', 'Genres', 'Minutes', 'On the wish list', 'Notes', 'Cover file', 'Not owned yet'],
-    titles.map((t) => [str(t.title), str(t.type), str(t.creator), str(t.year), str(t.summary), str(t.genres).split(',').filter(Boolean).join(', '), str(t.minutes), yes(t.wanted), str(t.note), covers.get(t.id as number) ?? '', yes(t.listed_only)]));
+  out.csv('collection.csv', ['Title', 'Type', 'By', 'Year', 'About it', 'Genres', 'Minutes', 'On the wish list', 'Notes', 'Cover file', 'Not owned yet', 'Stars', 'Letterboxd link'],
+    titles.map((t) => [str(t.title), str(t.type), str(t.creator), str(t.year), str(t.summary), str(t.genres).split(',').filter(Boolean).join(', '), str(t.minutes), yes(t.wanted), str(t.note), covers.get(t.id as number) ?? '', yes(t.listed_only), t.stars === null || t.stars === undefined ? '' : String(Number(t.stars) / 2), letterboxdLinkOf(t.ids)]));
   out.csv('copies.csv', ['Title', 'Type', 'Format', 'Place', 'Discs or tapes', 'Barcode', 'Lent to', 'Lent on', 'Link', 'Notes', 'Kept in step with this server'],
     (await all(`SELECT c.media_id, c.format, c.place_id, c.pieces, c.barcode, c.lent_to, c.lent_on, c.link, c.note, COALESCE(ms.name, ls.name) AS server
       FROM media_copies c JOIN media m ON m.id = c.media_id LEFT JOIN media_sources ms ON ms.id = c.connection_id LEFT JOIN library_sources ls ON ls.id = c.library_source_id
@@ -837,6 +838,11 @@ type Table = { headers: string[]; rows: Record<string, string>[] };
 export type Files = Record<string, string>;
 
 /** What the spreadsheet cell holds, with the quote that protected it from a spreadsheet taken off. */
+/** The Letterboxd link kept with a title's catalog ids, if it has one. */
+function letterboxdLinkOf(ids: unknown): string {
+  try { const v: unknown = typeof ids === 'string' ? JSON.parse(ids) : null; const u = v && typeof v === 'object' ? (v as Record<string, unknown>).letterboxd : null; return typeof u === 'string' ? u : ''; } catch { return ''; }
+}
+
 const unguarded = (cell: string) => (/^'(?:[=+@\t\r]|-[^0-9.])/.test(cell) ? cell.slice(1) : cell);
 
 function tableOf(files: Files, name: string): Table | null {
@@ -1584,10 +1590,12 @@ ${url.toLowerCase()}`)) { d.already += 1; continue; }
       const minutes = wholeOf(cellOf(row, 'Minutes'));
       const genres = [...new Set(cellOf(row, 'Genres').split(/[,;]/).map((g) => cut(g.trim(), 40)).filter(Boolean))].slice(0, 20);
       const made = await c.tx.run(
-        `INSERT INTO media (owner_id, type, title, creator, year, summary, genres, minutes, cover, wanted, ids, note, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?)`,
+        `INSERT INTO media (owner_id, type, title, creator, year, summary, genres, minutes, cover, wanted, ids, stars, note, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
         [c.owner, type, title, clean(cellOf(row, 'By'), 300), year !== null && year >= 0 && year <= 9999 ? year : null, clean(cellOf(row, 'About it'), 5000), genres.join(',') || null,
-          minutes !== null && minutes >= 0 && minutes <= 100_000 ? minutes : null, yesOf(cellOf(row, 'On the wish list')) ? 1 : 0, clean(row.notes, 5000), c.at, c.at]);
+          minutes !== null && minutes >= 0 && minutes <= 100_000 ? minutes : null, yesOf(cellOf(row, 'On the wish list')) ? 1 : 0,
+          /^https?:\/\/\S+$/i.test(cellOf(row, 'Letterboxd link')) ? JSON.stringify({ letterboxd: cut(cellOf(row, 'Letterboxd link'), 300) }) : null,
+          halvesOf(cellOf(row, 'Stars')), clean(row.notes, 5000), c.at, c.at]);
       const same = (r: Record<string, string>) => labelKey(cellOf(r, 'Title')) === labelKey(title) && (types.includes(cellOf(r, 'Type').toLowerCase()) ? cellOf(r, 'Type').toLowerCase() : 'other') === type;
       let kept = 0;
       for (const copy of copies.filter(same)) {
@@ -1609,7 +1617,7 @@ ${url.toLowerCase()}`)) { d.already += 1; continue; }
       if (kept === 0 && (yesOf(cellOf(row, 'Not owned yet')) || yesOf(cellOf(row, 'On the wish list')))) await c.tx.run('UPDATE media SET listed_only = 1 WHERE id = ?', [made.lastId]);
       for (const entry of log.filter(same)) {
         const day = dayOf(cellOf(entry, 'Day'));
-        if (day) await c.tx.run('INSERT INTO media_log (media_id, day, note, created_at) VALUES (?, ?, ?, ?)', [made.lastId, day, clean(entry.notes, 1000), c.at]);
+        if (day) await c.tx.run('INSERT INTO media_log (media_id, day, note, created_at) VALUES (?, ?, ?, ?)', [made.lastId, day, clean(entry.notes, 50_000), c.at]);
       }
       d.fresh += 1;
       const cover = cellOf(row, 'Cover file');

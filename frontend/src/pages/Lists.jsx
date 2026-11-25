@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import Icon, { Dots } from '../components/Icon';
+import LetterboxdIn from '../components/LetterboxdIn';
+import { starsText } from '../components/collectionTools';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput } from '../components/ui';
 
 const KINDS = [['film', 'Film'], ['show', 'Show'], ['music', 'Music'], ['book', 'Book'], ['game', 'Game'], ['other', 'Other']];
@@ -18,6 +20,7 @@ const small = `${quietButtonClass} ${control} inline-flex items-center justify-c
 export default function ListsPage() {
   const [lists, setLists] = useState(null);
   const [making, setMaking] = useState(false);
+  const [letterboxd, setLetterboxd] = useState(false);
   const [form, setForm] = useState({ name: '', shared: false });
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -49,8 +52,10 @@ export default function ListsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Lists</h1>
+        <button type="button" onClick={() => setLetterboxd(!letterboxd)} aria-expanded={letterboxd} className={`${quietButtonClass} ${control}`}>From Letterboxd</button>
         <button type="button" onClick={() => setMaking(!making)} aria-expanded={making} className={`${buttonClass} ${control}`}>+ New list</button>
       </div>
+      {letterboxd && <LetterboxdIn onDone={load} />}
       <p className="text-sm text-gray-600 dark:text-life-200">
         Put any title on a list, whether you own it or not: films, shows, music, books and games together. A title you do not own is not counted in your collection until you add a copy.
       </p>
@@ -86,6 +91,8 @@ export function ListPage() {
   const [error, setError] = useState('');
   const [name, setName] = useState('');
   const [ordering, setOrdering] = useState(false);
+  const [byRating, setByRating] = useState(false);
+  const [filed, setFiled] = useState('');
   const load = useCallback(() => { axios.get(`/api/media/lists/${id}`).then(({ data }) => { setList(data); setName(data.name); }).catch(() => setList(null)); }, [id]);
   useEffect(() => { load(); }, [load]);
   if (list === undefined) return null;
@@ -107,9 +114,22 @@ export function ListPage() {
     if (!window.confirm(`Delete the list ${list.name}? No title is removed: the ones you do not own stay in search and can go on another list.`)) return;
     try { await axios.delete(`/api/media/lists/${id}`); navigate('/media/lists'); } catch (err) { setError(errorMessage(err, 'That did not work')); }
   };
+  const makeFile = async () => {
+    setError(''); setFiled('');
+    try {
+      const { data } = await axios.get(`/api/media/lists/${id}/letterboxd`);
+      const left = data.left_out ? ` ${data.left_out} other ${data.left_out === 1 ? 'title was' : 'titles were'} left out: only films go to Letterboxd.` : '';
+      if (data.films === 0) { setFiled(`There is no film on this list, so there is nothing to put in a file for Letterboxd.${left}`); return; }
+      const { handOver } = await import('../device/handOver.js');
+      await handOver(new TextEncoder().encode(data.csv), data.file_name);
+      setFiled(`Saved ${data.films} ${data.films === 1 ? 'film' : 'films'} as ${data.file_name}.${left} On Letterboxd, use its Import your data page and choose the file.`);
+    } catch (err) { setError(errorMessage(err, 'That file could not be made')); }
+  };
   const custom = list.mine && !list.builtin;
   const ordered = list.builtin !== 'wanted';
-  const canOrder = ordered && list.entries.length > 1;
+  const canOrder = ordered && !byRating && list.entries.length > 1;
+  const shownEntries = byRating ? [...list.entries].sort((a, b) => (b.stars ?? -1) - (a.stars ?? -1)) : list.entries;
+  const hasStars = list.entries.some((e) => e.stars != null);
   return (
     <div className="space-y-4">
       <div>
@@ -122,6 +142,11 @@ export function ListPage() {
         </p>
       </div>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      <div className="flex flex-wrap items-center gap-2">
+        {list.entries.length > 0 && <button type="button" onClick={makeFile} className={small} data-letterboxd-out>Make a Letterboxd file</button>}
+        {list.mine && hasStars && <button type="button" onClick={() => { setByRating(!byRating); setOrdering(false); }} aria-pressed={byRating} className={byRating ? `${buttonClass} ${control}` : small}>{byRating ? 'Sorted by my rating' : 'Sort by my rating'}</button>}
+      </div>
+      {filed && <p role="status" className="text-sm text-gray-700 dark:text-life-100" data-letterboxd-said>{filed}</p>}
       {canOrder && (
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => setOrdering(!ordering)} aria-pressed={ordering} className={ordering ? `${buttonClass} ${control}` : small}>{ordering ? 'Done' : 'Change order'}</button>
@@ -132,7 +157,7 @@ export function ListPage() {
       {list.entries.length > 0 && (
         <section className={cardClass} aria-label="Titles on the list">
           <ol className="divide-y divide-life-50 dark:divide-life-700">
-            {list.entries.map((e, i) => (
+            {shownEntries.map((e, i) => (
               <li key={e.media_id} className="space-y-1 py-2" data-entry>
                 <div className="flex items-start gap-2">
                   <span className="mt-0.5 flex-none text-life-600 dark:text-life-200" aria-hidden="true"><Icon of={e.type} /></span>
@@ -141,7 +166,7 @@ export function ListPage() {
                       {list.mine ? <Link to={`/media/${e.media_id}`} className={`inline-flex ${control} items-center hover:underline`}>{e.title}</Link> : e.title}
                     </span>
                     <span className="block text-xs text-gray-500 dark:text-life-300">
-                      <Dots parts={[KINDS.find(([k]) => k === e.type)?.[1], e.creator, e.year, e.added_by && `added by ${e.added_by}`, e.owned === false && 'not owned yet', e.owned === true && 'you have it', e.times > 0 && `${DID[e.type].toLowerCase()} ${e.times} ${e.times === 1 ? 'time' : 'times'}`]} />
+                      <Dots parts={[KINDS.find(([k]) => k === e.type)?.[1], e.creator, e.year, e.added_by && `added by ${e.added_by}`, e.owned === false && 'not owned yet', e.owned === true && 'you have it', e.times > 0 && `${DID[e.type].toLowerCase()} ${e.times} ${e.times === 1 ? 'time' : 'times'}`, e.stars != null && <span key="stars" aria-label={`rated ${e.stars} out of 5`}>{starsText(e.stars)}</span>]} />
                     </span>
                     {e.note && <span className="block whitespace-pre-wrap text-xs text-gray-700 dark:text-life-100">{e.note}</span>}
                   </span>

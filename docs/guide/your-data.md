@@ -48,6 +48,8 @@ A personal key lets one shortcut on your phone, like Siri, read or add a few thi
 
 **Export everything** (Settings › Your data, under Import and export) makes one zip of it all. Recipes export as a zip on their own. The home inventory prints or saves as a PDF. A backup holds everything.
 
+**Letterboxd, in and out.** On the Lists tab, **From Letterboxd** brings in the zip from Letterboxd's Export your data: watched days, watchlist, lists, half-star ratings and reviews. The files are read here, you see the counts first, and nothing is kept until you say so. Reading the same download again adds nothing. Any list can also be saved as a CSV that Letterboxd's importer takes (**Make a Letterboxd file**). Neither way sends anything to Letterboxd: you carry the file yourself. Your ratings are in the download of everything too. [Films, music and books](collection.html#letterboxd) has the details.
+
 **Bring in from HomeBox.** On Things, choose **Bring in from HomeBox** and pick the CSV that HomeBox exports. You see the kinds, places and tags first, and nothing is kept until you say so. Bringing in the same file again adds nothing. [Your home](home.html#bringing-in-from-homebox) says what is brought across.
 
 ## Sharing inside a household
