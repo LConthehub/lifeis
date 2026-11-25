@@ -1012,7 +1012,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
   // Put the database back to how version 2 left it: the kitchen, and none of the newer tables.
-  for (const table of ['item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['media_list_items', 'media_lists', 'item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.
@@ -1549,4 +1549,68 @@ it('prep reminders are kept on a recipe and on a meal, and listed for the week a
   const other = await member(admin, 'partner');
   expect((await other.put(`/api/prep/recipes/${recipe.id}`, { steps: [] })).status).toBe(404);
   expect((await visitor().get('/api/prep/coming')).status).toBe(401);
+});
+
+it('lists of titles answer over the web: private by default, shared with the household when chosen, not owned until a copy, and in the download', async () => {
+  const admin = await owner();
+  const other = await member(admin, 'partner');
+  const mine = (await admin.get('/api/media/lists')).json;
+  expect(mine.map((l: { name: string; builtin: string | null }) => [l.name, l.builtin])).toEqual([['Wanted', 'wanted'], ['To watch, read or hear', 'to_watch']]);
+  const toWatch = mine[1];
+  await admin.post('/api/media', { type: 'music', title: 'Blue', wanted: true });
+  expect((await admin.get(`/api/media/lists/${mine[0].id}`)).json.entries.map((e: { title: string }) => e.title)).toEqual(['Blue']);
+  expect((await admin.get('/api/media')).json).toEqual([]); // Blue is wanted, not owned
+
+  const added = await admin.post(`/api/media/lists/${toWatch.id}/titles`, { type: 'film', title: 'Stalker', year: 1979, note: 'rainy night' });
+  expect([added.status, added.json.entries.map((e: { title: string; owned: boolean }) => [e.title, e.owned])]).toEqual([201, [['Stalker', false]]]);
+  expect((await admin.get('/api/media')).json).toEqual([]);
+  expect((await admin.get('/api/search?q=stalker')).json).toEqual([expect.objectContaining({ kind: 'title', detail: expect.stringContaining('On a list') })]);
+  expect((await admin.post(`/api/media/lists/${toWatch.id}/titles`, { type: 'podcast', title: 'x' })).status).toBe(400);
+  expect((await admin.post(`/api/media/lists/${toWatch.id}/titles`, { type: 'film' })).status).toBe(400);
+
+  // Your own list, in an order you choose; the partner cannot see it until it is shared.
+  const made = (await admin.post('/api/media/lists', { name: 'Rainy day' })).json;
+  await admin.post(`/api/media/lists/${made.id}/titles`, { type: 'game', title: 'Ticket to Ride' });
+  const two = (await admin.post(`/api/media/lists/${made.id}/titles`, { type: 'book', title: 'Dune' })).json;
+  expect((await admin.post(`/api/media/lists/${made.id}/move`, { media_id: two.entries[1].media_id, way: 'up' })).json.entries.map((e: { title: string }) => e.title)).toEqual(['Dune', 'Ticket to Ride']);
+  expect((await admin.post(`/api/media/lists/${made.id}/move`, { media_id: two.entries[1].media_id, way: 'sideways' })).status).toBe(400);
+  expect((await other.get(`/api/media/lists/${made.id}`)).status).toBe(404);
+  expect((await other.get('/api/media/lists')).json.map((l: { name: string }) => l.name)).toEqual(['Wanted', 'To watch, read or hear']);
+  expect((await other.get('/api/search?q=dune')).json).toEqual([]);
+  expect((await other.post(`/api/media/lists/${made.id}/titles`, { type: 'film', title: 'Sneaky' })).status).toBe(404);
+  expect((await other.put(`/api/media/lists/${made.id}`, { shared: true })).status).toBe(404);
+  const theirs = await splitDownload(new Uint8Array((await other.get('/api/export/everything.zip')).bytes));
+  expect(JSON.stringify(theirs.files)).not.toMatch(/Dune|Rainy day|Stalker/);
+
+  // Shared: the partner sees it and can add to it, but not change it.
+  expect((await admin.put(`/api/media/lists/${made.id}`, { shared: true })).json.shared).toBe(true);
+  expect((await other.get('/api/media/lists')).json.map((l: { name: string; mine: boolean }) => [l.name, l.mine])).toEqual([['Wanted', true], ['To watch, read or hear', true], ['Rainy day', false]]);
+  expect((await other.post(`/api/media/lists/${made.id}/titles`, { type: 'film', title: 'Spirited Away' })).json.entries.map((e: { title: string }) => e.title)).toEqual(['Dune', 'Ticket to Ride', 'Spirited Away']);
+  expect((await other.put(`/api/media/lists/${made.id}`, { name: 'Mine' })).status).toBe(403);
+  expect((await other.delete(`/api/media/lists/${made.id}`)).status).toBe(403);
+  expect((await other.get('/api/media')).json).toEqual([]); // nothing of it is in the partner's collection
+
+  // The two lists everyone has stay.
+  expect((await admin.put(`/api/media/lists/${toWatch.id}`, { name: 'Other' })).status).toBe(400);
+  expect((await admin.delete(`/api/media/lists/${toWatch.id}`)).status).toBe(400);
+
+  // Watching Stalker takes it off To watch. A copy makes it owned.
+  const stalker = added.json.entries[0].media_id;
+  await admin.post(`/api/media/${stalker}/copies`, { format: 'DVD' });
+  expect((await admin.get('/api/media')).json.map((t: { title: string }) => t.title)).toEqual(['Stalker']);
+  await admin.post(`/api/media/${stalker}/log`, { day: MONDAY });
+  expect((await admin.get(`/api/media/lists/${toWatch.id}`)).json.entries).toEqual([]);
+
+  // In the download, and back in on an empty Life Is.
+  await admin.post(`/api/media/lists/${toWatch.id}/titles`, { type: 'book', title: 'Emma' });
+  const zip = await splitDownload(new Uint8Array((await admin.get('/api/export/everything.zip', { 'X-Local-Day': MONDAY })).bytes));
+  expect(zip.files['lists.csv']).toContain('Rainy day');
+  const looked = (await other.post('/api/export/look', { files: zip.files })).json;
+  expect(looked.kinds.find((k: { key: string }) => k.key === 'lists')).toMatchObject({ found: 4, importable: true });
+  const brought = (await other.post('/api/export/bring-in', { files: zip.files, kinds: ['collection', 'lists'] })).json;
+  expect(brought.kinds.every((k: { ok: boolean }) => k.ok)).toBe(true);
+  const own = (await other.get('/api/media/lists')).json.filter((l: { mine: boolean }) => l.mine);
+  expect(own.map((l: { name: string; count: number }) => [l.name, l.count])).toEqual([['Wanted', 1], ['To watch, read or hear', 1], ['Rainy day', 3]]);
+  const again = (await other.post('/api/export/bring-in', { files: zip.files, kinds: ['collection', 'lists'] })).json;
+  expect(again.kinds.map((k: { fresh: number }) => k.fresh)).toEqual([0, 0]);
 });

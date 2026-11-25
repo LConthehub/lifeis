@@ -1620,6 +1620,40 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE items ADD COLUMN import_ref TEXT`,
     ],
   },
+  {
+    number: 50,
+    name: 'entertaining: lists of titles, and titles kept only on a list',
+    statements: [
+      // A person's own lists. builtin is 'to_watch' or 'wanted' for the two every person has (they cannot be renamed, shared or removed).
+      // A shared list is seen, and added to, by everyone who signs in here. An unshared list is only its owner's.
+      `CREATE TABLE media_lists (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        builtin TEXT,
+        shared INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_media_lists_owner ON media_lists(owner_id, sort_order)`,
+      // The titles on a list, in the order the person chose. The Wanted list has no rows here: it is drawn from media.wanted.
+      `CREATE TABLE media_list_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        list_id INTEGER NOT NULL REFERENCES media_lists(id) ON DELETE CASCADE,
+        media_id INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        note TEXT,
+        added_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE (list_id, media_id)
+      )`,
+      `CREATE INDEX idx_media_list_items_media ON media_list_items(media_id)`,
+      // 1 for a title that is only on a list or wanted: not owned, so it stays out of the Collection and everything that counts what is owned, until a copy is added.
+      `ALTER TABLE media ADD COLUMN listed_only INTEGER NOT NULL DEFAULT 0`,
+      // Titles marked wanted with no copy move to the Wanted list (the wanted column and its data stay as they are).
+      `UPDATE media SET listed_only = 1 WHERE wanted = 1 AND NOT EXISTS (SELECT 1 FROM media_copies c WHERE c.media_id = media.id)`,
+    ],
+  },
 ];
 
 export const LATEST = MIGRATIONS[MIGRATIONS.length - 1]!.number;

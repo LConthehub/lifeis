@@ -22,6 +22,7 @@ import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { noteHistory } from './history.ts';
 import { assetLabel, assetNumber, GONE_HOW, placePaths } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
+import { BUILT_IN_NAMES, LIST_TYPES, TO_WATCH } from './mediaLists.ts';
 import { Problem } from './problem.ts';
 import { prepAsText, prepFromText, type PrepRule } from './prep.ts';
 import { recipeKey } from './recipeFiles.ts';
@@ -73,6 +74,7 @@ export const KINDS: KindInfo[] = [
   { key: 'manual', label: 'The house manual', file: 'house-manual.csv', importable: true, matched: 'by part and title' },
   { key: 'licenses', label: 'Licenses and permits', file: 'licenses.csv', importable: true, matched: 'by name and holder' },
   { key: 'collection', label: 'The collection: titles, copies and what was watched or read', file: 'collection.csv', importable: true, matched: 'by title and type' },
+  { key: 'lists', label: 'Lists of titles: To watch, read or hear, and the ones you made, in their order and whether they are shared', file: 'lists.csv', importable: true, matched: 'a list by its name; a title on it by title and type' },
   { key: 'events', label: 'Calendar events', file: 'events.csv', importable: true, matched: 'by title and day' },
   { key: 'money', label: 'Spending: categories and entries', file: 'money-entries.csv', importable: true, matched: 'by day, amount, label and category' },
   { key: 'budget', label: 'Income and savings goals, with the money put toward each', file: 'money-income.csv', importable: true, matched: 'income by name, amount and how often; goals by name' },
@@ -515,15 +517,16 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
       .map((l) => [str(l.name), str(l.category), str(l.holder), str(l.number), str(l.issuer), str(l.issued_on), str(l.expires_on), str(l.note)]));
 
   // ---------- the collection ----------
-  const titles = await all('SELECT id, type, title, creator, year, summary, genres, minutes, wanted, note FROM media WHERE owner_id = ? ORDER BY title COLLATE NOCASE, id');
+  const titles = await all('SELECT id, type, title, creator, year, summary, genres, minutes, wanted, listed_only, note FROM media WHERE owner_id = ? ORDER BY title COLLATE NOCASE, id');
   const titleOf = new Map(titles.map((t) => [t.id as number, t]));
   const covers = new Map<number, string>();
   for (const c of await all('SELECT c.media_id, c.type, c.bytes FROM media_covers c JOIN media m ON m.id = c.media_id WHERE m.owner_id = ?')) {
     const bytes = bytesOf(c.bytes);
     if (bytes) covers.set(c.media_id as number, out.binary('pictures/covers', slug(str(titleOf.get(c.media_id as number)?.title), c.media_id as number), str(c.type), bytes));
   }
-  out.csv('collection.csv', ['Title', 'Type', 'By', 'Year', 'About it', 'Genres', 'Minutes', 'On the wish list', 'Notes', 'Cover file'],
-    titles.map((t) => [str(t.title), str(t.type), str(t.creator), str(t.year), str(t.summary), str(t.genres).split(',').filter(Boolean).join(', '), str(t.minutes), yes(t.wanted), str(t.note), covers.get(t.id as number) ?? '']));
+  // A title only on a list, or wanted, with no copy yet is in this file too (Not owned yet: yes), so it comes back; it is not part of what the collection counts.
+  out.csv('collection.csv', ['Title', 'Type', 'By', 'Year', 'About it', 'Genres', 'Minutes', 'On the wish list', 'Notes', 'Cover file', 'Not owned yet'],
+    titles.map((t) => [str(t.title), str(t.type), str(t.creator), str(t.year), str(t.summary), str(t.genres).split(',').filter(Boolean).join(', '), str(t.minutes), yes(t.wanted), str(t.note), covers.get(t.id as number) ?? '', yes(t.listed_only)]));
   out.csv('copies.csv', ['Title', 'Type', 'Format', 'Place', 'Discs or tapes', 'Barcode', 'Lent to', 'Lent on', 'Link', 'Notes', 'Kept in step with this server'],
     (await all(`SELECT c.media_id, c.format, c.place_id, c.pieces, c.barcode, c.lent_to, c.lent_on, c.link, c.note, COALESCE(ms.name, ls.name) AS server
       FROM media_copies c JOIN media m ON m.id = c.media_id LEFT JOIN media_sources ms ON ms.id = c.connection_id LEFT JOIN library_sources ls ON ls.id = c.library_source_id
@@ -531,6 +534,17 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('collection-log.csv', ['Title', 'Type', 'Day', 'Notes'],
     (await all('SELECT l.media_id, l.day, l.note FROM media_log l JOIN media m ON m.id = l.media_id WHERE m.owner_id = ? ORDER BY l.day, l.id'))
       .map((l) => { const t = titleOf.get(l.media_id as number)!; return [str(t.title), str(t.type), str(l.day), str(l.note)]; }));
+  // The lists the person made, and To watch, read or hear: one row for each title on a list, in its order. (Wanted is the "On the wish list" column above.)
+  // A list with nothing on it has one row with no title, so its name and whether it is shared are kept.
+  const titleListRows: Cell[][] = [];
+  for (const l of await all("SELECT id, name, builtin, shared FROM media_lists WHERE owner_id = ? AND (builtin IS NULL OR builtin = 'to_watch') ORDER BY sort_order, id")) {
+    const items = await all('SELECT i.media_id, i.note, u.username AS by FROM media_list_items i LEFT JOIN users u ON u.id = i.added_by WHERE i.list_id = ? ORDER BY i.sort_order, i.id', [l.id as number]);
+    if (!items.length && (l.builtin && !l.shared)) continue;
+    const base = [str(l.name), yes(l.builtin), yes(l.shared)];
+    if (!items.length) titleListRows.push([...base, '', '', '', '', '']);
+    for (const [n, i] of items.entries()) { const t = titleOf.get(i.media_id as number)!; titleListRows.push([...base, str(n + 1), str(t.title), str(t.type), str(i.by), str(i.note)]); }
+  }
+  out.csv('lists.csv', ['List', 'Built in', 'Shared with everyone', 'Order', 'Title', 'Type', 'Added by', 'Notes'], titleListRows);
 
   // ---------- the calendar, projects, plans ----------
   out.csv('events.csv', ['Title', 'Day', 'Ends on', 'Time', 'Every year', 'Notes'],
@@ -745,6 +759,7 @@ const FILE_ABOUT: [string, string][] = [
   ['collection.csv', 'The titles in your collection (films, shows, music, books, games).'],
   ['copies.csv', 'Each copy of a title: format, place, discs, who it is lent to, and its link.'],
   ['collection-log.csv', 'When you watched, read, listened to or played something.'],
+  ['lists.csv', 'Your lists of titles (To watch, read or hear, and the ones you made): each title on each list, in order, and whether the list is shared. Titles you do not own yet are in collection.csv, marked Not owned yet.'],
   ['events.csv', 'Calendar events you wrote.'],
   ['projects.csv', 'Projects, and project-lines.csv, project-time.csv and project-costs.csv for what they use, the time spent and what they cost.'],
   ['plans.csv', 'Plans, and plan-items.csv and plan-photos.csv for what belongs to each.'],
@@ -1511,6 +1526,7 @@ const importers: Record<string, Importer> = {
         [c.owner, type, title, clean(cellOf(row, 'By'), 300), year !== null && year >= 0 && year <= 9999 ? year : null, clean(cellOf(row, 'About it'), 5000), genres.join(',') || null,
           minutes !== null && minutes >= 0 && minutes <= 100_000 ? minutes : null, yesOf(cellOf(row, 'On the wish list')) ? 1 : 0, clean(row.notes, 5000), c.at, c.at]);
       const same = (r: Record<string, string>) => labelKey(cellOf(r, 'Title')) === labelKey(title) && (types.includes(cellOf(r, 'Type').toLowerCase()) ? cellOf(r, 'Type').toLowerCase() : 'other') === type;
+      let kept = 0;
       for (const copy of copies.filter(same)) {
         if (cellOf(copy, 'Kept in step with this server')) { serverCopies += 1; continue; }
         const format = clean(cellOf(copy, 'Format'), 40);
@@ -1524,7 +1540,10 @@ const importers: Record<string, Importer> = {
           [made.lastId, format, placeId, clean(cellOf(copy, 'Barcode'), 40), lentTo, lentTo ? dayOf(cellOf(copy, 'Lent on')) ?? c.today : null, clean(copy.notes, 1000),
             pieces !== null && pieces >= 1 && pieces <= 999 ? pieces : null, /^https?:\/\//i.test(link) || /^[a-z][a-z0-9+.-]*:\/\//i.test(link) ? cut(link, 1000) : null, c.at]);
         await noteHistory(c.tx, c.owner, { copy_id: m.lastId }, { what: 'added', to_place: placeId ? book.pathOf(placeId) : null, day: c.today, at: c.at });
+        kept += 1;
       }
+      // Not owned yet (on a list, or wanted, with no copy): out of the collection until a copy is added.
+      if (kept === 0 && (yesOf(cellOf(row, 'Not owned yet')) || yesOf(cellOf(row, 'On the wish list')))) await c.tx.run('UPDATE media SET listed_only = 1 WHERE id = ?', [made.lastId]);
       for (const entry of log.filter(same)) {
         const day = dayOf(cellOf(entry, 'Day'));
         if (day) await c.tx.run('INSERT INTO media_log (media_id, day, note, created_at) VALUES (?, ?, ?, ?)', [made.lastId, day, clean(entry.notes, 1000), c.at]);
@@ -1535,6 +1554,67 @@ const importers: Record<string, Importer> = {
     }
     const notes = [book.made ? `${book.made} place${book.made === 1 ? '' : 's'} made` : '', serverCopies ? `${serverCopies} cop${serverCopies === 1 ? 'y' : 'ies'} that a media or book server keeps in step were left for that server to bring in again` : ''].filter(Boolean);
     if (notes.length) d.note = notes.join('; ');
+    return d;
+  },
+
+  async lists(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'lists.csv');
+    if (!t) return d;
+    const types: readonly string[] = LIST_TYPES;
+    const people = new Map((await c.tx.all<{ id: number; username: string }>('SELECT id, username FROM users')).map((u) => [u.username.toLowerCase(), u.id]));
+    // The lists already here: To watch by what it is, the others by name.
+    const listIds = new Map<string, number>();
+    for (const l of await c.tx.all<{ id: number; name: string; builtin: string | null }>('SELECT id, name, builtin FROM media_lists WHERE owner_id = ? ORDER BY id DESC', [c.owner])) listIds.set(l.builtin ? `#${l.builtin}` : labelKey(l.name), l.id);
+    const titles = new Map<string, number>();
+    for (const m of await c.tx.all<{ id: number; title: string; type: string }>('SELECT id, title, type FROM media WHERE owner_id = ? ORDER BY id DESC', [c.owner])) titles.set(`${labelKey(m.title)}
+${m.type}`, m.id);
+    const on = new Set((await c.tx.all<{ list_id: number; media_id: number }>('SELECT i.list_id, i.media_id FROM media_list_items i JOIN media_lists l ON l.id = i.list_id WHERE l.owner_id = ?', [c.owner])).map((i) => `${i.list_id}
+${i.media_id}`));
+    const last = new Map<number, number>();
+    const lastOf = async (listId: number) => {
+      if (!last.has(listId)) last.set(listId, (await c.tx.get<{ n: number | null }>('SELECT MAX(sort_order) AS n FROM media_list_items WHERE list_id = ?', [listId]))!.n ?? 0);
+      return last.get(listId)!;
+    };
+    for (const [at, row] of t.rows.entries()) {
+      const builtIn = yesOf(cellOf(row, 'Built in'));
+      const name = builtIn ? BUILT_IN_NAMES[TO_WATCH]! : clean(cellOf(row, 'List'), 80);
+      if (!name) { skip(d, at, 'it has no list name'); continue; }
+      d.found += 1;
+      const key = builtIn ? `#${TO_WATCH}` : labelKey(name);
+      let fresh = false;
+      let listId = listIds.get(key);
+      if (listId === undefined) {
+        const order = builtIn ? -1 : (await c.tx.get<{ n: number | null }>('SELECT MAX(sort_order) AS n FROM media_lists WHERE owner_id = ?', [c.owner]))!.n ?? 0;
+        listId = (await c.tx.run('INSERT INTO media_lists (owner_id, name, builtin, shared, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+          [c.owner, name, builtIn ? TO_WATCH : null, !builtIn && yesOf(cellOf(row, 'Shared with everyone')) ? 1 : 0, builtIn ? -1 : Math.max(order, 0) + 1, c.at])).lastId;
+        listIds.set(key, listId);
+        fresh = true;
+      }
+      const title = clean(cellOf(row, 'Title'), 300);
+      if (title) {
+        const type = types.includes(cellOf(row, 'Type').toLowerCase()) ? cellOf(row, 'Type').toLowerCase() : 'other';
+        let mediaId = titles.get(`${labelKey(title)}
+${type}`);
+        if (mediaId === undefined) {
+          mediaId = (await c.tx.run('INSERT INTO media (owner_id, type, title, wanted, listed_only, created_at, updated_at) VALUES (?, ?, ?, 0, 1, ?, ?)', [c.owner, type, title, c.at, c.at])).lastId;
+          titles.set(`${labelKey(title)}
+${type}`, mediaId);
+        }
+        if (!on.has(`${listId}
+${mediaId}`)) {
+          const n = (await lastOf(listId)) + 1;
+          last.set(listId, n);
+          await c.tx.run('INSERT INTO media_list_items (list_id, media_id, sort_order, note, added_by, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [listId, mediaId, n, clean(cellOf(row, 'Notes'), 1000), people.get(cellOf(row, 'Added by').toLowerCase()) ?? null, c.at]);
+          on.add(`${listId}
+${mediaId}`);
+          fresh = true;
+        }
+      }
+      if (fresh) d.fresh += 1;
+      else d.already += 1;
+    }
     return d;
   },
 
@@ -2070,7 +2150,7 @@ const importers: Record<string, Importer> = {
     return d;
   },
 };
-const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'manual', 'licenses', 'collection', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
+const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'manual', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
 
 function rowsIn(files: Files, info: KindInfo): number {
   return tableOf(files, info.file)?.rows.length ?? 0;

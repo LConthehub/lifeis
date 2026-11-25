@@ -6,6 +6,10 @@
  * like: VHS, Betamax, Vinyl, Paperback), a place (the same places your other things use), and who it's lent
  * to. A title with no copies can be marked as wanted.
  *
+ * A title can also be only on a list (mediaLists.ts) or wanted: not owned. Those are kept with `listed_only` set, and
+ * `list` leaves them out, so nothing that counts what is owned (the Collection, its counts and formats, the printable
+ * list, the home page) sees them. Adding a copy takes the mark off.
+ *
  * Each time you watch, read, listen or play is a line in the title's log, with its day. A log line can
  * belong to a project session, which is how "watched Alien while sewing" is kept.
  *
@@ -214,6 +218,8 @@ export type MediaSummary = {
   minutes: number | null;
   cover: string | null;
   wanted: boolean;
+  /** Not owned: only on a list, or wanted, with no copy yet. Such a title is left out of `list`. */
+  unowned: boolean;
   /** The formats you have it on, each once: ["VHS", "Blu-ray"]. */
   formats: string[];
   /** How many discs or tapes, for each format in `formats` that has a copy saying so (the most, if two do): { "Book on CD": 12 }. */
@@ -245,7 +251,7 @@ export type Media = MediaSummary & {
   updated_at: string;
 };
 
-type MediaRow = Omit<Media, 'genres' | 'wanted' | 'formats' | 'pieces' | 'lent_to' | 'times' | 'last_on' | 'ids' | 'copies' | 'log' | 'added_at' | 'copy_count' | 'cost_cents' | 'worth_cents' | 'unvalued' | 'gain_cents' | 'tag_list'> & { genres: string | null; wanted: number; ids: string | null };
+type MediaRow = Omit<Media, 'genres' | 'wanted' | 'unowned' | 'formats' | 'pieces' | 'lent_to' | 'times' | 'last_on' | 'ids' | 'copies' | 'log' | 'added_at' | 'copy_count' | 'cost_cents' | 'worth_cents' | 'unvalued' | 'gain_cents' | 'tag_list'> & { genres: string | null; wanted: number; listed_only: number; ids: string | null };
 
 const list = (text: string | null) => (text ?? '').split(',').filter(Boolean);
 
@@ -274,7 +280,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
 
   async function owned(q: Queries, id: number): Promise<MediaRow> {
     const row = await q.get<MediaRow>(
-      'SELECT id, type, title, creator, year, summary, genres, minutes, cover, wanted, ids, note, created_at, updated_at FROM media WHERE id = ? AND owner_id = ?', [id, owner]);
+      'SELECT id, type, title, creator, year, summary, genres, minutes, cover, wanted, listed_only, ids, note, created_at, updated_at FROM media WHERE id = ? AND owner_id = ?', [id, owner]);
     if (!row) throw new Problem(404, 'Not found');
     return row;
   }
@@ -304,7 +310,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
     }
     return {
       id: row.id, type: row.type, title: row.title, creator: row.creator, year: row.year, genres: list(row.genres), minutes: row.minutes,
-      cover: row.cover, wanted: Boolean(row.wanted), formats, pieces,
+      cover: row.cover, wanted: Boolean(row.wanted), unowned: row.listed_only === 1, formats, pieces,
       lent_to: copies.filter((copy) => copy.lent_to).map((copy) => copy.lent_to!),
       times: log.length, last_on: log[0]?.day ?? null,
       added_at: row.created_at, copy_count: copies.length,
@@ -406,7 +412,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
     await saveMoney(q, made.lastId, input);
     await noteHistory(q, owner, { copy_id: made.lastId }, { what: 'added', to_place: await placePath(q, owner, input.place_id), day: todayOf(clock), at: now() });
     // Having a copy answers the wanting.
-    await q.run('UPDATE media SET wanted = 0, updated_at = ? WHERE id = ?', [now(), mediaId]);
+    await q.run('UPDATE media SET wanted = 0, listed_only = 0, updated_at = ? WHERE id = ?', [now(), mediaId]);
   }
 
   return {
@@ -436,9 +442,11 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
         where += ' AND (title LIKE ? OR creator LIKE ? OR genres LIKE ?)';
         args.push(like, like, like);
       }
+      // A title that is only on a list, or wanted, is not owned: it stays out unless wanted is what was asked for.
       if (find.wanted) where += ' AND wanted = 1';
+      else where += ' AND listed_only = 0';
       const rows = await db.all<MediaRow>(
-        `SELECT id, type, title, creator, year, summary, genres, minutes, cover, wanted, ids, note, created_at, updated_at FROM media
+        `SELECT id, type, title, creator, year, summary, genres, minutes, cover, wanted, listed_only, ids, note, created_at, updated_at FROM media
          WHERE owner_id = ? ${where} ORDER BY title COLLATE NOCASE, year, id`, [owner, ...args]);
       const copies = await copiesOf(db, '', []);
       const log = await logOf(db, '', []);
@@ -469,15 +477,33 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
 
     get: (id: number) => one(db, id),
 
+    /** How many titles are marked wanted (the Wanted list). */
+    async wantedCount(): Promise<number> {
+      return (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM media WHERE owner_id = ? AND wanted = 1', [owner]))!.n;
+    },
+
     /** A new title, with its first copy if one is given. */
     async create(input: MediaInput, copy?: CopyInput | null): Promise<Media> {
       const values = titleValues(input);
       return atomic(db, async (tx) => {
-        const made = await tx.run(
-          `INSERT INTO media (owner_id, type, title, creator, year, summary, genres, minutes, cover, wanted, ids, note, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [owner, ...values, now(), now()]);
-        if (copy) await addCopyIn(tx, made.lastId, copy);
-        return one(tx, made.lastId);
+        // The same title already kept on a list (not owned) is the one that gets the copy, not a second one.
+        const key = labelKey(values[1] as string);
+        const same = (await tx.all<{ id: number; title: string; wanted: number }>('SELECT id, title, wanted FROM media WHERE owner_id = ? AND type = ? AND listed_only = 1', [owner, input.type])).find((r) => labelKey(r.title) === key);
+        let id: number;
+        if (same) {
+          id = same.id;
+          values[8] = input.wanted ? 1 : same.wanted;
+          await tx.run(
+            `UPDATE media SET type = ?, title = ?, creator = ?, year = ?, summary = ?, genres = ?, minutes = ?, cover = ?, wanted = ?, ids = ?, note = ?, updated_at = ? WHERE id = ?`,
+            [...values, now(), id]);
+        } else {
+          id = (await tx.run(
+            `INSERT INTO media (owner_id, type, title, creator, year, summary, genres, minutes, cover, wanted, ids, note, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [owner, ...values, now(), now()])).lastId;
+          if (input.wanted && !copy) await tx.run('UPDATE media SET listed_only = 1 WHERE id = ?', [id]);
+        }
+        if (copy) await addCopyIn(tx, id, copy);
+        return one(tx, id);
       });
     },
 
@@ -486,9 +512,12 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
       return atomic(db, async (tx) => {
         const before = await owned(tx, id);
         if (input.ids === undefined) values[9] = before.ids; // not sent: what other catalogs call it stays
+        if (input.wanted === undefined) values[8] = before.wanted; // not said: wanted stays as the Wanted list has it
         await tx.run(
           `UPDATE media SET type = ?, title = ?, creator = ?, year = ?, summary = ?, genres = ?, minutes = ?, cover = ?, wanted = ?, ids = ?, note = ?,
            updated_at = ? WHERE id = ?`, [...values, now(), id]);
+        // Wanted with no copy is not owned.
+        if (values[8] === 1 && !(await tx.get('SELECT id FROM media_copies WHERE media_id = ?', [id]))) await tx.run('UPDATE media SET listed_only = 1 WHERE id = ?', [id]);
         return one(tx, id);
       });
     },
@@ -577,6 +606,8 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
         }
         await tx.run('INSERT INTO media_log (media_id, day, note, session_id, created_at) VALUES (?, ?, ?, ?, ?)',
           [mediaId, input.day, clean(input.note, 1000), input.session_id ?? null, now()]);
+        // Watched, read or heard: it is no longer something to watch, read or hear.
+        await tx.run("DELETE FROM media_list_items WHERE media_id = ? AND list_id IN (SELECT id FROM media_lists WHERE owner_id = ? AND builtin = 'to_watch')", [mediaId, owner]);
         return one(tx, mediaId);
       });
     },

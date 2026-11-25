@@ -15,7 +15,7 @@
 import { randomBytes } from 'node:crypto';
 import { statSync } from 'node:fs';
 import {
-  calendar, inventory, kitchen, life, manual, media, money, outdoorTrips, packing, pets, projects, upkeep, type Db,
+  calendar, inventory, kitchen, life, manual, media, mediaLists, money, outdoorTrips, packing, pets, projects, upkeep, type Db,
 } from '../../core/src/index.ts';
 import { AREAS } from '../../core/src/life.ts';
 import { addDays } from '../../core/src/small.ts';
@@ -110,6 +110,18 @@ async function fill(db: Db, me: number): Promise<void> {
   await shelf.create({ type: 'film', title: 'Spirited Away', creator: 'Hayao Miyazaki', year: 2001, genres: ['Animation'] }, { format: 'Blu-ray', place_id: living });
   await shelf.create({ type: 'music', title: 'Rumours', creator: 'Fleetwood Mac', year: 1977 }, { format: 'Vinyl', place_id: living, lent_to: 'Sam', lent_on: day(-40) });
   await shelf.create({ type: 'game', title: 'Ticket to Ride', year: 2004 }, { format: 'Board game', place_id: living });
+  // Lists: something to watch, one thing wanted, and a list the household shares. Made-up titles, none of them owned.
+  const lists = mediaLists(db, me);
+  const toWatch = (await lists.all()).find((l) => l.builtin === 'to_watch')!;
+  await lists.add(toWatch.id, { type: 'film', title: 'The Lantern Festival', year: 2019, note: 'Saturday, after dinner' });
+  await lists.add(toWatch.id, { type: 'show', title: 'Pip and the Paper Boat' });
+  await lists.add(toWatch.id, { type: 'book', title: 'A Map of Small Places', creator: 'Ines Calloway' });
+  const wishes = (await lists.all()).find((l) => l.builtin === 'wanted')!;
+  await lists.add(wishes.id, { type: 'music', title: 'Harbor Lights', creator: 'The Night Ferries' });
+  const movieNight = await lists.create({ name: 'Family movie night', shared: true });
+  await lists.add(movieNight.id, { type: 'film', title: 'The Lantern Festival', year: 2019 });
+  await lists.add(movieNight.id, { type: 'film', title: 'Orchard Street', year: 2008 });
+  await lists.add(movieNight.id, { type: 'show', title: 'Pip and the Paper Boat' });
 
   // ---- making ----
   const making = projects(db, me);

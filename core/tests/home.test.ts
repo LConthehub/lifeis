@@ -89,7 +89,7 @@ it('it gathers today from every section', async () => {
   expect(s.pantry).toEqual({ low: ['Cream'], expiring: [{ name: 'Cream', days_left: 1 }] });
   expect(s.projects.map((p) => [p.name, p.status, p.short_count])).toEqual([['Shirt dress', 'active', 1]]); // ideas aren't "in hand"
   expect(s.things).toEqual({ total: 1, low: [{ id: dish.id, name: '8x8 baking dish', amount: '1', kind: 'Baking dishes' }] });
-  expect(s.collection).toEqual({ total: 2, wanted: 1, lent: [{ id: alien.id, title: 'Alien', to: 'Sam' }], lately: [{ id: alien.id, title: 'Alien', type: 'film', day: TODAY }] });
+  expect(s.collection).toEqual({ total: 1, wanted: 1, lent: [{ id: alien.id, title: 'Alien', to: 'Sam' }], lately: [{ id: alien.id, title: 'Alien', type: 'film', day: TODAY }] });
 });
 
 it('a person chooses what shows, and a section they do not use brings no cards', async () => {

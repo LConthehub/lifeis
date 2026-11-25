@@ -2,7 +2,7 @@
  * The addresses for the calendar (/api/calendar) and the collection of films, shows, music, books and games
  * (/api/media). What they do is core/'s calendar.ts and media.ts; this only reads what was sent and passes it on.
  */
-import { calendar, calendarFeed, followedCalendars, importBookList, media, readBookList, FOLLOW_SERVICE, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
+import { calendar, calendarFeed, followedCalendars, importBookList, media, mediaLists, readBookList, FOLLOW_SERVICE, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
 import { importMediaList, readMediaList } from '../../core/src/bookList.ts';
 import { notUnderstood, queryNumber, read, type Body, type Context, type Route } from './http.ts';
 
@@ -14,6 +14,9 @@ const eventFrom = (body: Body) => ({
   time: read.maybeText(body, 'time'), note: read.maybeText(body, 'note'), yearly: read.yesNo(body, 'yearly', false),
 });
 
+/** A whole number that has to be there. */
+const needWhole = (body: Body, name: string): number => read.maybeWhole(body, name) ?? (() => { throw notUnderstood(name); })();
+
 /** Whether a field was sent at all: left out means "leave it as it is". */
 const sent = (body: Body, name: string) => Object.hasOwn(body, name);
 
@@ -23,7 +26,9 @@ function titleFrom(body: Body) {
   return {
     type: read.text(body, 'type'), title: read.text(body, 'title'), creator: read.maybeText(body, 'creator'), year: read.maybeWhole(body, 'year'),
     summary: read.maybeText(body, 'summary'), genres: read.texts(body, 'genres'), minutes: read.maybeWhole(body, 'minutes'),
-    cover: read.maybeText(body, 'cover'), wanted: read.yesNo(body, 'wanted', false), note: read.maybeText(body, 'note'),
+    cover: read.maybeText(body, 'cover'), note: read.maybeText(body, 'note'),
+    // Left out: wanted stays as the Wanted list has it (and a new title is not wanted).
+    ...(sent(body, 'wanted') ? { wanted: read.yesNo(body, 'wanted', false) } : {}),
     ...(sent(body, 'ids') ? { ids } : {}),
   };
 }
@@ -48,6 +53,7 @@ export function enjoyingRoutes(db: Db, follow?: FollowTools): Route[] {
   const followed = async (c: Context, calendars: Awaited<ReturnType<ReturnType<typeof followedCalendars>['list']>>) =>
     ({ available: others(c).available(), service: FOLLOW_SERVICE, calendars });
   const shelf = (c: Context) => media(db, c.user.id, c.clock);
+  const lists = (c: Context) => mediaLists(db, c.user.id, c.clock);
 
   return [
     // ==================== THE CALENDAR ====================
@@ -88,6 +94,23 @@ export function enjoyingRoutes(db: Db, follow?: FollowTools): Route[] {
         }),
       };
     }],
+    // Lists of titles (see core/ mediaLists.ts): the person's own, and ones shared with everyone who signs in.
+    ['GET', at('media/lists'), async (c) => ({ json: await lists(c).all() })],
+    ['POST', at('media/lists'), async (c) => ({ status: 201, json: await lists(c).create({ name: read.maybeText(c.body, 'name'), shared: read.yesNo(c.body, 'shared', false) }) })],
+    ['GET', at('media/lists/:id'), async (c) => ({ json: await lists(c).get(c.id) })],
+    ['PUT', at('media/lists/:id'), async (c) => ({
+      json: await lists(c).update(c.id, { ...(sent(c.body, 'name') ? { name: read.maybeText(c.body, 'name') } : {}), ...(sent(c.body, 'shared') ? { shared: read.yesNo(c.body, 'shared', false) } : {}) }),
+    })],
+    ['DELETE', at('media/lists/:id'), async (c) => (await lists(c).remove(c.id), { status: 204 })],
+    ['POST', at('media/lists/:id/titles'), async (c) => ({
+      status: 201,
+      json: await lists(c).add(c.id, {
+        media_id: read.maybeWhole(c.body, 'media_id'), type: read.maybeText(c.body, 'type'), title: read.maybeText(c.body, 'title'),
+        creator: read.maybeText(c.body, 'creator'), year: read.maybeWhole(c.body, 'year'), note: read.maybeText(c.body, 'note'),
+      }),
+    })],
+    ['POST', at('media/lists/:id/take'), async (c) => ({ json: await lists(c).take(c.id, needWhole(c.body, 'media_id')) })],
+    ['POST', at('media/lists/:id/move'), async (c) => ({ json: await lists(c).move(c.id, needWhole(c.body, 'media_id'), read.text(c.body, 'way') as 'up' | 'down') })],
     ['GET', at('media/barcode'), async (c) => ({ json: await shelf(c).findBarcode(c.query.get('code') ?? '') })],
     ['POST', at('media'), async (c) => {
       const copy = read.record(c.body, 'copy');

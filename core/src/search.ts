@@ -11,7 +11,7 @@ import { placePaths } from './inventory.ts';
 import { Problem } from './problem.ts';
 import { idsWithAny, tagsMatching, tagsOnto, type TagKind } from './tags.ts';
 
-export const SEARCH_KINDS = ['tag', 'recipe', 'pantry', 'thing', 'place', 'title', 'project', 'job', 'pet', 'license', 'plan', 'event', 'routine'] as const;
+export const SEARCH_KINDS = ['tag', 'recipe', 'pantry', 'thing', 'place', 'title', 'list', 'project', 'job', 'pet', 'license', 'plan', 'event', 'routine'] as const;
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 export type SearchResult = { kind: SearchKind; id: number; icon: string; title: string; detail: string | null; link: string };
 
@@ -84,13 +84,30 @@ export async function search(db: Db, owner: number, query: string, only?: Search
   if (wants('title')) {
     const w = every(['m.title', 'm.creator', 'm.genres', 'm.note',
       "(SELECT GROUP_CONCAT(c.format || ' ' || COALESCE(c.barcode, '') || ' ' || COALESCE(c.lent_to, ''), ' ') FROM media_copies c WHERE c.media_id = m.id)"]);
-    for (const m of await db.all<{ id: number; title: string; type: string; creator: string | null; year: number | null; place_id: number | null; lent_to: string | null }>(
-      `SELECT m.id, m.title, m.type, m.creator, m.year,
+    for (const m of await db.all<{ id: number; title: string; type: string; creator: string | null; year: number | null; place_id: number | null; lent_to: string | null; unowned: number; wanted: number; lists: string | null }>(
+      `SELECT m.id, m.title, m.type, m.creator, m.year, m.listed_only AS unowned, m.wanted,
+              (SELECT GROUP_CONCAT(l.name, ', ') FROM media_list_items i JOIN media_lists l ON l.id = i.list_id WHERE i.media_id = m.id AND l.owner_id = m.owner_id) AS lists,
               (SELECT c.place_id FROM media_copies c WHERE c.media_id = m.id AND c.place_id IS NOT NULL ORDER BY c.id LIMIT 1) AS place_id,
               (SELECT c.lent_to FROM media_copies c WHERE c.media_id = m.id AND c.lent_to IS NOT NULL ORDER BY c.id LIMIT 1) AS lent_to
        FROM media m WHERE m.owner_id = ? AND (${w.sql}${await tagged('title', 'm.id')}) ORDER BY m.title COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
       out.push({ kind: 'title', id: m.id, icon: MEDIA_ICONS[m.type] ?? '🗃', title: m.title,
-        detail: join(m.creator, m.year, m.lent_to ? `with ${m.lent_to}` : where(m.place_id) && `📍 ${where(m.place_id)}`), link: `/media/${m.id}` });
+        detail: join(m.creator, m.year, m.unowned ? `On a list: ${[m.wanted ? 'Wanted' : '', m.lists ?? ''].filter(Boolean).join(', ') || 'none'}` : m.lent_to ? `with ${m.lent_to}` : where(m.place_id) && `📍 ${where(m.place_id)}`), link: `/media/${m.id}` });
+    }
+  }
+  if (wants('list')) {
+    // Lists by name (the person's own, and ones shared with everyone), and the titles on lists others shared. A list nobody shared is never here.
+    const names = every(['l.name']);
+    for (const l of await db.all<{ id: number; name: string; shared: number; mine: number }>(
+      `SELECT l.id, l.name, l.shared, (l.owner_id = ?) AS mine FROM media_lists l WHERE (l.owner_id = ? OR l.shared = 1) AND ${names.sql} ORDER BY l.name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, owner, ...names.args])) {
+      out.push({ kind: 'list', id: l.id, icon: '📋', title: l.name, detail: join('List', l.shared && (l.mine ? 'shared' : 'shared with you')), link: `/media/lists/${l.id}` });
+    }
+    const w = every(['m.title', 'm.creator', 'i.note']);
+    // A title on someone else's shared list has a negative id here, so it never matches a list's id.
+    for (const e of await db.all<{ id: number; list_id: number; list: string; title: string; type: string; creator: string | null; year: number | null }>(
+      `SELECT i.id, l.id AS list_id, l.name AS list, m.title, m.type, m.creator, m.year
+       FROM media_list_items i JOIN media_lists l ON l.id = i.list_id JOIN media m ON m.id = i.media_id
+       WHERE l.shared = 1 AND l.owner_id != ? AND ${w.sql} ORDER BY m.title COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
+      out.push({ kind: 'list', id: -e.id, icon: MEDIA_ICONS[e.type] ?? '🗃', title: e.title, detail: join(e.creator, e.year, `On the shared list ${e.list}`), link: `/media/lists/${e.list_id}` });
     }
   }
   if (wants('project')) {

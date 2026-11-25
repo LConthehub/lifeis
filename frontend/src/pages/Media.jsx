@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Icon, { Dots } from '../components/Icon';
 import axios from 'axios';
 import Scanner from '../components/Scanner';
@@ -90,7 +90,7 @@ export default function MediaPage({ library = null }) {
   const [titles, setTitles] = useState(null);
   const [type, setType] = useState(lib?.type ?? '');
   const [format, setFormat] = useState(lib?.group ?? '');   // a group from formatGroups.js, or '' for all of them
-  const [show, setShow] = useState('');     // '', 'wanted' or 'lent'
+  const [show, setShow] = useState('');     // '' or 'lent' (what is wanted is on the Wanted list)
   const [q, setQ] = useState('');
   const [genre, setGenre] = useState('');
   const [from, setFrom] = useState('');     // the years asked for: from, and to
@@ -110,7 +110,7 @@ export default function MediaPage({ library = null }) {
   const word = q.trim().toLowerCase();
   const lo = from === '' ? null : Number(from);
   const hi = to === '' ? null : Number(to);
-  const matching = mine.filter((m) => (!type || m.type === type) && (!type || inFormatGroup(m, format)) && (show !== 'wanted' || m.wanted) && (show !== 'lent' || m.lent_to.length > 0)
+  const matching = mine.filter((m) => (!type || m.type === type) && (!type || inFormatGroup(m, format)) && (show !== 'lent' || m.lent_to.length > 0)
     && (!genre || m.genres.some((g) => labelKey(g) === labelKey(genre)))
     && (lo === null || (m.year != null && m.year >= lo)) && (hi === null || (m.year != null && m.year <= hi))
     && (!word || [m.title, m.creator, ...m.genres, ...m.formats].some((v) => String(v ?? '').toLowerCase().includes(word))));
@@ -158,7 +158,7 @@ export default function MediaPage({ library = null }) {
             {TYPES.filter(([id]) => count(id) > 0).map(([id, label, icon]) => (
               <button key={id} type="button" onClick={() => pickType(id)} aria-pressed={type === id} className={chip(type === id)}><Icon of={icon} /> {label} <span className="opacity-80">{count(id)}</span></button>
             ))}
-            {mine.some((m) => m.wanted) && <button type="button" onClick={() => setShow(show === 'wanted' ? '' : 'wanted')} aria-pressed={show === 'wanted'} className={chip(show === 'wanted')}>Wanted</button>}
+            <Link to="/media/lists" className={`${chip(false)} inline-flex min-h-[44px] items-center`} data-wanted-list>Wanted list</Link>
             {mine.some((m) => m.lent_to.length) && <button type="button" onClick={() => setShow(show === 'lent' ? '' : 'lent')} aria-pressed={show === 'lent'} className={chip(show === 'lent')}>Lent out</button>}
           </div>
           {chips.length > 0 && (
@@ -578,8 +578,13 @@ export function MediaTitlePage() {
   const navigate = useNavigate();
   const [title, setTitle] = useState(undefined);
   const [modal, setModal] = useState(null);
+  const [params] = useSearchParams();
   const load = useCallback(() => { axios.get(`/api/media/${id}`).then(({ data }) => setTitle(data)).catch(() => setTitle(null)); }, [id]);
   useEffect(() => { load(); }, [load]);
+  // "I have it now" on a list comes here ready to add the copy.
+  const wantsCopy = params.get('copy') === '1';
+  const ready = title && title.copies.length === 0;
+  useEffect(() => { if (wantsCopy && ready) setModal({ copy: {} }); }, [wantsCopy, ready]);
   if (title === undefined) return null;
   if (title === null) return <p className="text-sm text-gray-600 dark:text-life-200">That isn't in your collection. <Link to="/media" className="underline">The whole collection</Link></p>;
   const saved = (data) => { setTitle(data); setModal(null); };
@@ -603,6 +608,11 @@ export function MediaTitlePage() {
               <Dots parts={[<><Icon of={typeOf(title.type)[2]} /> {typeOf(title.type)[3]}</>, title.creator, title.year, title.minutes != null && minutesText(title.minutes), title.genres.join(', ')]} />
             </p>
             {title.wanted && <p className="mt-1"><span className="rounded bg-honey-100 px-1.5 text-xs text-honey-700">wanted</span></p>}
+            {title.unowned && (
+              <p className="mt-2 text-sm text-gray-700 dark:text-life-100" data-not-owned>
+                You don't have this one yet, so it is not counted in your collection. It is on a list. <button type="button" onClick={() => setModal({ copy: {} })} className="min-h-[44px] font-medium text-life-600 underline dark:text-life-200">I have it now</button>
+              </p>
+            )}
             {title.summary && <p className="mt-2 text-sm text-gray-700 dark:text-life-100">{title.summary}</p>}
             {title.ids?.tmdb && title.ids?.tmdb_kind && <TmdbNotice ids={title.ids} />}
             {title.note && <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700 dark:text-life-100">{title.note}</p>}

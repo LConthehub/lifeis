@@ -216,7 +216,7 @@ export async function applyImport(q: Queries, owner: number, connection: { id: n
             item.minutes, Object.keys(item.ids).length ? JSON.stringify(item.ids) : null, now, now])).lastId;
         result.titles_added += 1;
       } else {
-        await q.run('UPDATE media SET wanted = 0 WHERE id = ? AND wanted = 1', [mediaId]); // having it answers the wanting
+        await q.run('UPDATE media SET wanted = 0, listed_only = 0 WHERE id = ? AND (wanted = 1 OR listed_only = 1)', [mediaId]); // having it answers the wanting, and it is owned now
       }
       remember(mediaId, item.type, item.title, item.year, item.ids);
       await q.run(`INSERT INTO media_copies (media_id, format, source, source_id, ${where.column}, link, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -231,7 +231,8 @@ export async function applyImport(q: Queries, owner: number, connection: { id: n
     await q.run('DELETE FROM media_copies WHERE id = ?', [copy.id]);
     await q.run(
       `DELETE FROM media WHERE id = ? AND wanted = 0 AND note IS NULL
-       AND NOT EXISTS (SELECT 1 FROM media_copies WHERE media_id = media.id) AND NOT EXISTS (SELECT 1 FROM media_log WHERE media_id = media.id)`, [copy.media_id]);
+       AND NOT EXISTS (SELECT 1 FROM media_copies WHERE media_id = media.id) AND NOT EXISTS (SELECT 1 FROM media_log WHERE media_id = media.id)
+       AND NOT EXISTS (SELECT 1 FROM media_list_items WHERE media_id = media.id)`, [copy.media_id]);
     result.removed += 1;
   }
   return { result, wantsCover };

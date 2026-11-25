@@ -19,6 +19,8 @@ const Calendar = lazyPage(() => import('./pages/Calendar'));
 const MediaPage = lazyPage(() => import('./pages/Media'));
 const MediaTitlePage = lazyPage(() => import('./pages/Media').then((m) => ({ default: m.MediaTitlePage })));
 const Servers = lazyPage(() => import('./pages/Servers'));
+const ListsPage = lazyPage(() => import('./pages/Lists'));
+const ListPage = lazyPage(() => import('./pages/Lists').then((m) => ({ default: m.ListPage })));
 const Mail = lazyPage(() => import('./pages/Mail'));
 const Prices = lazyPage(() => import('./pages/Prices'));
 const PlansPage = lazyPage(() => import('./pages/Plans'));
@@ -86,7 +88,7 @@ const SECTIONS = [
     tabs: [['/calendar', 'Calendar'], ['/routines', 'Routines'], ['/projects', 'Projects'], ['/plans', 'Plans'], ['/plans/holidays', 'Holidays'], ['/plans/trips', 'Trips'], ['/things/activities', 'Activities']] },
   { word: 'enjoying', shown: 'entertaining', icon: 'media', home: '/media', owns: (path) => path.startsWith('/media'),
     // The third place in a tab is the older addresses that still open it (the book shelves are now chips in the Collection).
-    tabs: [['/media', 'Collection', ['/media/books', '/media/ebooks', '/media/audiobooks']], ['/media/connections', 'Connections', ['/media/servers']]] },
+    tabs: [['/media', 'Collection', ['/media/books', '/media/ebooks', '/media/audiobooks']], ['/media/lists', 'Lists'], ['/media/connections', 'Connections', ['/media/servers']]] },
 ];
 
 export default function App() {
@@ -215,6 +217,8 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/media/ebooks" element={<MediaPage key="ebooks" library="ebooks" />} />
           <Route path="/media/audiobooks" element={<MediaPage key="audiobooks" library="audiobooks" />} />
           <Route path="/media/print" element={<CollectionPrint />} />
+          <Route path="/media/lists" element={<ListsPage />} />
+          <Route path="/media/lists/:id" element={<ListPage />} />
           <Route path="/media/connections" element={<Servers />} />
           <Route path="/media/servers" element={<Servers />} />
           <Route path="/media/:id" element={<MediaTitlePage />} />

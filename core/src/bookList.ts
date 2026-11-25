@@ -184,6 +184,7 @@ export async function importBookList(db: Db, owner: number, clock: Clock, books:
         id = (await tx.run(
           `INSERT INTO media (owner_id, type, title, creator, year, wanted, ids, created_at, updated_at) VALUES (?, 'book', ?, ?, ?, ?, ?, ?, ?)`,
           [owner, book.title, book.creator, book.year, wanted ? 1 : 0, book.isbn ? JSON.stringify({ isbn: book.isbn }) : null, now, now])).lastId;
+        if (wanted) await tx.run('UPDATE media SET listed_only = 1 WHERE id = ?', [id]); // wanted and not owned: on the Wanted list
         if (book.isbn) byIsbn.set(book.isbn, id);
         byName.set(nameKey(book.title, book.creator), id);
         titles.push({ id, title: book.title, creator: book.creator, ids: null });
@@ -198,7 +199,7 @@ export async function importBookList(db: Db, owner: number, clock: Clock, books:
           if (!fresh) result.already += 1;
         } else {
           await tx.run('INSERT INTO media_copies (media_id, format, source, created_at) VALUES (?, ?, ?, ?)', [id, format, 'list', now]);
-          await tx.run('UPDATE media SET wanted = 0 WHERE id = ? AND wanted = 1', [id]);
+          await tx.run('UPDATE media SET wanted = 0, listed_only = 0 WHERE id = ? AND (wanted = 1 OR listed_only = 1)', [id]);
           have.add(labelKey(format));
           formats.set(id, have);
           result.copies += 1;
@@ -394,6 +395,7 @@ export async function importMediaList(db: Db, owner: number, clock: Clock, items
         id = (await tx.run(
           'INSERT INTO media (owner_id, type, title, creator, year, genres, minutes, wanted, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           [owner, item.type, item.title, item.creator, item.year, item.genres.join(',') || null, item.minutes, wanted ? 1 : 0, item.note, now, now])).lastId;
+        if (wanted) await tx.run('UPDATE media SET listed_only = 1 WHERE id = ?', [id]); // wanted and not owned: on the Wanted list
         titles.push({ id, type: item.type, title: item.title, creator: item.creator, year: item.year });
         formats.set(id, new Set());
         result.added += 1;
@@ -408,7 +410,7 @@ export async function importMediaList(db: Db, owner: number, clock: Clock, items
           await tx.run(
             'INSERT INTO media_copies (media_id, format, barcode, cost_cents, bought_on, value_cents, valued_on, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [id, format, item.barcode, item.cost_cents, item.bought_on, item.value_cents, item.value_cents === null ? null : item.valued_on, 'list', now]);
-          await tx.run('UPDATE media SET wanted = 0 WHERE id = ? AND wanted = 1', [id]);
+          await tx.run('UPDATE media SET wanted = 0, listed_only = 0 WHERE id = ? AND (wanted = 1 OR listed_only = 1)', [id]);
           have.add(labelKey(format));
           formats.set(id, have);
           if (item.barcode) byBarcode.set(barcodeKey(item.barcode), id);

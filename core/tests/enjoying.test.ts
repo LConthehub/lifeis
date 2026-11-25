@@ -81,8 +81,9 @@ it('music, books and anything else sit beside the films, and are found many ways
   const wish = await shelf.create({ type: 'music', title: 'Blue', creator: 'Joni Mitchell', wanted: true });
 
   const titles = async (find: Parameters<MediaCollection['list']>[0]) => (await shelf.list(find)).map((m) => `${m.title} (${m.type})`);
-  expect(await titles({})).toEqual(['Alien (film)', 'Blue (music)', 'Dune (book)', 'Dune (film)', 'Rumours (music)']);
-  expect(await titles({ type: 'music' })).toEqual(['Blue (music)', 'Rumours (music)']);
+  // Blue is wanted and not owned: it is on the Wanted list, not in the collection.
+  expect(await titles({})).toEqual(['Alien (film)', 'Dune (book)', 'Dune (film)', 'Rumours (music)']);
+  expect(await titles({ type: 'music' })).toEqual(['Rumours (music)']);
   expect(await titles({ q: 'herbert' })).toEqual(['Dune (book)']);
   expect(await titles({ q: 'rock' })).toEqual(['Rumours (music)']);
   expect(await titles({ format: 'vinyl' })).toEqual(['Rumours (music)']);

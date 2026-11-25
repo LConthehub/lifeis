@@ -288,7 +288,8 @@ it('a list is brought in once: what you have gains nothing, wanted books are wan
   expect(await shelf.get((await shelf.list({ q: 'Hail Mary' }))[0]!.id)).toMatchObject({ formats: ['Audiobook'], ids: { isbn: '9780593135204' } });
   // The same list again changes nothing.
   expect(await importBookList(db, owner, clock, books, { to_read_as_wanted: true, log_read: true })).toEqual({ listed: 3, added: 0, copies: 0, already: 3, wanted: 0, logged: 0 });
-  expect(await shelf.list()).toHaveLength(3);
+  expect(await shelf.list()).toHaveLength(2); // the wanted book is on the Wanted list, not in the collection
+  expect(await shelf.list({ wanted: true })).toHaveLength(1);
 });
 
 it('"they are all on Kindle" overrides what the list says', async () => {
@@ -360,11 +361,12 @@ it('a list of anything is brought in once: copies with their prices, wanted ones
   const rumours = (await shelf.list({ q: 'Rumours' }))[0]!;
   expect(rumours).toMatchObject({ type: 'music', formats: ['Vinyl'], cost_cents: 1200, worth_cents: 3050 });
   expect(await shelf.get(rumours.id)).toMatchObject({ copies: [expect.objectContaining({ cost_cents: 1200, value_cents: 3050 })] });
-  expect((await shelf.list({ q: 'Halo' }))[0]).toMatchObject({ type: 'game', wanted: true, formats: [] });
+  expect((await shelf.list({ q: 'Halo', wanted: true }))[0]).toMatchObject({ type: 'game', wanted: true, formats: [] });
+  expect(await shelf.list({ q: 'Halo' })).toEqual([]);
   expect((await shelf.list({ q: 'The Thing' }))[0]).toMatchObject({ formats: ['DVD'] });
   // The same list again changes nothing.
   expect(await importMediaList(db, owner, clock, items, { otherwise: 'DVD' })).toEqual({ listed: 4, added: 0, copies: 0, already: 4, wanted: 0, logged: 0 });
-  expect(await shelf.list()).toHaveLength(5);
+  expect(await shelf.list()).toHaveLength(4); // and the wanted game is on the Wanted list
   // A barcode that is already a copy's finds its title, whatever the list calls it, and a format said for all overrides.
   const again = await importMediaList(db, owner, clock, readMediaList('Title,Barcode\nAlien: Special Edition,086162109034\n').items, { format: 'LaserDisc' });
   expect(again).toMatchObject({ added: 0, copies: 1 });

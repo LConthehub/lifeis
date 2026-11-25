@@ -62,7 +62,19 @@ await page.getByLabel(/I don.t have it yet/).check();
 await page.getByRole('button', { name: 'Save' }).click(); await wait(900);
 await page.getByRole('link', { name: '← Collection' }).click(); await wait();
 t = await text();
-say('films, music and books sit together, with formats, wanted and lent: ' + flat(t).slice(0, 200), /Alien/.test(t) && /Rumours/.test(t) && /Vinyl/.test(t) && /wanted/.test(t) && /with Sam/.test(t) && /Lent out/.test(t));
+say('films, music and books sit together, with formats, wanted and lent: ' + flat(t).slice(0, 200), /Alien/.test(t) && /Rumours/.test(t) && /Vinyl/.test(t) && !/Dune/.test(t) && /with Sam/.test(t) && /Lent out/.test(t));
+say('a wanted title is not in the collection: it is on the Wanted list, which the collection points to', await page.locator('[data-wanted-list]').isVisible());
+await page.locator('[data-wanted-list]').click(); await wait(700);
+await page.getByRole('link', { name: /^Wanted/ }).click(); await wait(700);
+t = await text();
+say('Dune is on the Wanted list, not owned yet: ' + flat(t).slice(0, 120), /Dune/.test(t) && /not owned yet/.test(t));
+await page.getByRole('link', { name: 'I have it now' }).click(); await wait(900);
+say('"I have it now" opens the title ready to add a copy', await page.getByRole('dialog').isVisible());
+await page.getByPlaceholder(/Hardcover/).fill('Paperback');
+await page.getByRole('button', { name: 'Save' }).click(); await wait(900);
+say('with a copy it is owned, and wanted no more', /Paperback/.test(await text()) && !/You don.t have this one yet/.test(await text()));
+await page.goto(base + '/media'); await wait(700);
+say('and it is in the collection now', /Dune/.test(await text()));
 await page.getByRole('button', { name: /Music/ }).click(); await wait(300);
 say('the music chip shows only music', /Rumours/.test(await text()) && !/Alien/.test(await text()));
 await page.getByRole('button', { name: /Everything/ }).click(); await wait(300);
@@ -147,7 +159,7 @@ say('a day can be typed for the worth: ' + flat(await copies.innerText()).slice(
 await page.goto(base + '/media'); await wait(900);
 const summary = flat(await page.getByRole('region', { name: 'What it all comes to' }).innerText());
 say('the collection adds up: ' + summary.slice(0, 230),
-  /Titles 8 Copies 8 Cost \$27\.50 Worth now \$95\.50 Difference \+\$68\.00/.test(summary) && /6 copies have no cost or value typed/.test(summary));
+  /Titles 8 Copies 9 Cost \$27\.50 Worth now \$95\.50 Difference \+\$68\.00/.test(summary) && /7 copies have no cost or value typed/.test(summary));
 await page.goto(base + '/media/audiobooks'); await wait(900);
 say('each tab adds up what it shows: ' + flat(await page.getByRole('region', { name: 'What it all comes to' }).innerText()).slice(0, 120),
   /Titles 1 Copies 1/.test(flat(await page.getByRole('region', { name: 'What it all comes to' }).innerText())) && /No prices typed yet/.test(await text()));

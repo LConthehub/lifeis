@@ -25,6 +25,8 @@ export type { Area, Life, LifeProfile, Section } from './life.ts';
 export { calendar } from './calendar.ts';
 export type { Calendar, Entry, EntryKind, Event, EventInput, YearlyDate } from './calendar.ts';
 export { media, barcodeKey, FORMATS, MEDIA_TYPES } from './media.ts';
+export { mediaLists } from './mediaLists.ts';
+export type { ListEntry, ListSummary, ListView, MediaLists } from './mediaLists.ts';
 export type { BarcodeMatch } from './media.ts';
 export type { Copy, CopyInput, LogEntry, LogInput, Media, MediaCollection, MediaInput, MediaSummary, MediaType } from './media.ts';
 export { connections, connectionsDue, EVERY_CHOICES, SERVER_KINDS } from './connections.ts';

@@ -49,6 +49,16 @@ Nothing in a list is looked up or sent anywhere.
 
 Life Is does not read books itself. It keeps track of them and opens them where they live.
 
+## Lists
+
+The **Lists** tab holds lists of titles. A list can mix films, shows, music, books and games, in the order you choose (use the up and down buttons). Everyone has two lists that stay: **To watch, read or hear** and **Wanted**. Wanted is every title you marked as wanted. You can make more lists, such as "Rainy day" or "Gift ideas".
+
+You can type a title onto a list even if you do not own it: a name, what kind it is, and a year or note if you like. It is kept, and search finds it, but it is not counted in your Collection, its formats, the printable list or any totals until you add a copy. Choose **I have it now** on the list to add the copy. Marking a title watched, read or heard takes it off To watch.
+
+A list is only yours unless you choose **Share with the household**. Then everyone who signs in can see it and add titles to it. Only you can reorder, rename or delete it. A list you do not share is not seen by anyone else, in search or in their downloads.
+
+Lists are in the download of everything, and come back when you bring it in. Bringing the same file in twice adds nothing. Nothing on a list is sent anywhere.
+
 ## Lending and the log
 
 A copy can be lent to someone, with the day. Each time you watch, read or listen can go in the title's log, and a log line can belong to a project session: "listened while sewing".

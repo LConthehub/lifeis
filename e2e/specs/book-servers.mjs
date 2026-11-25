@@ -46,7 +46,10 @@ await dialog().getByRole('button', { name: 'Done' }).click(); await wait(900);
 let t = await text();
 say('the Kindle books are under eBooks, and the wanted one is not: ' + flat(t).slice(0, 200), /Dune/.test(t) && /Piranesi/.test(t) && /Kindle/.test(t) && !/Left Hand/.test(t));
 await shelf('books'); await wait(900);
-say('the one on the to-read shelf is a book that is wanted', /The Left Hand of Darkness[\s\S]*wanted/.test(await text()));
+say('the one on the to-read shelf is not in the collection, but on the Wanted list', !/Left Hand/.test(await text()));
+await page.getByRole('link', { name: 'Lists' }).click(); await wait(700);
+await page.getByRole('link', { name: /^Wanted/ }).click(); await wait(700);
+say('the Wanted list has the book that is wanted', /The Left Hand of Darkness/.test(await text()));
 
 // ---- a link on a copy ----
 await shelf('ebooks'); await wait();

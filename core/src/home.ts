@@ -169,7 +169,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
         const titles = await media(db, owner, clock).list();
         summary.collection = {
           total: titles.length,
-          wanted: titles.filter((t) => t.wanted).length,
+          wanted: await media(db, owner, clock).wantedCount(),
           lent: titles.flatMap((t) => t.lent_to.map((to) => ({ id: t.id, title: t.title, to }))).slice(0, 12),
           lately: titles.filter((t) => t.last_on).sort((a, b) => (a.last_on! < b.last_on! ? 1 : -1)).slice(0, 5)
             .map((t) => ({ id: t.id, title: t.title, type: t.type, day: t.last_on! })),

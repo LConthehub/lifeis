@@ -69,7 +69,7 @@ try {
           if (name === 'entertaining') {
             check(`${tag}: the bar says entertaining`, places.some((p) => p.t === 'entertaining'));
             const tabs = (await page.getByRole('navigation', { name: 'Life is entertaining' }).innerText()).replace(/\s+/g, ' ').trim();
-            check(`${tag}: the tabs are Collection and Connections`, tabs === 'Collection Connections', tabs);
+            check(`${tag}: the tabs are Collection, Lists and Connections`, tabs === 'Collection Lists Connections', tabs);
           }
           // the end of the page sits above the bar
           await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await page.waitForTimeout(300);
