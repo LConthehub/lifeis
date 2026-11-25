@@ -207,6 +207,29 @@ it('a product is taught once by its barcode, and found on the list ever after', 
   expect((await shopping(db, await person('other'), clock).scan('025500000276')).ingredient).toBeNull();
 });
 
+it('scanning from a line: a grocery can have several barcodes, and a free-typed line becomes a known grocery', async () => {
+  await k.addGrocery({ label: 'milk' });
+  await k.addGrocery({ label: 'oat milk' });
+  await k.addGrocery({ label: 'birthday card' });
+  const [milk, oat, card] = [await idOf('milk'), await idOf('oat'), await idOf('birthday')];
+  // Store brand and organic are both milk.
+  await shop.learn('025500000276', milk, 'Store brand');
+  await shop.learn('4006381333931', milk, 'Organic');
+  expect((await shop.scan('025500000276')).ingredient!.product).toBe('Store brand');
+  expect((await shop.scan('4006381333931')).ingredient!.name).toMatch(/^milk$/i);
+  expect((await db.all('SELECT barcode FROM ingredient_barcodes WHERE ingredient_id = (SELECT ingredient_id FROM grocery WHERE id = ?)', [milk])).length).toBe(2);
+  // Oat milk scanned from the Milk line is oat milk until it is taught as milk.
+  await shop.learn('7310865001016', oat);
+  expect((await shop.scan('7310865001016')).ingredient!.name).toMatch(/oat milk/i);
+  expect((await shop.learn('7310865001016', milk)).ingredient!.name).toMatch(/^milk$/i);
+  // A line with nothing behind it is made a known grocery by its first scan.
+  await db.run('UPDATE grocery SET ingredient_id = NULL WHERE id = ?', [card]);
+  const seen = await shop.learn('9780140449136', card);
+  expect(seen.ingredient!.name).toMatch(/birthday card/i);
+  expect(seen.line).toMatchObject({ id: card, done: false });
+  expect((await db.get<{ ingredient_id: number }>('SELECT ingredient_id FROM grocery WHERE id = ?', [card]))!.ingredient_id).toBe(seen.ingredient!.id);
+});
+
 it('prices are followed over time, like for like, and spending by the month', async () => {
   const buy = async (label: string, price: number, at: Date, store: string, assumed = false) => {
     time = at;

@@ -33,6 +33,8 @@ Put recipes on days and meals. The front page shows today's, and the calendar sh
 
 Fill the list from the week's meals, less what the pantry already has, or add anything by hand. Scan a package to add it. The list can be shown by store, with each thing's usual size.
 
+Every line also has its own scan button. Tap it on "Milk", scan the package, and that barcode is milk from then on. A grocery can have several barcodes, such as a store brand and an organic one. The line is checked off as soon as the scan matches, and the price box starts with last time's price. Change it, or leave it and that price is used and marked as a guess. If the barcode is already known as something else, such as oat milk, Life Is asks whether to get it in place of milk this time, or whether it is milk from now on.
+
 ## The pantry
 
 What you have, how much, and when it should be used by. Give something a "running low at" amount and Life Is tells you when to buy more.

@@ -594,7 +594,14 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       const barcode = barcodeKey(code);
       if (!/^[0-9A-Z]{4,40}$/.test(barcode)) throw new Problem(400, "That isn't a barcode");
       const l = await line(db, groceryId);
-      if (l.ingredient_id === null) throw new Problem(400, "That line isn't an ingredient Life Is knows, so a barcode can't be tied to it");
+      if (l.ingredient_id === null) {
+        // A line typed with nothing behind it becomes a known grocery the first time it's scanned.
+        const key = units.nameKey(l.label);
+        if (!key) throw new Problem(400, "That line has no name Life Is can use, so a barcode can't be tied to it");
+        const have = await db.get<{ id: number }>('SELECT id FROM ingredients WHERE owner_id = ? AND key = ?', [owner, key]);
+        l.ingredient_id = have ? have.id : (await db.run('INSERT INTO ingredients (owner_id, name, key) VALUES (?, ?, ?)', [owner, clean(l.label, 120), key])).lastId;
+        await db.run('UPDATE grocery SET ingredient_id = ? WHERE id = ? AND owner_id = ?', [l.ingredient_id, groceryId, owner]);
+      }
       const packet = sizeOf(size);
       await db.run(
         `INSERT INTO ingredient_barcodes (owner_id, barcode, ingredient_id, label, size_quantity, size_unit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
