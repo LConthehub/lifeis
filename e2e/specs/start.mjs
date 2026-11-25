@@ -55,6 +55,12 @@ await signUp(page, 'ana', true);
 const dlg = page.getByRole('dialog');
 check('a brand-new household is asked the short start, a dialog with a name', await dlg.isVisible() && (await dlg.getAttribute('aria-label')) === 'A two-minute start');
 let t = flat(await dlg.innerText());
+check('the first question is what bugs you most, with six plain choices, and no server needed', /What bugs you most at home\?/.test(t) && (await dlg.getByRole('radio').count()) === 6 && /Most people need no server/.test(t), t.slice(0, 160));
+check('and it can be skipped from there', await dlg.getByRole('button', { name: 'Skip, show me everything' }).isVisible());
+await fits(page, 'the first question');
+await dlg.getByLabel(/^Meals: what to cook/).check();
+await dlg.getByRole('button', { name: 'Next' }).click(); await wait(page, 900);
+t = flat(await dlg.innerText());
 check('step 1 says which step it is, asks who lives here, and says the adults get no sign-ins', /Step 1 of 4/.test(t) && /Who lives here\?/.test(t) && /This only names them; it does not make sign-ins/.test(t), t.slice(0, 120));
 check('"Skip, show me everything" is there, once', await dlg.getByRole('button', { name: 'Skip, show me everything' }).count() === 1);
 check('Back is out of reach on the first step', await dlg.getByRole('button', { name: 'Back' }).isDisabled());
@@ -92,9 +98,8 @@ await fits(page, 'step 3');
 await dlg.getByRole('button', { name: 'Next' }).click(); await wait(page, 1200);
 
 t = flat(await dlg.innerText());
-check('step 4 offers a sample, off by default, and says it clears with one tap', /Step 4 of 4/.test(t) && !(await dlg.getByLabel('Put a few examples in').isChecked()) && /clear them all with one tap/.test(t), t.slice(0, 160));
+check('step 4 offers examples, on by default, marked Example, and says they clear with one tap', /Step 4 of 4/.test(t) && await dlg.getByLabel('Put a few examples in').isChecked() && /each says Example/.test(t) && /clear them all with one tap/.test(t), t.slice(0, 160));
 await fits(page, 'step 4');
-await dlg.getByLabel('Put a few examples in').check();
 await dlg.getByRole('button', { name: 'Finish' }).click(); await wait(page, 1800);
 
 t = flat(await dlg.innerText());
@@ -118,7 +123,7 @@ const dinners = (await api(page, 'GET', `/api/kitchen/plan?start=${day(0)}&days=
 const list = (await api(page, 'GET', '/api/kitchen/grocery')).json;
 check('the children are household members, with no sign-ins for anyone', members.join(',') === 'Leo,Mia' && (await api(page, 'GET', '/api/things/upkeep/people')).json.length === 1, members.join(','));
 check('the dog is a pet', dogs.length === 1 && dogs[0].name === 'Biscuit' && dogs[0].species === 'dog');
-check('the upkeep jobs of the two sets are there', jobs.length === wanted && jobs.some((j) => j.name === 'Change the furnace filter') && jobs.some((j) => j.name === 'Change the oil'), `${jobs.length} of ${wanted}`);
+check('the upkeep jobs of the two sets are there', jobs.length === wanted + 2 && jobs.some((j) => j.name === 'Change the furnace filter') && jobs.some((j) => j.name === 'Change the oil'), `${jobs.length} of ${wanted} and 2 examples`);
 check('three dinners are planned, from the recipes', dinners.length === 3 && dinners.every((m) => m.meal === 'dinner' && m.recipe_id), dinners.map((m) => `${m.day} ${m.recipe_title}`).join('; '));
 check('six lines are on the grocery list', list.length === 6, String(list.length));
 await page.goto(base + '/week'); await wait(page, 1200);
@@ -130,9 +135,10 @@ check('the chore chart lists the children', /Mia/.test(await page.locator('main'
 
 // The front page: the getting-started card.
 await page.goto(base + '/'); await wait(page, 1500);
-const card = page.getByRole('region', { name: 'Getting started' });
+const card = page.getByRole('region', { name: 'Start here' });
 t = flat(await card.innerText());
-check('the front page has a getting-started card with up to four things to do', await card.isVisible() && /Add your first recipe/.test(t) && /Scan a shelf/.test(t) && /Add your car to get recall alerts/.test(t) && /Print a chore chart/.test(t), t.slice(0, 200));
+check('the front page has a Start here card with five small steps, each about 2 min, led by the answer', await card.isVisible() && (await card.locator('li').count()) === 5 && /Add a recipe you cook/.test(t) && /Add a few things from one room/.test(t) && /Add your car to get recall alerts/.test(t) && /Print a chore chart/.test(t) && /2 min/.test(t) && /Hide this/.test(t), t.slice(0, 260));
+check('the first step is the one for the answer, and none is ticked yet', (await card.locator('li').first().getAttribute('data-step')) === 'recipe' && (await card.locator('li[data-done=true]').count()) === 0);
 check('and a way to clear the examples', await card.getByRole('button', { name: 'Clear the examples' }).isVisible());
 check('no dialog and no "Finish setting up" card, as it was finished', !(await dlg.isVisible().catch(() => false)) && (await page.getByRole('region', { name: 'Finish setting up' }).count()) === 0);
 await page.screenshot({ path: shots + '/start-card.png', fullPage: true });
@@ -140,7 +146,7 @@ await page.screenshot({ path: shots + '/start-card.png', fullPage: true });
 await api(page, 'POST', '/api/kitchen/recipes', { title: 'Our pancakes', ingredients_text: '2 cups flour\n2 eggs', steps_text: 'Mix.\nFry.' });
 await page.reload(); await wait(page, 1500);
 t = flat(await card.innerText());
-check('"Add your first recipe" goes once they have one of their own', !/Add your first recipe/.test(t) && /Scan a shelf/.test(t), t.slice(0, 160));
+check('"Add a recipe you cook" ticks itself once they have one of their own', (await card.locator('li[data-step=recipe]').getAttribute('data-done')) === 'true' && (await card.locator('li[data-done=true]').count()) === 1, t.slice(0, 160));
 
 // Edit one example, then clear: that one stays, and is said to.
 const chili = (await api(page, 'GET', '/api/kitchen/recipes')).json.find((r) => r.title === 'Slow-cooker beef chili');
@@ -148,7 +154,7 @@ const whole = (await api(page, 'GET', `/api/kitchen/recipes/${chili.id}`)).json;
 await api(page, 'PUT', `/api/kitchen/recipes/${chili.id}`, { title: whole.title, servings: 8, ingredients_text: `${whole.ingredients_text}\n1 tsp oregano`, steps_text: whole.steps_text, tags: whole.tags });
 await card.getByRole('button', { name: 'Clear the examples' }).click(); await wait(page, 1500);
 t = flat(await card.innerText());
-check('clearing says what went and what was kept', /Cleared the examples: 2 recipes, 3 dinners and 6 grocery lines/.test(t) && /Kept “Slow-cooker beef chili” because you have changed it/.test(t), t.slice(0, 260));
+check('clearing says what went and what was kept', /Cleared the examples: 2 recipes, 3 dinners, 6 grocery lines, 3 things and 2 upkeep jobs/.test(t) && /Kept “Slow-cooker beef chili” because you have changed it/.test(t), t.slice(0, 260));
 const left = (await api(page, 'GET', '/api/kitchen/recipes')).json.map((r) => r.title).sort();
 check('the edited example and their own recipe stay, nothing else', left.join('|') === 'Our pancakes|Slow-cooker beef chili', left.join('|'));
 check('no examples are on offer any more', (await card.getByRole('button', { name: 'Clear the examples' }).count()) === 0);
@@ -170,13 +176,14 @@ const life = (await api(second, 'GET', '/api/life')).json;
 check('everything shows, as it always did', life.sections.length === 6 && (await second.locator('nav[aria-label="Home and sections"] a').count()) === 6, JSON.stringify(life.sections));
 check('and no sample was made', (await api(second, 'GET', '/api/kitchen/recipes')).json.length === 0 && (await api(second, 'GET', '/api/kitchen/grocery')).json.length === 0);
 await second.reload(); await wait(second, 1500);
-check('nor any card, nor the dialog again', (await d2.count()) === 0 && (await second.getByRole('region', { name: /Getting started|Finish setting up/ }).count()) === 0);
+check('nor any card, nor the dialog again', (await d2.count()) === 0 && (await second.getByRole('region', { name: /Start here|Finish setting up/ }).count()) === 0);
 
 // ---------- someone else: close it part way ----------
 const third = await (await browser.newContext({ viewport: { width: 375, height: 812 } })).newPage();
 watch(third);
 await signUp(third, 'cora', false);
 const d3 = third.getByRole('dialog');
+await d3.getByRole('button', { name: 'Next' }).click(); await wait(third, 900); // passes the first question by
 await d3.getByLabel('Children').fill('Zed');
 await d3.getByRole('button', { name: 'Next' }).click(); await wait(third, 900);
 check('they reach step 2', /Step 2 of 4/.test(flat(await d3.innerText())));
@@ -191,7 +198,7 @@ check('it reopens at the step they left', /Step 2 of 4/.test(flat(await d3.inner
 await d3.getByRole('button', { name: 'Back' }).click(); await wait(third, 400);
 check('and Back shows what they put in', (await d3.getByLabel('Children').inputValue()) === 'Zed');
 await d3.getByRole('button', { name: 'Skip, show me everything' }).click(); await wait(third, 1800);
-check('skipping from there ends it, with no card left', (await third.getByRole('region', { name: /Getting started|Finish setting up/ }).count()) === 0 && (await d3.count()) === 0);
+check('skipping from there ends it, with no card left', (await third.getByRole('region', { name: /Start here|Finish setting up/ }).count()) === 0 && (await d3.count()) === 0);
 
 console.log(bad.length ? 'PROBLEMS SEEN:\n' + [...new Set(bad)].join('\n') : 'no failed requests, no page errors');
 check('no failed requests', bad.length === 0, [...new Set(bad)].join('; '));

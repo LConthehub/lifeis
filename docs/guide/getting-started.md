@@ -4,15 +4,20 @@ blurb: Make your account, say what Life Is should look after, and do the three t
 ---
 # Get started
 
-Life Is runs **on your phone**, where the app keeps everything on the phone itself, or **on a computer you run at home**, which you open from any browser. Both hold the same things and look the same.
+Life Is runs **on your phone**, where the app keeps everything on the phone itself, or **on a computer you run at home**, which you open from any browser. Both hold the same things and look the same. Most people need no server: start on your phone, and move to a server later with a backup file.
 
 To see it first, try the [demo](https://demo.lifeis.living): a made-up household you can change freely. It resets every night.
 
 ## Your first five minutes
 
 1. **Make your account.** On a computer, make the first account on that computer itself, at `http://localhost:8020`. That first account is the admin. Use a password of 12 or more characters and keep it somewhere safe: nobody can reset it for you.
-2. **Say what Life Is should look after.** Check what you want: cooking, the things you keep, projects, films and books, money. The rest stays out of your way. You can change this later in Settings.
-3. **Look at the front page.** It shows the next three days, starting today, and what needs you. Hide any card with **Choose what shows**.
+2. **Say what bugs you most at home.** Pick one: meals, clutter, bills, the calendar, chores, or keeping track of things. Life Is starts there, and the front page opens on that card. You can skip it.
+3. **Say what Life Is should look after.** Check what you want: cooking, the things you keep, projects, films and books, money. The rest stays out of your way. You can change this later in Settings.
+4. **Look at the front page.** It shows the next three days, starting today, and what needs you. A **Start here** card lists three to five small steps, about two minutes each. Each one ticks itself off when you do it. Hide the card with **Hide this**.
+
+The pages start with a few made-up examples in the parts you picked. Each says **Example**. Tap **Clear the examples** to take them all away. Anything you added yourself stays.
+
+If you set up reminders, a short question comes each Monday: what do you want to get done this week? After two weeks it asks once whether to keep it.
 
 ## Three things worth doing on day one
 

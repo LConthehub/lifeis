@@ -729,6 +729,9 @@ it('the two-minute start is for a new household, saves each step, and clears onl
   const admin = await owner();
   const first = (await admin.get('/api/start')).json;
   expect([first.first_run, first.status, first.step, first.card]).toEqual(['guide', 'new', 1, null]);
+  // The first question: what bugs them most. A wrong answer is refused; Home opens on the card for the answer.
+  expect((await admin.put('/api/start/problem', { problem: 'boredom' })).status).toBe(400);
+  expect((await admin.put('/api/start/problem', { problem: 'meals' })).json.answers.problem).toBe('meals');
   expect(first.options.sets.map((s: { slug: string }) => s.slug)).toEqual(['house', 'car', 'papers', 'health', 'yard']);
 
   const people = (await admin.put('/api/start/people', { adults: ['Sam'], children: ['Mia', 'Leo'], pets: [{ kind: 'dog', name: 'Biscuit' }] })).json;
@@ -756,6 +759,10 @@ it('the two-minute start is for a new household, saves each step, and clears onl
   expect(done.card).toMatchObject({ kind: 'started', examples: { recipes: 3, meals: 3, groceries: 6 } });
   expect(done.landing).toEqual({ to: '/recipes', label: 'Open your recipes' });
   expect((await admin.put('/api/start/people', { children: ['Zed'] })).status).toBe(409); // finished
+  expect((await admin.get('/api/home')).json.first).toBe('kitchen');
+  // The weekly question is off without a way to be reminded, and a wrong answer is refused.
+  expect((await admin.get('/api/start/weekly')).json).toMatchObject({ channel: false, on: false, picks: [] });
+  expect((await admin.post('/api/start/weekly', { answer: 'maybe' })).status).toBe(400);
 
   // One example the person changes is kept.
   const recipes = (await admin.get('/api/kitchen/recipes')).json as { id: number; title: string }[];
@@ -763,7 +770,7 @@ it('the two-minute start is for a new household, saves each step, and clears onl
   const whole = (await admin.get(`/api/kitchen/recipes/${chili.id}`)).json;
   await admin.put(`/api/kitchen/recipes/${chili.id}`, { title: whole.title, ingredients_text: `${whole.ingredients_text}\n1 tsp oregano`, steps_text: whole.steps_text });
   const cleared = (await admin.post('/api/start/examples/clear', {})).json;
-  expect(cleared.removed).toEqual({ recipes: 2, meals: 3, groceries: 6 });
+  expect(cleared.removed).toEqual({ recipes: 2, meals: 3, groceries: 6, things: 0, jobs: 2, events: 0 }); // only the parts they picked had examples
   expect(cleared.kept).toEqual([{ title: 'Slow-cooker beef chili', why: 'you have changed it' }]);
   expect((await admin.get('/api/kitchen/recipes')).json.map((r: { title: string }) => r.title)).toEqual(['Slow-cooker beef chili']);
   expect(cleared.state.card).toMatchObject({ kind: 'started', examples: null }); // the examples are gone; the tips stay

@@ -13,6 +13,9 @@ export function startRoutes(db: Db): Route[] {
   const mine = (c: Context) => start(db, c.user.id, c.clock);
   return [
     ['GET', at(''), async (c) => ({ json: await mine(c).state() })],
+    ['PUT', at('/problem'), async (c) => ({ json: await mine(c).problem(c.body.problem) })],
+    ['GET', at('/weekly'), async (c) => ({ json: await mine(c).weekly() })],
+    ['POST', at('/weekly'), async (c) => ({ json: await mine(c).weeklyAnswer(c.body.answer) })],
     ['PUT', at('/people'), async (c) => ({ json: await mine(c).people({ adults: c.body.adults, children: c.body.children, pets: c.body.pets }) })],
     ['PUT', at('/interests'), async (c) => ({ json: await mine(c).interests({ wants: c.body.wants, hobbies: c.body.hobbies }) })],
     ['PUT', at('/upkeep'), async (c) => ({ json: await mine(c).upkeep({ sets: c.body.sets, has_car: c.body.has_car }) })],

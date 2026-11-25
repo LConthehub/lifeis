@@ -16,7 +16,8 @@ const firstRun = async (patience = 6000) => {
   await dialog.waitFor({ timeout: patience }).catch(() => {});
   if (await dialog.isVisible().catch(() => false)) {
     // A brand-new person is met by the two-minute start; the full checklist is one step in.
-    if (await dialog.getByRole('button', { name: 'Choose everything myself' }).isVisible().catch(() => false) === false && await dialog.getByRole('button', { name: 'Next', exact: true }).isVisible().catch(() => false)) {
+    // The first question (what bugs you most) comes before the steps: Next passes it by.
+    for (let i = 0; i < 3 && await dialog.getByRole('button', { name: 'Choose everything myself' }).isVisible().catch(() => false) === false && await dialog.getByRole('button', { name: 'Next', exact: true }).isVisible().catch(() => false); i += 1) {
       await dialog.getByRole('button', { name: 'Next', exact: true }).click(); await wait(800);
     }
     if (await dialog.getByRole('button', { name: 'Choose everything myself' }).isVisible().catch(() => false)) { await dialog.getByRole('button', { name: 'Choose everything myself' }).click(); await wait(800); }

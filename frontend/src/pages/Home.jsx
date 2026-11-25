@@ -5,7 +5,7 @@ import { onDevice } from '../where';
 import { AskCard } from '../components/Assistant';
 import AskBack from '../components/AskBack';
 import { Badge, Open } from '../components/ServiceLinks';
-import { StartCard } from '../components/Start';
+import { StartCard, WeeklyCard, START_CHANGED } from '../components/Start';
 import { RoutinesCard } from '../components/Routines';
 import HolidayCard from '../components/HolidayCard';
 import Icon, { hasIcon } from '../components/Icon';
@@ -27,9 +27,10 @@ const dayName = (day, today) => {
   return n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : fromDateInput(day).toLocaleDateString(undefined, { weekday: 'long' });
 };
 
-function Card({ title, to, link = 'Open', children }) {
+/** `lead`: the card the person said matters most to them, shown first. */
+function Card({ title, to, link = 'Open', lead = false, children }) {
   return (
-    <section className={cardClass}>
+    <section className={cardClass} style={lead ? { order: -1 } : undefined} data-lead={lead ? 'true' : undefined}>
       <div className="mb-2 flex items-baseline gap-2">
         <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">{title}</h2>
         {to && <Link to={to} className="text-xs text-life-600 hover:underline dark:text-life-200">{link} →</Link>}
@@ -61,6 +62,10 @@ export default function Home({ user }) {
   const [choosing, setChoosing] = useState(false);
   const load = useCallback(() => { axios.get('/api/home').then(({ data }) => setS(data)).catch(() => setS(false)); }, []);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    window.addEventListener(START_CHANGED, load);
+    return () => window.removeEventListener(START_CHANGED, load);
+  }, [load]);
   // The email card's messages come from the mail provider, so they are asked for apart and never hold the page up.
   const [post, setPost] = useState(null);
   // Prep falling due tonight and tomorrow morning ("Thaw the chicken: tonight 8 pm").
@@ -92,6 +97,7 @@ export default function Home({ user }) {
       </div>
 
       <StartCard onChanged={load} />
+      <WeeklyCard />
 
       <AskCard />
       <AskBack />
@@ -100,7 +106,7 @@ export default function Home({ user }) {
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {shows('days') && (
-          <Card title="The next three days" to="/calendar" link="Calendar">
+          <Card title="The next three days" to="/calendar" link="Calendar" lead={s.first === 'days'}>
             <div className="space-y-3">
               {prepSoon.length > 0 && (
                 <div data-section="prep-soon">
@@ -206,7 +212,7 @@ export default function Home({ user }) {
         )}
 
         {shows('kitchen') && (
-          <Card title="Cooking" to="/week" link="The week">
+          <Card title="Cooking" to="/week" link="The week" lead={s.first === 'kitchen'}>
             {s.kitchen.meals.length === 0 ? <Quiet>No meals planned for today.</Quiet> : (
               <ul className="space-y-1">
                 {s.kitchen.meals.map((m) => (
@@ -311,7 +317,7 @@ export default function Home({ user }) {
         )}
 
         {shows('upkeep') && (
-          <Card title="Upkeep" to="/things/upkeep">
+          <Card title="Upkeep" to="/things/upkeep" lead={s.first === 'upkeep'}>
             {s.upkeep.length === 0 ? <Quiet>Nothing due around the home.</Quiet> : (
               <ul className="space-y-1 text-sm">
                 {s.upkeep.map((j) => (
@@ -343,7 +349,7 @@ export default function Home({ user }) {
         )}
 
         {shows('things') && (
-          <Card title="Things" to="/things">
+          <Card title="Things" to="/things" lead={s.first === 'things'}>
             {s.things.low.length === 0 ? <Quiet>{s.things.total === 0 ? 'Nothing cataloged yet.' : `${s.things.total} things kept, none running low.`}</Quiet> : (
               <ul className="space-y-1 text-sm">
                 {s.things.low.map((t) => (

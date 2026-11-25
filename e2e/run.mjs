@@ -35,6 +35,7 @@ const SUITE = [
   { specs: ['household'] },
   { specs: ['family'] },
   { specs: ['start'] },
+  { specs: ['easing-in'] },
   { specs: ['demo'], demo: true },
   { specs: ['lists'], demo: true },
   { specs: ['pets'] },

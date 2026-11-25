@@ -29,6 +29,8 @@ export default function FillPlace() {
   const [typed, setTyped] = useState('');
   const [round, setRound] = useState(0);
   const last = useRef({ code: '', at: 0 });
+  const camera = useRef(null);
+  const gallery = useRef(null);
   const busy = useRef(Promise.resolve());
 
   const loadKinds = useCallback(() => axios.get('/api/things/kinds').then(({ data }) => {
@@ -143,6 +145,22 @@ export default function FillPlace() {
     }).catch((err) => note({ icon: 'warning', text: name, note: errorMessage(err, "Couldn't add that"), tone: 'trouble' }));
   };
 
+  /**
+   * Snap photos fast: each photo becomes a thing here at once, named "New thing" until the person names it (or
+   * leaves it for later). The photo is shrunk on the phone and kept in Life Is; it is sent nowhere else.
+   */
+  const snap = (files) => {
+    for (const file of Array.from(files ?? [])) {
+      busy.current = busy.current.then(async () => {
+        const made = await addThing('New thing');
+        await axios.put(`/api/things/items/${made.id}/photo`, { data: await shrink(file) });
+        note({ icon: made.icon || 'thing', text: made.name, note: 'added with its photo', tone: 'added', item_id: made.id, thing: made, naming: true });
+      }).catch((err) => note({ icon: 'warning', text: 'A photo', note: errorMessage(err, "Couldn't put that here"), tone: 'trouble' }));
+    }
+    if (camera.current) camera.current.value = '';
+    if (gallery.current) gallery.current.value = '';
+  };
+
   const turnOnLookups = async () => {
     const { data } = await axios.put('/api/lookups', { books: true, titles: true });
     setCan(data);
@@ -197,6 +215,15 @@ export default function FillPlace() {
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-3">
             <div className={cardClass}><Scanner key={round} onCode={take} label="Point the camera at a barcode or a sticker" /></div>
+            <div className={`${cardClass} space-y-2`} aria-label="Snap photos">
+              <p className="text-sm text-gray-700 dark:text-life-100">Snap a photo of each thing. Each one is added here at once; name it now or later.</p>
+              <input ref={camera} type="file" accept="image/*" capture="environment" className="hidden" aria-label="Photo from the camera" onChange={(e) => snap(e.target.files)} />
+              <input ref={gallery} type="file" accept="image/*" multiple className="hidden" aria-label="Photos from the phone" onChange={(e) => snap(e.target.files)} />
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => camera.current?.click()} className={`${buttonClass} min-h-11`}><Icon of="scan" /> Snap a photo</button>
+                <button type="button" onClick={() => gallery.current?.click()} className={`${quietButtonClass} min-h-11`}>Pick photos</button>
+              </div>
+            </div>
             <form onSubmit={typedIn} className="flex gap-2">
               <input value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Something with no barcode"
                 placeholder={`No barcode? Type it and press Enter: a new ${kind ? kind.name.toLowerCase() : 'thing'}`} className={inputClass} />
@@ -246,6 +273,18 @@ function Row({ entry, onChange, addThing, addTitle, bookFormat }) {
     try { await axios.put(`/api/things/items/${entry.item_id}/photo`, { data: await shrink(file) }); onChange({ photo: 'kept' }); } catch (err) { setError(errorMessage(err, "The photo couldn't be kept")); }
   };
 
+  const rename = async (e) => {
+    e.preventDefault();
+    const text = name.trim();
+    if (!text) { onChange({ naming: false }); return; }
+    setError('');
+    try {
+      const t = entry.thing;
+      await axios.put(`/api/things/items/${entry.item_id}`, { name: text, quantity: t.quantity, unit: t.unit, place_id: t.place_id, low_at: t.low_at, note: t.note, values: t.values });
+      onChange({ text, naming: false, note: 'added with its photo, named' });
+    } catch (err) { setError(errorMessage(err, "Couldn't keep the name")); }
+  };
+
   const link = entry.item_id ? `/things/${entry.item_id}` : entry.media_id ? `/media/${entry.media_id}` : null;
   return (
     <li className="space-y-1.5 py-2 text-sm" data-tone={entry.tone}>
@@ -270,6 +309,12 @@ function Row({ entry, onChange, addThing, addTitle, bookFormat }) {
           )}
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} aria-label="Its name" placeholder="Its name" className={`${inputClass} min-w-0 flex-1`} />
           <button type="submit" disabled={!name.trim()} className={quietButtonClass}>Add</button>
+        </form>
+      )}
+      {entry.naming && (
+        <form onSubmit={rename} className="flex flex-wrap gap-2">
+          <input value={name} onChange={(e) => setName(e.target.value)} aria-label="Name this thing" placeholder="Name it, or add details later" className={`${inputClass} min-w-0 flex-1`} />
+          <button type="submit" className={quietButtonClass}>{name.trim() ? 'Save name' : 'Later'}</button>
         </form>
       )}
       {error && <p className="text-xs text-red-600" role="alert">{error}</p>}

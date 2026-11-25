@@ -6,6 +6,8 @@ blurb: Pick your options and get a ready setup file to copy.
 
 Pick your options, copy one file, start it. This page writes the setup file for you.
 
+Most people need no server. Start on your phone, and move to a server later with a backup file. If you would like Life Is on a computer at home, read on.
+
 Life Is on your own computer is free, with every part included. It runs in Docker, a free program that keeps Life Is and everything it needs in one tidy box.
 
 {{released}}

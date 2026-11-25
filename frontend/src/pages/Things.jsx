@@ -316,6 +316,7 @@ export function ItemForm({ item, kinds, places, onPlaces, onDone }) {
         </Field>
       )}
       <Field label="What *"><input required autoFocus={!item.id} value={form.name} onChange={set('name')} placeholder="e.g. Blue linen" className={inputClass} /></Field>
+      {!item.id && <p className="-mt-1 text-xs text-gray-500 dark:text-life-300">Only the name is needed. Add details later.</p>}
       <div className="grid grid-cols-2 gap-3">
         <Field label="How much (empty: some)"><input type="number" min="0" step="any" value={form.quantity} onChange={set('quantity')} className={inputClass} /></Field>
         <Field label="Unit"><input list="thing-units" value={form.unit} onChange={set('unit')} placeholder={kind.unit || 'yd, m, skein, box…'} className={inputClass} /></Field>

@@ -16,6 +16,8 @@ const row = 'flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg borde
 const picked = (on) => `${row} ${on ? 'border-life-300 bg-life-50 dark:border-life-500 dark:bg-life-700' : 'border-gray-200 dark:border-life-700'}`;
 const tick = 'mt-0.5 h-5 w-5 shrink-0 accent-life-600';
 
+/** Said when the start has changed what the front page shows, so it reads again without a reload. */
+export const START_CHANGED = 'lifeis:start-changed';
 const names = (text) => text.split(/[,;\n]/).map((n) => n.trim()).filter(Boolean);
 const FIRST = ['meals', 'things', 'house'];
 
@@ -53,7 +55,10 @@ export function StartDialog({ onDone, onClose, fresh = false }) {
   const [hobbies, setHobbies] = useState([]);
   const [hasCar, setHasCar] = useState(null);
   const [sets, setSets] = useState(['house']);
-  const [sample, setSample] = useState(false);
+  const [sample, setSample] = useState(true);
+  const [problem, setProblem] = useState(null);
+  // The first question, before the numbered steps: shown until it is answered or passed by.
+  const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [finished, setFinished] = useState(null);
@@ -72,10 +77,11 @@ export function StartDialog({ onDone, onClose, fresh = false }) {
       if (a.wants.length > 0 || data.step > 2) { setWants(a.wants); setHobbies(a.hobbies); }
       setHasCar(a.has_car);
       if (a.sets.length > 0) setSets(a.sets);
-      setSample(a.sample);
+      setProblem(a.problem && a.problem !== 'none' ? a.problem : null);
+      setAsking(a.problem === null && (data.step || 1) <= 1);
     }).catch(() => setError("Couldn't start. Try again in a moment."));
   }, []);
-  useEffect(() => { heading.current?.focus(); }, [step, finished, everything, s === null]);
+  useEffect(() => { heading.current?.focus(); }, [step, finished, everything, asking, s === null]);
 
   if (!s) return <Shell title="A two-minute start" onClose={onClose}>{error ? <p role="alert" className="text-sm text-red-700">{error}</p> : <p className="text-sm text-gray-500">One moment…</p>}</Shell>;
 
@@ -97,6 +103,8 @@ export function StartDialog({ onDone, onClose, fresh = false }) {
     const profile = await lifeNow().catch(() => null);
     if (fresh) { window.location.assign(to || '/'); return; }
     onDone(profile);
+    // The front page is already open behind this: its Start here card and examples are new since it loaded.
+    window.dispatchEvent(new Event(START_CHANGED));
     if (to) navigate(to);
   };
   const close = async () => {
@@ -156,6 +164,43 @@ export function StartDialog({ onDone, onClose, fresh = false }) {
           onSaved={(data) => { axios.post('/api/start/finish', { early: true }).catch(() => {}).finally(() => setTimeout(() => (fresh ? window.location.assign('/') : onDone(data)), data.added.length ? 1400 : 300)); }}
           onSkip={() => { axios.post('/api/start/skip', {}).catch(() => {}); if (fresh) window.location.reload(); else onDone(); }} />
         <div className="mt-3"><button type="button" onClick={() => setEverything(false)} className={quiet}>Back to the quick start</button></div>
+      </Shell>
+    );
+  }
+
+  /** What bugs them most: the parts it points to start checked, and Home opens on its card. */
+  const answerProblem = () => run(async () => {
+    await axios.put('/api/start/problem', { problem: problem ?? '' });
+    const extra = s.options.problems.find((p) => p.key === problem)?.wants ?? [];
+    setWants([...new Set([...FIRST, ...extra])]);
+    setAsking(false);
+    touched.current = true;
+  });
+
+  if (asking) {
+    return (
+      <Shell title="A two-minute start" onClose={close}>
+        {head('What bugs you most at home?')}
+        <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Pick one. Life Is starts there. Or press Next to skip this question.</p>
+        <div role="radiogroup" aria-label="What bugs you most at home" className="mt-3 space-y-2">
+          {s.options.problems.map((p) => (
+            <label key={p.key} className={`${picked(problem === p.key)} items-center`}>
+              <input type="radio" name="problem" checked={problem === p.key} onChange={() => setProblem(p.key)} className={tick} />
+              <span className="text-gray-800 dark:text-life-50">{p.label}</span>
+            </label>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-gray-500 dark:text-life-300">Most people need no server. Start on this phone or computer, and move to a server later with a backup file.</p>
+        {error && <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        <div className="sticky -bottom-4 -mx-4 -mb-4 mt-4 space-y-2 border-t border-life-100 bg-card px-4 pb-4 pt-3 dark:border-life-700 dark:bg-life-800 sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6 sm:pb-6">
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={answerProblem} disabled={busy} className={primary}>{busy ? 'Saving…' : 'Next'}</button>
+          </div>
+          <div className="flex flex-wrap justify-between gap-x-2">
+            <button type="button" onClick={skip} disabled={busy} className="min-h-[44px] text-sm text-life-700 underline disabled:opacity-50 dark:text-life-200">Skip, show me everything</button>
+            <button type="button" onClick={setUpNow} disabled={busy} className="min-h-[44px] text-sm text-life-700 underline disabled:opacity-50 dark:text-life-200">Set up Life Is now</button>
+          </div>
+        </div>
       </Shell>
     );
   }
@@ -274,7 +319,7 @@ export function StartDialog({ onDone, onClose, fresh = false }) {
           <label className={picked(sample)}>
             <input type="checkbox" checked={sample} onChange={(e) => setSample(e.target.checked)} className={tick} />
             <span><span className="block font-medium text-gray-800 dark:text-life-50">Put a few examples in</span>
-              <span className="block text-xs text-gray-500 dark:text-life-300">so the pages aren’t empty: three recipes, this week’s dinners, a short grocery list. You can clear them all with one tap.</span></span>
+              <span className="block text-xs text-gray-500 dark:text-life-300">so the pages aren’t empty. They go in only the parts you picked, and each says Example. You can clear them all with one tap.</span></span>
           </label>
           <p className="text-xs text-gray-500 dark:text-life-300">Nothing is looked up for them. They are written out here.</p>
         </div>
@@ -297,8 +342,8 @@ export function StartDialog({ onDone, onClose, fresh = false }) {
 }
 
 /**
- * The small cards on the front page: "Finish setting up" for a start left part way, and "Getting started" for the
- * first week, with a few things not yet done and, while there are examples, a way to clear them.
+ * The small cards on the front page: "Finish setting up" for a start left part way, and "Start here" with three to
+ * five small steps that tick themselves, and, while there are examples, a way to clear them.
  */
 export function StartCard({ onChanged }) {
   const [s, setS] = useState(null);
@@ -307,6 +352,10 @@ export function StartCard({ onChanged }) {
   const [busy, setBusy] = useState(false);
   const load = () => axios.get('/api/start').then(({ data }) => setS(data)).catch(() => {});
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    window.addEventListener(START_CHANGED, load);
+    return () => window.removeEventListener(START_CHANGED, load);
+  }, []);
   const card = s?.card;
   if (!card && !open) return message ? <p role="status" className={`${cardClass} text-sm text-gray-700 dark:text-life-100`}>{message}</p> : null;
 
@@ -332,21 +381,27 @@ export function StartCard({ onChanged }) {
         </section>
       )}
       {card?.kind === 'started' && (
-        <section className={cardClass} aria-label="Getting started">
+        <section className={cardClass} aria-label="Start here">
           <div className="flex items-baseline justify-between gap-2">
-            <h2 className="font-semibold text-life-800 dark:text-life-50">Getting started</h2>
-            <button type="button" onClick={dismiss} disabled={busy} className="min-h-[44px] text-xs text-gray-500 underline dark:text-life-300">Hide this card</button>
+            <h2 className="font-semibold text-life-800 dark:text-life-50">Start here</h2>
+            <button type="button" onClick={dismiss} disabled={busy} className="min-h-[44px] text-xs text-gray-500 underline dark:text-life-300">Hide this</button>
           </div>
-          {card.suggestions.length > 0 && (
+          {card.steps.length > 0 && (
             <ul className="mt-1 grid gap-2 sm:grid-cols-2">
-              {card.suggestions.map((t) => (
-                <li key={t.key}><Link to={t.to} className="flex min-h-[44px] items-center rounded-lg bg-life-50/70 px-3 py-2 text-sm text-life-800 hover:underline dark:bg-life-700/60 dark:text-life-50">{t.label} →</Link></li>
+              {card.steps.map((t) => (
+                <li key={t.key} data-step={t.key} data-done={t.done}>
+                  <Link to={t.to} className={`flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-sm hover:underline ${t.done ? 'bg-life-50/40 text-gray-500 dark:bg-life-700/30 dark:text-life-300' : 'bg-life-50/70 text-life-800 dark:bg-life-700/60 dark:text-life-50'}`}>
+                    <span aria-hidden="true" className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-sm ${t.done ? 'border-life-600 bg-life-600 text-white' : 'border-life-300 dark:border-life-500'}`}>{t.done ? '✓' : ''}</span>
+                    <span className="flex-1"><span className="sr-only">{t.done ? 'Done: ' : 'To do: '}</span><span className={t.done ? 'line-through' : ''}>{t.label}</span></span>
+                    <span className="shrink-0 text-xs text-gray-500 dark:text-life-300">{t.minutes} min</span>
+                  </Link>
+                </li>
               ))}
             </ul>
           )}
           {card.examples && (
             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-life-100">
-              <span className="mr-auto">A few examples are in your pages.</span>
+              <span className="mr-auto">Some pages hold examples, each marked Example.</span>
               <button type="button" onClick={clear} disabled={busy} className={quiet}>Clear the examples</button>
             </p>
           )}
@@ -355,5 +410,40 @@ export function StartCard({ onChanged }) {
       )}
       {open && <StartDialog fresh onClose={() => { setOpen(false); load(); }} onDone={() => { setOpen(false); load(); onChanged?.(); }} />}
     </>
+  );
+}
+
+/**
+ * The weekly question, on Home in the week it was sent: three things that are missing, or, once after the second
+ * week, whether to keep asking. It only exists for someone who has chosen a way to be reminded.
+ */
+export function WeeklyCard() {
+  const [w, setW] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { axios.get('/api/start/weekly').then(({ data }) => setW(data)).catch(() => {}); }, []);
+  if (!w || !w.active) return null;
+  const answer = async (what) => { setBusy(true); try { setW((await axios.post('/api/start/weekly', { answer: what })).data); } catch { /* try again */ } finally { setBusy(false); } };
+  if (w.ask) {
+    return (
+      <section className={cardClass} aria-label="The weekly question">
+        <h2 className="font-semibold text-life-800 dark:text-life-50">Keep the weekly question?</h2>
+        <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Each Monday it asks what you want to get done that week, in the same way as your other reminders.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={() => answer('keep')} disabled={busy} className={primary}>Keep weekly</button>
+          <button type="button" onClick={() => answer('stop')} disabled={busy} className={quiet}>Stop</button>
+        </div>
+      </section>
+    );
+  }
+  if (w.picks.length === 0) return null;
+  return (
+    <section className={cardClass} aria-label="The weekly question">
+      <h2 className="font-semibold text-life-800 dark:text-life-50">What do you want to get done this week?</h2>
+      <ul className="mt-1 grid gap-2 sm:grid-cols-3">
+        {w.picks.map((p) => (
+          <li key={p.key}><Link to={p.to} className="flex min-h-[44px] items-center rounded-lg bg-life-50/70 px-3 py-2 text-sm text-life-800 hover:underline dark:bg-life-700/60 dark:text-life-50">{p.label} →</Link></li>
+        ))}
+      </ul>
+    </section>
   );
 }

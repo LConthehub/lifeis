@@ -291,6 +291,7 @@ export function RecipeForm({ recipe, draft, onSaved }) {
   return (
     <form onSubmit={submit} className="space-y-3">
       <Field label="Name *"><input required autoFocus={!recipe} value={form.title} onChange={set('title')} className={inputClass} /></Field>
+      {!recipe && <p className="-mt-1 text-xs text-gray-500 dark:text-life-300">Only the name is needed. Add details later.</p>}
       <div className="grid grid-cols-3 gap-3">
         <Field label="Serves"><input type="number" min="0.5" step="0.5" value={form.servings} onChange={set('servings')} className={inputClass} /></Field>
         <Field label="Prep (min)"><input type="number" min="0" value={form.prep_minutes} onChange={set('prep_minutes')} className={inputClass} /></Field>

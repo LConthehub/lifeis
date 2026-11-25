@@ -22,6 +22,7 @@ import { inventory } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
 import { mail, type Postbox } from './mail.ts';
 import { Problem } from './problem.ts';
+import { start } from './start.ts';
 import { addDays, clean, dayNumber, todayOf, type Clock } from './small.ts';
 import { upkeep } from './upkeep.ts';
 
@@ -62,7 +63,7 @@ export type CopyState = {
   /** Whether the morning digest line is turned on. */
   remind: boolean;
 };
-export type DigestLine = { kind: Cover; icon: string; title: string; detail: string | null; link: string; urgent: boolean };
+export type DigestLine = { kind: Cover | 'week'; icon: string; title: string; detail: string | null; link: string; urgent: boolean };
 /** One message sent as it stands, not as a list of things for the day (a finished cooking timer). `hidden` is what an ntfy server is told when the person chose to send only counts. */
 export type Single = { title: string; body: string; link: string; hidden: { title: string; body: string } };
 export type Digest = { day: string; lines: DigestLine[]; title: string; text: string; single?: Single };
@@ -232,6 +233,9 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
         lines.push({ kind: 'copy', icon: '💾', title: `Make a copy of your Life Is: it's been ${n} days.`, detail: null, link: '/settings/data', urgent: false });
       }
     }
+    // Mondays: what to get done this week, or, once, whether to keep asking. Only for someone who has a way to be reminded.
+    const week = await start(db, owner, clock).weeklyLine();
+    if (week) lines.push({ kind: 'week', icon: '🗓', title: week.title, detail: week.detail, link: '/', urgent: false });
     lines.sort((a, b) => Number(b.urgent) - Number(a.urgent));
     const urgent = lines.filter((l) => l.urgent).length;
     const title = !lines.length ? 'Nothing needs you today'
@@ -361,6 +365,8 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
       s.last_sent = day;
       if (sent?.lines.some((l) => l.kind === 'copy')) s.copy_nudged = day;
       await keep(s);
+      const week = sent?.lines.find((l) => l.kind === 'week');
+      if (week) await start(db, owner, clock).weeklySent(day, week.title.startsWith('Keep'));
     },
   };
 }

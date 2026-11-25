@@ -309,6 +309,7 @@ const LEFT_SETTINGS: Record<string, string> = {
   reminders: 'where your reminders are sent',
   weather_forecast: 'the forecast kept from the last look',
   start_setup: 'what the two-minute start made',
+  weekly_question: 'how many weeks the weekly question has gone',
   recalls_checked_at: 'when car recalls were last checked',
   license_lead_: 'how long before each license runs out you are reminded',
 };

@@ -93,6 +93,7 @@ function ProjectForm({ project, activities, onDone }) {
   return (
     <form onSubmit={submit} className="space-y-3">
       <Field label="What it is *"><input required autoFocus={!project.id} value={form.name} onChange={set('name')} placeholder={`e.g. ${hintsFor(form.activity).project}`} className={inputClass} /></Field>
+      {!project.id && <p className="-mt-1 text-xs text-gray-500 dark:text-life-300">Only the name is needed. Add details later.</p>}
       <div className="grid grid-cols-2 gap-3">
         <Field label="What kind of project"><input list="project-activities" value={form.activity} onChange={set('activity')} placeholder="Sewing, Woodworking, Home repair…" className={inputClass} /></Field>
         <Field label="Where it's at">

@@ -18,6 +18,7 @@ import { life, type Section } from './life.ts';
 import { media } from './media.ts';
 import { Problem } from './problem.ts';
 import { projects, type ProjectSummary } from './projects.ts';
+import { problemCard } from './start.ts';
 import { addDays, dayNumber, todayOf, type Clock } from './small.ts';
 import { weather, type Forecast, type WeatherPlace } from './weather.ts';
 
@@ -52,6 +53,8 @@ export type HomeSummary = {
   day: string;
   /** The cards to show, in order: those of the sections the person uses, less the ones they put out of sight. */
   cards: CardKey[];
+  /** The card to open on, for what bugs them most at home (their answer when they began), when it is showing. */
+  first: CardKey | null;
   /** Every card they could show, for choosing. */
   choices: { key: CardKey; label: string; shown: boolean }[];
   days: { day: string; entries: Entry[] }[];
@@ -122,9 +125,10 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
         : (card.section === null || sections.includes(card.section)) && (card.key !== 'plans' || hasPlans) && (card.key !== 'holidays' || hasHolidays) && (card.key !== 'coupons' || hasCoupons) && (card.key !== 'services' || hasServices)));
       const cards = offered.map((card) => card.key).filter((key) => !out.includes(key));
       const shows = (key: CardKey) => cards.includes(key);
+      const asked = await problemCard(db, owner);
 
       const summary: HomeSummary = {
-        day, cards,
+        day, cards, first: cards.find((key) => key === asked) ?? null,
         choices: offered.map((card) => ({ key: card.key, label: card.label, shown: !out.includes(card.key) })),
         days: [], kitchen: { meals: [], to_buy: 0, short: [], use_up: null }, pantry: { low: [], expiring: [] }, projects: [],
         services: [], things: { low: [], total: 0 }, ammo: [], upkeep: [], collection: { total: 0, wanted: 0, lent: [], lately: [] },

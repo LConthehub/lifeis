@@ -93,7 +93,7 @@ button: Try the demo
 note: A made-up household, reset every night. No sign-up.
 
 ## closing
-text: The app is on its way to the app stores. [Read the guides](docs/) to see how it all works.
+text: Most people need no server. Start on your phone, and move to a server later with a backup file. The app is on its way to the app stores. [Read the guides](docs/) to see how it all works.
 
 ## footer
 guides: Guides
