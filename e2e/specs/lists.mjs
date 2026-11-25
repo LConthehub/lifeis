@@ -32,6 +32,15 @@ for (const look of ['light', 'dark']) {
   say(`${look} 375px: the Lists tab does not scroll sideways`, (await phone.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0);
   await phone.getByRole('link', { name: /^To watch, read or hear/ }).click(); await wait(1000);
   await phone.screenshot({ path: `${shots}/list-open-375-${look}.png`, fullPage: true });
+  await phone.evaluate(() => window.scrollTo(0, 0));
+  await phone.getByRole('button', { name: /^More for / }).first().click(); await wait(400);
+  await phone.screenshot({ path: `${shots}/list-more-375-${look}.png`, fullPage: true });
+  const smallMore = await phone.locator('main [data-more] button, main [data-more] a').evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().height < 44).map((e) => e.textContent.trim()));
+  say(`${look} 375px: the More choices are 44px tall or more: ` + smallMore.join(' | '), smallMore.length === 0);
+  await phone.keyboard.press('Escape'); await wait(300);
+  await phone.getByRole('button', { name: 'Change order' }).click(); await wait(400);
+  await phone.screenshot({ path: `${shots}/list-change-order-375-${look}.png`, fullPage: true });
+  await phone.getByRole('button', { name: 'Done' }).click(); await wait(300);
   say(`${look} 375px: an open list does not scroll sideways`, (await phone.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0);
   const small = await phone.locator('main button, main a').evaluateAll((els) => els.filter((e) => !e.closest('[data-demo-banner]') && e.getBoundingClientRect().height > 0 && e.getBoundingClientRect().height < 44).map((e) => e.textContent.trim().slice(0, 30)));
   say(`${look} 375px: every control on the open list is 44px tall or more: ` + small.join(' | '), small.length === 0);
@@ -59,10 +68,14 @@ say('the Lists tab shows Wanted, To watch, read or hear and the shared list: ' +
 // ---- To watch: in order, up and down ----
 await page.getByRole('link', { name: /^To watch, read or hear/ }).click(); await wait(900);
 say('To watch holds a film, a show and a book in the order they were put there', JSON.stringify(await entries()) === JSON.stringify(['The Lantern Festival', 'Pip and the Paper Boat', 'A Map of Small Places']));
+say('the arrows are hidden until Change order is on', !(await page.getByRole('button', { name: /^Move .* up$/ }).count()));
+await page.getByRole('button', { name: 'Change order' }).click(); await wait(400);
 await page.getByRole('button', { name: 'Move A Map of Small Places up' }).click(); await wait(700);
 say('up moves a title one place', JSON.stringify(await entries()) === JSON.stringify(['The Lantern Festival', 'A Map of Small Places', 'Pip and the Paper Boat']));
 await page.getByRole('button', { name: 'Move The Lantern Festival down' }).click(); await wait(700);
 say('down moves a title one place', JSON.stringify(await entries()) === JSON.stringify(['A Map of Small Places', 'The Lantern Festival', 'Pip and the Paper Boat']));
+await page.getByRole('button', { name: 'Done' }).click(); await wait(400);
+say('Done turns the arrows off again', !(await page.getByRole('button', { name: /^Move .* up$/ }).count()));
 const tall = await page.locator('main button, main a').evaluateAll((els) => els.filter((e) => !e.closest('[data-demo-banner]') && e.getBoundingClientRect().height > 0 && e.getBoundingClientRect().height < 44).map((e) => e.textContent.trim().slice(0, 30)));
 say('every button and link on the list is at least 44px tall: ' + tall.join(' | '), tall.length === 0);
 
@@ -70,6 +83,8 @@ say('every button and link on the list is at least 44px tall: ' + tall.join(' | 
 await field('Kind').selectOption('show'); await field('Title').fill('The Quiet Orchard'); await field('Note').fill('start with the pilot');
 await page.getByRole('button', { name: 'Add to the list' }).click(); await wait(800);
 say('a typed title is added, with its note, marked as not owned yet: ' + flat(await text()).slice(0, 80), JSON.stringify(await entries()).includes('The Quiet Orchard') && /start with the pilot/.test(await text()) && /not owned yet/.test(await text()));
+await page.getByRole('button', { name: 'More for The Quiet Orchard' }).click(); await wait(300);
+say('each title has one main button and More', await page.locator('[data-entry]').filter({ hasText: 'The Quiet Orchard' }).getByRole('button', { name: 'Watched today' }).count() === 1);
 await page.locator('[data-entry]').filter({ hasText: 'The Quiet Orchard' }).getByRole('button', { name: /Take The Quiet Orchard off/ }).click(); await wait(800);
 say('and it can be taken off again', !JSON.stringify(await entries()).includes('Quiet Orchard'));
 
@@ -78,6 +93,7 @@ await page.locator('[data-entry]').filter({ hasText: 'A Map of Small Places' }).
 say('marking a book read takes it off To watch', !JSON.stringify(await entries()).includes('A Map of Small Places'));
 
 // ---- "I have it now" leads to adding a copy; then it is in the collection ----
+await page.getByRole('button', { name: 'More for Pip and the Paper Boat' }).click(); await wait(300);
 await page.locator('[data-entry]').filter({ hasText: 'Pip and the Paper Boat' }).getByRole('link', { name: 'I have it now' }).click(); await wait(1000);
 say('"I have it now" opens the title with the copy form ready', await page.getByRole('dialog').isVisible());
 await page.getByPlaceholder(/VHS, DVD, Blu-ray/).fill('DVD');
@@ -100,7 +116,7 @@ say('search finds it, marked as on a list: ' + JSON.stringify(found).slice(0, 12
 await page.getByLabel('Share with the household').click(); await wait(900);
 say('sharing says who can see it', /shared with the household/.test(await text()));
 await page.getByRole('button', { name: 'Delete this list' }).click(); await wait(900);
-say('a list can be deleted, and the titles only on it go', /Lists/.test(await text()) && !/Gift ideas/.test(await text()) && (await asked('surprise')).length === 0);
+say('a list can be deleted, and its titles stay findable', /Lists/.test(await text()) && !/Gift ideas/.test(await text()) && (await asked('surprise')).length === 1);
 
 // ---- Wanted is drawn from the wanted mark ----
 await page.getByRole('link', { name: /^Wanted/ }).click(); await wait(800);

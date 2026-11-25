@@ -62,7 +62,7 @@ Add recipes from your kitchen to the menu. The full plan, with its checklist and
 
 Write a gift idea down whenever it comes, all year. Each has a person and an idea, and moves through **An idea**, **Bought**, **Wrapped** and **Given**. When it is bought, add what it cost. Ideas you did not use carry over to next year, and a person's list shows what you gave them in other years.
 
-A gift for someone who signs in to Life Is is hidden from them until the day has passed.
+A gift for someone who signs in to Life Is is hidden from them until the day has passed. After that, a **Given to you** part on the Holidays page shows what they were given.
 
 ## Decorations
 

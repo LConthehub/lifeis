@@ -110,6 +110,7 @@ export function enjoyingRoutes(db: Db, follow?: FollowTools): Route[] {
       }),
     })],
     ['POST', at('media/lists/:id/take'), async (c) => ({ json: await lists(c).take(c.id, needWhole(c.body, 'media_id')) })],
+    ['POST', at('media/lists/:id/watched'), async (c) => ({ json: await lists(c).watched(c.id, needWhole(c.body, 'media_id'), read.text(c.body, 'day')) })],
     ['POST', at('media/lists/:id/move'), async (c) => ({ json: await lists(c).move(c.id, needWhole(c.body, 'media_id'), read.text(c.body, 'way') as 'up' | 'down') })],
     ['GET', at('media/barcode'), async (c) => ({ json: await shelf(c).findBarcode(c.query.get('code') ?? '') })],
     ['POST', at('media'), async (c) => {

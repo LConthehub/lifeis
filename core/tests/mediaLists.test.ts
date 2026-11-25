@@ -127,10 +127,14 @@ it('lists of your own take any kind of title, in an order you choose, and move u
   const builtin = (await lists.all())[0]!;
   await expect(lists.update(builtin.id, { shared: true })).rejects.toEqual(problem(400));
   await expect(lists.remove(builtin.id)).rejects.toEqual(problem(400));
-  // Deleting a list takes off the titles that were only on it; owned ones stay in the collection.
+  // Deleting a list removes no title: owned ones stay in the collection, the others stay findable and can go on another list.
   await lists.remove(made.id);
   expect((await shelfOf(ana).list()).map((t) => t.title)).toEqual(['Ticket to Ride']);
-  expect(await db.all('SELECT title FROM media WHERE owner_id = ? AND listed_only = 1', [ana])).toEqual([]);
+  const kept = (await db.all<{ title: string }>('SELECT title FROM media WHERE owner_id = ? AND listed_only = 1', [ana])).map((t) => t.title);
+  expect(kept.length).toBeGreaterThan(0);
+  expect((await search(db, ana, kept[0]!)).length).toBeGreaterThan(0);
+  const toWatch = (await lists.all()).find((l) => l.builtin === 'to_watch')!;
+  expect((await lists.add(toWatch.id, { type: 'film', title: kept[0]! })).entries.map((e) => e.title)).toEqual([kept[0]]);
 });
 
 it('a list nobody shared is seen only by its owner, through every route; a shared one can be seen and added to by everyone', async () => {
@@ -159,20 +163,25 @@ it('a list nobody shared is seen only by its owner, through every route; a share
   const seen = (await listsOf(bob).all()).find((l) => l.name === 'Gift ideas')!;
   expect([seen.mine, seen.shared, seen.owner_name]).toEqual([false, true, 'ana']);
   const view = await listsOf(bob).get(secret.id);
-  expect(view.entries.map((e) => [e.title, e.owned, e.times, e.can_remove])).toEqual([['A Surprise Film', null, null, false]]); // nothing of Ana's copies or log
+  expect(view.entries.map((e) => [e.title, e.owned, e.times, e.can_remove])).toEqual([['A Surprise Film', null, null, true]]); // nothing of Ana's copies or log
   expect(await search(db, bob, 'surprise')).toEqual([expect.objectContaining({ kind: 'list', title: 'A Surprise Film', link: `/media/lists/${secret.id}` })]);
   expect(await search(db, bob, 'gift')).toEqual([expect.objectContaining({ kind: 'list', title: 'Gift ideas' })]);
   const added = await listsOf(bob).add(secret.id, { type: 'show', title: 'Bob picks' });
-  expect(added.entries.map((e) => [e.title, e.added_by, e.can_remove])).toEqual([['A Surprise Film', 'ana', false], ['Bob picks', null, true]]);
+  expect(added.entries.map((e) => [e.title, e.added_by, e.can_remove])).toEqual([['A Surprise Film', 'ana', true], ['Bob picks', null, true]]);
   expect((await listsOf(ana).get(secret.id)).entries[1]).toMatchObject({ title: 'Bob picks', added_by: 'bob', can_remove: true });
   await expect(listsOf(bob).add(secret.id, { media_id: surprise })).rejects.toEqual(problem(400)); // type it; pick from your own collection only on your own lists
   await expect(listsOf(bob).update(secret.id, { name: 'Mine now' })).rejects.toEqual(problem(403));
   await expect(listsOf(bob).remove(secret.id)).rejects.toEqual(problem(403));
-  await expect(listsOf(bob).move(secret.id, surprise, 'down')).rejects.toEqual(problem(403));
-  await expect(listsOf(bob).take(secret.id, surprise)).rejects.toEqual(problem(403));
-  // Bob can take off what he put there; none of it is in Bob's collection or lists.
+  // It is the household's: Bob can reorder it and take off any title, Ana's too; none of it is in Bob's collection or lists.
+  expect(titlesOf(await listsOf(bob).move(secret.id, surprise, 'down'))).toEqual(['Bob picks', 'A Surprise Film']);
+  expect(titlesOf(await listsOf(ana).get(secret.id))).toEqual(['Bob picks', 'A Surprise Film']);
+  await listsOf(bob).take(secret.id, surprise);
+  expect(titlesOf(await listsOf(ana).get(secret.id))).toEqual(['Bob picks']);
   await listsOf(bob).take(secret.id, added.entries[1]!.media_id);
-  expect(titlesOf(await listsOf(ana).get(secret.id))).toEqual(['A Surprise Film']);
+  expect(titlesOf(await listsOf(ana).get(secret.id))).toEqual([]);
+  // Wanted is only its owner's.
+  const anaWanted = (await listsOf(ana).all()).find((l) => l.builtin === 'wanted')!;
+  await expect(listsOf(bob).take(anaWanted.id, 1)).rejects.toEqual(problem(404));
   expect(await shelfOf(bob).list()).toEqual([]);
   expect((await listsOf(bob).all()).filter((l) => l.mine).map((l) => l.count)).toEqual([0, 0]);
   // Unshared again: gone from Bob.
@@ -256,4 +265,44 @@ it('upgrading from before lists: what was marked wanted is on its owner’s Want
   expect(await db.all('SELECT title, wanted FROM media ORDER BY id')).toEqual([
     { title: 'Stalker', wanted: 1 }, { title: 'Solaris', wanted: 1 }, { title: 'Alien', wanted: 0 }, { title: 'Dune', wanted: 1 }]);
   expect((await shelfOf(ana).get(wish)).unowned).toBe(true);
+});
+
+it('on a shared list another person marks a title watched: it is in their own log and comes off the list for everyone', async () => {
+  const shared = await listsOf(ana).create({ name: 'Movie night', shared: true });
+  const view = await listsOf(ana).add(shared.id, { type: 'film', title: 'Stalker', year: 1979 });
+  await listsOf(ana).add(shared.id, { type: 'book', title: 'Dune' });
+  const stalker = view.entries[0]!.media_id;
+  const after = await listsOf(bob).watched(shared.id, stalker, '2046-03-05');
+  expect(titlesOf(after)).toEqual(['Dune']);
+  expect(titlesOf(await listsOf(ana).get(shared.id))).toEqual(['Dune']);
+  // It is in Bob's log, on his own shelf, and not in his Collection; Ana's log has nothing.
+  expect(await db.all('SELECT m.owner_id, m.title, m.listed_only, l.day FROM media_log l JOIN media m ON m.id = l.media_id')).toEqual([
+    { owner_id: bob, title: 'Stalker', listed_only: 1, day: '2046-03-05' },
+  ]);
+  expect(await shelfOf(bob).list()).toEqual([]);
+  // Ana's own record of it was only for the list, so nothing is left of it on her side.
+  expect(await db.all('SELECT id FROM media WHERE owner_id = ? AND title = ?', [ana, 'Stalker'])).toEqual([]);
+  // Bob watching a title he already keeps logs that one.
+  const own = await shelfOf(bob).create({ type: 'book', title: 'Dune' });
+  await listsOf(bob).watched(shared.id, (await listsOf(ana).get(shared.id)).entries[0]!.media_id, '2046-03-06');
+  expect((await shelfOf(bob).get(own.id)).log.map((l) => l.day)).toEqual(['2046-03-06']);
+  expect(titlesOf(await listsOf(ana).get(shared.id))).toEqual([]);
+  // A private list of his own keeps the title on it; Wanted cannot be watched.
+  const privateList = await listsOf(bob).create({ name: 'Mine' });
+  const one = (await listsOf(bob).add(privateList.id, { type: 'film', title: 'Alien' })).entries[0]!.media_id;
+  expect(titlesOf(await listsOf(bob).watched(privateList.id, one, '2046-03-07'))).toEqual(['Alien']);
+  const wanted = (await listsOf(bob).all()).find((l) => l.builtin === 'wanted')!;
+  await expect(listsOf(bob).watched(wanted.id, one, '2046-03-07')).rejects.toEqual(problem(400));
+});
+
+it('on a shared list others can reorder and take off any title, but not rename, stop sharing or delete it', async () => {
+  const shared = await listsOf(ana).create({ name: 'Family picks', shared: true });
+  for (const title of ['One', 'Two', 'Three']) await listsOf(ana).add(shared.id, { type: 'film', title });
+  const ids = (await listsOf(bob).get(shared.id)).entries.map((e) => e.media_id);
+  expect(titlesOf(await listsOf(bob).move(shared.id, ids[2]!, 'up'))).toEqual(['One', 'Three', 'Two']);
+  expect(titlesOf(await listsOf(bob).take(shared.id, ids[0]!))).toEqual(['Three', 'Two']);
+  await expect(listsOf(bob).update(shared.id, { name: 'Bob’s' })).rejects.toEqual(problem(403));
+  await expect(listsOf(bob).update(shared.id, { shared: false })).rejects.toEqual(problem(403));
+  await expect(listsOf(bob).remove(shared.id)).rejects.toEqual(problem(403));
+  expect((await listsOf(ana).get(shared.id)).shared).toBe(true);
 });

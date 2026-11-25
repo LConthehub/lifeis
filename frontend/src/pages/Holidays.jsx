@@ -42,6 +42,27 @@ export const Remove = ({ onClick, label }) => <button type="button" onClick={onC
 
 // ==================== the list of holidays ====================
 
+/**
+ * What other people gave you at a holiday. The server says nothing until the day has passed, so this part is only
+ * there afterward. On a holiday's page, only what was given at a holiday of that name.
+ */
+function GivenToYou({ only }) {
+  const [given, setGiven] = useState([]);
+  useEffect(() => { axios.get(`${API}/given-to-me`).then(({ data }) => setGiven(data)).catch(() => {}); }, []);
+  const shown = only ? given.filter((g) => g.holiday.toLowerCase() === only.toLowerCase()) : given;
+  if (shown.length === 0) return null;
+  return (
+    <section className={`${cardClass} space-y-2`} aria-label="Given to you">
+      <Heading icon="gift">Given to you</Heading>
+      <ul className="divide-y divide-life-100 dark:divide-life-700">
+        {shown.map((g, i) => (
+          <li key={i} className="py-2 text-sm text-gray-800 dark:text-life-50">{g.idea}<span className="block text-xs text-gray-500 dark:text-life-300">{g.holiday} {g.year} · {dayText(g.day)}</span></li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** Holidays: what returns each year. Only the ones you add. */
 export default function HolidaysPage() {
   const [list, setList] = useState(null);
@@ -68,6 +89,7 @@ export default function HolidaysPage() {
         <button type="button" onClick={() => setAdding(true)} className={button}>+ Add a holiday</button>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
+      <GivenToYou />
       {list.length === 0 && (
         <div className={`${cardClass} text-sm text-gray-600 dark:text-life-100`}>
           A holiday is a plan that comes back each year. Add the ones you keep. Life Is suggests none. Each year gets its own copy, started from last year's:
@@ -219,6 +241,7 @@ export function HolidayPage() {
         </nav>
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}
+      <GivenToYou only={holiday.name} />
       {!upcoming && <NextYear holiday={holiday} year={year} start={start} />}
       {!year && upcoming === false && holiday.years.length === 0 && <p className="text-sm text-gray-600 dark:text-life-100">No year has been started yet.</p>}
       {year && <YearBody key={year.plan_id} year={year} options={options} act={act} reload={load} />}

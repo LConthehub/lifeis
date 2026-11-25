@@ -4,8 +4,9 @@
  * Every person has two lists of their own that stay: "To watch, read or hear" and "Wanted". Wanted is drawn from
  * the `wanted` mark on a title (media.wanted), so what was marked wanted before lists is on it, and nothing was
  * moved or rebuilt. A person can make more lists. A list is private to its owner unless the owner shares it, and
- * then everyone who signs in here sees it and can add a title to it (by typing it). Only the owner can reorder,
- * rename, share or delete it. Whoever added a title, or the owner, can take it off.
+ * then it belongs to the household: everyone who signs in here sees it and can add a title to it (by typing it),
+ * take any title off it, reorder it, and mark a title watched. Only the owner can rename, stop sharing or delete it.
+ * Deleting a list never removes a title.
  *
  * A title typed onto a list that the person does not own is kept as a title with `listed_only` set. It stays
  * out of the Collection and everything that counts what is owned (media.ts `list`) until a copy is added.
@@ -16,7 +17,7 @@ import { atomic, type Db, type Queries } from './db.ts';
 import { shown } from './displayName.ts';
 import { Problem } from './problem.ts';
 import { unlink } from './tags.ts';
-import { clean, labelKey, stamp, type Clock } from './small.ts';
+import { clean, dayNumber, labelKey, stamp, type Clock } from './small.ts';
 
 export const LIST_TYPES = ['film', 'show', 'music', 'book', 'game', 'other'] as const;
 export const TO_WATCH = 'to_watch';
@@ -46,7 +47,7 @@ export type ListEntry = {
   /** Only said to the list's owner: whether a copy is kept, and how many times it was watched, read or heard. */
   owned: boolean | null;
   times: number | null;
-  /** Whether the viewer can take it off. */
+  /** Whether the viewer can take it off (anyone who sees a list can, except on Wanted, which is only its owner's). */
   can_remove: boolean;
 };
 export type ListView = ListSummary & { entries: ListEntry[] };
@@ -133,7 +134,7 @@ export function mediaLists(db: Db, owner: number, clock: Clock = () => new Date(
         media_id: f.media_id, title: f.title, type: f.type, creator: f.creator, year: f.year, note: f.note,
         added_by: f.added_by_id !== null && f.added_by_id !== owner ? f.added_by : null,
         owned: own ? f.owned === 1 : null, times: own ? f.times : null,
-        can_remove: own || f.added_by_id === owner,
+        can_remove: row.builtin === WANTED ? own : true,
       })),
     };
   }
@@ -193,14 +194,12 @@ export function mediaLists(db: Db, owner: number, clock: Clock = () => new Date(
       });
     },
 
-    /** Delete a list the person made. The titles are not owned things, so one that was only on it goes too (unless watched or noted). */
+    /** Delete a list the person made. No title is removed: one that is not owned stays findable and can go on another list. */
     async remove(id: number): Promise<void> {
       await atomic(db, async (tx) => {
         const row = await mine(tx, id);
         if (row.builtin) throw new Problem(400, `${row.name} stays as it is`);
-        const titles = (await tx.all<{ media_id: number }>('SELECT media_id FROM media_list_items WHERE list_id = ?', [id])).map((t) => t.media_id);
         await tx.run('DELETE FROM media_lists WHERE id = ?', [id]);
-        for (const t of titles) await tidyUnowned(tx, t);
       });
     },
 
@@ -240,7 +239,7 @@ export function mediaLists(db: Db, owner: number, clock: Clock = () => new Date(
       });
     },
 
-    /** Take a title off a list: the owner, or whoever put it there, can. The title itself is not deleted if it is owned. */
+    /** Take a title off a list: anyone who sees a shared list can. The title itself is not deleted if it is owned. */
     async take(id: number, mediaId: number): Promise<ListView> {
       return atomic(db, async (tx) => {
         const row = await visible(tx, id);
@@ -250,7 +249,6 @@ export function mediaLists(db: Db, owner: number, clock: Clock = () => new Date(
         } else {
           const item = await tx.get<{ added_by: number | null }>('SELECT added_by FROM media_list_items WHERE list_id = ? AND media_id = ?', [id, mediaId]);
           if (!item) throw new Problem(404, 'Not found');
-          if (row.owner_id !== owner && item.added_by !== owner) throw new Problem(403, 'Only whoever put it there can take it off');
           await tx.run('DELETE FROM media_list_items WHERE list_id = ? AND media_id = ?', [id, mediaId]);
         }
         await tidyUnowned(tx, mediaId);
@@ -258,11 +256,41 @@ export function mediaLists(db: Db, owner: number, clock: Clock = () => new Date(
       });
     },
 
-    /** Move a title one place up or down a list (the owner's; Wanted is in alphabetical order). */
+    /**
+     * Mark a title on a list watched, read or heard, today (`day`). It goes in the viewer's OWN log: on their own shelf, a
+     * title with the same kind and name (made there, out of the Collection, if they have none). It comes off the list for
+     * everyone, if the list is shared or is To watch. On a private list of their own it stays, as marking it always did.
+     */
+    async watched(id: number, mediaId: number, day: string): Promise<ListView> {
+      dayNumber(day);
+      return atomic(db, async (tx) => {
+        await ensureBuiltIn(tx);
+        const row = await visible(tx, id);
+        if (row.builtin === WANTED) throw new Problem(400, 'Wanted is for what you do not have yet');
+        const title = await tx.get<{ type: string; title: string; creator: string | null; year: number | null }>(
+          'SELECT m.type, m.title, m.creator, m.year FROM media_list_items i JOIN media m ON m.id = i.media_id WHERE i.list_id = ? AND i.media_id = ?', [id, mediaId]);
+        if (!title) throw new Problem(404, 'Not found');
+        let mine = mediaId;
+        if (row.owner_id !== owner) {
+          const same = await findTitle(tx, owner, title.type, title.title);
+          mine = same ? same.id : (await tx.run(
+            `INSERT INTO media (owner_id, type, title, creator, year, wanted, listed_only, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?)`,
+            [owner, title.type, title.title, title.creator, title.year, now(), now()])).lastId;
+        }
+        await tx.run('INSERT INTO media_log (media_id, day, created_at) VALUES (?, ?, ?)', [mine, day, now()]);
+        // No longer something to watch, read or hear, on the person's own To watch list.
+        await tx.run("DELETE FROM media_list_items WHERE media_id = ? AND list_id IN (SELECT id FROM media_lists WHERE owner_id = ? AND builtin = 'to_watch')", [mine, owner]);
+        if (row.shared === 1) await tx.run('DELETE FROM media_list_items WHERE list_id = ? AND media_id = ?', [id, mediaId]);
+        await tidyUnowned(tx, mediaId);
+        return view(tx, id);
+      });
+    },
+
+    /** Move a title one place up or down a list (anyone who sees it; Wanted is in alphabetical order). */
     async move(id: number, mediaId: number, way: 'up' | 'down'): Promise<ListView> {
       if (way !== 'up' && way !== 'down') throw new Problem(400, 'Up or down');
       return atomic(db, async (tx) => {
-        const row = await mine(tx, id);
+        const row = await visible(tx, id);
         if (row.builtin === WANTED) throw new Problem(400, 'Wanted is kept in alphabetical order');
         const items = await tx.all<{ id: number; media_id: number }>('SELECT id, media_id FROM media_list_items WHERE list_id = ? ORDER BY sort_order, id', [id]);
         const at = items.findIndex((i) => i.media_id === mediaId);
