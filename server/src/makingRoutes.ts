@@ -51,7 +51,7 @@ function reportChoices(query: URLSearchParams) {
   if (ids && (ids.length > 200 || !ids.every((id) => Number.isInteger(id) && id >= 0))) throw notUnderstood('rooms');
   const least = queryNumber(query, 'min_cents');
   if (least !== null && !(Number.isInteger(least) && least >= 0)) throw notUnderstood('min_cents');
-  return { rooms: ids, min_cents: least, unvalued: query.get('unvalued') !== '0', insured_only: query.get('insured') === '1' };
+  return { rooms: ids, min_cents: least, unvalued: query.get('unvalued') !== '0', insured_only: query.get('insured') === '1', guns: query.get('guns') === '1' };
 }
 
 const placeFrom = (body: Body) => ({ name: read.text(body, 'name'), parent_id: read.maybeWhole(body, 'parent_id'), note: read.maybeText(body, 'note') });

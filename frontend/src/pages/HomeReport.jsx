@@ -41,6 +41,7 @@ export default function HomeReport() {
   const [minText, setMinText] = useState('');
   const [withUnvalued, setWithUnvalued] = useState(true);
   const [insuredOnly, setInsuredOnly] = useState(false);
+  const [withGuns, setWithGuns] = useState(false);
   const [photos, setPhotos] = useState(true);
   const [perPage, setPerPage] = useState(false);
   const [problem, setProblem] = useState('');
@@ -54,8 +55,9 @@ export default function HomeReport() {
     if (minCents) params.min_cents = String(minCents);
     if (!withUnvalued) params.unvalued = '0';
     if (insuredOnly) params.insured = '1';
+    if (withGuns) params.guns = '1';
     return params;
-  }, [picked, minCents, withUnvalued, insuredOnly]);
+  }, [picked, minCents, withUnvalued, insuredOnly, withGuns]);
 
   useEffect(() => {
     if (minBad) return undefined;
@@ -144,6 +146,7 @@ export default function HomeReport() {
               <div>
                 <label className="flex min-h-11 items-center gap-2 text-sm text-gray-800 dark:text-life-50"><input type="checkbox" checked={withUnvalued} onChange={(e) => setWithUnvalued(e.target.checked)} className="h-4 w-4 accent-life-600" /> Include things with no value</label>
                 <label className="flex min-h-11 items-center gap-2 text-sm text-gray-800 dark:text-life-50"><input type="checkbox" checked={insuredOnly} onChange={(e) => setInsuredOnly(e.target.checked)} className="h-4 w-4 accent-life-600" /> Only insured things <span className="text-xs text-gray-500 dark:text-life-300">{report.insured}</span></label>
+                <label className="flex min-h-11 items-center gap-2 text-sm text-gray-800 dark:text-life-50"><input type="checkbox" checked={withGuns} onChange={(e) => setWithGuns(e.target.checked)} className="h-4 w-4 accent-life-600" /> Include my guns <span className="text-xs text-gray-500 dark:text-life-300">guns and ammunition, with serial numbers</span></label>
                 <label className="flex min-h-11 items-center gap-2 text-sm text-gray-800 dark:text-life-50"><input type="checkbox" checked={photos} onChange={(e) => setPhotos(e.target.checked)} className="h-4 w-4 accent-life-600" /> With photos (they make it longer)</label>
                 <label className="flex min-h-11 items-center gap-2 text-sm text-gray-800 dark:text-life-50"><input type="checkbox" checked={perPage} onChange={(e) => setPerPage(e.target.checked)} className="h-4 w-4 accent-life-600" /> One room per page</label>
               </div>

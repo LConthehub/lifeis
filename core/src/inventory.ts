@@ -237,6 +237,8 @@ export type ReportOptions = {
   unvalued?: boolean;
   /** Only the things that are insured. Default: all of them. */
   insured_only?: boolean;
+  /** Add the person's own guns and ammunition, with their serial numbers. Default: left out. Never anyone else's. */
+  guns?: boolean;
 };
 export type HomeReport = {
   day: string;
@@ -614,8 +616,9 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
    * shelf in the sewing room is in the sewing room. All money is whole cents added as whole numbers.
    */
   async function homeReportIn(options: ReportOptions): Promise<HomeReport> {
-    // Guns and ammunition are never in this report: it is the one that gets handed to an insurer or a bank. Guns have their own list.
-    const all = await items(db, 'AND k.guard IS NULL');
+    // Guns and ammunition are left out unless the person asks for them. Then only their own (items() only ever reads
+    // this person's things), with serial numbers, since the report goes to an insurer.
+    const all = await items(db, options.guns ? '' : 'AND k.guard IS NULL', [], 'here', Boolean(options.guns));
     const rows = await placeRows(db);
     const byId = new Map(rows.map((row) => [row.id, row]));
     const roomOfPlace = (placeId: number | null): PlaceRow | null => {

@@ -221,3 +221,53 @@ it('the hunting trip fills its bring list from guns and hunting gear, adds ammun
   expect((await theirs.fillGear(trip.years[0]!.plan_id, 'hunting')).added).toBe(0);
   expect((await theirs.options()).things.map((t) => t.name)).toEqual(['Hammer']);
 });
+
+const reportNames = (r: Awaited<ReturnType<Inventory['homeReport']>>) => r.rooms.flatMap((room) => room.lines.map((l) => l.name));
+
+it('the home report leaves guns out unless asked; asked, it has only the person’s own guns and ammunition, with serial numbers', async () => {
+  const mine = of(ana);
+  await mine.createItem({ kind_id: await kindId(mine, 'Firearms'), name: 'Old shotgun', insured: true, records: { serial: 'S-77', price_cents: 30000 } });
+  await mine.createItem({ kind_id: await kindId(mine, 'Firearms'), name: 'Spare barrel' });
+  const off = await mine.homeReport();
+  expect(off.things).toBe(0);
+  expect(JSON.stringify(off)).not.toMatch(/rifle|shotgun|barrel|Soft point|ZX-90417|S-77/i);
+  expect((await mine.homeReportCsv()).text).not.toMatch(/rifle|shotgun|barrel|Soft point|ZX-90417|S-77/i);
+
+  const on = await mine.homeReport({ guns: true });
+  expect(reportNames(on)).toEqual(['Deer rifle', 'Soft point 150 grain', 'Old shotgun', 'Spare barrel']);
+  expect(on.things).toBe(4);
+  expect(on.with_serial).toBe(2);
+  expect(on.rooms.find((r) => r.name === 'Study')!.lines.find((l) => l.name === 'Deer rifle')!.serial).toBe(SERIAL);
+  const csv = (await mine.homeReportCsv({ guns: true })).text;
+  expect(csv).toContain(SERIAL);
+  expect(csv).toContain('S-77');
+  expect(csv).toContain('Old shotgun');
+});
+
+it('the home report with guns never shows guns shared with the person, or anyone else’s', async () => {
+  const mine = of(ana);
+  const bobs = of(bob);
+  await bobs.addStarter('hunting');
+  await bobs.createItem({ kind_id: await kindId(bobs, 'Firearms'), name: 'Duck gun', records: { serial: 'B-1' } });
+  await mine.shareWith(rifle, [bob]);
+  const theirs = await bobs.homeReport({ guns: true });
+  expect(reportNames(theirs)).toEqual(['Duck gun', 'Hammer']);
+  expect(JSON.stringify(theirs)).not.toMatch(/Deer rifle|ZX-90417/);
+  const mineNow = await mine.homeReport({ guns: true });
+  expect(reportNames(mineNow)).toEqual(['Deer rifle', 'Soft point 150 grain']);
+  expect(JSON.stringify(mineNow)).not.toMatch(/Duck gun|B-1/);
+  expect((await mine.homeReportCsv({ guns: true })).text).not.toMatch(/Duck gun|B-1/);
+  expect(reportNames(await bobs.homeReport())).toEqual(['Hammer']);
+});
+
+it('the insured filter still works with the guns option', async () => {
+  const mine = of(ana);
+  await mine.createItem({ kind_id: await kindId(mine, 'Firearms'), name: 'Old shotgun', insured: true, records: { serial: 'S-77' } });
+  await mine.createItem({ kind_id: await kindId(mine, 'Firearms'), name: 'Spare barrel' });
+  expect(reportNames(await mine.homeReport({ insured_only: true }))).toEqual([]);
+  expect(reportNames(await mine.homeReport({ guns: true, insured_only: true }))).toEqual(['Old shotgun']);
+  const csv = (await mine.homeReportCsv({ guns: true, insured_only: true })).text;
+  expect(csv).toContain('Old shotgun');
+  expect(csv).not.toContain('Spare barrel');
+  expect(csv).not.toContain(SERIAL);
+});
