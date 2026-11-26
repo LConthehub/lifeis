@@ -21,6 +21,7 @@ let server: Server;
 let base: string;
 let time: Date;
 const errors: unknown[] = [];
+const notes: string[] = [];
 
 function visitor() {
   let session = '';
@@ -94,9 +95,10 @@ const call = (app: Someone, token: string, name: string, args: unknown = {}, id 
 beforeEach(async () => {
   folder = mkdtempSync(path.join(tmpdir(), 'lifeis-test-'));
   errors.length = 0;
+  notes.length = 0;
   time = MONDAY;
   database = await openDatabase(path.join(folder, 'data'), path.join(folder, 'keys'));
-  server = createServer(createApp({ db: database.db, clock: () => time, onError: (problem) => errors.push(problem) }));
+  server = createServer(createApp({ db: database.db, clock: () => time, onError: (problem) => errors.push(problem), note: (line) => notes.push(line) }));
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
@@ -430,4 +432,22 @@ it('does nothing in the demo', async () => {
   expect((await guest.get('/api/connector/request?client_id=x&redirect_uri=y&response_type=code')).status).toBe(403);
   expect((await guest.post('/api/connector/allow', { client_id: 'x', redirect_uri: REDIRECT, code_challenge: 'x', code_challenge_method: 'S256' })).status).toBe(403);
   expect((await guest.put('/api/connector/household', { on: true })).status).toBe(403);
+});
+
+it('answers not found at the sign-in addresses Life Is does not have, and notes each step without what was sent', async () => {
+  const admin = await owner();
+  await admin.put('/api/connector/household', { on: true });
+  const app = visitor();
+  for (const address of ['/.well-known/openid-configuration', '/.well-known/oauth-authorization-server/mcp', '/register', '/authorize', '/token']) {
+    expect([address, (await app.get(address)).status]).toEqual([address, 404]);
+  }
+  const tokens = await connect(admin, app);
+  expect((await app.post('/oauth/register', { client_name: 'Claude', redirect_uris: ['http://evil.example/cb'] })).status).toBe(400);
+  const all = notes.join('\n');
+  expect(all).toMatch(/\[connector\] \S+ POST \/oauth\/register -> 201/);
+  expect(all).toMatch(/POST \/oauth\/token -> 200/);
+  expect(all).toMatch(/POST \/oauth\/register -> 400 app="[^"]*" why="invalid_redirect_uri: /);
+  expect(all).toMatch(/GET \/register -> 404/);
+  for (const secret of [tokens.access_token, tokens.refresh_token, 'code_challenge', 'evil.example']) expect(all).not.toContain(secret);
+  expect(notes.every((line) => line.startsWith('[connector] '))).toBe(true);
 });

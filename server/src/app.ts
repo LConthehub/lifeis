@@ -64,7 +64,23 @@ export type Options = {
   timers?: CookTimers;
   /** Told about anything that went wrong inside Life Is itself (never about a person's mistake). */
   onError?: (problem: unknown) => void;
+  /** Told one line per step an AI app takes to sign in or call Life Is (see connectorNote). Left out: nothing is noted. */
+  note?: (line: string) => void;
 };
+
+/**
+ * The addresses an AI app uses while it connects, or might try: the connector's own, and the ones the open
+ * standard falls back to when it can't find them.
+ */
+const CONNECTOR_STEPS = /^\/(mcp|connect|oauth\/|\.well-known\/|register$|authorize$|token$|api\/connector\/(request|allow|deny)$)/;
+/**
+ * One line about a step an AI app took: when, the method and address, the answer's status, the app's own name for
+ * itself, and the plain reason when it was refused. Never what was sent: no tokens, codes, data or query strings.
+ */
+export function connectorNote(at: Date, method: string, path: string, status: number, userAgent: string | undefined, reason: string | undefined): string {
+  const clip = (text: string | undefined, most: number) => (text ?? '').replace(/[\u0000-\u001f\u007f"]/g, ' ').slice(0, most);
+  return `[connector] ${at.toISOString()} ${method} ${clip(path, 120)} -> ${status} app="${clip(userAgent, 60)}"${reason ? ` why="${clip(reason, 160)}"` : ''}`;
+}
 
 // ---------- who is asking, and from where ----------
 
@@ -349,6 +365,10 @@ export function createApp(options: Options) {
         // A page of its own with no scripts, kept out of search engines and out of any cache but the reader's.
         reply = { body: Buffer.from(manualHtml(found), 'utf8'), headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'private, no-store',
           'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'", 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' } };
+      } else if (path.startsWith('/.well-known/') || /^\/(register|authorize|token)$/.test(path)) {
+        // Programs look for these addresses (an AI app signing in, among others). Any that isn't one of Life Is's own is
+        // plainly not here: the app's page in its place would be read as an answer, and make no sense to them.
+        throw new Refusal(404, 'Not found');
       } else if (page && (req.method === 'GET' || req.method === 'HEAD')) {
         const found = await page(url.pathname, isHttps(req));
         reply = { headers: found.headers, body: found.body };
@@ -365,6 +385,12 @@ export function createApp(options: Options) {
         (options.onError ?? console.error)(problem);
         reply = { status: 500, json: { detail: 'Something went wrong inside Life Is' } };
       }
+    }
+
+    if (options.note && CONNECTOR_STEPS.test(path)) {
+      const said = reply.json && typeof reply.json === 'object' ? reply.json as { error?: unknown; error_description?: unknown; detail?: unknown } : {};
+      const reason = (reply.status ?? 200) >= 400 ? [said.error, said.error_description ?? said.detail].filter((x) => typeof x === 'string').join(': ') : undefined;
+      options.note(connectorNote(clock(), req.method ?? '?', path, reply.status ?? 200, req.headers['user-agent'] as string | undefined, reason));
     }
 
     const headers: Record<string, string | string[]> = {};

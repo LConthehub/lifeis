@@ -36,6 +36,8 @@ const server = createServer(createApp({
   db: database.db,
   // Locks each person's authenticator-app secret, with the same key folder as everything else kept locked.
   sealer: vault(keyDir, 'second_step'),
+  // One line in the server's log for each step an AI app takes to sign in (see connectorNote in app.ts).
+  note: (line: string) => console.log(line),
   ...(demo ? { demo } : {
     reach,
     photos: { fetcher: webFetcher, sealer: vault(keyDir, 'photo_library') },
