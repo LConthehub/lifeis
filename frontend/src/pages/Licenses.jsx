@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import SubChips, { THING_CHIPS } from '../components/SubChips';
 import CopyButton from '../components/Copy';
 import Modal, { Field, inputClass as baseInput, buttonClass as baseButton, quietButtonClass as baseQuiet, cardClass, errorMessage } from '../components/ui';
 
@@ -64,6 +65,7 @@ export default function LicensesPage() {
 
   return (
     <div className="space-y-4">
+      <SubChips items={THING_CHIPS} label="Things and licenses" />
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Licenses</h1>
         <button type="button" onClick={() => setModal({ start: true })} className={buttonClass}>+ Add a license</button>

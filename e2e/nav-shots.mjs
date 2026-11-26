@@ -1,6 +1,6 @@
-// Pictures of the navigation sample on the demo household, for the owner's OK: Home, tasty, tidy, busy and
+// Pictures of the navigation sample on the demo household, for the owner's OK: Home, cooking, in order, on track and
 // Settings, at phone (375) and desktop (1280) width, light and dark, and again with the "Life is ..." drop-down
-// open. It also checks: the header reads "Life is busy" on the calendar and "Life is home" on Home, the first place
+// open. It also checks: the header reads "Life is on track" on the calendar and "Life is home" on Home, the first place
 // in the phone bar says "Life is", nothing scrolls sideways, every place in the bar and every row of the drop-down
 // is at least 44px tall, the drop-down fits on screen, and the end of a page is not hidden under the bar.
 //
@@ -35,7 +35,7 @@ const server = spawn(process.execPath, ['server/src/main.ts'], { cwd: root, stdi
 for (let i = 0; i < 100; i += 1) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch { /* not up yet */ } await new Promise((r) => setTimeout(r, 200)); }
 
 const SIZES = { phone: { width: 375, height: 812 }, desktop: { width: 1280, height: 800 } };
-const PAGES = [['home', '/'], ['tasty', '/recipes'], ['tidy', '/things'], ['busy', '/calendar'], ['entertaining', '/media'], ['settings', '/settings/home']];
+const PAGES = [['home', '/'], ['cooking', '/week'], ['in order', '/manual'], ['on track', '/calendar'], ['entertaining', '/media'], ['settings', '/settings/home']];
 const browser = await chromium.launch(browserChoice);
 try {
   for (const look of ['light', 'dark']) {
@@ -57,7 +57,7 @@ try {
           const heights = await bar.getByRole('link').evaluateAll((ls) => ls.map((l) => Math.round(l.getBoundingClientRect().height)));
           check(`${tag}: every place in the bar is 44px or taller`, heights.length >= 2 && heights.every((h) => h >= 44), heights.join(','));
           const words = (await bar.innerText()).replace(/\s+/g, ' ').trim();
-          if (name === 'home') check(`${tag}: the bar reads Life is and the words`, /^Life is/.test(words) && /tasty/.test(words), words);
+          if (name === 'home') check(`${tag}: the bar reads Life is and the words`, /^Life is/.test(words) && /cooking/.test(words), words);
           // all six words fit: each word whole inside its place, no place wider than the screen, none over its neighbor
           const places = await bar.getByRole('link').evaluateAll((ls) => ls.map((l) => {
             const r = l.getBoundingClientRect(); const w = l.querySelector('span:last-child'); const wr = w.getBoundingClientRect();
@@ -78,14 +78,14 @@ try {
             return Math.round(barBox.top - sheet.getBoundingClientRect().bottom);
           });
           check(`${tag}: the end of the page is above the bar`, gap >= 0, `${gap}px`);
-          if (name === 'tidy' || name === 'busy') await page.screenshot({ path: path.join(shots, `${name}-${sizeName}-${look}-end.png`) });
+          if (name === 'in order' || name === 'on track') await page.screenshot({ path: path.join(shots, `${name}-${sizeName}-${look}-end.png`) });
         } else {
           check(`${tag}: no bottom bar on a computer`, !(await bar.isVisible()));
           check(`${tag}: the words are not a row across the top`, (await page.getByRole('navigation', { name: 'Sections', exact: true }).count()) === 0);
         }
         // the header reads as a sentence
         const sentence = (await page.locator('[data-life-sentence]').innerText()).replace(/\s+/g, ' ').trim();
-        if (name === 'busy') check(`${tag}: the header reads Life is busy`, sentence === 'Life is busy', sentence);
+        if (name === 'on track') check(`${tag}: the header reads Life is on track`, sentence === 'Life is on track', sentence);
         if (name === 'home') check(`${tag}: the header reads Life is home`, sentence === 'Life is home', sentence);
         if (name === 'settings') check(`${tag}: the header reads Life is with no word`, sentence === 'Life is', sentence);
         // the drop-down, open
@@ -94,19 +94,19 @@ try {
         const menu = page.getByRole('navigation', { name: 'Sections', exact: true });
         check(`${tag}: the drop-down opens`, await menu.isVisible() && (await button.getAttribute('aria-expanded')) === 'true');
         const rows = await menu.getByRole('link').evaluateAll((ls) => ls.map((l) => { const r = l.getBoundingClientRect(); return { t: l.innerText.trim(), h: Math.round(r.height) }; }));
-        check(`${tag}: the drop-down lists home and the five words`, rows.map((r) => r.t).join(',') === 'home,tasty,tidy,balanced,busy,entertaining', rows.map((r) => r.t).join(','));
+        check(`${tag}: the drop-down lists home and the five words`, rows.map((r) => r.t).join(',') === 'home,on track,cooking,in order,budgeted,entertaining', rows.map((r) => r.t).join(','));
         check(`${tag}: every row is 44px or taller`, rows.every((r) => r.h >= 44), rows.map((r) => r.h).join(','));
         const box = await menu.boundingBox();
         check(`${tag}: the drop-down is on screen`, box.x >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height, JSON.stringify(box));
         const lit = await menu.locator('a[aria-current="page"]').allInnerTexts();
-        const want = { home: ['home'], tasty: ['tasty'], tidy: ['tidy'], busy: ['busy'], entertaining: ['entertaining'], settings: [] }[name];
+        const want = { home: ['home'], cooking: ['cooking'], 'in order': ['in order'], 'on track': ['on track'], entertaining: ['entertaining'], settings: [] }[name];
         check(`${tag}: the right row is lit`, lit.map((t) => t.trim()).join() === want.join(), lit.join());
         await page.screenshot({ path: path.join(shots, `${name}-${sizeName}-${look}-menu.png`) });
-        if (name === 'busy') {
+        if (name === 'on track') {
           await page.keyboard.press('Escape'); await page.waitForTimeout(200);
           check(`${tag}: Escape closes the drop-down`, !(await menu.isVisible()));
-          await button.click(); await page.getByRole('navigation', { name: 'Sections', exact: true }).getByRole('link', { name: 'tidy', exact: true }).click(); await page.waitForTimeout(600);
-          check(`${tag}: picking tidy goes to its home and closes`, /\/things$/.test(page.url()) && !(await page.getByRole('navigation', { name: 'Sections', exact: true }).isVisible()), page.url());
+          await button.click(); await page.getByRole('navigation', { name: 'Sections', exact: true }).getByRole('link', { name: 'in order', exact: true }).click(); await page.waitForTimeout(600);
+          check(`${tag}: picking in order goes to its home and closes`, /\/manual$/.test(page.url()) && !(await page.getByRole('navigation', { name: 'Sections', exact: true }).isVisible()), page.url());
         } else { await page.keyboard.press('Escape'); }
       }
       if (sizeName === 'phone') {

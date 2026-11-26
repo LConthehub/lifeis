@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import SubChips, { MANUAL_CHIPS } from '../components/SubChips';
 import { Badge, COLOR_CLASSES, COLOR_WORDS, ICON_WORDS, Open, inGroups } from '../components/ServiceLinks';
 import Icon from '../components/Icon';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
@@ -23,6 +24,7 @@ export default function HomeServicesPage() {
 
   return (
     <div className="space-y-4">
+      <SubChips items={MANUAL_CHIPS} label="House manual and home services" />
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Home services</h1>
         {data.can_change && <button type="button" onClick={() => setEditing({})} className={`${buttonClass} min-h-[44px]`}>+ Add a link</button>}

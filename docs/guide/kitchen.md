@@ -4,7 +4,7 @@ blurb: Recipes kept as you wrote them, the week's meals, groceries, the pantry a
 ---
 # The kitchen
 
-The **tasty** section is recipes, the week, the grocery list and the pantry. In the phone app, all of it is free for good.
+The **cooking** section is the week, the grocery list, recipes and the pantry. In the phone app, all of it is free for good.
 
 ## Recipes
 
@@ -65,5 +65,5 @@ When you have checked off what you got at a store, choose **Done at** that store
 - **Prices.** Change a price on the way, and the estimate follows. Each line can also have what came off it ("saved"), so the price paid and the saving are both kept.
 - **A photo of the receipt.** Choose **Read a receipt photo**. The words are read on your own device, and nothing is sent to anyone. Life Is matches each line to a thing on your list and shows you what it found. Change anything that is wrong, then choose **Use these**. Lines that are not on the list are left out. You can also paste or type the receipt's words. You can keep the photo with the spending.
 - **Split it.** If the receipt covers more than groceries, choose **Split this receipt**. Life Is suggests the parts from what each thing is for (the week's meals, a project's supplies, the household), and you pick a category for each. The parts must add up to the receipt.
-- **Saved at the store.** The **This month** page under **balanced** shows how much you saved this month and this year with sales and coupons, by store. It is already taken off what you paid, so it is not in the spending.
+- **Saved at the store.** The **This month** page under **budgeted** shows how much you saved this month and this year with sales and coupons, by store. It is already taken off what you paid, so it is not in the spending.
 - **A price came down?** If a store lets you ask for a price adjustment and a price dropped, Life Is says what to ask them for.

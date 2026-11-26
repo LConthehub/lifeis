@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import SubChips, { PLAN_CHIPS } from '../components/SubChips';
 import Icon from '../components/Icon';
 import Picture from '../components/Picture';
 import { shrink } from '../components/shrink';
@@ -84,7 +85,7 @@ export default function HolidaysPage() {
   };
   return (
     <div className="space-y-5">
-      <Link to="/plans" className="text-sm text-life-600 hover:underline dark:text-life-200">← Plans and memories</Link>
+      <SubChips items={PLAN_CHIPS} label="Plans, holidays and trips" />
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Holidays</h1>
         <button type="button" onClick={() => setAdding(true)} className={button}>+ Add a holiday</button>

@@ -210,6 +210,7 @@ export default function Things() {
       ) : kindChips(kinds, 'Kind of thing', 'Everything')}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={() => setShowGone((on) => !on)} aria-pressed={showGone} className={chip(showGone)}>No longer have</button>
+        <Link to="/things/licenses" className={`${chip(false)} flex items-center`}>Licenses</Link>
         {items.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find something" aria-label="Find a thing" className={`${inputClass} max-w-sm`} />}
         <TagFilter value={tag} onChange={setTag} />
         {items.length > 0 && <SelectButton sel={sel} />}

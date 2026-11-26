@@ -46,7 +46,7 @@ const made = await ana.evaluate(async (password) => (await fetch('/api/users', {
 console.log('   ben has an account: ' + made);
 
 await ana.goto(base + '/money'); await wait(ana, 1200);
-say('a section called balanced is there, with nothing in it yet', /None yet/.test(await ana.locator('main').innerText()) && (await ana.locator('header button[aria-haspopup]').click(), await ana.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'balanced' }).count()) > 0);
+say('a section called budgeted is there, with nothing in it yet', /None yet/.test(await ana.locator('main').innerText()) && (await ana.locator('header button[aria-haspopup]').click(), await ana.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'budgeted' }).count()) > 0);
 await ana.keyboard.press('Escape');
 await category(ana, 'House', '500', 'ben');
 await category(ana, "Ben's birthday", '200');

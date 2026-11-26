@@ -35,8 +35,8 @@ const chief = await chiefContext.newPage();
 watch(chief, 'in charge');
 await signIn(chief, 'ana', true);
 await chief.goto(base + '/manual'); await wait(1000);
-const tabs = flat(await chief.locator('nav[aria-label="Life is tidy"]').innerText());
-check('the tidy tabs end with House Manual and Home services: ' + tabs, /House Manual\s+Home services$/.test(tabs));
+const tabs = flat(await chief.locator('nav[aria-label="Life is in order"]').innerText());
+check('the in order tabs start with House Manual, and Home services is a chip on it: ' + tabs, /^House Manual\s+Upkeep/.test(tabs) && await chief.getByRole('link', { name: 'Home services', exact: true }).isVisible());
 await chief.getByRole('link', { name: 'Home services', exact: true }).click(); await wait(900);
 check('the page starts empty and says what to add', /No links yet/.test(await chief.locator('main').innerText()));
 

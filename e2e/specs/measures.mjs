@@ -31,7 +31,7 @@ await page.getByRole('button', { name: 'Sign in' }).click(); await wait(1500);
 
 // ---------- the tab ----------
 await page.goto(base + '/routines'); await wait(1000);
-say('there is a Measures tab beside Routines, under busy', await page.getByRole('link', { name: 'Measures', exact: true }).first().isVisible());
+say('there is a Measures chip on Routines, under on track', await page.getByRole('link', { name: 'Measures', exact: true }).first().isVisible());
 await page.getByRole('link', { name: 'Measures', exact: true }).first().click(); await wait(1000);
 say('with none yet, the page says how to start, and that only you can see them', /No measures yet/.test(await text()) && (await page.locator('[data-measures-private]').innerText()).includes('Only you can see these'));
 say('the page says they are in your own download', (await page.locator('[data-measures-private]').innerText()).includes('full download'));

@@ -22,7 +22,7 @@ await wait(1000);
 { const skip = page.getByRole('dialog').getByRole('button', { name: 'Skip, show me everything' }); if (await skip.isVisible().catch(() => false)) { await skip.click(); await wait(900); } }
 await page.locator('header button[aria-haspopup]').click();
 const header = flat(await page.locator('nav[aria-label="Sections"]').innerText());
-say('the header has its sections: ' + header, /home\s+tasty\s+tidy\s+balanced\s+busy\s+entertaining/.test(header));
+say('the header has its sections: ' + header, /home\s+on track\s+cooking\s+in order\s+budgeted\s+entertaining/.test(header));
 await page.keyboard.press('Escape');
 
 // A place for the tapes, then the collection.
@@ -290,8 +290,8 @@ say('the film and the album are in, with what they cost: ' + t.slice(0, 140), /J
 await page.goto(base + '/media'); await wait(700);
 
 // Watched while sewing.
-await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'busy', exact: true }).click(); await wait();
-await page.getByRole('navigation', { name: 'Life is busy' }).getByRole('link', { name: 'Projects' }).click(); await wait();
+await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'on track', exact: true }).click(); await wait();
+await page.getByRole('navigation', { name: 'Life is on track' }).getByRole('link', { name: 'Projects' }).click(); await wait();
 await page.getByRole('button', { name: '+ New project' }).click();
 await field('What it is').fill('Shirt dress'); await field('Where it').selectOption('active');
 await page.getByRole('button', { name: 'Save' }).click(); await wait(1000);
@@ -308,8 +308,8 @@ await time.getByRole('link', { name: 'Alien' }).click(); await wait(900);
 say('and the film says it was watched while working on the dress', /while working on Shirt dress/.test(await text()));
 
 // The calendar gathers it all.
-await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'busy', exact: true }).click(); await wait(600);
-await page.getByRole('navigation', { name: 'Life is busy' }).getByRole('link', { name: 'Calendar' }).click(); await wait(900);
+await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'on track', exact: true }).click(); await wait(600);
+await page.getByRole('navigation', { name: 'Life is on track' }).getByRole('link', { name: 'Calendar' }).click(); await wait(900);
 await page.getByRole('button', { name: '+ Add' }).first().click();
 await field('What').fill('Dentist'); await field('Time').fill('14:30');
 await page.getByRole('button', { name: 'Save' }).click(); await wait(900);

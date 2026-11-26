@@ -8,7 +8,7 @@ An outdoor trip is a plan that comes back each year. You turn on the parts you n
 
 Places are only words you type. Nothing is looked up on a map or sent anywhere.
 
-Trips are in the **busy** section, on the **Trips** tab.
+Trips are in the **on track** section, on the **Plans** tab. Choose the **Trips** chip at the top.
 
 ## Start a trip
 

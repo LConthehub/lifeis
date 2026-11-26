@@ -18,7 +18,7 @@ export function PrintMushroom({ size = '0.5in', className = '' }) {
 }
 
 /**
- * The top of every printout: the stripe band, then the little mushroom with the section's phrase ("Life is tasty"),
+ * The top of every printout: the stripe band, then the little mushroom with the section's phrase ("Life is cooking"),
  * then the page's title in Fraunces. Everything but the words is left out (the room kept) in the plain print styles.
  */
 export function PrintHead({ phrase, title, sub, framed = false, as: Title = 'h2' }) {
@@ -40,7 +40,7 @@ export function PrintHead({ phrase, title, sub, framed = false, as: Title = 'h2'
 /**
  * The one frame every printout is made in: white paper, color as accents (see index.css, ".pf"). The print style the
  * person picked (printStyle.js) is on the element, and the styles change only colors and art, never the layout.
- * `phrase` is the section's own line ("Life is tidy"). Put what the page says after `title` in the children.
+ * `phrase` is the section's own line ("Life is in order"). Put what the page says after `title` in the children.
  */
 export default function PrintFrame({ phrase, title, sub, as = 'section', headingAs, framed = false, className = '', children, ...rest }) {
   const [style] = usePrintStyle();

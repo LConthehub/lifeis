@@ -61,7 +61,7 @@ This lets an AI app you use, such as Claude, read the parts you tick and add a f
 
 See [Get started](getting-started.html). Nothing is seen by anyone else unless it is shared.
 
-**Measures are yours alone.** The numbers you keep on the Measures tab can never be shared, not even with the person in charge. They are in your own download of everything, and nobody else's.
+**Measures are yours alone.** The numbers you keep on the Measures chip of Routines can never be shared, not even with the person in charge. They are in your own download of everything, and nobody else's.
 
 ## The privacy policy
 

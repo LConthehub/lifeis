@@ -4,7 +4,7 @@ blurb: Plans for a day or a trip, with food, things and checklists, and projects
 ---
 # Plans and projects
 
-Both are in the **busy** section. Its tabs are Calendar, Routines, Projects, Plans, Holidays, Trips and Activities.
+Both are in the **on track** section. Its tabs are Calendar, Routines, Plans, Projects and Activities. Holidays and Trips are chips at the top of Plans, and Measures is a chip at the top of Routines.
 
 ## Plans
 

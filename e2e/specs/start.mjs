@@ -160,7 +160,7 @@ check('the edited example and their own recipe stay, nothing else', left.join('|
 check('no examples are on offer any more', (await card.getByRole('button', { name: 'Clear the examples' }).count()) === 0);
 await page.reload(); await wait(page, 1500);
 check('after a reload, the start does not come back', (await dlg.count()) === 0 && (await page.getByRole('region', { name: 'Finish setting up' }).count()) === 0);
-check('and the chosen parts are what shows', (await page.locator('nav[aria-label="Home and sections"] a').allInnerTexts()).map((t) => t.trim()).join(',') === 'Life is,tasty,tidy', (await page.locator('nav[aria-label="Home and sections"] a').allInnerTexts()).join(','));
+check('and the chosen parts are what shows', (await page.locator('nav[aria-label="Home and sections"] a').allInnerTexts()).map((t) => t.trim()).join(',') === 'Life is,cooking,in order', (await page.locator('nav[aria-label="Home and sections"] a').allInnerTexts()).join(','));
 
 // ---------- someone else: skip on step 1 ----------
 await api(page, 'POST', '/api/users', { username: 'ben', password: PASS });

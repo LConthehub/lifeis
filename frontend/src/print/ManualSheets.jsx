@@ -3,7 +3,7 @@ import { usePrintStyle } from './printStyle';
 import { feedingFrom, fitList, linesOf, manualParts, shorten } from './manualParts';
 import { ZINE_SHEET, zinePanels } from './zineLayout';
 
-const PHRASE = 'Life is tidy';
+const PHRASE = 'Life is in order';
 const tel = (phone) => phone.replace(/[^0-9+]/g, '');
 const dayText = () => new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
 const hostOf = (address) => String(address ?? '').replace(/^https?:\/\//, '').replace(/\/$/, '');

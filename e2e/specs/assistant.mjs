@@ -109,7 +109,7 @@ await page.goto(base + '/'); await wait(1500);
 say('nowhere: not even on Home', (await page.locator('[data-ask]').count()) === 0);
 
 // A handwritten card: the model copies it out, and the person checks it before it becomes a recipe.
-await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'tasty', exact: true }).click(); await wait();
+await page.locator('header button[aria-haspopup]').click(); await page.locator('nav[aria-label="Sections"]').getByRole('link', { name: 'cooking', exact: true }).click(); await wait(); await page.getByRole('navigation', { name: 'Life is cooking' }).getByRole('link', { name: 'Recipes' }).click(); await wait();
 await page.getByRole('button', { name: 'Import one' }).click();
 await page.getByRole('button', { name: 'From a photo or a book' }).click(); await wait(600);
 const importing = page.getByRole('dialog');

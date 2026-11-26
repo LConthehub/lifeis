@@ -6,7 +6,7 @@ import { minutesText } from '../components/ui';
 import PrintFrame from './PrintFrame';
 import { usePrintStyle } from './printStyle';
 
-const PHRASE = 'Life is tasty';
+const PHRASE = 'Life is cooking';
 const ingredientText = (l) => `${l.text}${l.scaled ? ` (${l.scaled})` : ''}`;
 const metaOf = (r, servings) => [
   (servings ?? r.servings) && `Serves ${servings ?? r.servings}`,

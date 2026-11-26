@@ -4,7 +4,7 @@ blurb: Places, things, records for your insurer, filling a shelf by scanning, pe
 ---
 # Your home
 
-The **tidy** section holds what you own, where it is, what it is for, and where it has been. It also holds the records that go with each thing, your pets, your [licenses](licenses.html) and a House Manual for a sitter. Jobs that come round again are in [Upkeep](upkeep.html). Its tabs are Things, Places, Upkeep, Pets, Licenses, House Manual and Home services.
+The **in order** section holds what you own, where it is, what it is for, and where it has been. It also holds the records that go with each thing, your pets, your [licenses](licenses.html) and a House Manual for a sitter. Jobs that come round again are in [Upkeep](upkeep.html). Its tabs are House Manual, Upkeep, Pets, Places and Things. Home services is a chip at the top of the House Manual, and Licenses is a chip on Things.
 
 ## Places
 
@@ -137,7 +137,7 @@ Mark an entry **private**, such as an alarm code, and it is never on the shared 
 
 ## Home services
 
-**Home services** is a tab next to the House Manual. It holds links to the programs you run at home: a media server, a photos app, the page for your router. Tap a link and it opens in a new tab (in the phone app, in the phone's own browser).
+**Home services** is a chip at the top of the House Manual. It holds links to the programs you run at home: a media server, a photos app, the page for your router. Tap a link and it opens in a new tab (in the phone app, in the phone's own browser).
 
 The person in charge adds and changes the links. Each one has a name, an address, a color and an icon from the set Life Is already uses, and a note. You can add a second address and say which works **at home** and which works **away**; the link then has a button for each. You can also name a group (Watch, Files, House) and give an order.
 

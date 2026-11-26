@@ -52,7 +52,7 @@ await send('POST', '/api/kitchen/recipes', { title: 'Campfire chili', servings: 
 await page.goto(base + '/plans/trips'); await wait(1000);
 let t = await text();
 say('Outdoor trips starts empty and says nothing is looked up or sent', /Nothing is looked up/.test(t) && !/Lake weekend/.test(t));
-say('Trips is a tab in the busy section', await page.getByRole('link', { name: 'Trips' }).first().isVisible());
+say('Trips is a chip on Plans, in the on track section', await page.getByRole('link', { name: 'Trips' }).first().isVisible());
 await page.getByRole('button', { name: '+ Add a trip' }).click(); await wait(500);
 await dialog.getByLabel('Name *').fill('Lake weekend');
 await dialog.getByRole('checkbox', { name: 'Camping' }).check();

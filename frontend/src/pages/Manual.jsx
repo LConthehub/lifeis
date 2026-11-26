@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../components/Icon';
 import axios from 'axios';
+import SubChips, { MANUAL_CHIPS } from '../components/SubChips';
 import PlacePicker from '../components/PlacePicker';
 import CopyButton from '../components/Copy';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
@@ -49,6 +50,7 @@ export default function ManualPage() {
 
   return (
     <div className="space-y-4">
+      <SubChips items={MANUAL_CHIPS} label="House manual and home services" />
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">House Manual</h1>
       </div>

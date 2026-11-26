@@ -4,7 +4,7 @@ blurb: Checklists for parts of the day, workouts with numbers, your own measures
 ---
 # Routines and the chore chart
 
-A routine is a checklist for part of a day: morning, bedtime, after school, a weekly reset. It is in the **busy** section, on the **Routines** tab. Today's routines also show on the front page, where you tick steps off.
+A routine is a checklist for part of a day: morning, bedtime, after school, a weekly reset. It is in the **on track** section, on the **Routines** tab. Today's routines also show on the front page, where you tick steps off.
 
 ## Make a routine
 
@@ -49,7 +49,7 @@ Choose **Look back** on a workout to see "5 of the last 7 days", a month of dots
 
 ## Measures
 
-The **Measures** tab, beside Routines, is for numbers you want to watch over time, such as a weight or the pages you read. Choose **+ New measure**, give it a name and a unit, and add an entry with its day whenever you like. You see the latest entries as a plain list. Add a target only if you want one.
+The **Measures** chip at the top of Routines is for numbers you want to watch over time, such as a weight or the pages you read. Choose **+ New measure**, give it a name and a unit, and add an entry with its day whenever you like. You see the latest entries as a plain list. Add a target only if you want one.
 
 Life Is suggests nothing and judges nothing here: no "good" or "bad", no arrows, no colors for up or down.
 

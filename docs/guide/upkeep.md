@@ -4,7 +4,7 @@ blurb: Jobs, bills, renewals and chores, and how Life Is tells you what is due.
 ---
 # Upkeep
 
-**Upkeep** (in **tidy**) is one list of everything that comes round again, in four kinds.
+**Upkeep** (in **in order**) is one list of everything that comes round again, in four kinds.
 
 | Kind | For | When you have done it |
 |---|---|---|
@@ -37,7 +37,7 @@ Give a bill its usual amount and Life Is tells you what your bills and renewals 
 
 ### In the budget
 
-The budget under **balanced** reads your bills from here, so there is one list. Add a bill from **Income and bills** and it is added to Upkeep too; open it there to change it or mark it paid. The [Money guide](money.html) covers the rest of the budget.
+The budget under **budgeted** reads your bills from here, so there is one list. Add a bill from **Income and bills** and it is added to Upkeep too; open it there to change it or mark it paid. The [Money guide](money.html) covers the rest of the budget.
 
 ## Chores, and children
 

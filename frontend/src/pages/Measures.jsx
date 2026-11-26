@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
+import SubChips, { ROUTINE_CHIPS } from '../components/SubChips';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 
 /**
@@ -102,6 +103,7 @@ export default function MeasuresPage() {
   const done = () => { setModal(null); load(); };
   return (
     <div className="space-y-4">
+      <SubChips items={ROUTINE_CHIPS} label="Routines and measures" />
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Measures</h1>
         <button type="button" onClick={() => setModal({ measure: null })} className={`${buttonClass} min-h-[44px]`}>+ New measure</button>

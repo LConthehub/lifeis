@@ -6,7 +6,7 @@ blurb: Keep licenses, passports and permits with their expiry days, get a remind
 
 ## Licenses
 
-The **Licenses** tab is in the **tidy** section. It keeps the licenses and permits your household has: driver's licenses, passports, fishing and hunting licenses, a nursing license, parking permits, pet tags. For each one it holds whose it is, its number, who issued it, and when it runs out.
+**Licenses** is in the **in order** section, a chip next to the kinds on the **Things** tab. It keeps the licenses and permits your household has: driver's licenses, passports, fishing and hunting licenses, a nursing license, parking permits, pet tags. For each one it holds whose it is, its number, who issued it, and when it runs out.
 
 ### Add one
 

@@ -6,7 +6,7 @@ blurb: Holidays that come back every year, planned from last year's: the dinner 
 
 A holiday is a plan that comes back each year. Each year gets its own copy, started from last year's, so you do not begin from nothing. Life Is suggests no holidays. You add the ones you keep.
 
-Holidays are in the **busy** section, on the **Holidays** tab.
+Holidays are in the **on track** section, on the **Plans** tab. Choose the **Holidays** chip at the top.
 
 ## Add a holiday
 

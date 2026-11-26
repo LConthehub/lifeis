@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Icon from '../components/Icon';
 import axios from 'axios';
+import SubChips, { PLAN_CHIPS } from '../components/SubChips';
 import { shrink } from '../components/shrink';
 import Picture from '../components/Picture';
 import { PlanGoal } from '../components/Goals';
@@ -104,10 +105,9 @@ export default function PlansPage() {
   );
   return (
     <div className="space-y-5">
+      <SubChips items={PLAN_CHIPS} label="Plans, holidays and trips" />
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Plans and memories</h1>
-        <Link to="/plans/holidays" className={`${quietButtonClass} flex min-h-[44px] items-center`}><Icon of="holiday" /> &nbsp;Holidays</Link>
-        <Link to="/plans/trips" className={`${quietButtonClass} flex min-h-[44px] items-center`}><Icon of="trip" /> &nbsp;Trips</Link>
         <button type="button" onClick={() => setAdding(true)} className={buttonClass}>+ New</button>
       </div>
       <div className="flex flex-wrap items-center gap-2">

@@ -82,16 +82,18 @@ axios.interceptors.request.use((config) => {
 // Life is… each section finishes the sentence, and has its own few pages.
 // `word` is what Life Is calls the section inside (it is what people's choices are saved under, so it never
 // changes); `shown` is the word people see; `icon` sits over the word in the bar along the bottom of a phone.
-// In this order: what a household needs first, then what it plans, makes and enjoys.
+// In this order: what is on the calendar, what is cooking, what is in order, what is budgeted, what is entertaining.
+// The third place in a tab is the older addresses that still open it (a part that now lives inside another page).
 const SECTIONS = [
-  { word: 'eating', shown: 'tasty', icon: 'recipe', home: '/recipes', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
-    tabs: [['/recipes', 'Recipes'], ['/week', 'Week'], ['/groceries', 'Groceries'], ['/pantry', 'Pantry'], ['/prices', 'Prices']] },
-  { word: 'keeping', shown: 'tidy', icon: 'thing', home: '/things', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || path.startsWith('/manual'),
-    tabs: [['/things', 'Things'], ['/things/places', 'Places'], ['/things/upkeep', 'Upkeep'], ['/things/pets', 'Pets'], ['/things/licenses', 'Licenses'], ['/manual', 'House Manual'], ['/manual/services', 'Home services']] },
-  { word: 'spending', shown: 'balanced', icon: 'bill', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month'], ['/money/year', 'Year'], ['/money/goals', 'Goals'], ['/money/income', 'Income and bills']] },
-  // Everything with a date or a time to it.
-  { word: 'making', shown: 'busy', icon: 'date', home: '/calendar', owns: (path) => ['/calendar', '/routines', '/measures', '/projects', '/plans', '/things/activities'].some((p) => path.startsWith(p)),
-    tabs: [['/calendar', 'Calendar'], ['/routines', 'Routines'], ['/measures', 'Measures'], ['/projects', 'Projects'], ['/plans', 'Plans'], ['/plans/holidays', 'Holidays'], ['/plans/trips', 'Trips'], ['/things/activities', 'Activities']] },
+  // Everything with a date or a time to it. Measures sit inside Routines, Holidays and Trips inside Plans.
+  { word: 'making', shown: 'on track', icon: 'date', home: '/calendar', owns: (path) => ['/calendar', '/routines', '/measures', '/projects', '/plans', '/things/activities'].some((p) => path.startsWith(p)),
+    tabs: [['/calendar', 'Calendar'], ['/routines', 'Routines', ['/measures']], ['/plans', 'Plans', ['/plans/holidays', '/plans/trips']], ['/projects', 'Projects'], ['/things/activities', 'Activities']] },
+  { word: 'eating', shown: 'cooking', icon: 'recipe', home: '/week', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
+    tabs: [['/week', 'Week'], ['/groceries', 'Groceries'], ['/recipes', 'Recipes'], ['/pantry', 'Pantry'], ['/prices', 'Prices']] },
+  // Home services sit inside the House Manual, and Licenses inside Things.
+  { word: 'keeping', shown: 'in order', icon: 'thing', home: '/manual', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || path.startsWith('/manual'),
+    tabs: [['/manual', 'House Manual', ['/manual/services']], ['/things/upkeep', 'Upkeep'], ['/things/pets', 'Pets'], ['/things/places', 'Places'], ['/things', 'Things', ['/things/licenses']]] },
+  { word: 'spending', shown: 'budgeted', icon: 'bill', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month'], ['/money/income', 'Income and bills'], ['/money/goals', 'Goals'], ['/money/year', 'Year']] },
   { word: 'enjoying', shown: 'entertaining', icon: 'media', home: '/media', owns: (path) => path.startsWith('/media'),
     // The third place in a tab is the older addresses that still open it (the book shelves are now chips in the Collection).
     tabs: [['/media', 'Collection', ['/media/books', '/media/ebooks', '/media/audiobooks']], ['/media/lists', 'Lists'], ['/media/connections', 'Connections', ['/media/servers']]] },
@@ -137,10 +139,10 @@ function Shell({ user, demo = false, onLogout }) {
   const loadLife = useCallback(() => { axios.get('/api/life').then(({ data }) => setLife(data)).catch(() => {}); }, []);
   useEffect(() => { loadLife(); }, [loadLife]);
   const section = SECTIONS.find((s) => s.owns(pathname));
-  // The calendar ("planning") lives in busy, so choosing it shows busy.
+  // The calendar ("planning") lives in "on track", so choosing it shows that.
   const showing = SECTIONS.filter((s) => !life || life.sections.includes(s.word) || (s.word === 'making' && life.sections.includes('planning')) || s === section);
   const tabs = section ? section.tabs : [];
-  const exact = (to) => ['/recipes', '/things', '/projects', '/media', '/calendar', '/plans', '/manual'].includes(to);
+  const exact = (to) => ['/recipes', '/things', '/projects', '/media', '/calendar', '/money'].includes(to);
   // The page an AI app sends a person to stands alone, without the menu bar.
   if (pathname === '/connect') return <main className="safe-sides mx-auto max-w-5xl px-3 py-4"><Suspense fallback={<PageLoading />}><Connect /></Suspense></main>;
   return (
@@ -157,9 +159,10 @@ function Shell({ user, demo = false, onLogout }) {
           <div className="order-2 ml-auto"><Search /></div>
           <NavLink to="/settings" aria-label="Settings" className="order-2 text-sm text-white/90 hover:text-white hover:underline"><span className="hidden sm:inline">Settings</span><span aria-hidden="true" className="sm:hidden"><Icon of="settings" size={22} /></span></NavLink>
           {tabs.length > 1 && (
-            <nav className="order-4 flex w-full min-w-0 flex-wrap gap-1" aria-label={`Life is ${section.shown ?? section.word}`}>
+            <nav className="order-4 flex w-full min-w-0 flex-nowrap justify-between gap-0 overflow-x-auto sm:justify-start sm:gap-1" aria-label={`Life is ${section.shown ?? section.word}`}>
+              {/* One row, always (owner, Nov 25, 2026): on a phone the five tabs share the width with less space around each. */}
               {tabs.map(([to, label, also = []]) => (
-                <NavLink key={to} to={to} end={exact(to)} className={({ isActive }) => `flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium sm:min-h-0 ${isActive || also.includes(pathname) ? 'bg-white/25 text-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}>{label}</NavLink>
+                <NavLink key={to} to={to} end={exact(to)} className={({ isActive }) => `flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-full px-2 py-1 text-[13px] font-medium sm:min-h-0 sm:px-3 sm:text-sm ${isActive || also.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ? 'bg-white/25 text-white' : 'text-white/80 hover:bg-white/15 hover:text-white'}`}>{label}</NavLink>
               ))}
             </nav>
           )}
@@ -305,11 +308,11 @@ function SectionMenu({ showing, section, atHome }) {
 function BarLink({ to, icon, mark = false, word, current }) {
   return (
     <Link to={to} aria-current={current ? 'page' : undefined}
-      className={`flex min-h-[56px] min-w-max flex-1 flex-col items-center justify-center gap-0.5 px-0.5 pt-1.5 pb-1 text-[11px] font-semibold leading-tight ${current ? 'text-avocado-100' : 'text-white/80 hover:text-white'}`}>
+      className={`flex min-h-[56px] min-w-max flex-1 flex-col items-center justify-center gap-0.5 px-0 pt-1.5 pb-1 text-[11px] font-semibold leading-tight ${current ? 'text-avocado-100' : 'text-white/80 hover:text-white'}`}>
       <span className={`flex h-7 w-11 items-center justify-center rounded-full ${current ? 'bg-avocado-100 text-avocado-800' : ''}`}>
         {mark ? <img src="/mark-192.png" alt="" className="h-6 w-6" /> : <Icon of={icon} size={20} />}
       </span>
-      <span className="whitespace-nowrap">{word}</span>
+      <span className="whitespace-nowrap tracking-tight">{word}</span>
     </Link>
   );
 }

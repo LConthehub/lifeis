@@ -4,7 +4,7 @@ blurb: Spending by category, income and bills, goals, and the year at a glance.
 ---
 # Money and budget
 
-The **balanced** section is your money. Its tabs are **This month**, **Year**, **Goals** and **Income and bills**. It is private: only you see it, unless you share a spending category.
+The **budgeted** section is your money. Its tabs are **This month**, **Income and bills**, **Goals** and **Year**. It is private: only you see it, unless you share a spending category.
 
 Life Is keeps track. It never moves any money.
 

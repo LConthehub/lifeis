@@ -88,7 +88,7 @@ const frame = await sheet.evaluate((el) => {
     titleFont: getComputedStyle(title).fontFamily, titleColor: getComputedStyle(title).color, titleAbove: title.getBoundingClientRect().top >= mark.bottom - 2, title: title.textContent, headings: [...el.querySelectorAll('h3')].map((h) => getComputedStyle(h).color) };
 });
 check('the stripe band is 3/8 in tall with plum, green, gold, orange and cream', frame.bandHeight === 36 && frame.bands.join(' ') === 'rgb(96, 48, 79) rgb(58, 116, 47) rgb(242, 206, 71) rgb(231, 96, 44) rgb(245, 232, 205)', JSON.stringify(frame));
-check('the mushroom is 1/2 in, beside "Life is tasty", under the stripe, above the title', frame.markSize.join('x') === '48x48' && frame.markLoaded && frame.phrase === 'Life is tasty' && frame.phraseAbove && frame.titleAbove, JSON.stringify(frame));
+check('the mushroom is 1/2 in, beside "Life is cooking", under the stripe, above the title', frame.markSize.join('x') === '48x48' && frame.markLoaded && frame.phrase === 'Life is cooking' && frame.phraseAbove && frame.titleAbove, JSON.stringify(frame));
 check('the title is in Fraunces and chocolate', /Fraunces/.test(frame.titleFont) && frame.titleColor === 'rgb(66, 42, 23)' && frame.title === 'Lemon Pasta' && frame.headings.every((c) => c === 'rgb(66, 42, 23)'), JSON.stringify(frame));
 const layout = await sheet.evaluate((el) => ({ photo: !!el.querySelector('.pr-photo'), photoLoaded: el.querySelector('.pr-photo')?.naturalWidth > 0, ing: el.querySelector('.pr-ing').getBoundingClientRect().left, steps: el.querySelector('.pr-steps').getBoundingClientRect().left, ingTop: el.querySelector('.pr-ing').getBoundingClientRect().top, stepsTop: el.querySelector('.pr-steps').getBoundingClientRect().top,
   text: el.innerText.replace(/\s+/g, ' '), box: el.querySelector('.pf-titlebox') ? getComputedStyle(el.querySelector('.pf-titlebox')).borderTopStyle : 'none', height: el.getBoundingClientRect().height }));
@@ -170,7 +170,7 @@ const full = await page.locator('[data-sheet="full"]').evaluate((el) => ({
 }));
 check('the full manual: emergencies and contacts first, then Wi-Fi, pets, how the house works, home services', full.parts.join(',') === 'emergencies,contacts,wifi,pets,quirks,services', full.parts.join(','));
 check('it has the Wi-Fi code (drawn on this device) and the password in words, the pet, and no private entry', full.qr && /SampleHome/.test(full.text) && /made-up-for-the-test/.test(full.text) && /Biscuit/.test(full.text) && !/4821/.test(full.text));
-check('it has "Life is tidy" and the title, and the links this person can see', full.head === 'Life is tidy' && full.title === 'House Manual' && full.services.join(',') === 'Family photos,Router', full.services.join(','));
+check('it has "Life is in order" and the title, and the links this person can see', full.head === 'Life is in order' && full.title === 'House Manual' && full.services.join(',') === 'Family photos,Router', full.services.join(','));
 await picture('manual-full');
 const fullPages = await pdf('manual-full');
 check('the full manual is on letter pages', fullPages >= 1, `${fullPages} pages`);
@@ -210,7 +210,7 @@ check('every panel is 2 5/8 x 4 in, and the sheet is 10 1/2 x 8 in', zine.panels
 check('nothing is cut off at the foot of a panel', zine.panels.every((p) => p.fits), zine.panels.filter((p) => !p.fits).map((p) => p.content).join(','));
 check('there are light dashed fold lines and a cut line between the middle four panels, and the back cover says "fold and cut"', zine.folds === 4 && zine.cut && /Fold and cut/.test(zine.panels.find((p) => p.content === 'back').text));
 check('too much for a panel is shortened with "more in the full manual"', /More in the full manual/.test(zine.panels.find((p) => p.content === 'contacts').text), zine.panels.find((p) => p.content === 'contacts').text.slice(-80));
-check('the Wi-Fi panel has the code, and the cover is "Life is tidy" House Manual', zine.qr && /SampleHome/.test(zine.panels.find((p) => p.content === 'wifi').text) && /Life is tidy/.test(zine.panels.find((p) => p.content === 'cover').text) && /House Manual/.test(zine.panels.find((p) => p.content === 'cover').text));
+check('the Wi-Fi panel has the code, and the cover is "Life is in order" House Manual', zine.qr && /SampleHome/.test(zine.panels.find((p) => p.content === 'wifi').text) && /Life is in order/.test(zine.panels.find((p) => p.content === 'cover').text) && /House Manual/.test(zine.panels.find((p) => p.content === 'cover').text));
 await picture('manual-zine');
 const zinePages = await pdf('manual-zine');
 const zineDebug = await page.evaluate(() => { const z = document.querySelector('[data-zine]').getBoundingClientRect(); const chain = []; for (let e = document.querySelector('[data-zine]'); e; e = e.parentElement) { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); chain.push(`${e.tagName.toLowerCase()}.${String(e.className).slice(0, 30)} top${Math.round(r.top)} h${Math.round(r.height)} pad${s.paddingTop}/${s.paddingBottom} mar${s.marginTop}/${s.marginBottom} min${s.minHeight}`); } return `zine top ${Math.round(z.top)} h ${Math.round(z.height)}; ` + chain.join(' < '); });
