@@ -53,3 +53,27 @@ it('durations are read as backend/kitchen.py reads them', () => {
     expect(minutes(iso), String(iso)).toBe(expected);
   }
 });
+
+// A whole recipe page copied from a site, header, buttons, rating and photo credits included.
+const COPIED_PAGE = [
+  'SKIP TO CONTENT', 'A Food Site', '', 'Save', 'Rate', '', 'Big Sale Starts Early! Get $59 Off', '', '',
+  'HOLIDAYS & OCCASIONS', 'THANKSGIVING RECIPES', 'Spatchcocked Turkey', '4.8', '(4)', '1 REVIEW',
+  'Faster cook time and crispy skin.', '', 'Ingredients', '2 1/2 Tbsp. kosher salt', '1 Tbsp. smoked paprika', '',
+  'Directions', 'Make spice blend:', 'Combine the salt and paprika.', '',
+  'Credit: A Photographer; Food Stylist: A Stylist', 'Remove giblets and neck:', 'Dry the skin. Do not rinse.', '',
+  'Credit: A Photographer', '', 'Roast turkey:', 'Bake 70 minutes at 450°F.',
+].join('\n');
+
+it('a copied recipe page is read without its header, buttons, rating or photo credits', () => {
+  const read = readPasted(COPIED_PAGE);
+  expect(read.title).toBe('Spatchcocked Turkey');
+  expect(read.description).toBe('Faster cook time and crispy skin.');
+  expect(read.ingredients_text).toBe('2 1/2 Tbsp. kosher salt\n1 Tbsp. smoked paprika');
+  expect(read.steps_text).toBe('Make spice blend:\nCombine the salt and paprika.\n\nRemove giblets and neck:\nDry the skin. Do not rinse.\n\nRoast turkey:\nBake 70 minutes at 450°F.');
+  expect(read.original_text).toBe(COPIED_PAGE);
+});
+
+it('a recipe typed by hand keeps a first line that looks like a page button only when it is all there is', () => {
+  expect(readPasted('Save').title).toBe('Save');
+  expect(readPasted('Rice\n4.8\n1 cup rice').title).toBe('Rice');
+});

@@ -3,7 +3,9 @@
  *
  * The promise about recipes: they are kept exactly as you wrote them. Every ingredient line and every step is
  * stored word for word, with section headings ("For the sauce") where you put them, and the original text of
- * an imported recipe is kept beside it. Nothing here shortens, summarises or rewrites a recipe.
+ * an imported recipe is kept beside it. Nothing here shortens, summarises or rewrites a recipe. The one thing
+ * left out is what a copied web page adds around a recipe (skip links, buttons, ratings, photo credits); the
+ * pasted text is still kept whole as the original.
  *
  * Recipes come in as pasted text or as schema.org recipe JSON (what the Nextcloud Cookbook app and most
  * recipe sites use), and go out as schema.org JSON.
@@ -83,16 +85,51 @@ const INGREDIENT_HEADS = /^\s*#*\s*(ingredients?)\s*:?\s*$/i;
 const STEP_HEADS = /^\s*#*\s*(instructions?|directions?|method|steps?|preparation)\s*:?\s*$/i;
 const NOTE_HEADS = /^\s*#*\s*(notes?|tips?)\s*:?\s*$/i;
 
+/** A star rating or a count of reviews, as a recipe page shows them: "4.8", "(4)", "1 REVIEW", "12 ratings". */
+const RATING = /^\s*(\d\.\d|\(\d[\d,]*\)|\d[\d,]* (reviews?|ratings?))\s*$/i;
+/**
+ * Lines a web page adds around its recipe when the whole page is copied: skip links, buttons, ratings and
+ * photo credits ("Credit: name; Food Stylist: name"). They are not part of the recipe, so they are left out.
+ */
+const PAGE_BITS = /^\s*(skip to (main )?content|jump to recipe|print( recipe)?|save|saved|rate|share|pin( it)?)\s*$/i;
+const CREDIT = /^\s*(photo )?credits?\s*:|^\s*photo(graph)? by\b/i;
+const pageBit = (line: string) => PAGE_BITS.test(line) || RATING.test(line) || CREDIT.test(line);
+
 /**
  * A recipe from pasted text. The first line is the name; "Ingredients" and "Method" (or "Instructions",
  * "Directions", "Steps") headings split the rest. Without headings, lines that start with an amount are
- * ingredients and everything after the first line that doesn't is a step. Nothing is rewritten.
+ * ingredients and everything after the first line that doesn't is a step.
+ *
+ * A whole copied web page is read too. Its skip links, buttons, ratings and photo credits are left out, and
+ * when the page starts with those, the name is the line just above the rating, with the page's header above
+ * it left out. Nothing else is rewritten, and the text as pasted is kept as the original.
  */
 export function readPasted(text: string): RecipeInput {
   const lines = unixLines(text).split('\n');
   while (lines.length && !lines[0]!.trim()) lines.shift();
   if (!lines.length) throw new Problem(400, "There's nothing to read");
+  // A copied page starts with its skip link or buttons, before the site's name and the recipe's.
+  let copied = false;
+  while (lines.length > 1 && (!lines[0]!.trim() || pageBit(lines[0]!))) {
+    if (lines[0]!.trim()) copied = true;
+    lines.shift();
+  }
+  if (copied) {
+    const heading = lines.findIndex((line) => INGREDIENT_HEADS.test(line) || STEP_HEADS.test(line));
+    const rating = lines.findIndex((line) => RATING.test(line));
+    if (rating > 0 && (heading === -1 || rating < heading)) {
+      let named = rating - 1;
+      while (named > 0 && (!lines[named]!.trim() || pageBit(lines[named]!))) named -= 1;
+      if (lines[named]!.trim()) lines.splice(0, named);
+    }
+  }
   const title = cut(withoutLeadingHashes(lines.shift()!.trim()).trim(), 200);
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    if (!pageBit(lines[i]!)) continue;
+    // A page bit on its own between two blank lines takes one blank with it, so no wider gap is left.
+    const alone = i > 0 && !lines[i - 1]!.trim() && i + 1 < lines.length && !lines[i + 1]!.trim();
+    lines.splice(alone ? i - 1 : i, alone ? 2 : 1);
+  }
   const sections = { intro: [] as string[], ingredients: [] as string[], steps: [] as string[], notes: [] as string[] };
   let current: 'ingredients' | 'steps' | 'notes' | null = null;
   for (const line of lines) {

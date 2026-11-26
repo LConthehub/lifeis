@@ -30,6 +30,8 @@ All notable changes to Life Is are listed here. The format follows [Keep a Chang
 
 - Every page uses Lucide icons in place of the emoji it chose itself.
 - The undo button on a paid cost says "Mark not paid".
+- A whole recipe page pasted under "Import a recipe" comes in clean: the recipe's own name, not "Skip to content" or
+  the site's name, and no buttons, star ratings or photo credits among the steps. The pasted text is still kept whole.
 
 ## [0.2.0] - 2026-11-23
 
