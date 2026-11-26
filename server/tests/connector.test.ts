@@ -438,16 +438,23 @@ it('answers not found at the sign-in addresses Life Is does not have, and notes 
   const admin = await owner();
   await admin.put('/api/connector/household', { on: true });
   const app = visitor();
-  for (const address of ['/.well-known/openid-configuration', '/.well-known/oauth-authorization-server/mcp', '/register', '/authorize', '/token']) {
+  for (const address of ['/.well-known/openid-configuration', '/.well-known/oauth-authorization-server/mcp', '/.well-known/something']) {
     expect([address, (await app.get(address)).status]).toEqual([address, 404]);
   }
   const tokens = await connect(admin, app);
+  // The standard's fallback addresses do what Life Is's own do.
+  const fallback = await app.post('/register', { client_name: 'Claude', redirect_uris: [REDIRECT] });
+  expect(fallback.status).toBe(201);
+  expect((await app.form('/token', { grant_type: 'refresh_token', refresh_token: tokens.refresh_token })).status).toBe(200);
+  const sent = await fetch(`${base}/authorize?client_id=x&state=a%20b`, { redirect: 'manual' });
+  expect([sent.status, sent.headers.get('location')]).toEqual([302, '/connect?client_id=x&state=a%20b']);
   expect((await app.post('/oauth/register', { client_name: 'Claude', redirect_uris: ['http://evil.example/cb'] })).status).toBe(400);
   const all = notes.join('\n');
   expect(all).toMatch(/\[connector\] \S+ POST \/oauth\/register -> 201/);
   expect(all).toMatch(/POST \/oauth\/token -> 200/);
   expect(all).toMatch(/POST \/oauth\/register -> 400 app="[^"]*" why="invalid_redirect_uri: /);
-  expect(all).toMatch(/GET \/register -> 404/);
+  expect(all).toMatch(/GET \/\.well-known\/something -> 404/);
+  expect(all).toMatch(/POST \/register -> 201/);
   for (const secret of [tokens.access_token, tokens.refresh_token, 'code_challenge', 'evil.example']) expect(all).not.toContain(secret);
   expect(notes.every((line) => line.startsWith('[connector] '))).toBe(true);
 });

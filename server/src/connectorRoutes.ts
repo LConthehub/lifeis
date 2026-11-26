@@ -124,7 +124,12 @@ export function connectorRoutes(db: Db, tools: { clock: Clock; demo: boolean }):
 
 // ---------- the public addresses ----------
 
-const PUBLIC = /^\/(\.well-known\/oauth-(protected-resource(\/mcp)?|authorization-server)|oauth\/(register|token)|mcp)$/;
+const PUBLIC = /^\/(\.well-known\/oauth-(protected-resource(\/mcp)?|authorization-server)|oauth\/(register|token)|mcp|register|token|authorize)$/;
+/**
+ * The addresses the open standard falls back to when an app does not use the ones named in the sign-in documents
+ * (Claude does, at times). Each does exactly what Life Is's own address does.
+ */
+const FALLBACK: Record<string, string> = { '/register': '/oauth/register', '/token': '/oauth/token' };
 const CORS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Authorization, Content-Type, MCP-Protocol-Version, Mcp-Session-Id', 'Access-Control-Expose-Headers': 'WWW-Authenticate',
@@ -222,6 +227,14 @@ export function connectorPublic(db: Db, tools: { clock: Clock; demo: boolean }):
     const method = req.method ?? 'GET';
     const origin = where.origin ?? '';
     if (path === '/mcp') return mcp(req, where.ip);
+    // The page where the person says yes is /connect; an app that goes to /authorize is sent there with what it asked.
+    if (path === '/authorize') {
+      if (method !== 'GET' && method !== 'HEAD') return { status: 405, json: { detail: 'Method not allowed' } };
+      const asked = req.url ?? '';
+      const query = asked.includes('?') ? asked.slice(asked.indexOf('?')).slice(0, 4000) : '';
+      return { status: 302, headers: { Location: `/connect${query}` } };
+    }
+    path = FALLBACK[path] ?? path;
     const wrongMethod = (): Reply => ({ status: 405, json: { detail: 'Method not allowed' } });
     if (path.startsWith('/.well-known/')) {
       if (method !== 'GET' && method !== 'HEAD') return wrongMethod();
