@@ -6,7 +6,9 @@
 #
 # Order matters, and is why this is a script: the new image is built BEFORE the running copy is stopped (so a build
 # that fails leaves Life Is running). While it is stopped, the data is only COPIED (a plain .tar, no compression,
-# so the downtime is short) and the copy's size is checked. Then the new version starts. The copy is squeezed into
+# so the downtime is short) and the copy's size is checked. If the copy can't be written the script stops before
+# stopping anything; if it comes out missing or too small, the version from before is started again and the new one
+# is not. Only with a good copy does the new version start. The copy is squeezed into
 # the final private/backups/before-<branch>-<stamp>.tgz AFTER the health check (or after the previous version is
 # back, if the new one failed), and the .tar is removed only once the .tgz is written and its size checked. If the
 # new version does not come up healthy the previous version is put back. After a good deploy only the 5 newest
@@ -60,12 +62,24 @@ git checkout -- docs/site
 
 say "Backing up"
 stamp=$(date +%Y%m%d-%H%M)
-backup="private/backups/before-$branch-$stamp.tgz"
-raw="private/backups/before-$branch-$stamp.tar" # a quick uncompressed copy, made while stopped; squeezed into $backup later
-[ ! -e "$backup" ] && [ ! -e "$raw" ] && [ ! -e "$backup.partial" ] || fail "a backup named before-$branch-$stamp already exists; wait a minute and try again (nothing was changed)"
+# A branch name can hold a slash (claude/some-work), which would make the backup's name a folder that isn't there:
+# anything but letters, numbers, dots, dashes and underscores becomes a dash in the file's name.
+name=$(printf '%s' "$branch" | tr -c 'A-Za-z0-9._-' '-')
+backup="private/backups/before-$name-$stamp.tgz"
+raw="private/backups/before-$name-$stamp.tar" # a quick uncompressed copy, made while stopped; squeezed into $backup later
+[ ! -e "$backup" ] && [ ! -e "$raw" ] && [ ! -e "$backup.partial" ] || fail "a backup named before-$name-$stamp already exists; wait a minute and try again (nothing was changed)"
+# Before anything is stopped: the backup's file must be one that can be written here.
+mkdir -p private/backups 2>/dev/null && : 2>/dev/null > "$raw" || fail "the backup file $raw can't be written; Life Is was not stopped and nothing was changed"
 docker compose stop
 docker run --rm -v lifeis_lifeis_data:/data:ro -v lifeis_lifeis_keys:/keys:ro --entrypoint tar lifeis-lifeis cf - /data /keys > "$raw" && size=$(wc -c < "$raw") || size=0
-[ "$size" -gt 100000 ] || { docker compose up -d; fail "the backup copy looks too small ($size bytes, kept at $raw); Life Is was started again unchanged"; }
+if [ ! -s "$raw" ] || [ "$size" -le 100000 ]; then
+  # No good backup, so the new version must not start. `docker compose up` would start the image just built;
+  # `docker compose start` wakes the same container that was stopped a moment ago, which is the version from before.
+  [ -s "$raw" ] && kept="kept at $raw" || { rm -f "$raw"; kept="nothing was kept"; } # an empty file of our own making is not a backup
+  docker compose start || true
+  healthy 8020 && fail "the backup copy is missing or too small ($size bytes, $kept); the version from before was started again, and the new one was not"
+  fail "the backup copy is missing or too small ($size bytes, $kept), and the version from before did not answer after being started again; check it with: docker compose ps"
+fi
 echo "copy of the data: $raw ($((size / 1048576)) MB); it is compressed after the new version is up"
 
 say "Starting the new version"
