@@ -10,6 +10,7 @@ import { ItemForm, goneText } from './Things';
 import { DueBadge } from './Upkeep';
 import Records from '../components/Records';
 import { ThingRecalls } from '../components/Recalls';
+import { lastDoneText, todayHere } from '../ago';
 
 const dayText = (day) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -60,11 +61,14 @@ export default function Thing() {
   const [jobs, setJobs] = useState([]);
   const [routines, setRoutines] = useState([]);
   const [error, setError] = useState('');
+  const [did, setDid] = useState(null);           // { last_day, last_id, times }
+  const [justDid, setJustDid] = useState(null);   // the record the last tap made, while it can still be taken back
   const picker = useRef(null);
 
   const load = useCallback(() => {
     axios.get(`/api/things/items/${id}`).then(({ data }) => setItem(data)).catch(() => setItem(null));
     axios.get(`/api/things/items/${id}/history`).then(({ data }) => setHistory(data)).catch(() => setHistory([]));
+    axios.get(`/api/things/items/${id}/did`).then(({ data }) => setDid(data)).catch(() => setDid(null));
   }, [id]);
   useEffect(() => {
     load();
@@ -89,6 +93,14 @@ export default function Thing() {
   const takeBack = async () => {
     setError('');
     try { setItem((await axios.delete(`/api/things/items/${id}/gone`)).data); load(); } catch (err) { setError(errorMessage(err, "Couldn't undo that")); }
+  };
+  const didIt = async () => {
+    setError('');
+    try { const { data } = await axios.post(`/api/things/items/${id}/did`, {}); setDid(data); setJustDid(data.last_id); } catch (err) { setError(errorMessage(err, "Couldn't save that")); }
+  };
+  const undoDid = async () => {
+    setError('');
+    try { setDid((await axios.delete(`/api/things/did/${justDid}`)).data); setJustDid(null); } catch (err) { setError(errorMessage(err, "Couldn't undo that")); }
   };
   const removePhoto = async () => { setItem((await axios.delete(`/api/things/items/${id}/photo`)).data); };
 
@@ -122,6 +134,19 @@ export default function Thing() {
             {!item.gone && <button type="button" onClick={() => setModal('use')} className={buttonClass}><Icon of="session" /> I used it</button>}
             <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Change</button>
           </div>
+          {!item.gone && did && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1" data-did>
+              {justDid ? (
+                <>
+                  <span role="status" className="text-sm font-medium text-life-700 dark:text-life-100">Did it today</span>
+                  <button type="button" onClick={undoDid} className="inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200">Undo</button>
+                </>
+              ) : (
+                <button type="button" onClick={didIt} className={`${quietButtonClass} min-h-[44px]`}>Did it</button>
+              )}
+              <span className="text-xs text-gray-500 dark:text-life-300" data-last-done>{lastDoneText(did.last_day, todayHere())}</span>
+            </div>
+          )}
           {item.gone && (
             <div className="space-y-2 rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700" role="status" data-gone>
               <p>No longer have it: {goneText(item.gone)}</p>

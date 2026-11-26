@@ -1856,6 +1856,21 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_ai_log_owner ON ai_log(owner_id, id)`,
     ],
   },
+  {
+    number: 59,
+    name: 'Did it: one tap on a thing records today, so it can say how long ago it was last done',
+    // A chore or a routine already keeps its own times (upkeep_done, routine_finished). A thing keeps these.
+    statements: [
+      `CREATE TABLE item_did (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        by_user INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_item_did ON item_did(item_id, day)`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

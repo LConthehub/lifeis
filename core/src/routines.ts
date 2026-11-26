@@ -155,7 +155,7 @@ export type Step = {
   /** When it falls, in words: "every day", "Mon and Thu", "night 2 of 4". */
   days: string;
 };
-export type Time = { id: number; name: string; at: string | null; at_words: string | null; steps: Step[]; /** Days finished of the last 7, today included. */ last7: number };
+export type Time = { id: number; name: string; at: string | null; at_words: string | null; steps: Step[]; /** Days finished of the last 7, today included. */ last7: number; /** The latest day it was finished (a workout: the latest day anything in it was done), or null. */ last_done: string | null };
 export type Routine = {
   id: number; name: string; owner_id: number; kind: RoutineKind;
   /** Whether it is the viewer's own to change. */
@@ -191,7 +191,7 @@ export type DayTime = {
   night: number | null; cycle_length: number | null;
   points: number | null;
   steps: DayStep[];
-  total: number; done: number; finished: boolean; last7: number;
+  total: number; done: number; finished: boolean; last7: number; last_done: string | null;
 };
 
 export const HISTORY_DAYS = 30;
@@ -327,13 +327,20 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
     return (await q.get<{ n: number }>('SELECT COUNT(*) AS n FROM routine_finished WHERE time_id = ? AND day >= ? AND day <= ?', [timeId, addDays(day, -6), day]))?.n ?? 0;
   }
 
+  async function lastDoneOf(q: Queries, timeId: number, workout = false): Promise<string | null> {
+    const found = workout
+      ? await q.get<{ day: string | null }>('SELECT MAX(k.day) AS day FROM routine_ticks k JOIN routine_steps s ON s.id = k.step_id WHERE s.time_id = ?', [timeId])
+      : await q.get<{ day: string | null }>('SELECT MAX(day) AS day FROM routine_finished WHERE time_id = ?', [timeId]);
+    return found?.day ?? null;
+  }
+
   async function whole(q: Queries, row: RoutineRow, day: string): Promise<Routine> {
     const times: Time[] = [];
     for (const t of await q.all<{ id: number; name: string; at_time: string | null }>('SELECT id, name, at_time FROM routine_times WHERE routine_id = ? ORDER BY sort_order, id', [row.id])) {
       const steps = await q.all<StepRow>(
         `SELECT s.id, s.words, s.rule, s.weekdays, s.night, s.item_id, i.name AS item, s.wait_seconds, s.sets, s.reps, s.weight, s.weight_unit, s.minutes, s.distance, s.distance_unit FROM routine_steps s LEFT JOIN items i ON i.id = s.item_id
          WHERE s.time_id = ? ORDER BY s.sort_order, s.id`, [t.id]);
-      times.push({ id: t.id, name: t.name, at: t.at_time, at_words: t.at_time ? clockWords(t.at_time) : null, steps: steps.map((s) => asStep(s, row.cycle_length)), last7: await last7Of(q, t.id, day, row.kind === 'workout') });
+      times.push({ id: t.id, name: t.name, at: t.at_time, at_words: t.at_time ? clockWords(t.at_time) : null, steps: steps.map((s) => asStep(s, row.cycle_length)), last7: await last7Of(q, t.id, day, row.kind === 'workout'), last_done: await lastDoneOf(q, t.id, row.kind === 'workout') });
     }
     const kind = row.for_pet !== null ? 'pet' : row.for_member !== null ? 'member' : row.for_user === viewer ? 'me' : row.for_user !== null ? 'person' : 'everyone';
     return {
@@ -406,7 +413,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
       id: t.id, routine_id: r.id, routine: r.name, kind: r.kind, name: t.name,
       title: r.for_pet !== null ? `${r.who}: ${t.name}` : labelKey(r.name) === labelKey(t.name) ? r.name : `${r.name}: ${t.name}`,
       who_kind: r.who_kind, who: r.who, member_id: r.for_member, pet_id: r.for_pet, day, at: t.at, at_words: t.at_words, night, cycle_length: r.cycle_length, points: r.for_member !== null ? r.points : null,
-      steps, total: due.length, done, finished: due.length > 0 && done === due.length, last7: t.last7,
+      steps, total: due.length, done, finished: due.length > 0 && done === due.length, last7: t.last7, last_done: t.last_done,
     };
   }
 
@@ -419,7 +426,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
     } else {
       await q.run('DELETE FROM routine_finished WHERE time_id = ? AND day = ?', [t.id, day]);
     }
-    return { ...view, last7: await last7Of(q, t.id, day, r.kind === 'workout') };
+    return { ...view, last7: await last7Of(q, t.id, day, r.kind === 'workout'), last_done: await lastDoneOf(q, t.id, r.kind === 'workout') };
   }
 
   /**

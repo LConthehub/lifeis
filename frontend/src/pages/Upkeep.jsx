@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import Icon from '../components/Icon';
 import axios from 'axios';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
+import { lastDoneText, todayHere } from '../ago';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
 const UNITS = [['day', 'days'], ['week', 'weeks'], ['month', 'months'], ['year', 'years']];
@@ -143,6 +144,8 @@ export default function UpkeepPage() {
   const sel = useSelecting();
   const [scores, setScores] = useState(null);
   const [members, setMembers] = useState([]);
+  const [didToday, setDidToday] = useState({});     // job id -> the record a "Did it" tap just made, so it can be taken back
+  const [didError, setDidError] = useState('');
   const navigate = useNavigate();
   const load = useCallback(() => {
     axios.get('/api/things/upkeep', { params: { tag: tag || undefined } }).then(({ data }) => setJobs(data)).catch(() => setJobs([]));
@@ -154,6 +157,24 @@ export default function UpkeepPage() {
   const have = new Set(jobs.map((j) => j.name.toLowerCase()));
   const addStarter = async (s) => { const { data } = await axios.post('/api/things/upkeep', s); if (s.kind === 'bill' || s.kind === 'renewal') navigate(`/things/upkeep/${data.id}?edit=1`); else load(); };
   const shown = jobs.filter((j) => !kind || j.kind === kind);
+  // One tap: today, done by me, nothing else. Bills and renewals keep the longer way (Paid, Renewed).
+  const swap = (job) => setJobs((all) => all.map((j) => (j.id === job.id ? { ...j, ...job, tag_list: j.tag_list } : j)));
+  const didIt = async (j) => {
+    setDidError('');
+    try {
+      const { data } = await axios.post(`/api/things/upkeep/${j.id}/done`, {});
+      swap(data.job);
+      setDidToday((m) => ({ ...m, [j.id]: Math.max(...data.done.map((d) => d.id)) }));
+    } catch (err) { setDidError(errorMessage(err, "Couldn't save that")); }
+  };
+  const undoDid = async (j) => {
+    setDidError('');
+    try {
+      const { data } = await axios.delete(`/api/things/upkeep/done/${didToday[j.id]}`);
+      swap(data);
+      setDidToday(({ [j.id]: _gone, ...rest }) => rest);
+    } catch (err) { setDidError(errorMessage(err, "Couldn't undo that")); }
+  };
   const offered = starters.filter((s) => !have.has(s.name.toLowerCase()) && (!kind || (s.kind ?? 'job') === kind));
   const perMonth = monthly(jobs);
   const chip = (active) => `rounded-full px-3 py-1 text-sm ${active ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
@@ -201,6 +222,7 @@ export default function UpkeepPage() {
           Say how often and what each needs. Life Is tells you when each is due, and keeps every time it was done.
         </p>
       )}
+      {didError && <p role="alert" className="text-sm text-red-600">{didError}</p>}
       {GROUPS.map(([title, states]) => {
         const here = shown.filter((j) => (states === 'date' ? j.due.needs_date : !j.due.needs_date && states.includes(j.due.state)));
         if (!here.length) return null;
@@ -220,6 +242,19 @@ export default function UpkeepPage() {
                   </Link>
                   <DueBadge job={j} />
                   <button type="button" onClick={() => setModal({ done: j })} aria-label={`${j.name} ${doneWord(j).toLowerCase()}`} className="shrink-0 rounded-full border border-life-200 px-2.5 py-1 text-xs text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100"><Icon of="done" size={14} /> {doneWord(j)}</button>
+                  {j.kind !== 'bill' && j.kind !== 'renewal' && (
+                    <div className="flex basis-full flex-wrap items-center gap-x-3 gap-y-1">
+                      {didToday[j.id] ? (
+                        <>
+                          <span role="status" className="text-sm font-medium text-life-700 dark:text-life-100">Did it today</span>
+                          <button type="button" onClick={() => undoDid(j)} className="inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200">Undo</button>
+                        </>
+                      ) : (
+                        <button type="button" onClick={() => didIt(j)} aria-label={`Did it: ${j.name}`} className={`${quietButtonClass} min-h-[44px]`}>Did it</button>
+                      )}
+                      <span className="text-xs text-gray-500 dark:text-life-300" data-last-done>{lastDoneText(j.last_done?.day, todayHere())}</span>
+                    </div>
+                  )}
                   <TagChips tags={j.tag_list} className="basis-full" />
                 </li>
               ))}

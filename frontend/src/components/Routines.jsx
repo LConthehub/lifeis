@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import Icon from './Icon';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { lastDoneText, todayHere } from '../ago';
 import { buttonClass, cardClass, quietButtonClass, errorMessage } from './ui';
 
 /**
@@ -120,6 +121,7 @@ export function TimeChecklist({ time, onChange, onGo }) {
         <span data-done>{doneText(time)}</span>
         <span className="text-xs text-gray-500 dark:text-life-300"> · {lastText(time)}{time.night ? ` · night ${time.night} of ${time.cycle_length}` : ''}{time.who_kind === 'member' || time.who_kind === 'person' ? ` · for ${time.who}` : ''}</span>
       </p>
+      <p className="text-xs text-gray-500 dark:text-life-300" data-last-done>{lastDoneText(time.last_done, todayHere())}</p>
       <ul className="mt-1">
         {time.steps.map((s) => (
           <li key={s.id}>
@@ -142,6 +144,7 @@ export function TimeChecklist({ time, onChange, onGo }) {
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="mt-2 flex flex-wrap gap-2">
         <button type="button" onClick={onGo} className={`${buttonClass} min-h-[44px]`}>Go through it</button>
+        {!time.finished && time.total > 0 && <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, true))} aria-label={`Did it: ${time.title}`} className={`${quietButtonClass} min-h-[44px]`}>Did it</button>}
         {time.finished
           ? <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, false))} className={`${quietButtonClass} min-h-[44px]`}>Start over</button>
           : <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, true))} className={`${quietButtonClass} min-h-[44px]`}>Tick them all</button>}

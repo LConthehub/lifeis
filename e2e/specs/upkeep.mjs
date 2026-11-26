@@ -144,4 +144,16 @@ const small = await sets.locator('button, label').evaluateAll((els) => els.filte
 check('its buttons and rows are at least 44px tall', small.length === 0, small.join(' | '));
 const papers = await sets.getByRole('list', { name: 'Jobs in Papers and money' }).innerText();
 check('the papers set leaves the person\'s own dates to them, and keeps estimated taxes out', papers.includes('the date is yours to set') && papers.includes('first due') && !/estimated/i.test(papers));
+// ---------- Did it: one tap on a chore with no schedule ----------
+await page.evaluate(() => fetch('/api/things/upkeep', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Wipe the counters', kind: 'chore' }) }));
+await page.goto(`${base}/things/upkeep`); await page.waitForTimeout(1000);
+const chore = page.getByRole('listitem').filter({ hasText: 'Wipe the counters' }).first();
+check('a chore with no schedule says it was not done yet', (await chore.innerText()).includes('Not done yet'));
+const didButton = chore.getByRole('button', { name: /^Did it/ });
+check('its Did it button is at least 44px tall', (await didButton.boundingBox()).height >= 44);
+await didButton.click(); await page.waitForTimeout(800);
+const tapped = await chore.innerText();
+check('one tap says Did it today, Last done today, and offers Undo', tapped.includes('Did it today') && tapped.includes('Last done today') && await chore.getByRole('button', { name: 'Undo' }).isVisible(), tapped.replace(/\s+/g, ' '));
+await chore.getByRole('button', { name: 'Undo' }).click(); await page.waitForTimeout(800);
+check('Undo takes it back', (await chore.innerText()).includes('Not done yet'));
 await browser.close();
