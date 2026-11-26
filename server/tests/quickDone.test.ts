@@ -1,4 +1,4 @@
-/** Did it over the web addresses: one tap on a thing, a chore or a routine time records today. */
+/** One tap over the web addresses: a thing use, a chore done record, and a routine time last finished day. */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -71,27 +71,27 @@ afterEach(async () => {
   expect(errors).toEqual([]);
 });
 
-it('a thing is tapped Did it, says so, and the tap is taken back', async () => {
+it('one tap on a thing records a use, Undo takes back only that use, and nobody else can', async () => {
   const admin = await owner();
   const kind = (await admin.post('/api/things/kinds', { name: 'Appliances' })).json[0].id;
   const thing = (await admin.post('/api/things/items', { name: 'Water filter', kind_id: kind })).json;
-  expect((await admin.get(`/api/things/items/${thing.id}/did`)).json).toEqual({ last_day: null, last_id: null, times: 0 });
-  const tap = await admin.post(`/api/things/items/${thing.id}/did`, {});
+  const tap = await admin.post(`/api/things/items/${thing.id}/uses`, {});
   expect(tap.status).toBe(201);
-  expect(tap.json).toMatchObject({ last_day: '2046-03-05', times: 1 });
-  expect((await admin.post(`/api/things/items/${thing.id}/did`, { day: 'someday' })).status).toBe(400);
-  // Someone else cannot see, tap or undo it.
+  const used = tap.json.find((h: { what: string }) => h.what === 'used');
+  expect(used).toMatchObject({ day: '2046-03-05' });
   const sam = await member(admin, 'sam');
-  expect((await sam.get(`/api/things/items/${thing.id}/did`)).status).toBe(404);
-  expect((await sam.post(`/api/things/items/${thing.id}/did`, {})).status).toBe(404);
-  expect((await sam.delete(`/api/things/did/${tap.json.last_id}`)).status).toBe(404);
-  const undone = await admin.delete(`/api/things/did/${tap.json.last_id}`);
+  expect((await sam.delete(`/api/things/uses/${used.id}`)).status).toBe(404);
+  // Being added is not a use: it cannot be taken back this way.
+  const added = tap.json.find((h: { what: string }) => h.what !== 'used');
+  expect((await admin.delete(`/api/things/uses/${added.id}`)).status).toBe(404);
+  const undone = await admin.delete(`/api/things/uses/${used.id}`);
   expect(undone.status).toBe(200);
-  expect(undone.json).toEqual({ last_day: null, last_id: null, times: 0 });
-  expect((await admin.delete(`/api/things/did/${tap.json.last_id}`)).status).toBe(404);
+  expect(undone.json.some((h: { what: string }) => h.what === 'used')).toBe(false);
+  expect(undone.json.length).toBe(tap.json.length - 1);
+  expect((await admin.delete(`/api/things/uses/${used.id}`)).status).toBe(404);
 });
 
-it('a chore with no schedule is tapped Did it once and undone with the same address as before', async () => {
+it('a chore with no schedule is tapped Done once and undone with the same address as before', async () => {
   const admin = await owner();
   const made = await admin.post('/api/things/upkeep', { name: 'Wipe the counters', kind: 'chore' });
   expect(made.status).toBe(201);
@@ -99,8 +99,11 @@ it('a chore with no schedule is tapped Did it once and undone with the same addr
   const tap = await admin.post(`/api/things/upkeep/${made.json.id}/done`, {});
   expect(tap.status).toBe(201);
   expect(tap.json.job.last_done.day).toBe('2046-03-05');
-  const undone = await admin.delete(`/api/things/upkeep/done/${tap.json.done[0].id}`);
-  expect(undone.json.last_done).toBeNull();
+  expect(tap.json.done).toHaveLength(1);
+  // Adding details replaces the quick record: take it back, then save the fuller one. One record in the end.
+  expect((await admin.delete(`/api/things/upkeep/done/${tap.json.done[0].id}`)).json.last_done).toBeNull();
+  const full = await admin.post(`/api/things/upkeep/${made.json.id}/done`, { day: '2046-03-05', minutes: 10, note: 'streaky' });
+  expect(full.json.done).toHaveLength(1);
 });
 
 it('a routine time says when it was last finished', async () => {

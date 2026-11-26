@@ -144,7 +144,6 @@ export function TimeChecklist({ time, onChange, onGo }) {
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="mt-2 flex flex-wrap gap-2">
         <button type="button" onClick={onGo} className={`${buttonClass} min-h-[44px]`}>Go through it</button>
-        {!time.finished && time.total > 0 && <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, true))} aria-label={`Did it: ${time.title}`} className={`${quietButtonClass} min-h-[44px]`}>Did it</button>}
         {time.finished
           ? <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, false))} className={`${quietButtonClass} min-h-[44px]`}>Start over</button>
           : <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, true))} className={`${quietButtonClass} min-h-[44px]`}>Tick them all</button>}

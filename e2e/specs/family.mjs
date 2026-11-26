@@ -43,12 +43,15 @@ check('the chore says whose it is', (await page.locator('main').innerText()).inc
 await page.goto(`${base}/things/upkeep`); await page.waitForTimeout(1000);
 check('the list says who does it', (await page.locator('main').innerText()).includes('Leo does it'));
 
-await page.getByRole('button', { name: 'Tidy your room done' }).click(); await page.waitForTimeout(600);
+await page.getByRole('button', { name: 'Tidy your room done' }).click(); await page.waitForTimeout(800);
+await page.getByRole('button', { name: 'Add details to Tidy your room' }).click(); await page.waitForTimeout(600);
 const done = page.getByRole('dialog');
 check('marking it done starts with the child whose chore it is', (await done.getByLabel('Who did it').evaluate((s) => s.options[s.selectedIndex].text)) === 'Leo');
 await done.getByRole('button', { name: 'Done', exact: true }).click(); await page.waitForTimeout(1200);
 // Mia does it too, the next time it's marked.
-await page.getByRole('button', { name: 'Tidy your room done' }).click(); await page.waitForTimeout(600);
+await page.goto(`${base}/things/upkeep`); await page.waitForTimeout(1000);
+await page.getByRole('button', { name: 'Tidy your room done' }).click(); await page.waitForTimeout(800);
+await page.getByRole('button', { name: 'Add details to Tidy your room' }).click(); await page.waitForTimeout(600);
 await page.getByRole('dialog').getByLabel('Who did it').selectOption({ label: 'Mia' });
 await page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true }).click(); await page.waitForTimeout(1200);
 

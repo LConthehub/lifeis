@@ -309,9 +309,6 @@ export async function setAsideByItem(q: Queries, owner: number, exceptLine?: num
   return total;
 }
 
-/** When a thing was last marked "did it" (null if never), the record to undo, and how many times in all. */
-export type DidSummary = { last_day: string | null; last_id: number | null; times: number };
-
 export function inventory(db: Db, owner: number, clock: Clock = () => new Date()) {
   const now = () => stamp(clock());
 
@@ -579,12 +576,6 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     if (kept.length > MAX_OWN_FIELDS) throw new Problem(400, `A thing can have ${MAX_OWN_FIELDS} fields of your own at most`);
     await q.run('DELETE FROM item_fields WHERE item_id = ?', [itemId]);
     for (const [n, f] of kept.entries()) await q.run('INSERT INTO item_fields (item_id, name, value, sort_order) VALUES (?, ?, ?, ?)', [itemId, f.name, f.value, n]);
-  }
-
-  async function didOf(q: Queries, itemId: number): Promise<DidSummary> {
-    const last = await q.get<{ id: number; day: string }>('SELECT id, day FROM item_did WHERE item_id = ? ORDER BY day DESC, id DESC LIMIT 1', [itemId]);
-    const times = (await q.get<{ n: number }>('SELECT COUNT(*) AS n FROM item_did WHERE item_id = ?', [itemId]))?.n ?? 0;
-    return { last_day: last?.day ?? null, last_id: last?.id ?? null, times };
   }
 
   async function ownedItem(q: Queries, id: number): Promise<{ id: number; place_id: number | null; code: string | null }> {
@@ -1024,30 +1015,13 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       });
     },
 
-    /** The last day a thing was marked "did it", how many times, and the latest record (to undo). */
-    async didSummary(id: number): Promise<DidSummary> {
-      await ownedItem(db, id);
-      return didOf(db, id);
-    },
-
-    /** "Did it": today (or the day given) recorded against a thing, in one step. */
-    didIt(id: number, day?: string | null): Promise<DidSummary> {
+    /** Take back one recorded use of a thing (only a "used" entry; moves and the rest stay). */
+    undoUse(historyId: number): Promise<HistoryEntry[]> {
       return atomic(db, async (tx) => {
-        await ownedItem(tx, id);
-        if (day != null && day !== '' && !dayOrNull(day)) throw new Problem(400, 'Pick the day it was done');
-        await tx.run('INSERT INTO item_did (item_id, day, by_user, created_at) VALUES (?, ?, ?, ?)', [id, dayOrNull(day) ?? todayOf(clock), owner, now()]);
-        return didOf(tx, id);
-      });
-    },
-
-    /** Take back one "did it". */
-    undoDid(didId: number): Promise<DidSummary> {
-      return atomic(db, async (tx) => {
-        const found = await tx.get<{ item_id: number }>('SELECT item_id FROM item_did WHERE id = ?', [didId]);
+        const found = await tx.get<{ item_id: number }>("SELECT h.item_id FROM item_history h JOIN items i ON i.id = h.item_id WHERE h.id = ? AND h.owner_id = ? AND i.owner_id = ? AND h.what = 'used'", [historyId, owner, owner]);
         if (!found) throw new Problem(404, 'Not found');
-        await ownedItem(tx, found.item_id);
-        await tx.run('DELETE FROM item_did WHERE id = ?', [didId]);
-        return didOf(tx, found.item_id);
+        await tx.run('DELETE FROM item_history WHERE id = ?', [historyId]);
+        return historyOf(tx, owner, { item_id: found.item_id });
       });
     },
 

@@ -10,7 +10,7 @@ import { ItemForm, goneText } from './Things';
 import { DueBadge } from './Upkeep';
 import Records from '../components/Records';
 import { ThingRecalls } from '../components/Recalls';
-import { lastDoneText, todayHere } from '../ago';
+import { lastUsedText, todayHere } from '../ago';
 
 const dayText = (day) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -61,14 +61,12 @@ export default function Thing() {
   const [jobs, setJobs] = useState([]);
   const [routines, setRoutines] = useState([]);
   const [error, setError] = useState('');
-  const [did, setDid] = useState(null);           // { last_day, last_id, times }
-  const [justDid, setJustDid] = useState(null);   // the record the last tap made, while it can still be taken back
+  const [quick, setQuick] = useState(null);       // { rec, details }: the use the last tap recorded, while it can still be taken back
   const picker = useRef(null);
 
   const load = useCallback(() => {
     axios.get(`/api/things/items/${id}`).then(({ data }) => setItem(data)).catch(() => setItem(null));
     axios.get(`/api/things/items/${id}/history`).then(({ data }) => setHistory(data)).catch(() => setHistory([]));
-    axios.get(`/api/things/items/${id}/did`).then(({ data }) => setDid(data)).catch(() => setDid(null));
   }, [id]);
   useEffect(() => {
     load();
@@ -94,14 +92,15 @@ export default function Thing() {
     setError('');
     try { setItem((await axios.delete(`/api/things/items/${id}/gone`)).data); load(); } catch (err) { setError(errorMessage(err, "Couldn't undo that")); }
   };
-  const didIt = async () => {
+  const usedIt = async () => {
     setError('');
-    try { const { data } = await axios.post(`/api/things/items/${id}/did`, {}); setDid(data); setJustDid(data.last_id); } catch (err) { setError(errorMessage(err, "Couldn't save that")); }
+    try { const { data } = await axios.post(`/api/things/items/${id}/uses`, {}); setHistory(data); setQuick({ rec: Math.max(...data.map((h) => h.id)), details: false }); } catch (err) { setError(errorMessage(err, "Couldn't save that")); }
   };
-  const undoDid = async () => {
+  const undoUsed = async () => {
     setError('');
-    try { setDid((await axios.delete(`/api/things/did/${justDid}`)).data); setJustDid(null); } catch (err) { setError(errorMessage(err, "Couldn't undo that")); }
+    try { setHistory((await axios.delete(`/api/things/uses/${quick.rec}`)).data); setQuick(null); } catch (err) { setError(errorMessage(err, "Couldn't undo that")); }
   };
+  const lastUsed = history.filter((h) => h.what === 'used').map((h) => h.day).sort().pop() ?? null;
   const removePhoto = async () => { setItem((await axios.delete(`/api/things/items/${id}/photo`)).data); };
 
   return (
@@ -131,20 +130,20 @@ export default function Thing() {
               <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">{item.name}</h1>
               <p className="text-xs text-gray-500 dark:text-life-300">{[item.icon && `${item.icon} ${item.kind}`, item.amount !== 'some' && item.amount].filter(Boolean).join(' · ') || item.kind}</p>
             </div>
-            {!item.gone && <button type="button" onClick={() => setModal('use')} className={buttonClass}><Icon of="session" /> I used it</button>}
+            {!item.gone && <button type="button" onClick={usedIt} className={buttonClass}><Icon of="session" /> I used it</button>}
             <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Change</button>
           </div>
-          {!item.gone && did && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1" data-did>
-              {justDid ? (
+          {!item.gone && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-0 text-sm" data-did>
+              {quick ? (
                 <>
-                  <span role="status" className="text-sm font-medium text-life-700 dark:text-life-100">Did it today</span>
-                  <button type="button" onClick={undoDid} className="inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200">Undo</button>
+                  <span role="status" className="text-gray-700 dark:text-life-100">Used it today</span>
+                  <button type="button" onClick={undoUsed} className="inline-flex min-h-[44px] items-center text-life-600 underline dark:text-life-200">Undo</button>
+                  {!quick.details && <button type="button" onClick={() => setModal('use')} className="inline-flex min-h-[44px] items-center text-life-600 underline dark:text-life-200">Add details</button>}
                 </>
               ) : (
-                <button type="button" onClick={didIt} className={`${quietButtonClass} min-h-[44px]`}>Did it</button>
+                <span className="text-xs text-gray-500 dark:text-life-300" data-last-done>{lastUsedText(lastUsed, todayHere())}</span>
               )}
-              <span className="text-xs text-gray-500 dark:text-life-300" data-last-done>{lastDoneText(did.last_day, todayHere())}</span>
             </div>
           )}
           {item.gone && (
@@ -229,7 +228,7 @@ export default function Thing() {
       )}
       {modal === 'use' && (
         <Modal title={`Using ${item.name}`} onClose={() => setModal(null)}>
-          <UseForm item={item} onDone={(h) => { setHistory(h); setModal(null); }} />
+          <UseForm item={item} replace={quick?.rec ?? null} onDone={(h) => { setHistory(h); setQuick(quick ? { rec: Math.max(...h.map((e) => e.id)), details: true } : null); setModal(null); }} />
         </Modal>
       )}
     </div>
@@ -306,15 +305,18 @@ function GoneForm({ item, onDone }) {
 }
 
 /** A time it was used: the day, the project (whose activity comes with it) or just an activity, and a note. */
-function UseForm({ item, onDone }) {
+function UseForm({ item, onDone, replace = null }) {
   const [projects, setProjects] = useState([]);
   const [form, setForm] = useState({ day: toDateInput(new Date()), project_id: '', activity: item.activities.length === 1 ? item.activities[0] : '', note: '' });
   const [error, setError] = useState('');
+  const cleared = useRef(false);
   useEffect(() => { axios.get('/api/projects').then(({ data }) => setProjects(data.filter((p) => !['done', 'dropped'].includes(p.status)))).catch(() => {}); }, []);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const submit = async (e) => {
     e.preventDefault();
     try {
+      // Filling in a one-tap use replaces it: take the quick one back first, so there is one record for one use.
+      if (replace && !cleared.current) { await axios.delete(`/api/things/uses/${replace}`); cleared.current = true; }
       onDone((await axios.post(`/api/things/items/${item.id}/uses`, { day: form.day, project_id: form.project_id === '' ? null : Number(form.project_id), activity: form.activity || null, note: form.note || null })).data);
     } catch (err) { setError(errorMessage(err, "Couldn't keep that")); }
   };

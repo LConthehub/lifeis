@@ -421,7 +421,7 @@ it('keeps the pet link in the download and when it is brought in, and leaves a r
 it('upgrades from the version before pet routines: routines and ticks kept, ticks without a time, new ones with', async () => {
   const r = await mine().create({ name: 'Morning', times: [{ name: 'Morning', steps: [{ words: 'One' }, { words: 'Two' }] }] });
   await mine().tick(r.times[0]!.steps[0]!.id, true);
-  for (const table of ['item_did', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
+  for (const table of ['ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE measure_entries');
   await db.run('DROP TABLE measures');
   await db.run('ALTER TABLE routines DROP COLUMN kind');
@@ -553,7 +553,7 @@ it('a workout comes back from a download with its kind and numbers, once', async
 it('upgrades from the version before workouts: routines and ticks stay, as plain ones with no numbers', async () => {
   const r = await mine().create({ name: 'Morning', times: [{ name: 'Morning', steps: [{ words: 'One' }] }] });
   await mine().tick(r.times[0]!.steps[0]!.id, true);
-  for (const table of ['item_did', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
+  for (const table of ['ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE measure_entries');
   await db.run('DROP TABLE measures');
   await db.run('ALTER TABLE routines DROP COLUMN kind');

@@ -219,10 +219,7 @@ export function makingRoutes(db: Db): Route[] {
       status: 201,
       json: await things(c).logUse(c.id, { day: read.maybeText(c.body, 'day'), project_id: read.maybeWhole(c.body, 'project_id'), activity: read.maybeText(c.body, 'activity'), note: read.maybeText(c.body, 'note') }),
     })],
-    // "Did it": one tap records today on a thing; Undo takes one back.
-    ['GET', at('things/items/:id/did'), async (c) => ({ json: await things(c).didSummary(c.id) })],
-    ['POST', at('things/items/:id/did'), async (c) => ({ status: 201, json: await things(c).didIt(c.id, read.maybeText(c.body, 'day')) })],
-    ['DELETE', at('things/did/:id'), async (c) => ({ json: await things(c).undoDid(c.id) })],
+    ['DELETE', at('things/uses/:id'), async (c) => ({ json: await things(c).undoUse(c.id) })],
     // Home records: a thing's papers, and the whole home inventory.
     ['GET', at('things/report'), async (c) => ({ json: await things(c).homeReport(reportChoices(c.query)) })],
     // The same as a spreadsheet to keep off-site; made here, from this person's things only.

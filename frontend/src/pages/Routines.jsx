@@ -306,7 +306,7 @@ export default function RoutinesPage() {
               {r.mine && <button type="button" onClick={() => setModal({ routine: r })} className={`${quietButtonClass} min-h-[44px]`} aria-label={`Change ${r.name}`}>Change</button>}
             </div>
             <ul className="mt-1 space-y-0.5 text-sm text-gray-700 dark:text-life-100">
-              {r.times.map((t) => <li key={t.id}>{timeLine(t)} <span className="text-xs text-gray-500 dark:text-life-300" data-last-done>{lastDoneText(t.last_done, todayHere())}</span></li>)}
+              {r.times.map((t) => <li key={t.id}>{timeLine(t)} · <span data-last-done>{lastDoneText(t.last_done, todayHere())}</span></li>)}
             </ul>
             <TagChips tags={r.tag_list} className="mt-1" />
           </li>
@@ -391,7 +391,7 @@ export function PetRoutines({ pet }) {
                   <button type="button" onClick={() => setModal({ routine: r })} className={`${quietButtonClass} min-h-[44px]`} aria-label={`Change ${r.name}`}>Change</button>
                 </div>
                 <ul className="text-xs text-gray-600 dark:text-life-200">
-                  {r.times.map((t) => <li key={t.id}>{timeLine(t)}{t.steps.some((s) => s.item) ? ` · uses ${[...new Set(t.steps.filter((s) => s.item).map((s) => s.item))].join(', ')}` : ''} <span className="text-xs text-gray-500 dark:text-life-300" data-last-done>{lastDoneText(t.last_done, todayHere())}</span></li>)}
+                  {r.times.map((t) => <li key={t.id}>{timeLine(t)}{t.steps.some((s) => s.item) ? ` · uses ${[...new Set(t.steps.filter((s) => s.item).map((s) => s.item))].join(', ')}` : ''} · <span data-last-done>{lastDoneText(t.last_done, todayHere())}</span></li>)}
                 </ul>
               </li>
             ))}

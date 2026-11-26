@@ -44,6 +44,15 @@ await page.getByRole('button', { name: 'Save' }).click(); await page.waitForTime
 const main = (await page.locator('main').innerText()).replace(/\s+/g, ' ');
 check('insured and its own field show on the page', main.includes('Insured') && main.includes('Remote') && main.includes('In the drawer'), main.slice(0, 300));
 await noSideways('the thing page');
+// One tap on "I used it": today, with Undo and Add details; Last used before it.
+check('a thing never used says Not used yet', (await page.locator('main').innerText()).includes('Not used yet'));
+await page.getByRole('button', { name: 'I used it' }).click(); await page.waitForTimeout(800);
+const usedText = await page.locator('[data-did]').innerText();
+check('one tap says Used it today, with Undo and Add details', usedText.includes('Used it today') && await page.getByRole('button', { name: 'Undo' }).isVisible() && await page.getByRole('button', { name: 'Add details' }).isVisible(), usedText.replace(/\s+/g, ' '));
+const usedTall = await page.locator('[data-did]').getByRole('button').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+check('Undo and Add details are at least 44px tall', usedTall.length === 2 && usedTall.every((h) => h >= 44), usedTall.join(','));
+await page.getByRole('button', { name: 'Undo' }).click(); await page.waitForTimeout(800);
+check('Undo takes it back to Not used yet', (await page.locator('main').innerText()).includes('Not used yet'));
 await page.screenshot({ path: `${shots}/things-kept-thing.png`, fullPage: true });
 
 // Its sticker carries the number.

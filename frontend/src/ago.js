@@ -17,6 +17,9 @@ export function agoText(day, today) {
 /** "Last done 6 days ago", or "Not done yet". */
 export const lastDoneText = (day, today) => (day ? `Last done ${agoText(day, today)}` : 'Not done yet');
 
+/** "Last used 6 days ago", or "Not used yet". */
+export const lastUsedText = (day, today) => (day ? `Last used ${agoText(day, today)}` : 'Not used yet');
+
 /** Today as the person's own clock has it, 'YYYY-MM-DD'. */
 export function todayHere() {
   const d = new Date();

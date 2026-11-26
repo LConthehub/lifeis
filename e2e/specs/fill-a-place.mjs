@@ -81,6 +81,7 @@ await page.goto(`${base}/things/${setup.lamp}`); await page.waitForTimeout(1000)
 const history = await page.getByRole('list', { name: 'History' }).innerText();
 check("the lamp's history shows the move", history.includes("Moved from Living room to Son's room › Bookshelf") && history.includes('Added, in Living room'), history.replace(/\s+/g, ' '));
 await page.getByRole('button', { name: 'I used it' }).click(); await page.waitForTimeout(500);
+await page.getByRole('button', { name: 'Add details' }).click(); await page.waitForTimeout(500);
 await page.getByRole('dialog').getByLabel('A note').fill('bedtime story');
 await page.getByRole('dialog').getByRole('button', { name: 'Keep it' }).click(); await page.waitForTimeout(1000);
 const after = await page.getByRole('list', { name: 'History' }).innerText();

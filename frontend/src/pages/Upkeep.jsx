@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import Icon from '../components/Icon';
 import axios from 'axios';
@@ -144,7 +144,7 @@ export default function UpkeepPage() {
   const sel = useSelecting();
   const [scores, setScores] = useState(null);
   const [members, setMembers] = useState([]);
-  const [didToday, setDidToday] = useState({});     // job id -> the record a "Did it" tap just made, so it can be taken back
+  const [didToday, setDidToday] = useState({});     // job id -> { rec: the record the tap just made, group: where the row sat, details: whether it was filled in }
   const [didError, setDidError] = useState('');
   const navigate = useNavigate();
   const load = useCallback(() => {
@@ -158,21 +158,26 @@ export default function UpkeepPage() {
   const addStarter = async (s) => { const { data } = await axios.post('/api/things/upkeep', s); if (s.kind === 'bill' || s.kind === 'renewal') navigate(`/things/upkeep/${data.id}?edit=1`); else load(); };
   const shown = jobs.filter((j) => !kind || j.kind === kind);
   // One tap: today, done by me, nothing else. Bills and renewals keep the longer way (Paid, Renewed).
+  // A tapped row stays in the group it was in until the page is reloaded or left.
+  const rescore = () => axios.get('/api/things/upkeep/scores').then(({ data }) => setScores(data)).catch(() => {});
   const swap = (job) => setJobs((all) => all.map((j) => (j.id === job.id ? { ...j, ...job, tag_list: j.tag_list } : j)));
+  const groupOf = (j) => (j.due.needs_date ? GROUPS[0][0] : (GROUPS.find(([, st]) => st !== 'date' && st.includes(j.due.state)) ?? [])[0]);
+  const quick = (j) => j.kind !== 'bill' && j.kind !== 'renewal';
   const didIt = async (j) => {
     setDidError('');
     try {
+      const group = groupOf(j);
       const { data } = await axios.post(`/api/things/upkeep/${j.id}/done`, {});
-      swap(data.job);
-      setDidToday((m) => ({ ...m, [j.id]: Math.max(...data.done.map((d) => d.id)) }));
+      swap(data.job); rescore();
+      setDidToday((m) => ({ ...m, [j.id]: { rec: Math.max(...data.done.map((d) => d.id)), group, details: false } }));
     } catch (err) { setDidError(errorMessage(err, "Couldn't save that")); }
   };
   const undoDid = async (j) => {
     setDidError('');
     try {
-      const { data } = await axios.delete(`/api/things/upkeep/done/${didToday[j.id]}`);
-      swap(data);
-      setDidToday(({ [j.id]: _gone, ...rest }) => rest);
+      const { data } = await axios.delete(`/api/things/upkeep/done/${didToday[j.id].rec}`);
+      swap(data); rescore();
+      setDidToday((m) => ({ ...m, [j.id]: { ...m[j.id], rec: null } }));
     } catch (err) { setDidError(errorMessage(err, "Couldn't undo that")); }
   };
   const offered = starters.filter((s) => !have.has(s.name.toLowerCase()) && (!kind || (s.kind ?? 'job') === kind));
@@ -206,7 +211,7 @@ export default function UpkeepPage() {
           <ul className="space-y-1">
             {scores.people.map((p, i) => (
               <li key={p.name} className="flex items-baseline gap-2 text-sm">
-                <span className="flex-1 text-gray-800 dark:text-life-50">{i === 0 && p.this_week > (scores.people[1]?.this_week ?? 0) ? <><Icon of="trophy" /> </> : ''}{p.name} <span className="text-xs text-gray-500 dark:text-life-300">{p.done} done{p.last_week ? ` · ${p.last_week} points last week` : ''}</span></span>
+                <span className="flex-1 text-gray-800 dark:text-life-50">{i === 0 && p.this_week > (scores.people[1]?.this_week ?? 0) ? <><Icon of="trophy" /> </> : ''}{p.name} <span className="text-xs text-gray-500 dark:text-life-300">{p.done} done{p.last_week ? ` · ${p.last_week} point${p.last_week === 1 ? '' : 's'} last week` : ''}</span></span>
                 <span className="font-semibold text-life-700 dark:text-life-100">{p.this_week} point{p.this_week === 1 ? '' : 's'}{scores.point_cents ? <span className="font-normal text-gray-600 dark:text-life-200"> · {money(p.this_week * scores.point_cents)}</span> : null}</span>
               </li>
             ))}
@@ -224,7 +229,7 @@ export default function UpkeepPage() {
       )}
       {didError && <p role="alert" className="text-sm text-red-600">{didError}</p>}
       {GROUPS.map(([title, states]) => {
-        const here = shown.filter((j) => (states === 'date' ? j.due.needs_date : !j.due.needs_date && states.includes(j.due.state)));
+        const here = shown.filter((j) => (didToday[j.id] ? didToday[j.id].group === title : states === 'date' ? j.due.needs_date : !j.due.needs_date && states.includes(j.due.state)));
         if (!here.length) return null;
         return (
           <section key={title} className={cardClass} aria-label={title}>
@@ -239,20 +244,17 @@ export default function UpkeepPage() {
                     <span className="block text-xs text-gray-500 dark:text-life-300">
                       {[j.amount_cents != null && money(j.amount_cents), j.autopay && 'pays itself', j.points != null && `${j.points} point${j.points === 1 ? '' : 's'}`, j.item?.name, j.activity, (j.member ?? j.assigned_to) && `${(j.member ?? j.assigned_to).name} does it`, !j.mine && `${j.owner}'s`].filter(Boolean).join(' · ') || scheduleText(j)}
                     </span>
+                    {quick(j) && !didToday[j.id]?.rec && <span className="block text-xs text-gray-500 dark:text-life-300" data-last-done>{lastDoneText(j.last_done?.day, todayHere())}</span>}
                   </Link>
                   <DueBadge job={j} />
-                  <button type="button" onClick={() => setModal({ done: j })} aria-label={`${j.name} ${doneWord(j).toLowerCase()}`} className="shrink-0 rounded-full border border-life-200 px-2.5 py-1 text-xs text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100"><Icon of="done" size={14} /> {doneWord(j)}</button>
-                  {j.kind !== 'bill' && j.kind !== 'renewal' && (
-                    <div className="flex basis-full flex-wrap items-center gap-x-3 gap-y-1">
-                      {didToday[j.id] ? (
-                        <>
-                          <span role="status" className="text-sm font-medium text-life-700 dark:text-life-100">Did it today</span>
-                          <button type="button" onClick={() => undoDid(j)} className="inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200">Undo</button>
-                        </>
-                      ) : (
-                        <button type="button" onClick={() => didIt(j)} aria-label={`Did it: ${j.name}`} className={`${quietButtonClass} min-h-[44px]`}>Did it</button>
-                      )}
-                      <span className="text-xs text-gray-500 dark:text-life-300" data-last-done>{lastDoneText(j.last_done?.day, todayHere())}</span>
+                  {quick(j) && didToday[j.id]?.rec ? null : (
+                    <button type="button" onClick={() => (quick(j) ? didIt(j) : setModal({ done: j }))} aria-label={`${j.name} ${doneWord(j).toLowerCase()}`} className="shrink-0 rounded-full border border-life-200 px-2.5 py-1 text-xs text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100"><Icon of="done" size={14} /> {doneWord(j)}</button>
+                  )}
+                  {quick(j) && didToday[j.id]?.rec && (
+                    <div className="flex basis-full flex-wrap items-center gap-x-4 gap-y-0 text-sm" data-did>
+                      <span role="status" className="text-gray-700 dark:text-life-100">Did it today</span>
+                      <button type="button" onClick={() => undoDid(j)} aria-label={`Undo ${j.name}`} className="inline-flex min-h-[44px] items-center text-life-600 underline dark:text-life-200">Undo</button>
+                      {!didToday[j.id].details && <button type="button" onClick={() => setModal({ done: j, replace: didToday[j.id].rec })} aria-label={`Add details to ${j.name}`} className="inline-flex min-h-[44px] items-center text-life-600 underline dark:text-life-200">Add details</button>}
                     </div>
                   )}
                   <TagChips tags={j.tag_list} className="basis-full" />
@@ -284,7 +286,7 @@ export default function UpkeepPage() {
         </details>
       )}
       {modal?.job && <Modal title="Something that comes round again" wide onClose={() => setModal(null)}><JobForm job={modal.job} onDone={(j) => navigate(`/things/upkeep/${j.id}`)} /></Modal>}
-      {modal?.done && <Modal title={`${modal.done.name}: ${doneWord(modal.done).toLowerCase()}`} onClose={() => setModal(null)}><DoneForm job={modal.done} onDone={() => { setModal(null); load(); }} /></Modal>}
+      {modal?.done && <Modal title={`${modal.done.name}: ${doneWord(modal.done).toLowerCase()}`} onClose={() => setModal(null)}><DoneForm job={modal.done} replace={modal.replace} onDone={(r) => { const m = modal; setModal(null); if (m.replace && r?.job) { swap(r.job); rescore(); setDidToday((t) => ({ ...t, [m.done.id]: { ...t[m.done.id], rec: Math.max(...r.done.map((d) => d.id)), details: true } })); } else load(); }} /></Modal>}
     </div>
   );
 }
@@ -551,7 +553,7 @@ function JobForm({ job, onDone }) {
 }
 
 /** The job done: when, the reading then, how long it took, what it cost, and whether that goes into spending. */
-function DoneForm({ job, onDone }) {
+function DoneForm({ job, onDone, replace = null }) {
   const dated = job.kind === 'bill' || job.kind === 'renewal';
   const [form, setForm] = useState({ day: toDateInput(new Date()), reading: '', minutes: '', cost: dated && job.amount_cents != null ? (job.amount_cents / 100).toFixed(2) : '', spend: dated, category_id: '', note: '' });
   const [categories, setCategories] = useState([]);
@@ -559,6 +561,7 @@ function DoneForm({ job, onDone }) {
   const [who, setWho] = useState(job.member ? String(job.member.id) : '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const cleared = useRef(false);
   useEffect(() => {
     axios.get('/api/money').then(({ data }) => setCategories(data.categories || [])).catch(() => {});
     if (job.kind === 'chore' && job.mine) axios.get('/api/things/upkeep/members').then(({ data }) => setMembers(data)).catch(() => {});
@@ -569,6 +572,8 @@ function DoneForm({ job, onDone }) {
     setBusy(true); setError('');
     const cents = form.cost.trim() === '' ? null : Math.round(Number(form.cost.replace(/[^0-9.]/g, '')) * 100);
     try {
+      // Filling in a one-tap record replaces it: take the quick one back first, so there is one record for one doing.
+      if (replace && !cleared.current) { await axios.delete(`/api/things/upkeep/done/${replace}`); cleared.current = true; }
       onDone((await axios.post(`/api/things/upkeep/${job.id}/done`, {
         day: form.day, reading: form.reading === '' ? null : Number(form.reading), minutes: form.minutes === '' ? null : Number(form.minutes),
         cost_cents: cents, note: form.note || null, by_member: who === '' ? null : Number(who), spend: form.spend && cents ? { category_id: form.category_id === '' ? null : Number(form.category_id) } : null,

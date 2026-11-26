@@ -449,10 +449,6 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     (await all("SELECT h.item_id, h.what, h.day, h.from_place, h.to_place, h.project, h.job, h.activity, h.note FROM item_history h JOIN items i ON i.id = h.item_id WHERE h.owner_id = ? AND i.owner_id = ? ORDER BY h.item_id, h.day, h.id", [owner, owner]))
       .map((h) => { const t = itemName.get(h.item_id as number)!; return [str(t.name), where(t.place_id), str(h.what), str(h.day), str(h.from_place), str(h.to_place), str(h.project), str(h.job), str(h.activity), str(h.note)]; }));
 
-  out.csv('thing-did.csv', ['Thing', 'Place now', 'Did it on'],
-    (await all('SELECT d.item_id, d.day FROM item_did d JOIN items i ON i.id = d.item_id WHERE i.owner_id = ? ORDER BY d.item_id, d.day, d.id', [owner]))
-      .map((d) => { const t = itemName.get(d.item_id as number)!; return [str(t.name), where(t.place_id), str(d.day)]; }));
-
   // ---------- upkeep ----------
   const readingOf = new Map<string, number>();
   for (const r of await all('SELECT item_id, job_id, value FROM readings WHERE owner_id = ? ORDER BY day, id')) {
@@ -795,7 +791,6 @@ const FILE_ABOUT: [string, string][] = [
   ['thing-own-fields.csv', 'The fields you added to one thing yourself: a name and a value for each.'],
   ['thing-papers.csv', 'The receipts, manuals and warranty cards kept with things, and the file each is in.'],
   ['thing-history.csv', 'Where each thing has been and what it was used for.'],
-  ['thing-did.csv', 'Each day you tapped Did it on a thing.'],
   ['upkeep.csv', 'Jobs that come round again, bills, renewals and chores: how often, when last done and next due.'],
   ['upkeep-history.csv', 'Each time each job was done.'],
   ['household.csv', 'People in the household, and the chore points each has earned.'],
