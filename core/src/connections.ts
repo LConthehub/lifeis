@@ -16,6 +16,7 @@ import { atomic, type Db, type Queries } from './db.ts';
 import type { MediaType } from './media.ts';
 import { Problem } from './problem.ts';
 import { clean, labelKey, stamp, type Clock } from './small.ts';
+import { unlink } from './tags.ts';
 
 export const SERVER_KINDS = ['jellyfin', 'emby'] as const;
 export type ServerKind = (typeof SERVER_KINDS)[number];
@@ -49,6 +50,8 @@ export type Imported = {
   format?: string;
   /** An address that opens it where it lives. */
   link?: string | null;
+  /** When this is one book that the server keeps in pieces: the ids of the pieces, as earlier syncs may have made titles of them. */
+  parts?: string[];
 };
 /** Which kind of source copies belong to: a media server (the default) or a book server. */
 export type ImportAs = { column: 'connection_id' | 'library_source_id'; source: string; format: string };
@@ -67,7 +70,7 @@ export type Connection = {
   /** How many copies in the collection came from this server. */
   copies: number;
 };
-export type SyncResult = { total: number; added: number; titles_added: number; removed: number; covers: number };
+export type SyncResult = { total: number; added: number; titles_added: number; removed: number; covers: number; joined_parts: number; joined_books: number };
 
 type ConnectionRow = Omit<Connection, 'last_ok' | 'copies'> & { last_ok: number | null; secret: string | null; owner_id: number };
 
@@ -120,9 +123,11 @@ export async function serverName(fetcher: Fetcher, kind: ServerKind, url: string
 /** Everything in the server's library that the collection keeps: films, shows, albums and books. */
 export async function readServer(fetcher: Fetcher, kind: ServerKind, url: string, key: string): Promise<Imported[]> {
   const out: Imported[] = [];
+  // Jellyfin often lists each file of one audiobook as an AudioBook of its own. They are gathered by folder and joined after the last page.
+  const pieces: Piece[] = [];
   for (let start = 0; ; start += PAGE) {
     const query = new URLSearchParams({
-      recursive: 'true', includeItemTypes: Object.keys(JELLYFIN_TYPES).join(','), fields: 'Overview,Genres,ProviderIds',
+      recursive: 'true', includeItemTypes: Object.keys(JELLYFIN_TYPES).join(','), fields: 'Overview,Genres,ProviderIds,ParentId', // (an audiobook's Album comes without asking; Jellyfin refuses a field name it does not know)
       // Without this the server hides every film that belongs to a collection behind the collection, and since
       // collections aren't asked for, those films would never arrive.
       collapseBoxSetItems: 'false',
@@ -144,7 +149,7 @@ export async function readServer(fetcher: Fetcher, kind: ServerKind, url: string
       const artists = Array.isArray(item.Artists) ? item.Artists.filter((a): a is string => typeof a === 'string') : [];
       const ticks = typeof item.RunTimeTicks === 'number' ? item.RunTimeTicks : null;
       const hasCover = typeof item.ImageTags === 'object' && item.ImageTags !== null && 'Primary' in item.ImageTags;
-      out.push({
+      const imported: Imported = {
         sourceId: id, type, title,
         creator: text(item.AlbumArtist) ?? (artists.length ? artists.join(', ') : null),
         year: Number.isInteger(item.ProductionYear) ? (item.ProductionYear as number) : null,
@@ -153,14 +158,65 @@ export async function readServer(fetcher: Fetcher, kind: ServerKind, url: string
         minutes: ticks !== null && ticks > 0 ? Math.round(ticks / 600_000_000) : null,
         ids,
         coverUrl: hasCover ? `${url}/Items/${encodeURIComponent(id)}/Images/Primary?maxWidth=300&quality=80` : null,
-      });
+      };
+      if (String(item.Type) === 'AudioBook') pieces.push({ imported, ticks: ticks !== null && ticks > 0 ? ticks : 0, parent: text(item.ParentId), album: text(item.Album) });
+      else out.push(imported);
     }
     // The server says how many there are in all. A page can come back short of what was asked for, so the count
     // decides when to stop, not the size of a page; a server that gives no count stops at the first short page.
     const total = typeof page?.TotalRecordCount === 'number' ? page.TotalRecordCount : 0;
-    if (items.length === 0 || start + PAGE >= total && (total > 0 || items.length < PAGE)) return out;
+    if (items.length === 0 || start + PAGE >= total && (total > 0 || items.length < PAGE)) return [...out, ...(await joinAudiobooks(fetcher, kind, url, key, pieces))];
     if (start > 500_000) throw new Problem(400, 'That library is larger than Life Is can import');
   }
+}
+
+type Piece = { imported: Imported; ticks: number; parent: string | null; album: string | null };
+const FOLDERS_PER_ASK = 40;
+
+/**
+ * Audiobooks, with the files of one book made one book. A folder with two or more AudioBook items is one book;
+ * a folder with one stays as it was, so nothing about it changes.
+ */
+async function joinAudiobooks(fetcher: Fetcher, kind: ServerKind, url: string, key: string, pieces: Piece[]): Promise<Imported[]> {
+  const folders = new Map<string, Piece[]>();
+  for (const piece of pieces) if (piece.parent) folders.set(piece.parent, [...(folders.get(piece.parent) ?? []), piece]);
+  const many = [...folders].filter(([, parts]) => parts.length > 1);
+  // The folders' own names and pictures, a batch at a time. A folder that can't be read just has none.
+  const named = new Map<string, { name: string | null; cover: boolean }>();
+  for (let at = 0; at < many.length; at += FOLDERS_PER_ASK) {
+    const ids = many.slice(at, at + FOLDERS_PER_ASK).map(([id]) => id);
+    try {
+      const got = await ask(fetcher, kind, `${url}/Items?${new URLSearchParams({ ids: ids.join(',') })}`, authHeaders(kind, key)) as { Items?: unknown } | null;
+      for (const folder of Array.isArray(got?.Items) ? (got.Items as Record<string, unknown>[]) : []) {
+        const id = text(folder.Id);
+        if (id) named.set(id, { name: text(folder.Name), cover: typeof folder.ImageTags === 'object' && folder.ImageTags !== null && 'Primary' in folder.ImageTags });
+      }
+    } catch {
+      // The pieces still make one book, under their own album name.
+    }
+  }
+  const out: Imported[] = [];
+  for (const piece of pieces) if (!piece.parent || folders.get(piece.parent)!.length < 2) out.push(piece.imported);
+  for (const [folderId, parts] of many) {
+    const first = parts[0]!;
+    const shared = new Set(parts.map((p) => p.album)).size === 1 ? first.album : null;
+    const folder = named.get(folderId);
+    const ticks = parts.reduce((sum, p) => sum + p.ticks, 0);
+    const web = kind === 'emby' ? `${url}/web/index.html#!/item?id=${encodeURIComponent(folderId)}` : `${url}/web/#/details?id=${encodeURIComponent(folderId)}`;
+    out.push({
+      sourceId: `audiobook-folder-${folderId}`, type: 'book',
+      title: shared ?? folder?.name ?? first.album ?? first.imported.title,
+      creator: parts.find((p) => p.imported.creator)?.imported.creator ?? null,
+      year: parts.find((p) => p.imported.year !== null)?.imported.year ?? null,
+      summary: parts.find((p) => p.imported.summary)?.imported.summary ?? null,
+      genres: parts.find((p) => p.imported.genres.length > 0)?.imported.genres ?? [],
+      minutes: ticks > 0 ? Math.round(ticks / 600_000_000) : null,
+      ids: parts.find((p) => Object.keys(p.imported.ids).length > 0)?.imported.ids ?? {},
+      coverUrl: folder?.cover ? `${url}/Items/${encodeURIComponent(folderId)}/Images/Primary?maxWidth=300&quality=80` : parts.find((p) => p.imported.coverUrl)?.imported.coverUrl ?? null,
+      format: 'Audiobook', link: web, parts: parts.map((p) => p.imported.sourceId),
+    });
+  }
+  return out;
 }
 
 /** The catalog names worth matching titles on. A film's TMDB number is the same film wherever it's kept. */
@@ -172,14 +228,22 @@ const MATCH_IDS = ['tmdb', 'imdb', 'tvdb', 'isbn', 'musicbrainzalbum', 'musicbra
  */
 export async function applyImport(q: Queries, owner: number, connection: { id: number; kind: string }, items: Imported[], now: string, as?: ImportAs) {
   const where: ImportAs = as ?? { column: 'connection_id', source: connection.kind, format: NAMES[connection.kind as ServerKind] };
-  const titles = await q.all<{ id: number; type: string; title: string; year: number | null; ids: string | null }>(
-    'SELECT id, type, title, year, ids FROM media WHERE owner_id = ?', [owner]);
+  const titles = await q.all<{ id: number; type: string; title: string; creator: string | null; year: number | null; ids: string | null }>(
+    'SELECT id, type, title, creator, year, ids FROM media WHERE owner_id = ?', [owner]);
   const byId = new Map<string, number>();
   const byTitle = new Map<string, number>();
   const titleKey = (type: string, title: string, year: number | null) => `${type}|${labelKey(title)}|${year ?? ''}`;
-  const remember = (id: number, type: string, title: string, year: number | null, ids: Record<string, string>) => {
+  // Books only: the same book from two servers rarely agrees on the year, so title and the first author's surname are enough.
+  const byAuthor = new Map<string, number>();
+  const authorKey = (title: string, creator: string | null) => {
+    const surname = surnameOf(creator);
+    return surname ? `${labelKey(title)}|${surname}` : null;
+  };
+  const remember = (id: number, type: string, title: string, year: number | null, ids: Record<string, string>, creator: string | null) => {
     for (const name of MATCH_IDS) if (ids[name]) byId.set(`${type}|${name}|${ids[name]}`, id);
     if (!byTitle.has(titleKey(type, title, year))) byTitle.set(titleKey(type, title, year), id);
+    const author = type === 'book' ? authorKey(title, creator) : null;
+    if (author && !byAuthor.has(author)) byAuthor.set(author, id);
   };
   for (const title of titles) {
     let ids: Record<string, string> = {};
@@ -188,13 +252,14 @@ export async function applyImport(q: Queries, owner: number, connection: { id: n
     } catch {
       // Ids that can't be read just aren't matched on.
     }
-    remember(title.id, title.type, title.title, title.year, ids);
+    remember(title.id, title.type, title.title, title.year, ids, title.creator);
   }
   const have = new Map((await q.all<{ id: number; media_id: number; source_id: string; link: string | null }>(
     `SELECT id, media_id, source_id, link FROM media_copies WHERE ${where.column} = ?`, [connection.id])).map((copy) => [copy.source_id, copy]));
 
   const seen = new Set<string>();
-  const result = { total: 0, added: 0, titles_added: 0, removed: 0 };
+  const result = { total: 0, added: 0, titles_added: 0, removed: 0, joined_parts: 0, joined_books: 0 };
+  const titleOf = new Map<string, number>(); // each item's title by its source id, to move a piece's things onto its book
   const wantsCover: { mediaId: number; url: string }[] = [];
   for (const item of items) {
     if (seen.has(item.sourceId)) continue;
@@ -206,7 +271,8 @@ export async function applyImport(q: Queries, owner: number, connection: { id: n
     if (had && item.link && had.link !== item.link) await q.run('UPDATE media_copies SET link = ? WHERE id = ?', [item.link, had.id]);
     if (mediaId === undefined) {
       mediaId = MATCH_IDS.map((name) => (item.ids[name] ? byId.get(`${item.type}|${name}|${item.ids[name]}`) : undefined)).find((id) => id !== undefined)
-        ?? byTitle.get(titleKey(item.type, item.title, item.year));
+        ?? byTitle.get(titleKey(item.type, item.title, item.year))
+        ?? (item.type === 'book' ? byAuthor.get(authorKey(item.title, item.creator) ?? '') : undefined);
       if (mediaId === undefined) {
         mediaId = (await q.run(
           `INSERT INTO media (owner_id, type, title, creator, year, summary, genres, minutes, ids, created_at, updated_at)
@@ -218,24 +284,77 @@ export async function applyImport(q: Queries, owner: number, connection: { id: n
       } else {
         await q.run('UPDATE media SET wanted = 0, listed_only = 0 WHERE id = ? AND (wanted = 1 OR listed_only = 1)', [mediaId]); // having it answers the wanting, and it is owned now
       }
-      remember(mediaId, item.type, item.title, item.year, item.ids);
+      remember(mediaId, item.type, item.title, item.year, item.ids, item.creator);
       await q.run(`INSERT INTO media_copies (media_id, format, source, source_id, ${where.column}, link, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [mediaId, item.format ?? where.format, where.source, item.sourceId, connection.id, item.link ?? null, now]);
       result.added += 1;
     }
+    titleOf.set(item.sourceId, mediaId);
     if (item.coverUrl) wantsCover.push({ mediaId, url: item.coverUrl });
   }
+  // Which book each piece now belongs to.
+  const bookOf = new Map<string, number>();
+  for (const item of items) for (const part of item.parts ?? []) if (titleOf.has(item.sourceId)) bookOf.set(part, titleOf.get(item.sourceId)!);
+  const joinedBooks = new Set<number>();
   // What's gone from the server loses its copy; a title that was only there for the server goes with it.
   for (const [sourceId, copy] of have) {
     if (seen.has(sourceId)) continue;
+    const book = bookOf.get(sourceId);
+    if (book !== undefined) {
+      // A piece that is now part of a book: what the person added to it goes onto the book.
+      if (book !== copy.media_id) await moveOnto(q, owner, copy.media_id, book);
+      result.joined_parts += 1;
+      joinedBooks.add(book);
+    }
     await q.run('DELETE FROM media_copies WHERE id = ?', [copy.id]);
     await q.run(
       `DELETE FROM media WHERE id = ? AND wanted = 0 AND note IS NULL
        AND NOT EXISTS (SELECT 1 FROM media_copies WHERE media_id = media.id) AND NOT EXISTS (SELECT 1 FROM media_log WHERE media_id = media.id)
        AND NOT EXISTS (SELECT 1 FROM media_list_items WHERE media_id = media.id)`, [copy.media_id]);
+    if (!(await q.get('SELECT id FROM media WHERE id = ?', [copy.media_id]))) await unlink(q, 'title', copy.media_id);
     result.removed += 1;
   }
+  result.joined_books = joinedBooks.size;
   return { result, wantsCover };
+}
+
+/** The first author's surname as a word to compare, from "Frank Herbert", "Herbert, Frank", "A. Writer & B. Other" and the like. */
+export function surnameOf(creator: string | null): string | null {
+  if (!creator) return null;
+  const first = creator.split(/\s*(?:&|;|\/|\band\b)\s*/i)[0]!.split(',').map((p) => p.trim()).filter(Boolean)[0];
+  const last = first?.replaceAll('.', ' ').split(/\s+/).filter(Boolean).at(-1);
+  return last && last.length > 1 ? labelKey(last) : null;
+}
+
+/**
+ * A title that is one piece of a book goes into the book: what the person added to it (stars, a note, days logged,
+ * lists, tags, a place in a plan) moves to the book's title, so nothing is lost when the piece goes.
+ */
+async function moveOnto(q: Queries, owner: number, from: number, to: number): Promise<void> {
+  const mine = await q.get<{ stars: number | null; note: string | null }>('SELECT stars, note FROM media WHERE id = ? AND owner_id = ?', [from, owner]);
+  const book = await q.get<{ stars: number | null; note: string | null }>('SELECT stars, note FROM media WHERE id = ? AND owner_id = ?', [to, owner]);
+  if (!mine || !book) return;
+  if (book.stars === null && mine.stars !== null) await q.run('UPDATE media SET stars = ? WHERE id = ?', [mine.stars, to]);
+  await q.run('UPDATE media SET stars = NULL WHERE id = ?', [from]);
+  if (mine.note) {
+    const kept = (book.note ?? '').split(/\n\s*\n/).map((b) => b.trim());
+    if (!kept.includes(mine.note.trim())) await q.run('UPDATE media SET note = ? WHERE id = ?', [book.note ? `${book.note}\n\n${mine.note}` : mine.note, to]);
+    await q.run('UPDATE media SET note = NULL WHERE id = ?', [from]);
+  }
+  // Days logged: one the book has already (same day, words and session) is not doubled.
+  const key = (l: { day: string; note: string | null; session_id: number | null }) => `${l.day}|${l.note ?? ''}|${l.session_id ?? ''}`;
+  const had = new Set((await q.all<{ day: string; note: string | null; session_id: number | null }>('SELECT day, note, session_id FROM media_log WHERE media_id = ?', [to])).map(key));
+  for (const l of await q.all<{ id: number; day: string; note: string | null; session_id: number | null }>('SELECT id, day, note, session_id FROM media_log WHERE media_id = ?', [from])) {
+    if (had.has(key(l))) await q.run('DELETE FROM media_log WHERE id = ?', [l.id]);
+    else { await q.run('UPDATE media_log SET media_id = ? WHERE id = ?', [to, l.id]); had.add(key(l)); }
+  }
+  // Lists: a list that has the book already keeps its own entry.
+  await q.run('DELETE FROM media_list_items WHERE media_id = ? AND list_id IN (SELECT list_id FROM media_list_items WHERE media_id = ?)', [from, to]);
+  await q.run('UPDATE media_list_items SET media_id = ? WHERE media_id = ?', [to, from]);
+  await q.run("INSERT OR IGNORE INTO tag_links (tag_id, kind, target_id) SELECT tag_id, 'title', ? FROM tag_links WHERE kind = 'title' AND target_id = ?", [to, from]);
+  await unlink(q, 'title', from);
+  await q.run("UPDATE plan_items SET ref_id = ? WHERE kind = 'media' AND ref_id = ? AND plan_id IN (SELECT id FROM plans WHERE owner_id = ?)", [to, from, owner]);
+  // Wanted is not carried: the book is on the server now, which answers wanting it.
 }
 
 /** Every connection whose turn it is to sync by itself, across everyone. For the place that keeps the time. */

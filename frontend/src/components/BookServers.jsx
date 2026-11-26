@@ -31,7 +31,8 @@ export default function BookServers() {
       const { data } = await axios.post(`/api/libraries/${s.id}/sync`);
       setServers(data.libraries);
       const parts = [`${data.total} on ${s.name}`, data.added && `${data.added} added`, data.removed && `${data.removed} gone`, data.covers && `${data.covers} covers kept`].filter(Boolean);
-      setMessage({ ok: `In step: ${parts.join(', ')}.` });
+      const joined = data.joined_parts > 0 ? ` Joined ${data.joined_parts} ${data.joined_parts === 1 ? 'part' : 'parts'} into ${data.joined_books} ${data.joined_books === 1 ? 'book' : 'books'}.` : '';
+      setMessage({ ok: `In step: ${parts.join(', ')}.${joined}` });
     } catch (err) {
       setMessage({ error: errorMessage(err, "Couldn't sync") });
       load();
