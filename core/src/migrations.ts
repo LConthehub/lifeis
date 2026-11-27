@@ -1871,6 +1871,20 @@ export const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    number: 60,
+    name: 'Routines closed on the front page for a day',
+    // One row per person, routine time and day that person closed it on Home (Close for today), so it stays closed on all their
+    // devices. Nothing in the routine changes. Rows older than a week are cleared when a new one is added.
+    statements: [
+      `CREATE TABLE routine_closed (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        time_id INTEGER NOT NULL REFERENCES routine_times(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        PRIMARY KEY (user_id, time_id, day)
+      )`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

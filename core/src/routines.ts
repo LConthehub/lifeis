@@ -192,6 +192,8 @@ export type DayTime = {
   points: number | null;
   steps: DayStep[];
   total: number; done: number; finished: boolean; last7: number; last_done: string | null;
+  /** Closed on the viewer's front page for this day (Close for today). Only set by today(). */
+  closed?: boolean;
 };
 
 export const HISTORY_DAYS = 30;
@@ -647,8 +649,21 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
         const r = await whole(db, row, day);
         for (const t of r.times) { const v = await timeDay(db, r, t, day); if (v.total > 0) out.push(v); }
       }
+      const closed = new Set((await db.all<{ time_id: number }>('SELECT time_id FROM routine_closed WHERE user_id = ? AND day = ?', [viewer, day])).map((x) => x.time_id));
       // In the order the person set them out (Morning before Evening), not by the clock: not every time has one.
-      return out;
+      return out.map((v) => ({ ...v, closed: closed.has(v.id) }));
+    },
+
+    /** Close for today: takes a time off the viewer's own front page for a day, on every device. Nothing in it changes. */
+    async close(timeId: number, dayGiven?: string | null): Promise<{ closed: true }> {
+      const day = dayGiven ?? today();
+      dayNumber(day);
+      const found = await db.get<{ routine_id: number }>('SELECT routine_id FROM routine_times WHERE id = ?', [timeId]);
+      if (!found) throw new Problem(404, "That time isn't here anymore. It may have been deleted.");
+      await seen(db, found.routine_id);
+      await db.run('INSERT OR IGNORE INTO routine_closed (user_id, time_id, day) VALUES (?, ?, ?)', [viewer, timeId, day]);
+      await db.run('DELETE FROM routine_closed WHERE user_id = ? AND day < ?', [viewer, addDays(day, -7)]);
+      return { closed: true };
     },
 
     /** What is on today for the household members' routines (the viewer's own): for the chore chart. */

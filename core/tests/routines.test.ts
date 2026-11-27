@@ -68,6 +68,19 @@ it('shows each step on its days: every day, or only on Monday and Thursday', asy
   expect(await words('2046-03-08')).toEqual(['Wash your face', 'Retinoid']); // Thursday
 });
 
+it('Close for today takes a time off one person\'s front page for that day only, and changes nothing in it', async () => {
+  const r = await mine().create({ name: 'Skincare', times: [{ name: 'Evening', steps: [{ words: 'Wash your face' }] }] });
+  const timeId = r.times[0]!.id;
+  expect(await mine().close(timeId, '2046-03-05')).toEqual({ closed: true });
+  expect(await mine().close(timeId, '2046-03-05')).toEqual({ closed: true }); // twice is fine
+  const today = (await mine().today('2046-03-05'))[0]!;
+  expect([today.closed, today.done, today.finished]).toEqual([true, 0, false]);
+  expect((await mine().today('2046-03-06'))[0]!.closed).toBe(false);
+  const theirs = await mine(partner).today('2046-03-05');
+  expect(theirs.every((t) => !t.closed)).toBe(true);
+  await expect(mine().close(999999, '2046-03-05')).rejects.toEqual(problem(404));
+});
+
 it('leaves out a time with nothing on that day, such as a Sunday-only reset on a Monday', async () => {
   await mine().addStarter('weekly-reset');
   expect(await mine().today('2046-03-05')).toEqual([]);
@@ -421,7 +434,7 @@ it('keeps the pet link in the download and when it is brought in, and leaves a r
 it('upgrades from the version before pet routines: routines and ticks kept, ticks without a time, new ones with', async () => {
   const r = await mine().create({ name: 'Morning', times: [{ name: 'Morning', steps: [{ words: 'One' }, { words: 'Two' }] }] });
   await mine().tick(r.times[0]!.steps[0]!.id, true);
-  for (const table of ['dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
+  for (const table of ['routine_closed', 'dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE measure_entries');
   await db.run('DROP TABLE measures');
   await db.run('ALTER TABLE routines DROP COLUMN kind');
@@ -553,7 +566,7 @@ it('a workout comes back from a download with its kind and numbers, once', async
 it('upgrades from the version before workouts: routines and ticks stay, as plain ones with no numbers', async () => {
   const r = await mine().create({ name: 'Morning', times: [{ name: 'Morning', steps: [{ words: 'One' }] }] });
   await mine().tick(r.times[0]!.steps[0]!.id, true);
-  for (const table of ['dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
+  for (const table of ['routine_closed', 'dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE measure_entries');
   await db.run('DROP TABLE measures');
   await db.run('ALTER TABLE routines DROP COLUMN kind');

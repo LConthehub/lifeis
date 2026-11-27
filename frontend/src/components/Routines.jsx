@@ -279,26 +279,17 @@ export function Checklists({ times, setTimes, onClose, hidden }) {
   );
 }
 
-/** Times closed on the front page for today, kept on this device only: { day, ids }. */
-const CLOSED_KEY = 'lifeis.routines.closed';
-function closedToday() {
-  try { const c = JSON.parse(localStorage.getItem(CLOSED_KEY) || 'null'); return c && c.day === todayHere() ? c.ids : []; } catch { return []; }
-}
-function closeForToday(id) {
-  try { localStorage.setItem(CLOSED_KEY, JSON.stringify({ day: todayHere(), ids: [...new Set([...closedToday(), id])] })); } catch { /* private mode: closes until the page is left */ }
-}
-
 /**
  * The front page's card: today's routines for this person and for everyone. A time that is all done, or closed for
  * today, is not shown. One finished on this visit folds to a single line, with Show it, until the page is left.
  */
 export function RoutinesCard() {
   const [times, setTimes] = useState(null);
-  const [gone, setGone] = useState(() => new Set(closedToday()));
+  const [gone, setGone] = useState(() => new Set());
   const [finishedHere, setFinishedHere] = useState(() => new Set());
   const [allDone, setAllDone] = useState(false); // every time today was already done when the page opened
   const load = useCallback(() => {
-    axios.get('/api/routine-day').then(({ data }) => { setAllDone(data.length > 0 && data.every((t) => t.finished)); setTimes(data.filter((t) => !t.finished)); }).catch(() => setTimes([]));
+    axios.get('/api/routine-day').then(({ data }) => { setAllDone(data.length > 0 && data.every((t) => t.finished || t.closed)); setTimes(data.filter((t) => !t.finished && !t.closed)); }).catch(() => setTimes([]));
   }, []);
   useEffect(() => { load(); }, [load]);
   const track = (next) => setTimes((before) => {
@@ -309,7 +300,8 @@ export function RoutinesCard() {
     return list;
   });
   if (times === null) return null;
-  const close = (t) => { closeForToday(t.id); setGone((g) => new Set([...g, t.id])); };
+  // Close for today is kept for the person, so it stays closed on their other devices too.
+  const close = (t) => { setGone((g) => new Set([...g, t.id])); axios.post(`/api/routine-day/times/${t.id}/close`, { day: t.day }).catch(() => setGone((g) => { const n = new Set(g); n.delete(t.id); return n; })); };
   const open = times.filter((t) => !gone.has(t.id) && !finishedHere.has(t.id));
   const folded = times.filter((t) => !gone.has(t.id) && finishedHere.has(t.id));
   if (allDone || (times.length > 0 && open.length === 0 && folded.length === 0)) return null;

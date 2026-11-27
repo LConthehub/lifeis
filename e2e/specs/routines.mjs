@@ -116,7 +116,9 @@ say('closing leaves it all done, folded to one line', (await page.locator('[data
 await eve.getByRole('button', { name: 'Close Skincare: Evening for today' }).click(); await wait(500);
 say('Close for today takes a time off Home', !(await eve.isVisible()));
 await page.reload(); await wait(1500);
-say('and it stays closed after reloading, though nothing in it was checked', !(await eve.isVisible()) && (await send('GET', '/api/routine-day')).find((x) => x.title === 'Skincare: Evening')?.finished === false);
+const eveningNow = (await send('GET', '/api/routine-day')).find((x) => x.title === 'Skincare: Evening');
+say('and it stays closed after reloading, though nothing in it was checked', !(await eve.isVisible()) && eveningNow?.finished === false);
+say('closed is kept for the person, so other devices hide it too', eveningNow?.closed === true);
 
 // ---------- the cycle waits ----------
 const night = async (n) => (await send('GET', `/api/routine-day?day=${inDays(n)}`)).find((x) => x.title === '4-night skin cycle: Evening')?.night;

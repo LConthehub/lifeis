@@ -79,6 +79,7 @@ export function routineRoutes(db: Db): Route[] {
     ['GET', at('routine-day'), async (c) => ({ json: await mine(c).today(day(c), queryNumber(c.query, 'pet')) })],
     ['GET', at('routine-day/times/:id'), async (c) => ({ json: await mine(c).time(c.id, day(c)) })],
     ['PUT', at('routine-day/steps/:id'), async (c) => ({ json: await mine(c).tick(c.id, read.yesNo(c.body, 'done'), read.maybeText(c.body, 'day'), sent(c.body, 'nums') ? (c.body.nums === null ? null : numbersFrom(read.record(c.body, 'nums'))) : undefined) })],
+    ['POST', at('routine-day/times/:id/close'), async (c) => ({ json: await mine(c).close(c.id, read.maybeText(c.body, 'day')) })],
     ['PUT', at('routine-day/times/:id'), async (c) => ({ json: await mine(c).finish(c.id, read.yesNo(c.body, 'done'), read.maybeText(c.body, 'day')) })],
     ['POST', at('routine-day/steps/:id/low'), async (c) => ({ json: await mine(c).low(c.id) })],
   ];
