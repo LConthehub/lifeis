@@ -62,7 +62,23 @@ it('the sign-in page is handed the demo sign-in, which opens a household with so
   expect(jobs.some((j: { due: { state: string } }) => j.due.state === 'overdue')).toBe(true); // something is due, so reminders and the calendar have something to say
   expect((await guest.get('/api/manual')).json.sections.every((s: { entries: unknown[] }) => s.entries.length >= 1)).toBe(true);
   expect((await guest.get('/api/things/packing')).json.boxes).toHaveLength(3);
-  expect((await guest.get('/api/things/upkeep/scores')).json.people.map((p: { name: string }) => p.name)).toEqual(expect.arrayContaining(['Leo', 'Mia']));
+  expect((await guest.get('/api/things/upkeep/scores')).json.people.map((p: { name: string }) => p.name)).toEqual(expect.arrayContaining(['Hank', 'Loretta']));
+  // The visitor is Charlie, the kids are Hank and Loretta, the dog is George.
+  expect((await guest.get('/api/account/name')).json.name).toBe('Charlie');
+  const everything = JSON.stringify([(await guest.get('/api/things/pets')).json, (await guest.get('/api/things/places')).json, jobs]);
+  expect(everything).toMatch(/George/);
+  expect(everything).toMatch(/Hank's room/);
+  expect(everything).not.toMatch(/Biscuit|Leo|Mia|[Ww]alleye/);
+  // The records, the grocery list, the pantry, the upkeep and the trip each have their touch of home.
+  const records = JSON.stringify((await guest.get('/api/media')).json);
+  expect(records).toMatch(/"John Prine"[^}]*1971|1971[^}]*"John Prine"/);
+  expect(records).toMatch(/Dust Bowl Ballads/);
+  expect(JSON.stringify((await guest.get('/api/kitchen/grocery')).json)).toMatch(/Cheerwine/);
+  expect(JSON.stringify((await guest.get('/api/kitchen/pantry')).json)).toMatch(/Duke's mayonnaise[\s\S]*Texas Pete/);
+  expect(jobs.map((j: { name: string }) => j.name)).toContain('Hurricane kit');
+  const trips = (await guest.get('/api/plans/trips')).json;
+  expect(trips).toHaveLength(1);
+  expect(trips[0].name).toMatch(/Deer hunting trip|Spot fishing|Outer Banks beach week/);
   expect((await guest.get('/api/auth/status')).json.user).toMatchObject({ username: 'demo', is_admin: false });
 });
 

@@ -15,10 +15,11 @@ check('the sign-in page says it is a demo and offers it', (await page.locator('[
 await page.getByRole('button', { name: 'Try the demo' }).click(); await page.waitForTimeout(2500);
 check('one tap opens it, with no welcome questions', await page.locator('[data-demo-banner]').isVisible() && !(await page.getByRole('dialog').isVisible().catch(() => false)));
 const home = (await page.locator('main').innerText()).replace(/\s+/g, ' ');
+check('the front page greets the visitor as Charlie', /Good (morning|afternoon|evening), Charlie/.test(home), home.slice(0, 120));
 check('the front page has things to show', ['Sheet-pan chicken tacos', 'Change the furnace filter', 'Dentist'].every((t) => home.includes(t)), home.slice(0, 200));
 await page.screenshot({ path: `${shots}/demo-home.png` });
 
-for (const [path, text, shot] of [['/things/upkeep', 'Car registration', 'demo-upkeep'], ['/things/pets', 'Biscuit', 'demo-pets'], ['/manual', 'Water shut-off', 'demo-manual'],
+for (const [path, text, shot] of [['/things/upkeep', 'Car registration', 'demo-upkeep'], ['/things/pets', 'George', 'demo-pets'], ['/manual', 'Water shut-off', 'demo-manual'],
   ['/things/report', 'Television', 'demo-inventory'], ['/recipes', 'Leek and potato soup', 'demo-recipes'], ['/media', 'Spirited Away', 'demo-collection']]) {
   await page.goto(base + path); await page.waitForTimeout(1300);
   check(`${path} has the sample household on it`, (await page.locator('main').innerText()).includes(text));
