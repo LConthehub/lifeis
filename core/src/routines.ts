@@ -10,7 +10,8 @@
  * Each tick keeps who ticked it and when, so anyone else who can see the routine reads "Done at 7:10 by Sam" and
  * nobody does the step twice.
  *
- * Step days: each step is every day (the usual), on chosen weekdays, or on one night of a cycle whose length the
+ * Step days: each step is every day (the usual), on chosen weekdays, every few days (every other day, every 3 days: counted
+ * from a start day on the calendar, so a missed day is missed and nothing piles up), or on one night of a cycle whose length the
  * routine sets (a four-night skin cycle). A cycle waits for you: it moves on only when that time was finished,
  * so skipping Tuesday and Wednesday is still the same cycle night on Thursday.
  *
@@ -37,7 +38,10 @@ import { reminders, zoneNow, type Channel, type Digest, type ReminderTools } fro
 import { addDays, clean, dayNumber, labelKey, stamp, todayOf, type Clock } from './small.ts';
 import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
 
-export const STEP_RULES = ['daily', 'weekdays', 'cycle'] as const;
+export const STEP_RULES = ['daily', 'weekdays', 'cycle', 'every'] as const;
+/** How many days apart an "every few days" step can be. */
+export const EVERY_MIN = 2;
+export const EVERY_MAX = 30;
 export type StepRule = (typeof STEP_RULES)[number];
 /** Weekdays go by number, Monday 1 to Sunday 7. */
 export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -124,6 +128,9 @@ export type StepInput = {
   weekdays?: number[] | null;
   /** Which night of the cycle, for `cycle`. */
   night?: number | null;
+  /** For `every`: how many days apart (2 to 30), and the day it counts from (today when not said). */
+  every?: number | null;
+  start?: string | null;
   /** A thing (an item) the step uses. */
   item_id?: number | null;
   /** A timer to wait after the step, in seconds ("let the serum dry"). */
@@ -149,6 +156,8 @@ export type RoutineInput = {
 
 export type Step = {
   id: number; words: string; rule: StepRule; weekdays: number[]; night: number | null;
+  /** For `every`: days apart, and the day it counts from. */
+  every: number | null; start: string | null;
   item_id: number | null; item: string | null; wait_seconds: number | null;
   /** The numbers it carries (what it usually is), and whether it carries any. */
   nums: Numbers; tracks: boolean;
@@ -269,29 +278,50 @@ export function weekdaysWords(days: number[]): string {
   return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
+type Days = { rule: StepRule; weekdays: number[]; night: number | null; every?: number | null; start?: string | null };
+
+/** "every other day", "every 3 days". */
+export function everyWords(every: number): string {
+  return every === 2 ? 'every other day' : `every ${every} days`;
+}
+
 /** When a step falls, in words. */
-export function daysWords(step: { rule: StepRule; weekdays: number[]; night: number | null }, cycle: number | null): string {
+export function daysWords(step: Days, cycle: number | null): string {
+  if (step.rule === 'every' && step.every) return everyWords(step.every);
   if (step.rule === 'weekdays') return weekdaysWords(step.weekdays);
   if (step.rule === 'cycle') return cycle ? `night ${step.night} of ${cycle}` : `night ${step.night}`;
   return 'every day';
 }
 
 /** Whether a step falls on a day, given which night of the cycle that day is. */
-export function fallsOn(step: { rule: StepRule; weekdays: number[]; night: number | null }, day: string, night: number | null): boolean {
+export function fallsOn(step: Days, day: string, night: number | null): boolean {
+  if (step.rule === 'every' && step.every && step.start) {
+    // On the start day, then every N days after it. Before the start day it is not due. A missed day is just missed.
+    const gap = dayNumber(day) - dayNumber(step.start);
+    return gap >= 0 && gap % step.every === 0;
+  }
   if (step.rule === 'weekdays') return step.weekdays.includes(isoWeekday(day));
   if (step.rule === 'cycle') return night !== null && step.night === night;
   return true;
 }
 
 /** A step's days as a short text for a download: "every day", "Mon Thu", "night 2". */
-export function daysAsText(step: { rule: StepRule; weekdays: number[]; night: number | null }): string {
+export function daysAsText(step: Days): string {
+  if (step.rule === 'every' && step.every && step.start) return `${everyWords(step.every)} from ${step.start}`;
   if (step.rule === 'weekdays') return step.weekdays.map((d) => DAY_NAMES[d - 1]).join(' ');
   if (step.rule === 'cycle') return `night ${step.night}`;
   return 'every day';
 }
 
 /** Read back from `daysAsText`. Anything not understood is every day. */
-export function daysFromText(text: string): Pick<StepInput, 'rule' | 'weekdays' | 'night'> {
+export function daysFromText(text: string): Pick<StepInput, 'rule' | 'weekdays' | 'night' | 'every' | 'start'> {
+  const every = /^\s*every\s+(other|\d{1,2})\s*days?\s+from\s+(\d{4}-\d{2}-\d{2})\s*$/i.exec(text);
+  if (every) {
+    const n = every[1]!.toLowerCase() === 'other' ? 2 : Number(every[1]);
+    let real = n >= EVERY_MIN && n <= EVERY_MAX;
+    try { dayNumber(every[2]!); } catch { real = false; }
+    if (real) return { rule: 'every', every: n, start: every[2]! };
+  }
   const night = /^\s*night\s+(\d{1,2})\s*$/i.exec(text);
   if (night && Number(night[1]) >= 1 && Number(night[1]) <= 14) return { rule: 'cycle', night: Number(night[1]) };
   const found = [...new Set(text.toLowerCase().split(/[^a-z]+/).map((w) => DAY_NAMES.findIndex((d) => d.toLowerCase() === w.slice(0, 3)) + 1).filter((n) => n > 0))];
@@ -305,7 +335,7 @@ type RoutineRow = {
   id: number; owner_id: number; name: string; kind: RoutineKind; for_user: number | null; for_member: number | null; for_pet: number | null; cycle_length: number | null;
   points: number | null; note: string | null; user_name: string | null; member_name: string | null; pet_name: string | null;
 };
-type StepRow = { id: number; words: string; rule: StepRule; weekdays: string | null; night: number | null; item_id: number | null; item: string | null; wait_seconds: number | null } & Numbers;
+type StepRow = { id: number; words: string; rule: StepRule; weekdays: string | null; night: number | null; every_days: number | null; every_from: string | null; item_id: number | null; item: string | null; wait_seconds: number | null } & Numbers;
 
 const BASE = `SELECT r.id, r.owner_id, r.name, r.kind, r.for_user, r.for_member, r.for_pet, r.cycle_length, r.points, r.note, ${shown('fu')} AS user_name, hm.name AS member_name, pt.name AS pet_name
   FROM routines r LEFT JOIN users fu ON fu.id = r.for_user LEFT JOIN household_members hm ON hm.id = r.for_member LEFT JOIN pets pt ON pt.id = r.for_pet`;
@@ -314,7 +344,11 @@ const VISIBLE = '(r.owner_id = ? OR r.for_user = ? OR (r.for_user IS NULL AND r.
 
 const asStep = (r: StepRow, cycle: number | null): Step => {
   const weekdays = weekdaysOf(r.weekdays);
-  return { id: r.id, words: r.words, rule: r.rule, weekdays, night: r.night, item_id: r.item_id, item: r.item, wait_seconds: r.wait_seconds, nums: numbersOf(r), tracks: hasNumbers(r), days: daysWords({ rule: r.rule, weekdays, night: r.night }, cycle) };
+  // A step that repeats is kept as rule 'daily' with its count and start day (see migration 61).
+  const every = r.every_days && r.every_from ? r.every_days : null;
+  const rule: StepRule = every ? 'every' : r.rule;
+  const start = every ? r.every_from : null;
+  return { id: r.id, words: r.words, rule, weekdays, night: r.night, every, start, item_id: r.item_id, item: r.item, wait_seconds: r.wait_seconds, nums: numbersOf(r), tracks: hasNumbers(r), days: daysWords({ rule, weekdays, night: r.night, every, start }, cycle) };
 };
 
 const minutesOf = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
@@ -340,7 +374,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
     const times: Time[] = [];
     for (const t of await q.all<{ id: number; name: string; at_time: string | null }>('SELECT id, name, at_time FROM routine_times WHERE routine_id = ? ORDER BY sort_order, id', [row.id])) {
       const steps = await q.all<StepRow>(
-        `SELECT s.id, s.words, s.rule, s.weekdays, s.night, s.item_id, i.name AS item, s.wait_seconds, s.sets, s.reps, s.weight, s.weight_unit, s.minutes, s.distance, s.distance_unit FROM routine_steps s LEFT JOIN items i ON i.id = s.item_id
+        `SELECT s.id, s.words, s.rule, s.weekdays, s.night, s.every_days, s.every_from, s.item_id, i.name AS item, s.wait_seconds, s.sets, s.reps, s.weight, s.weight_unit, s.minutes, s.distance, s.distance_unit FROM routine_steps s LEFT JOIN items i ON i.id = s.item_id
          WHERE s.time_id = ? ORDER BY s.sort_order, s.id`, [t.id]);
       times.push({ id: t.id, name: t.name, at: t.at_time, at_words: t.at_time ? clockWords(t.at_time) : null, steps: steps.map((s) => asStep(s, row.cycle_length)), last7: await last7Of(q, t.id, day, row.kind === 'workout'), last_done: await lastDoneOf(q, t.id, row.kind === 'workout') });
     }
@@ -493,10 +527,17 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
         const words = clean(s.words, 200);
         if (!words) throw new Problem(400, 'Say what each step is, like "Brush your teeth"');
         const rule = s.rule ?? 'daily';
-        if (!STEP_RULES.includes(rule)) throw new Problem(400, 'A step is every day, on some weekdays, or on a night of the cycle');
+        if (!STEP_RULES.includes(rule)) throw new Problem(400, 'A step is every day, on some weekdays, every few days, or on a night of the cycle');
         let weekdays: number[] | null = null;
         let night: number | null = null;
-        if (rule === 'weekdays') {
+        let every: number | null = null;
+        let start: string | null = null;
+        if (rule === 'every') {
+          every = s.every ?? null;
+          if (every === null || !Number.isInteger(every) || every < EVERY_MIN || every > EVERY_MAX) throw new Problem(400, `Pick how many days apart, from ${EVERY_MIN} to ${EVERY_MAX}, for "${words}"`);
+          start = s.start || today();
+          dayNumber(start);
+        } else if (rule === 'weekdays') {
           weekdays = [...new Set(s.weekdays ?? [])].sort((a, b) => a - b);
           if (weekdays.length === 0 || !weekdays.every((d) => Number.isInteger(d) && d >= 1 && d <= 7)) throw new Problem(400, `Pick the days for "${words}"`);
         } else if (rule === 'cycle') {
@@ -508,7 +549,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
         if (itemId !== null && !(await q.get('SELECT 1 AS one FROM items WHERE id = ? AND owner_id = ?', [itemId, owner]))) throw new Problem(404, "That thing isn't in your things.");
         const wait = s.wait_seconds ?? null;
         if (wait !== null && !(Number.isInteger(wait) && wait >= 1 && wait <= MAX_WAIT_SECONDS)) throw new Problem(400, 'A wait is from 1 second to an hour');
-        tidySteps.push({ id: s.id ?? null, words, rule, weekdays, night, item_id: itemId, wait_seconds: wait, nums: kind === 'workout' ? tidyNumbers(s.nums, words) : NO_NUMBERS });
+        tidySteps.push({ id: s.id ?? null, words, rule, weekdays, night, every, start, item_id: itemId, wait_seconds: wait, nums: kind === 'workout' ? tidyNumbers(s.nums, words) : NO_NUMBERS });
       }
       out.push({ id: t.id ?? null, name: timeName, at, steps: tidySteps });
     }
@@ -533,12 +574,12 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
       const haveSteps = new Set((await q.all<{ id: number }>('SELECT id FROM routine_steps WHERE time_id = ?', [timeId])).map((s) => s.id));
       const keepSteps = new Set<number>();
       for (const [n, s] of t.steps.entries()) {
-        const values: Value[] = [s.words, s.rule, s.weekdays ? s.weekdays.join(',') : null, s.night, s.item_id, s.wait_seconds, n, ...numberValues(s.nums)];
+        const values: Value[] = [s.words, s.rule === 'every' ? 'daily' : s.rule, s.weekdays ? s.weekdays.join(',') : null, s.night, s.every, s.start, s.item_id, s.wait_seconds, n, ...numberValues(s.nums)];
         if (s.id !== null && haveSteps.has(s.id)) {
-          await q.run('UPDATE routine_steps SET words = ?, rule = ?, weekdays = ?, night = ?, item_id = ?, wait_seconds = ?, sort_order = ?, sets = ?, reps = ?, weight = ?, weight_unit = ?, minutes = ?, distance = ?, distance_unit = ? WHERE id = ?', [...values, s.id]);
+          await q.run('UPDATE routine_steps SET words = ?, rule = ?, weekdays = ?, night = ?, every_days = ?, every_from = ?, item_id = ?, wait_seconds = ?, sort_order = ?, sets = ?, reps = ?, weight = ?, weight_unit = ?, minutes = ?, distance = ?, distance_unit = ? WHERE id = ?', [...values, s.id]);
           keepSteps.add(s.id);
         } else {
-          keepSteps.add((await q.run('INSERT INTO routine_steps (time_id, words, rule, weekdays, night, item_id, wait_seconds, sort_order, sets, reps, weight, weight_unit, minutes, distance, distance_unit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [timeId, ...values])).lastId);
+          keepSteps.add((await q.run('INSERT INTO routine_steps (time_id, words, rule, weekdays, night, every_days, every_from, item_id, wait_seconds, sort_order, sets, reps, weight, weight_unit, minutes, distance, distance_unit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [timeId, ...values])).lastId);
         }
       }
       for (const id of haveSteps) if (!keepSteps.has(id)) await q.run('DELETE FROM routine_steps WHERE id = ?', [id]);

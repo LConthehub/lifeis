@@ -101,6 +101,30 @@ for (const look of ['light', 'dark']) {
 }
 await ana.emulateMedia({ colorScheme: 'light' });
 
+// ---------- a cat: wet food every other day, starting today ----------
+const miso = await send(ana, 'POST', '/api/things/pets', { name: 'Miso', species: 'cat' });
+await ana.goto(`${base}/things/pets/${miso.id}`); await wait(1200);
+await ana.getByRole('button', { name: '+ Make your own' }).click(); await wait(600);
+const catForm = ana.getByRole('dialog');
+await catForm.getByLabel('Name of the routine').fill('Cat extras');
+const catStep = catForm.locator('[data-routine-step]').first();
+await catStep.getByLabel('Step', { exact: true }).fill('Wet food');
+await catStep.getByLabel('Days', { exact: true }).selectOption('every');
+check('Every few days shows Every 2 days, starting today', await catStep.getByLabel('How many days apart').inputValue() === '2' && await catStep.getByLabel('Starting day').inputValue() === new Date().toLocaleDateString('en-CA'));
+const catSmall = await tooSmall([catForm.locator('button'), catForm.locator('select'), catForm.locator('input:not([type=checkbox])')]);
+check('the every-few-days choice has 44px controls and fits 375px' + (catSmall.length ? ` (too small: ${catSmall})` : ''), catSmall.length === 0 && await noSideways(ana));
+await catForm.getByRole('button', { name: 'Save' }).click(); await wait(1200);
+check('the cat page lists it with "every other day"', /Wet food every other day/.test(await ana.locator('[data-routine="Cat extras"]').innerText()));
+await ana.goto(base + '/'); await wait(1500);
+const catHome = ana.locator('[data-routine-time^="Miso"]');
+check('Home shows wet food for Miso today, under the cat name', await catHome.count() === 1 && (await catHome.innerText()).includes('Wet food') && (await catHome.innerText()).includes('Miso'));
+const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+const tomorrowDay = tomorrow.toLocaleDateString('en-CA');
+const later = (await send(ana, 'GET', `/api/routine-day?day=${tomorrowDay}`)).flatMap((x) => x.steps.map((s) => s.words));
+check('tomorrow leaves the wet food out', !later.includes('Wet food'));
+const afterThat = new Date(); afterThat.setDate(afterThat.getDate() + 2);
+check('and the day after brings it back', (await send(ana, 'GET', `/api/routine-day?day=${afterThat.toLocaleDateString('en-CA')}`)).flatMap((x) => x.steps.map((s) => s.words)).includes('Wet food'));
+
 // ---------- changing it: link the evening feed step, and take it away with the pet ----------
 await ana.goto(`${base}/things/pets/${biscuit.id}`); await wait(1200);
 await ana.getByRole('button', { name: 'Change Dog, daily' }).click(); await wait(600);

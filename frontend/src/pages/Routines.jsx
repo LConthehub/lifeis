@@ -15,7 +15,7 @@ const DAYS = [[1, 'Mon', 'Monday'], [2, 'Tue', 'Tuesday'], [3, 'Wed', 'Wednesday
 const WAITS = [[30, '30 seconds'], [60, '1 minute'], [120, '2 minutes'], [300, '5 minutes'], [600, '10 minutes']];
 const control = `${inputClass} min-h-[44px]`;
 
-const blankStep = () => ({ id: null, words: '', rule: 'daily', weekdays: [], night: '', item_id: '', wait_seconds: '', nums: typed({}) });
+const blankStep = () => ({ id: null, words: '', rule: 'daily', weekdays: [], night: '', every: 2, start: todayHere(), item_id: '', wait_seconds: '', nums: typed({}) });
 const blankTime = (name = '') => ({ id: null, name, at: '', steps: [blankStep()] });
 
 /** What a routine becomes in the form. */
@@ -26,7 +26,7 @@ function formOf(r, me, startWho = 'me', startKind = 'plain') {
     who: r.for_pet != null ? `p${r.for_pet}` : r.for_member !== null ? `m${r.for_member}` : r.for_user === me ? 'me' : r.for_user !== null ? `u${r.for_user}` : 'everyone',
     times: r.times.map((t) => ({
       id: t.id, name: t.name, at: t.at ?? '',
-      steps: t.steps.map((s) => ({ id: s.id, words: s.words, rule: s.rule, weekdays: s.weekdays, night: s.night ?? '', item_id: s.item_id ?? '', wait_seconds: s.wait_seconds ?? '', nums: typed(s.nums ?? {}) })),
+      steps: t.steps.map((s) => ({ id: s.id, words: s.words, rule: s.rule, weekdays: s.weekdays, night: s.night ?? '', every: s.every ?? 2, start: s.start ?? todayHere(), item_id: s.item_id ?? '', wait_seconds: s.wait_seconds ?? '', nums: typed(s.nums ?? {}) })),
     })),
   };
 }
@@ -43,6 +43,7 @@ function bodyOf(f, me) {
       id: t.id, name: t.name, at: t.at || null,
       steps: t.steps.map((s) => ({
         id: s.id, words: s.words, rule: s.rule, weekdays: s.rule === 'weekdays' ? s.weekdays : null, night: s.rule === 'cycle' ? Number(s.night) : null,
+        every: s.rule === 'every' ? Number(s.every) : null, start: s.rule === 'every' ? s.start || null : null,
         item_id: s.item_id === '' ? null : Number(s.item_id), wait_seconds: s.wait_seconds === '' ? null : Number(s.wait_seconds),
         nums: f.kind === 'workout' ? sentNumbers(s.nums) : null,
       })),
@@ -87,6 +88,7 @@ function StepEditor({ step, cycle, items, onChange, onRemove, canRemove, workout
         <select value={step.rule} onChange={(e) => set({ rule: e.target.value, night: e.target.value === 'cycle' ? (step.night || 1) : '', weekdays: e.target.value === 'weekdays' ? step.weekdays : [] })} aria-label="Days" className={`${control} w-auto`}>
           <option value="daily">Every day</option>
           <option value="weekdays">Some days of the week</option>
+          <option value="every">Every few days</option>
           {cycle && <option value="cycle">A night of the cycle</option>}
         </select>
         {step.rule === 'cycle' && (
@@ -95,6 +97,17 @@ function StepEditor({ step, cycle, items, onChange, onRemove, canRemove, workout
           </select>
         )}
       </div>
+      {step.rule === 'every' && (
+        <div className="flex flex-wrap items-center gap-2 text-sm" data-every>
+          <label className="flex items-center gap-2">Every
+            <input type="number" inputMode="numeric" min="2" max="30" value={step.every} onChange={(e) => set({ every: e.target.value === '' ? '' : Number(e.target.value) })} aria-label="How many days apart" className={`${control} !w-20`} />
+            days</label>
+          <label className="flex items-center gap-2">starting
+            <input type="date" value={step.start} onChange={(e) => set({ start: e.target.value })} aria-label="Starting day" className={`${control} !w-auto`} />
+          </label>
+          <span className="w-full text-xs text-gray-500 dark:text-life-300">2 is every other day. A day you miss is just missed; the next one is still on the calendar.</span>
+        </div>
+      )}
       {step.rule === 'weekdays' && (
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Which days">
           {DAYS.map(([n, short, long]) => {
@@ -246,6 +259,8 @@ function History({ routine }) {
   );
 }
 
+/** The steps of a time that repeat every few days, in words ("Wet food every other day"), or nothing. */
+export const everyLine = (t) => t.steps.filter((s) => s.rule === 'every').map((s) => `${s.words} ${s.days}`).join(', ');
 export const timeLine = (t) => `${t.name}${t.at_words ? ` at ${t.at_words}` : ''}: ${t.steps.length} ${t.steps.length === 1 ? 'step' : 'steps'}, ${t.last7} of the last 7 days`;
 
 export default function RoutinesPage() {
@@ -306,7 +321,7 @@ export default function RoutinesPage() {
               {r.mine && <button type="button" onClick={() => setModal({ routine: r })} className={`${quietButtonClass} min-h-[44px]`} aria-label={`Change ${r.name}`}>Change</button>}
             </div>
             <ul className="mt-1 space-y-0.5 text-sm text-gray-700 dark:text-life-100">
-              {r.times.map((t) => <li key={t.id}>{timeLine(t)} · <span data-last-done>{lastDoneText(t.last_done, todayHere())}</span></li>)}
+              {r.times.map((t) => <li key={t.id}>{timeLine(t)} · <span data-last-done>{lastDoneText(t.last_done, todayHere())}</span>{everyLine(t) && <span data-step-days>{' · '}{everyLine(t)}</span>}</li>)}
             </ul>
             <TagChips tags={r.tag_list} className="mt-1" />
           </li>
@@ -391,7 +406,7 @@ export function PetRoutines({ pet }) {
                   <button type="button" onClick={() => setModal({ routine: r })} className={`${quietButtonClass} min-h-[44px]`} aria-label={`Change ${r.name}`}>Change</button>
                 </div>
                 <ul className="text-xs text-gray-600 dark:text-life-200">
-                  {r.times.map((t) => <li key={t.id}>{timeLine(t)}{t.steps.some((s) => s.item) ? ` · uses ${[...new Set(t.steps.filter((s) => s.item).map((s) => s.item))].join(', ')}` : ''} · <span data-last-done>{lastDoneText(t.last_done, todayHere())}</span></li>)}
+                  {r.times.map((t) => <li key={t.id}>{timeLine(t)}{t.steps.some((s) => s.item) ? ` · uses ${[...new Set(t.steps.filter((s) => s.item).map((s) => s.item))].join(', ')}` : ''} · <span data-last-done>{lastDoneText(t.last_done, todayHere())}</span>{everyLine(t) && <span data-step-days>{' · '}{everyLine(t)}</span>}</li>)}
                 </ul>
               </li>
             ))}

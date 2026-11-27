@@ -168,6 +168,19 @@ it('measures follow the trial and unlock rules of routines', () => {
   expect(isPaidPath('/api/routines')).toBe(true);
 });
 
+it('a step every other day over the web: checked, shown on its days, left out on the others', async () => {
+  const admin = await owner();
+  const made = await admin.post('/api/routines', { name: 'Cat', times: [{ name: 'Evening', steps: [{ words: 'Water' }, { words: 'Wet food', rule: 'every', every: 2, start: '2046-03-05' }] }] });
+  expect(made.status).toBe(201);
+  expect(made.json.times[0].steps[1]).toMatchObject({ rule: 'every', every: 2, start: '2046-03-05', days: 'every other day' });
+  const stepsOn = async (day: string) => (await admin.get(`/api/routine-day?day=${day}`)).json[0].steps.map((s: { words: string }) => s.words);
+  expect(await stepsOn('2046-03-05')).toEqual(['Water', 'Wet food']);
+  expect(await stepsOn('2046-03-06')).toEqual(['Water']);
+  for (const bad of [{ every: 1 }, { every: 31 }, {}, { every: 2, start: '2046-02-31' }]) {
+    expect((await admin.post('/api/routines', { name: 'Bad', times: [{ name: 'T', steps: [{ words: 'X', rule: 'every', ...bad }] }] })).status).toBe(400);
+  }
+});
+
 it('a workout over the web: private to start with, numbers kept with the tick, last time, and a plain history', async () => {
   const admin = await owner();
   const sam = await member(admin, 'Sam');

@@ -17,7 +17,7 @@ A routine is a checklist for part of a day: morning, bedtime, after school, a we
    - **A pet** shows on every front page and on the pet's page. See [Routines for a pet](#routines-for-a-pet).
 3. Give each **time of day** a name, such as Morning or Evening. You can have up to six. A time can have a clock time. With one, Life Is reminds you then, in the ways your reminders already go. See [Upkeep](upkeep.html#how-you-are-told).
 4. Add the steps. For each step you can choose:
-   - **Every day**, or **Some days of the week** (check the days).
+   - **Every day**, **Some days of the week** (check the days), or **Every few days**. Pick how many days apart (2 is every other day) and the day to start from. It keeps to the calendar: if you miss a day, it is still due on its own days, and nothing piles up.
    - **A thing it uses**, from the things you keep. On the front page, that step then has a "running low" button that puts the thing on the grocery list.
    - **A wait after this step**, such as "Wait 1 min". You see the wait when you go through the routine.
 5. Press **Save**.
