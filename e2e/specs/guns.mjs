@@ -120,7 +120,7 @@ async function sees(page, who) {
   for (const url of routes) codes.push((await api(page, 'GET', url)).status);
   check(`${who}: every address for the rifle or the ammunition says not found: ${codes.join(' ')}`, codes.every((c) => c === 404));
   check(`${who}: a sticker for it cannot be printed`, (await api(page, 'POST', '/api/things/stickers', { ids: [rifleId] })).status === 404);
-  check(`${who}: its page leads back to Things`, await (async () => { await page.goto(base + `/things/${rifleId}`); await wait(1200); return /\/things$/.test(page.url()); })());
+  check(`${who}: its page says it isn't here and leads back to Things`, await (async () => { await page.goto(base + `/things/${rifleId}`); await wait(1200); return (await page.getByText("That thing isn't here anymore.").isVisible()) && (await page.getByRole('link', { name: 'All things' }).getAttribute('href')) === '/things'; })());
   await page.goto(base + '/things'); await wait(1200);
   check(`${who}: the Things page shows none of it`, !/Deer rifle|Soft point|Private to you|Shared with you/.test(await page.locator('main').innerText()));
   await page.goto(base + '/'); await wait(1200);
