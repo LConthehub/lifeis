@@ -592,7 +592,7 @@ it('the house manual is written signed in, and read by its link without signing 
   const page = await reader.get(`/m/${share.token}`);
   const html = page.bytes.toString('utf8');
   expect([page.status, page.headers.get('content-type'), page.headers.get('content-security-policy'), page.headers.get('x-robots-tag')])
-    .toEqual([200, 'text/html; charset=utf-8', "default-src 'none'; style-src 'unsafe-inline'", 'noindex, nofollow']);
+    .toEqual([200, 'text/html; charset=utf-8', "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self'", 'noindex, nofollow']);
   expect([html.includes('Wi-Fi'), html.includes('&lt;b&gt;fish&lt;/b&gt;'), html.includes('4821'), html.includes('<script')]).toEqual([true, true, false, false]);
   expect((await reader.get(`/m/${'0'.repeat(64)}`)).status).toBe(404);
   expect((await reader.get('/api/manual')).status).toBe(401);

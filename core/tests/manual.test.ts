@@ -60,6 +60,24 @@ it('the shared link shows everything but what is private, with the pets, until i
   expect(page).toContain('<a href="tel:5550100">555 0100</a>');
   expect(page).not.toContain('4821');
   expect(page).not.toContain('<script');
+  // In Life Is's look, loading nothing from another site, with the quiet credit on by default.
+  expect(page).toContain('<meta name="robots" content="noindex, nofollow">');
+  expect(page).toContain('prefers-color-scheme:dark');
+  expect(page).toContain('Shared with you');
+  expect(page).toContain('Nothing on this page can be changed from here.');
+  expect(page).toContain('Made with Life Is, a private home organizer you run yourself. <a href="https://lifeis.living" rel="noopener noreferrer">lifeis.living</a>');
+  const outside = [...page.matchAll(/(?:src|href)="(https?:[^"]*)"|url\((https?:[^)]*)\)/g)].map((x) => x[1] ?? x[2]);
+  expect(outside).toEqual(['https://lifeis.living']);
+  expect(page).toContain('/fonts/fraunces-soft.woff2');
+  expect(page).toContain('src="/mark-192.png"');
+  // Turned off, the credit is gone and the old line stays.
+  expect((await book.get()).credit).toBe(true);
+  expect((await book.setCredit(false)).credit).toBe(false);
+  const quiet = manualHtml((await manualFor(db, shared.token!, clock))!);
+  expect(quiet).not.toContain('lifeis.living');
+  expect(quiet).not.toContain('Made with Life Is');
+  expect(quiet).toContain('Nothing on this page can be changed from here.');
+  expect((await book.setCredit(true)).credit).toBe(true);
 
   // A new link replaces the old; without pets when asked; and its day ends it.
   const again = (await book.shareFor(1, false)).share;

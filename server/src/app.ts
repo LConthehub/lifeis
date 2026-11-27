@@ -364,7 +364,7 @@ export function createApp(options: Options) {
         if (!found) throw new Refusal(404, 'Not found');
         // A page of its own with no scripts, kept out of search engines and out of any cache but the reader's.
         reply = { body: Buffer.from(manualHtml(found), 'utf8'), headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'private, no-store',
-          'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'", 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' } };
+          'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self'", 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' } };
       } else if (path.startsWith('/.well-known/')) {
         // Programs look for these addresses (an AI app signing in, among others). Any that isn't one of Life Is's own is
         // plainly not here: the app's page in its place would be read as an answer, and make no sense to them.

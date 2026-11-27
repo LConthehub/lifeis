@@ -115,7 +115,26 @@ check('the link opens with no sign-in', answer.status() === 200 && seen.includes
 check('it has the plumber and the pets, and not the alarm code', seen.includes('555 0142') && seen.includes('Rex') && seen.includes('Two cups, twice a day') && !seen.includes('4821') && !seen.includes('Alarm'));
 check('nothing else of Life Is opens for them', (await guest.request.get(`${base}/api/manual`)).status() === 401);
 check('and the page itself can fetch nothing', await guest.evaluate(() => fetch('/api/health').then(() => false).catch(() => true)));
+check('it has the quiet credit with a plain link to lifeis.living', seen.includes('Made with Life Is, a private home organizer you run yourself.') && await guest.locator('a[href="https://lifeis.living"][rel="noopener noreferrer"]').count() === 1);
+check('it still says nothing can be changed, and loads fonts and the mark from here', seen.includes('Nothing on this page can be changed from here.') && await guest.evaluate(() => document.fonts.check('16px "Fraunces Variable"') && document.querySelector('img').naturalWidth > 0));
+check('the page does not scroll sideways at phone width', await guest.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+check('the setting to show the credit is on in Sharing', await sharing.getByLabel("Show 'Made with Life Is' on the shared page").isChecked());
+await sharing.getByLabel("Show 'Made with Life Is' on the shared page").click(); await page.waitForTimeout(800);
+await guest.goto(link); await guest.waitForTimeout(400);
+const quiet = (await guest.locator('body').innerText()).replace(/\s+/g, ' ');
+check('turned off, the credit and its link are gone, the old line stays', !quiet.includes('Made with Life Is') && await guest.locator('a[href="https://lifeis.living"]').count() === 0 && quiet.includes('Nothing on this page can be changed from here.'));
+await sharing.getByLabel("Show 'Made with Life Is' on the shared page").click(); await page.waitForTimeout(800);
+await guest.goto(link); await guest.waitForTimeout(400);
 await guest.screenshot({ path: `${shots}/manual-shared.png`, fullPage: true });
+// Phone pictures of the shared page, light and dark, with a link on it (the owner looks at these).
+await page.evaluate(() => fetch('/api/home-services', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Jellyfin', address: 'https://watch.example.com', guests: true, note: 'Films and shows, ask for the login' }) }));
+for (const scheme of ['light', 'dark']) {
+  const phone = await (await browser.newContext({ viewport: { width: 375, height: 812 }, deviceScaleFactor: 2, colorScheme: scheme })).newPage();
+  await phone.goto(link); await phone.waitForTimeout(800);
+  check(`the shared page fits 375px with no sideways scroll (${scheme})`, await phone.evaluate(() => document.documentElement.scrollWidth <= 375));
+  await phone.screenshot({ path: `${shots}/guest-manual-${scheme}.png`, fullPage: true });
+  await phone.context().close();
+}
 
 await sharing.getByRole('button', { name: 'Turn it off' }).click(); await page.waitForTimeout(1000);
 check('turned off, the link stops working', (await guest.goto(link)).status() === 404);
