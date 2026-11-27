@@ -265,7 +265,7 @@ function NextYear({ holiday, year, start }) {
   return (
     <section className={`${cardClass} space-y-2`}>
       <Heading icon="plan">{manual ? `When is this year's ${holiday.name}?` : `Start this year's ${holiday.name}`}</Heading>
-      <Hint>{manual ? "You set its day each year. Next year's starts from this one: the same guests, cards, decorations and countdown, with nothing checked off." : "Starts from last year's: the same guests, cards, decorations and countdown, with nothing ticked, and what broke or ran out last year on the shopping list."}</Hint>
+      <Hint>{manual ? "You set its day each year. Next year's starts from this one: the same guests, cards, decorations and countdown, with nothing checked off." : "Starts from last year's: the same guests, cards, decorations and countdown, with nothing checked off, and what broke or ran out last year on the shopping list."}</Hint>
       {manual && <Field label="The day"><input type="date" value={day} onChange={(e) => setDay(e.target.value)} className={field} /></Field>}
       <button type="button" onClick={() => start(manual ? day : null)} className={button}>Start it</button>
     </section>
