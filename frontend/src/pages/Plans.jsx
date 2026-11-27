@@ -2,11 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Icon from '../components/Icon';
 import axios from 'axios';
-import SubChips, { PLAN_CHIPS } from '../components/SubChips';
 import { shrink } from '../components/shrink';
 import Picture from '../components/Picture';
 import { PlanGoal } from '../components/Goals';
-import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
+import { BulkBar, PickBox, SelectButton, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, fromDateInput } from '../components/ui';
 
 const ENTRY_ICONS = { meal: 'meal', session: 'session', media: 'media' };
@@ -62,69 +61,106 @@ function WhenEaten({ plan, day, meal, servings, onChange }) {
 export const photoAddress = (photo) => `/api/plans/photos/${photo.id ?? photo}`;
 
 
-/** Plans ahead, and the ones to look back on. */
+const KINDS = [['all', 'All'], ['yearly', 'Every year'], ['trip', 'Trips'], ['gathering', 'Gatherings']];
+const LINE_ICONS = { trip: 'trip', gathering: 'plan', birthday: 'birthday' };
+const awayText = (line) => (line.band === 'past' ? null : line.days_until === 0 ? 'now' : line.days_until === 1 ? 'tomorrow' : `in ${line.days_until} days`);
+/** "Dec 15", or "Dec 15, 2027" outside this year; a span says "Dec 15 to 17" or "Dec 30 to Jan 2". */
+const spanText = (l) => {
+  const thisYear = String(new Date().getFullYear());
+  const one = (day, withYear) => fromDateInput(day).toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}) });
+  const yearShown = l.start_day.slice(0, 4) !== thisYear || l.end_day.slice(0, 4) !== thisYear;
+  if (l.end_day === l.start_day) return one(l.start_day, yearShown);
+  const end = l.end_day.slice(0, 7) === l.start_day.slice(0, 7) ? String(Number(l.end_day.slice(8))) : one(l.end_day, false);
+  return `${one(l.start_day, false)} to ${end}${yearShown ? `, ${l.end_day.slice(0, 4)}` : ''}`;
+};
+const shortDay = (day) => fromDateInput(day).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+
+/**
+ * Every plan in one list by date: one-time plans, each year of a holiday or trip, and birthdays with no plan
+ * yet as small lines. Chips narrow it to what comes back every year, trips, or gatherings.
+ */
 export default function PlansPage() {
-  const [plans, setPlans] = useState(null);
+  const [lines, setLines] = useState(null);
+  const [tagged, setTagged] = useState(null);
+  const [kind, setKind] = useState('all');
   const [adding, setAdding] = useState(false);
   const [tag, setTag] = useState('');
   const sel = useSelecting();
   const navigate = useNavigate();
-  const load = useCallback(() => { axios.get('/api/plans', { params: { tag: tag || undefined } }).then(({ data }) => setPlans(data)).catch(() => setPlans([])); }, [tag]);
+  const load = useCallback(() => {
+    axios.get('/api/plans/all').then(({ data }) => setLines(data)).catch(() => setLines([]));
+    if (tag) axios.get('/api/plans', { params: { tag } }).then(({ data }) => setTagged(new Set(data.map((p) => `plan-${p.id}`)))).catch(() => setTagged(new Set()));
+    else setTagged(null);
+  }, [tag]);
   useEffect(() => { load(); }, [load]);
-  if (!plans) return null;
-  const now = plans.filter((p) => p.when === 'now');
-  const ahead = plans.filter((p) => p.when === 'ahead').reverse();
-  const past = plans.filter((p) => p.when === 'past');
-  const years = [...new Set(past.map((p) => p.start_day.slice(0, 4)))];
-  const tile = (p) => (
-    <li key={p.id}>
-      <div className={`${cardClass} flex h-full flex-col gap-2 hover:ring-life-300`}>
-      <div className="flex gap-2">
-      <PickBox sel={sel} id={p.id} name={p.name} />
-      <Link to={`/plans/${p.id}`} className="flex min-w-0 flex-1 gap-3">
-        {p.cover_photo ? <Picture src={photoAddress(p.cover_photo)} alt="" loading="lazy" className="h-16 w-16 flex-none rounded-lg object-cover" />
-          : <span aria-hidden="true" className="flex h-16 w-16 flex-none items-center justify-center rounded-lg bg-life-50 text-2xl dark:bg-life-700"><Icon of="plan" size={28} /></span>}
-        <span className="min-w-0 flex-1">
-          <span className="block font-medium text-life-800 dark:text-life-50">{p.name}</span>
-          <span className="block text-xs text-gray-500 dark:text-life-300">{daysText(p)}</span>
-          <span className="mt-1 block text-xs text-gray-600 dark:text-life-200">
-            {[p.when !== 'past' && p.tasks_left > 0 && `${p.tasks_left} still to do`, p.photos > 0 && `${p.photos} ${p.photos === 1 ? 'photo' : 'photos'}`, p.note].filter(Boolean).join(' · ')}
-          </span>
-        </span>
-      </Link>
-      </div>
-      <TagChips tags={p.tag_list} />
-      </div>
-    </li>
-  );
+  if (!lines) return null;
+  const shown = lines.filter((l) => (kind === 'all' || (kind === 'yearly' ? l.yearly : l.kind === kind)) && (!tagged || tagged.has(l.key)));
+  const plainIds = lines.filter((l) => l.link.startsWith('/plans/') && /^\/plans\/\d+$/.test(l.link)).map((l) => Number(l.key.slice(5)));
+  const row = (l) => {
+    const planId = /^\/plans\/\d+$/.test(l.link) ? Number(l.key.slice(5)) : null;
+    if (l.small) return (
+      <li key={l.key}>
+        <Link to={l.link} className="flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-sm text-gray-700 hover:bg-life-50 dark:text-life-100 dark:hover:bg-life-800">
+          <span aria-hidden="true" className="flex w-10 justify-center"><Icon of="birthday" /></span>
+          <span className="min-w-0 flex-1">{l.name}{l.years && <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{l.years} {l.years === 1 ? 'year' : 'years'}</span>}</span>
+          <span className="text-right text-xs text-gray-500 dark:text-life-300">{shortDay(l.start_day)}<span className="block">{awayText(l)}</span></span>
+        </Link>
+      </li>
+    );
+    return (
+      <li key={l.key}>
+        <div className={`${cardClass} flex items-center gap-3 hover:ring-life-300`}>
+          {planId !== null && <PickBox sel={sel} id={planId} name={l.name} />}
+          <Link to={l.link} className="flex min-w-0 flex-1 items-center gap-3">
+            {l.cover_photo ? <Picture src={photoAddress(l.cover_photo)} alt="" loading="lazy" className="h-12 w-12 flex-none rounded-lg object-cover" />
+              : <span aria-hidden="true" className="flex h-12 w-12 flex-none items-center justify-center rounded-lg bg-life-50 dark:bg-life-700"><Icon of={LINE_ICONS[l.kind]} size={22} /></span>}
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium text-life-800 dark:text-life-50">{l.name}</span>
+              <span className="block text-xs text-gray-500 dark:text-life-300">
+                {[spanText(l), l.yearly && 'Every year'].filter(Boolean).join(' · ')}
+              </span>
+              {(l.next || l.not_started) && <span className="mt-0.5 block text-xs text-gray-700 dark:text-life-100">{l.not_started ? 'Not started yet: start from last year' : l.next}</span>}
+            </span>
+            {awayText(l) && <span className="flex-none text-xs text-gray-500 dark:text-life-300">{awayText(l)}</span>}
+          </Link>
+        </div>
+      </li>
+    );
+  };
   const group = (title, list) => list.length > 0 && (
-    <section className="space-y-2">
+    <section className="space-y-2" aria-label={title}>
       <h2 className="text-xs font-semibold uppercase tracking-wide text-life-700 dark:text-life-200">{title}</h2>
-      <ul className="grid gap-3 sm:grid-cols-2">{list.map(tile)}</ul>
+      <ul className="space-y-2">{list.map(row)}</ul>
     </section>
   );
   return (
     <div className="space-y-5">
-      <SubChips items={PLAN_CHIPS} label="Plans, holidays and trips" />
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Plans and memories</h1>
+        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Plans</h1>
         <button type="button" onClick={() => setAdding(true)} className={buttonClass}>+ New</button>
+      </div>
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Show">
+        {KINDS.map(([key, text]) => (
+          <button key={key} type="button" aria-pressed={kind === key} onClick={() => setKind(key)}
+            className={`flex min-h-[44px] items-center rounded-full px-4 py-2 text-sm ${kind === key ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`}>{text}</button>
+        ))}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <TagFilter value={tag} onChange={setTag} />
-        {(plans.length > 0 || tag) && <SelectButton sel={sel} />}
+        {plainIds.length > 0 && <SelectButton sel={sel} />}
+        <span className="ml-auto text-xs"><Link to="/plans/holidays" className="text-life-700 hover:underline dark:text-life-100">Holidays</Link> · <Link to="/plans/trips" className="text-life-700 hover:underline dark:text-life-100">Trips</Link></span>
       </div>
-      <BulkBar sel={sel} kind="plan" list={plans.map((p) => p.id)} noun="plans" onDone={load} />
-      {plans.length === 0 && tag && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing matches.</div>}
-      {plans.length === 0 && !tag && (
+      <BulkBar sel={sel} kind="plan" list={plainIds} noun="plans" onDone={load} />
+      {shown.length === 0 && (tag || kind !== 'all') && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing matches.</div>}
+      {lines.length === 0 && !tag && (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>
-          A plan is anything with a day and things that belong to it: a vacation with its menu, dishes and films, or one afternoon's sewing.
+          A plan is anything with a day and things that belong to it: a trip, a lunch, Thanksgiving or a birthday.
           Make one ahead, or write one down afterwards. Either way it stays here to look back on.
         </div>
       )}
-      {group('Now', now)}
-      {group('Coming up', ahead)}
-      {years.map((year) => <div key={year}>{group(`Looking back: ${year}`, past.filter((p) => p.start_day.startsWith(year)))}</div>)}
+      {group('Coming up', shown.filter((l) => l.band === 'soon'))}
+      {group('Later', shown.filter((l) => l.band === 'later'))}
+      {group('Past', shown.filter((l) => l.band === 'past'))}
       {adding && (
         <Modal title="A plan, or a memory" onClose={() => setAdding(false)}>
           <PlanForm plan={{ start_day: toDateInput(new Date()) }} onDone={(p) => navigate(`/plans/${p.id}`)} />
