@@ -22,7 +22,7 @@ if (await first.isVisible().catch(() => false)) { await first.getByRole('button'
 await page.evaluate(() => fetch('/api/things/pets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Rex', species: 'dog', food: 'Two cups, twice a day', vet_name: 'Oak Lane Vets', vet_phone: '555 0100' }) }));
 
 await page.goto(`${base}/manual`); await page.waitForTimeout(1200);
-check('the manual has its parts, each with ideas to start from', (await page.getByRole('group', { name: 'Ideas for In an emergency' }).innerText()).includes('Water shut-off'));
+check('the manual has its parts, each with ideas to start from', (await page.getByRole('group', { name: 'Ideas for In an emergency' }).innerText()).includes('Breaker box'));
 check('pets are there by themselves, with food and vet', (await page.getByRole('region', { name: 'Pets' }).innerText()).replace(/\s+/g, ' ').includes('Food: Two cups, twice a day Vet: Oak Lane Vets · 555 0100'));
 
 const add = async (group, idea, fill) => {
@@ -31,18 +31,18 @@ const add = async (group, idea, fill) => {
   await fill(form);
   await form.getByRole('button', { name: 'Save' }).click(); await page.waitForTimeout(1000);
 };
-await add('In an emergency', 'Water shut-off', async (form) => {
-  await form.getByLabel('What to know').fill('Red lever behind the boiler.\nTurn it a quarter.');
+await add('In an emergency', 'Breaker box', async (form) => {
+  await form.getByLabel('What to know').fill('Gray panel on the back wall.\nEach switch is labeled.');
   await form.getByLabel('Where it is').selectOption('new');
-  await form.getByLabel('The new place').fill('Basement › Boiler cupboard');
+  await form.getByLabel('The new place').fill('Garage › Back wall');
   await form.getByRole('button', { name: 'Add', exact: true }).click(); await page.waitForTimeout(800);
 });
 await add('Who to call', 'Plumber', async (form) => { await form.getByLabel('A phone number').fill('555 0142'); await form.getByLabel('Anything to know about them').fill('Ask for Dana'); });
 await add('How the house works', 'Alarm', async (form) => { await form.getByLabel('What to know').fill('Code 4821'); await form.getByLabel(/Private/).check(); });
 
 const emergency = (await page.getByRole('region', { name: 'In an emergency' }).innerText()).replace(/\s+/g, ' ');
-check('an entry says what to know and where it is', emergency.includes('Water shut-off') && emergency.includes('Basement › Boiler cupboard') && emergency.includes('Turn it a quarter'), emergency.slice(0, 160));
-check('an idea that is written is no longer offered', !(await page.getByRole('group', { name: 'Ideas for In an emergency' }).innerText()).includes('Water shut-off'));
+check('an entry says what to know and where it is', emergency.includes('Breaker box') && emergency.includes('Garage › Back wall') && emergency.includes('Each switch is labeled'), emergency.slice(0, 160));
+check('an idea that is written is no longer offered', !(await page.getByRole('group', { name: 'Ideas for In an emergency' }).innerText()).includes('Breaker box'));
 check('a phone number can be tapped', await page.locator('a[href="tel:5550142"]').isVisible());
 check('a private entry says it stays off the link', (await page.getByRole('region', { name: 'How the house works' }).innerText()).includes('private: not on the shared link'));
 await page.screenshot({ path: `${shots}/manual.png`, fullPage: true });
@@ -111,7 +111,7 @@ check('a link is made, saying what is left out', /\/m\/[0-9a-f]{64}$/.test(link)
 const guest = await (await browser.newContext({ viewport: { width: 393, height: 852 } })).newPage();
 const answer = await guest.goto(link); await guest.waitForTimeout(600);
 const seen = (await guest.locator('body').innerText()).replace(/\s+/g, ' ');
-check('the link opens with no sign-in', answer.status() === 200 && seen.includes('House Manual') && seen.includes('Water shut-off') && seen.includes('Where: Basement › Boiler cupboard'), seen.slice(0, 140));
+check('the link opens with no sign-in', answer.status() === 200 && seen.includes('House Manual') && seen.includes('Breaker box') && seen.includes('Where: Garage › Back wall'), seen.slice(0, 140));
 check('it has the plumber and the pets, and not the alarm code', seen.includes('555 0142') && seen.includes('Rex') && seen.includes('Two cups, twice a day') && !seen.includes('4821') && !seen.includes('Alarm'));
 check('nothing else of Life Is opens for them', (await guest.request.get(`${base}/api/manual`)).status() === 401);
 check('and the page itself can fetch nothing', await guest.evaluate(() => fetch('/api/health').then(() => false).catch(() => true)));
