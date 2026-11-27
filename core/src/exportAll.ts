@@ -487,7 +487,7 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
 
   // ---------- routines ----------
   const routineRows = await all('SELECT r.id, r.name, r.kind, r.cycle_length, r.points, r.note, u.username AS signin, m.name AS member, p.name AS pet FROM routines r LEFT JOIN users u ON u.id = r.for_user LEFT JOIN household_members m ON m.id = r.for_member LEFT JOIN pets p ON p.id = r.for_pet WHERE r.owner_id = ? ORDER BY r.sort_order, r.id');
-  const routineSteps = await all(`SELECT t.routine_id, t.name AS time_name, t.at_time, s.words, s.rule, s.weekdays, s.night, i.name AS thing, s.wait_seconds, s.sets, s.reps, s.weight, s.weight_unit, s.minutes, s.distance, s.distance_unit
+  const routineSteps = await all(`SELECT t.routine_id, t.name AS time_name, t.at_time, s.words, s.rule, s.weekdays, s.night, s.every_days, s.every_from, i.name AS thing, s.wait_seconds, s.sets, s.reps, s.weight, s.weight_unit, s.minutes, s.distance, s.distance_unit
     FROM routine_steps s JOIN routine_times t ON t.id = s.time_id JOIN routines r ON r.id = t.routine_id LEFT JOIN items i ON i.id = s.item_id
     WHERE r.owner_id = ? ORDER BY r.sort_order, r.id, t.sort_order, t.id, s.sort_order, s.id`);
   const routineById = new Map(routineRows.map((r) => [r.id as number, r]));
@@ -496,7 +496,7 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
       const r = routineById.get(s.routine_id as number)!;
       const weekdays = str(s.weekdays).split(',').map(Number).filter((n) => n >= 1 && n <= 7);
       return [str(r.name), str(r.signin), str(r.member), str(r.pet), str(r.cycle_length), str(r.points), str(r.note), str(s.time_name), str(s.at_time), str(s.words),
-        daysAsText({ rule: str(s.rule) as StepRule, weekdays, night: num(s.night) }), str(s.thing), str(s.wait_seconds),
+        daysAsText({ rule: s.every_days && s.every_from ? 'every' : str(s.rule) as StepRule, weekdays, night: num(s.night), every: num(s.every_days), start: str(s.every_from) || null }), str(s.thing), str(s.wait_seconds),
         str(r.kind) === 'workout' ? 'workout' : '', str(s.sets), str(s.reps), str(s.weight), str(s.weight_unit), str(s.minutes), str(s.distance), str(s.distance_unit)];
     }));
   out.csv('routine-history.csv', ['Routine', 'Time', 'Day finished', 'Night of the cycle', 'Points'],
@@ -1504,8 +1504,8 @@ const importers: Record<string, Importer> = {
               minutes: numberOf(cellOf(row, 'Minutes')), distance: numberOf(cellOf(row, 'Distance')), distance_unit: cellOf(row, 'Distance unit') || null }, words);
           } catch { lost = true; }
         }
-        const made_step = await c.tx.run('INSERT INTO routine_steps (time_id, words, rule, weekdays, night, item_id, wait_seconds, sort_order, sets, reps, weight, weight_unit, minutes, distance, distance_unit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [timeId, words, days.rule ?? 'daily', days.rule === 'weekdays' ? days.weekdays!.join(',') : null, days.rule === 'cycle' ? days.night! : null, itemId, wait !== null && wait >= 1 && wait <= 3600 ? wait : null, count,
+        const made_step = await c.tx.run('INSERT INTO routine_steps (time_id, words, rule, weekdays, night, every_days, every_from, item_id, wait_seconds, sort_order, sets, reps, weight, weight_unit, minutes, distance, distance_unit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [timeId, words, days.rule === 'every' ? 'daily' : days.rule ?? 'daily', days.rule === 'weekdays' ? days.weekdays!.join(',') : null, days.rule === 'cycle' ? days.night! : null, days.rule === 'every' ? days.every! : null, days.rule === 'every' ? days.start! : null, itemId, wait !== null && wait >= 1 && wait <= 3600 ? wait : null, count,
             nums.sets, nums.reps, nums.weight, nums.weight_unit, nums.minutes, nums.distance, nums.distance_unit]);
         if (stepAt === undefined) stepIds.set(labelKey(timeName) + '|' + labelKey(words), made_step.lastId);
       }

@@ -36,7 +36,7 @@ function routineFrom(body: Body): RoutineInput {
       steps: read.records(t, 'steps').map((s) => ({
         id: read.maybeWhole(s, 'id'), words: read.text(s, 'words'), rule: read.maybeText(s, 'rule') as RoutineStepRule | null,
         weekdays: s.weekdays === undefined || s.weekdays === null ? null : read.wholes(s, 'weekdays'),
-        night: read.maybeWhole(s, 'night'), item_id: read.maybeWhole(s, 'item_id'), wait_seconds: read.maybeWhole(s, 'wait_seconds'),
+        night: read.maybeWhole(s, 'night'), every: read.maybeWhole(s, 'every'), start: read.maybeText(s, 'start'), item_id: read.maybeWhole(s, 'item_id'), wait_seconds: read.maybeWhole(s, 'wait_seconds'),
         nums: sent(s, 'nums') && s.nums !== null ? numbersFrom(read.record(s, 'nums')) : null,
       })),
     }));

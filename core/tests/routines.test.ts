@@ -56,6 +56,67 @@ it('says days in words and reads them back', () => {
   }
 });
 
+it('every other day and every 3 days count from the start day on the calendar', () => {
+  const two = { rule: 'every' as const, weekdays: [], night: null, every: 2, start: '2046-03-05' };
+  const three = { rule: 'every' as const, weekdays: [], night: null, every: 3, start: '2046-03-05' };
+  const on = (step: typeof two, days: string[]) => days.map((d) => fallsOn(step, d, null));
+  // The start day, the day after, two days after, and the day before the start (never due).
+  expect(on(two, ['2046-03-05', '2046-03-06', '2046-03-07', '2046-03-04', '2046-03-03', '2046-03-09'])).toEqual([true, false, true, false, false, true]);
+  expect(on(three, ['2046-03-05', '2046-03-06', '2046-03-07', '2046-03-08', '2046-03-04', '2046-03-02'])).toEqual([true, false, false, true, false, false]);
+  expect([daysWords(two, null), daysWords(three, null), daysWords({ ...three, every: 10 }, null)]).toEqual(['every other day', 'every 3 days', 'every 10 days']);
+  expect(daysAsText(two)).toBe('every other day from 2046-03-05');
+  expect(daysFromText(daysAsText(two))).toEqual({ rule: 'every', every: 2, start: '2046-03-05' });
+  expect(daysFromText(daysAsText(three))).toEqual({ rule: 'every', every: 3, start: '2046-03-05' });
+  expect(daysFromText('every 1 days from 2046-03-05')).toEqual({ rule: 'daily' });
+  expect(daysFromText('every 3 days from 2046-02-31')).toEqual({ rule: 'daily' });
+});
+
+it('a step every other day shows on its days, and nothing waits when a day is missed', async () => {
+  const r = await mine().create({ name: 'Cat', times: [{ name: 'Evening', steps: [
+    { words: 'Water' },
+    { words: 'Wet food', rule: 'every', every: 2, start: '2046-03-05' },
+    { words: 'Brush', rule: 'every', every: 3 },
+  ] }] });
+  expect(r.times[0]!.steps.map((s) => [s.days, s.rule, s.every, s.start])).toEqual([['every day', 'daily', null, null], ['every other day', 'every', 2, '2046-03-05'], ['every 3 days', 'every', 3, '2046-03-05']]);
+  const words = async (on: string) => (await mine().today(on)).flatMap((t) => t.steps.map((s) => s.words));
+  expect(await words('2046-03-05')).toEqual(['Water', 'Wet food', 'Brush']);
+  expect(await words('2046-03-06')).toEqual(['Water']);
+  expect(await words('2046-03-07')).toEqual(['Water', 'Wet food']);
+  expect(await words('2046-03-08')).toEqual(['Water', 'Brush']);
+  expect(await words('2046-03-09')).toEqual(['Water', 'Wet food']); // days skipped in between do not pile up
+  expect(await words('2046-03-04')).toEqual(['Water']); // before the start day
+  await expect(mine().create({ name: 'Bad', times: [{ name: 'Day', steps: [{ words: 'x', rule: 'every', every: 1 }] }] })).rejects.toEqual(problem(400));
+  await expect(mine().create({ name: 'Bad', times: [{ name: 'Day', steps: [{ words: 'x', rule: 'every', every: 31 }] }] })).rejects.toEqual(problem(400));
+  await expect(mine().create({ name: 'Bad', times: [{ name: 'Day', steps: [{ words: 'x', rule: 'every' }] }] })).rejects.toEqual(problem(400));
+  // Changing it keeps its other steps, and a time whose only step is on other days is left out of that day.
+  const only = await mine().create({ name: 'Plants', times: [{ name: 'Water', steps: [{ words: 'Fern', rule: 'every', every: 2, start: '2046-03-05' }] }] });
+  expect((await mine().today('2046-03-06')).some((t) => t.routine_id === only.id)).toBe(false);
+  expect((await mine().today('2046-03-07')).some((t) => t.routine_id === only.id)).toBe(true);
+  const changed = await mine().update(only.id, { name: 'Plants', times: [{ id: only.times[0]!.id, name: 'Water', steps: [{ id: only.times[0]!.steps[0]!.id, words: 'Fern', rule: 'every', every: 4, start: '2046-03-05' }] }] });
+  expect(changed.times[0]!.steps[0]!.days).toBe('every 4 days');
+  const back = await mine().update(only.id, { name: 'Plants', times: [{ id: only.times[0]!.id, name: 'Water', steps: [{ id: only.times[0]!.steps[0]!.id, words: 'Fern' }] }] });
+  expect([back.times[0]!.steps[0]!.rule, back.times[0]!.steps[0]!.every]).toEqual(['daily', null]);
+});
+
+it('every other day goes into the download and comes back in, and a file without it still reads', async () => {
+  await mine().create({ name: 'Cat', times: [{ name: 'Evening', steps: [{ words: 'Wet food', rule: 'every', every: 2, start: '2046-03-05' }, { words: 'Brush', rule: 'every', every: 3, start: '2046-03-04' }, { words: 'Water' }] }] });
+  const { files } = await splitDownload((await exportEverything(db, owner, clock)).bytes);
+  expect(files['routines.csv']).toContain('every other day from 2046-03-05');
+  expect(files['routines.csv']).toContain('every 3 days from 2046-03-04');
+  const bob = await person('bob');
+  const done = await bringInDownload(db, bob, files, ['routines'], clock);
+  for (const kind of done.kinds) if (kind.key === 'routines') expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  const cat = (await mine(bob).list()).find((x) => x.name === 'Cat')!;
+  expect(cat.times[0]!.steps.map((s) => [s.words, s.days, s.rule, s.every, s.start])).toEqual([
+    ['Wet food', 'every other day', 'every', 2, '2046-03-05'], ['Brush', 'every 3 days', 'every', 3, '2046-03-04'], ['Water', 'every day', 'daily', null, null],
+  ]);
+  // An older file has plain days in that column and still reads.
+  const old = { ...files, 'routines.csv': files['routines.csv']!.replace('every other day from 2046-03-05', 'Mon Thu') };
+  const carol = await person('carol');
+  await bringInDownload(db, carol, old, ['routines'], clock);
+  expect((await mine(carol).list()).find((x) => x.name === 'Cat' && x.owner_id === carol)!.times[0]!.steps.map((s) => s.days)).toEqual(['Mon and Thu', 'every 3 days', 'every day']);
+});
+
 it('shows each step on its days: every day, or only on Monday and Thursday', async () => {
   const r = await mine().create({ name: 'Skincare', times: [{ name: 'Evening', steps: [
     { words: 'Wash your face' },
@@ -437,6 +498,7 @@ it('upgrades from the version before pet routines: routines and ticks kept, tick
   for (const table of ['routine_closed', 'dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE measure_entries');
   await db.run('DROP TABLE measures');
+  for (const column of ['every_days', 'every_from']) await db.run(`ALTER TABLE routine_steps DROP COLUMN ${column}`);
   await db.run('ALTER TABLE routines DROP COLUMN kind');
   for (const column of ['sets', 'reps', 'weight', 'weight_unit', 'minutes', 'distance', 'distance_unit']) for (const table of ['routine_steps', 'routine_ticks']) await db.run(`ALTER TABLE ${table} DROP COLUMN ${column}`);
   await db.run('ALTER TABLE routines DROP COLUMN for_pet');
@@ -569,6 +631,7 @@ it('upgrades from the version before workouts: routines and ticks stay, as plain
   for (const table of ['routine_closed', 'dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE measure_entries');
   await db.run('DROP TABLE measures');
+  for (const column of ['every_days', 'every_from']) await db.run(`ALTER TABLE routine_steps DROP COLUMN ${column}`);
   await db.run('ALTER TABLE routines DROP COLUMN kind');
   for (const column of ['sets', 'reps', 'weight', 'weight_unit', 'minutes', 'distance', 'distance_unit']) for (const table of ['routine_steps', 'routine_ticks']) await db.run(`ALTER TABLE ${table} DROP COLUMN ${column}`);
   await db.run('PRAGMA user_version = 56');

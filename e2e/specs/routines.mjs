@@ -120,6 +120,23 @@ const eveningNow = (await send('GET', '/api/routine-day')).find((x) => x.title =
 say('and it stays closed after reloading, though nothing in it was checked', !(await eve.isVisible()) && eveningNow?.finished === false);
 say('closed is kept for the person, so other devices hide it too', eveningNow?.closed === true);
 
+// ---------- a step every other day ----------
+await page.goto(base + '/routines'); await wait(1200);
+await page.getByRole('button', { name: '+ New', exact: true }).click(); await wait(600);
+await dialog.getByLabel('Name of the routine').fill('Plants');
+const fern = dialog.locator('[data-routine-step]').first();
+await fern.getByLabel('Step', { exact: true }).fill('Water the fern');
+await fern.getByLabel('Days', { exact: true }).selectOption('every');
+say('Every few days shows Every 2 days, starting today', await fern.getByLabel('How many days apart').inputValue() === '2' && await fern.getByLabel('Starting day').inputValue() === iso(new Date()));
+await fern.getByLabel('Starting day').scrollIntoViewIfNeeded();
+await page.screenshot({ path: shots + '/every-other-day.png' });
+await dialog.getByRole('button', { name: 'Save' }).click(); await wait(1000);
+say('the Routines page says the step is every other day', /Water the fern every other day/.test(await text()));
+await page.goto(base + '/'); await wait(1500);
+say('Home shows it today, because it started today', await page.locator('[data-routine-time="Plants: Morning"]').isVisible());
+say('tomorrow it is left out', !(await send('GET', `/api/routine-day?day=${inDays(1)}`)).some((x) => x.routine === 'Plants'));
+say('and the day after it is back', (await send('GET', `/api/routine-day?day=${inDays(2)}`)).some((x) => x.routine === 'Plants'));
+
 // ---------- the cycle waits ----------
 const night = async (n) => (await send('GET', `/api/routine-day?day=${inDays(n)}`)).find((x) => x.title === '4-night skin cycle: Evening')?.night;
 say('tomorrow is night 2, the retinoid night', await night(1) === 2);

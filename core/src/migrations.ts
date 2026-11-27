@@ -1885,6 +1885,17 @@ export const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    number: 61,
+    name: 'A step that repeats every other day, or every few days',
+    // The step's rule column has a CHECK that only allows daily, weekdays and cycle, and a table cannot be rebuilt here. So a step
+    // that repeats keeps rule = 'daily' and says how often (every_days, 2 to 30) and the day it counts from (every_from). The
+    // code reads a step with every_days as the rule 'every'.
+    statements: [
+      `ALTER TABLE routine_steps ADD COLUMN every_days INTEGER`,
+      `ALTER TABLE routine_steps ADD COLUMN every_from TEXT`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;
