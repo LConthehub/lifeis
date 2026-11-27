@@ -47,7 +47,7 @@ export function cookingTimerRoutes(timers: CookTimers): Route[] {
     }],
     ['POST', new RegExp(`^/api/cooking/timers/${ID}/more$`), async (c) => {
       const found = timers.extend(c.user.id, c.id, read.maybeNumber(c.body, 'minutes') ?? 1);
-      if (!found) throw new Refusal(404, 'Not found');
+      if (!found) throw new Refusal(404, "That timer isn't running anymore.");
       return { json: found };
     }],
     ['DELETE', new RegExp(`^/api/cooking/timers/${ID}$`), async (c) => {

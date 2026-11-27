@@ -37,7 +37,7 @@ export function PersonalKeys() {
   const run = async (work) => {
     setMessage(null);
     setBusy(true);
-    try { await work(); } catch (err) { setMessage({ error: errorMessage(err, 'Something went wrong') }); } finally { setBusy(false); }
+    try { await work(); } catch (err) { setMessage({ error: errorMessage(err, "That didn't work. Try again in a moment.") }); } finally { setBusy(false); }
   };
 
   if (onDevice()) {

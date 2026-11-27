@@ -66,7 +66,7 @@ export function photoLibrary(db: Db, owner: number, _clock: Clock = () => new Da
     if (answer.status === 401) throw new Problem(400, "Immich didn't accept that key");
     if (answer.status === 403) throw new Problem(400, 'That key isn\'t allowed to do this. It needs the permissions asset.read and asset.view.');
     if (answer.status === 404) throw new Problem(404, "Immich doesn't have that any more");
-    if (answer.status !== 200) throw new Problem(400, `Immich answered with an error (${answer.status})`);
+    if (answer.status !== 200) throw new Problem(400, "Immich couldn't answer just now. Try again in a moment.");
     return answer;
   }
 

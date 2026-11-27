@@ -20,7 +20,7 @@ export const shown = (alias = 'u'): string =>
 /** What the person typed, made ready to keep: trimmed and at most 40 characters. Empty means none. */
 export function readName(given: unknown): string {
   if (given === undefined || given === null) return '';
-  if (typeof given !== 'string') throw new Problem(400, 'A name is words');
+  if (typeof given !== 'string') throw new Problem(400, 'Type a name.');
   const said = given.trim().replace(/\s+/g, ' ');
   if ([...said].length > MAX_NAME) throw new Problem(400, `Keep the name to ${MAX_NAME} letters or fewer`);
   return said;
@@ -30,7 +30,7 @@ export function displayName(db: Db, owner: number) {
   async function get(): Promise<{ display_name: string; name: string }> {
     const person = await db.get<{ username: string; chosen: string | null }>(
       `SELECT u.username, (SELECT s.value FROM user_settings s WHERE s.user_id = u.id AND s.key = '${NAME_SETTING}') AS chosen FROM users u WHERE u.id = ?`, [owner]);
-    if (!person) throw new Problem(404, 'Not found');
+    if (!person) throw new Problem(404, "That person isn't here anymore. It may have been deleted.");
     const chosen = (person.chosen ?? '').trim();
     return { display_name: chosen, name: chosen || person.username };
   }

@@ -180,7 +180,7 @@ it('changing the password signs out the other devices', async () => {
 it("a change another website started is refused", async () => {
   const admin = await owner();
   const blocked = await admin.post('/api/kitchen/grocery', { label: 'milk' }, { 'Sec-Fetch-Site': 'cross-site' });
-  expect([blocked.status, blocked.json.detail]).toEqual([403, 'Request blocked: it came from another website']);
+  expect([blocked.status, blocked.json.detail]).toEqual([403, 'That was blocked because it came from another website.']);
   expect((await admin.post('/api/kitchen/grocery', { label: 'milk' }, { 'Sec-Fetch-Site': 'same-origin' })).status).toBe(201);
 });
 

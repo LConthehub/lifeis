@@ -110,7 +110,7 @@ it('reads a table pasted from a spreadsheet, tab by tab, and days written as wor
 
 it('refuses plainly: nothing there, no columns, OFX, too much', () => {
   expect(() => readStatement('   \n')).toThrow(/empty/);
-  expect(() => readStatement('Name,Phone\nAna,555')).toThrow(/couldn't find the columns/);
+  expect(() => readStatement('Name,Phone\nAna,555')).toThrow(/No columns of a statement/);
   expect(() => readStatement('Date,Description,Amount\nnot a day,Shop,12.00')).toThrow(/no line had both a date and an amount/);
   expect(() => readStatement('OFXHEADER:100\nDATA:OFXSGML\n<OFX>\n</OFX>')).toThrow('That is a Quicken/OFX file. Download the CSV version from your bank instead.');
   expect(() => readStatement('<OFX><BANKMSGSRSV1/></OFX>')).toThrow(/Quicken\/OFX/);

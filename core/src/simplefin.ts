@@ -235,7 +235,7 @@ export function simplefin(db: Db, owner: number, clock: Clock = () => new Date()
     if (answer.status === 402) throw new Problem(400, "SimpleFIN says this connection isn't paid up. Check your account at bridge.simplefin.org.");
     if (answer.status === 401 || answer.status === 403) throw new Problem(400, 'SimpleFIN no longer accepts this connection. It may have been turned off at SimpleFIN. Disconnect, and connect again with a new setup token.');
     if (answer.status === 429) throw new Problem(400, 'SimpleFIN asks for fewer readings. Try again later: a bank connection can only be read so many times a day.');
-    if (answer.status !== 200) throw new Problem(400, `SimpleFIN answered with an error (${answer.status}).`);
+    if (answer.status !== 200) throw new Problem(400, "SimpleFIN couldn't answer just now. Try again in a moment.");
     try { return { connection: a.connection, reading: readAnswer(await answer.json(), behind) }; } catch { throw new Problem(400, "SimpleFIN's answer couldn't be read."); }
   };
 
@@ -308,11 +308,11 @@ export function simplefin(db: Db, owner: number, clock: Clock = () => new Date()
       await atomic(db, async (tx) => {
         for (const choice of choices) {
           const mine = await tx.get('SELECT 1 AS x FROM simplefin_accounts WHERE id = ? AND connection_id = ?', [choice.id, c.id]);
-          if (!mine) throw new Problem(404, 'Not found');
+          if (!mine) throw new Problem(404, "That account isn't here anymore. It may have been deleted.");
           const category = choice.category_id ?? null;
           if (category !== null && !(await tx.get(
             'SELECT 1 AS x FROM money_categories k WHERE k.id = ? AND (k.owner_id = ? OR EXISTS (SELECT 1 FROM money_shares s WHERE s.category_id = k.id AND s.user_id = ?))', [category, owner, owner]))) {
-            throw new Problem(404, 'Not found');
+            throw new Problem(404, "That account isn't here anymore. It may have been deleted.");
           }
           await tx.run('UPDATE simplefin_accounts SET chosen = ?, category_id = ? WHERE id = ?', [choice.chosen ? 1 : 0, category, choice.id]);
         }

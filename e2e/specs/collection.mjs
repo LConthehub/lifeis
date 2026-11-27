@@ -247,7 +247,7 @@ await typeCode('555000111222'); await wait(300);
 let b = flat(await bulk.innerText()); 
 say('three barcodes make three lines, one already in the collection: ' + b.match(/You have this:[^.]*/)?.[0], await bulk.locator('li[data-line]').count() === 3 && /You have this: Heat/.test(b));
 say('a barcode scanned twice is there once, with a gentle note', /You already scanned 555000111222/.test(b));
-say('one not found says so and asks for a title: ' + b.match(/Not found: barcode 555000111222[^.]*\./)?.[0], /Not found: barcode 555000111222/.test(b) && /Not found: barcode 555000111339/.test(b));
+say('one not found says so and asks for a title: ' + b.match(/Nothing found for barcode 555000111222[^.]*\./)?.[0], /Nothing found for barcode 555000111222/.test(b) && /Nothing found for barcode 555000111339/.test(b));
 await bulk.getByLabel('Title for barcode 555000111222').fill('Tron');
 await bulk.getByLabel('Title for barcode 555000111339').fill('Kind of Blue');
 const lastLine = bulk.locator('li[data-line]').nth(2);

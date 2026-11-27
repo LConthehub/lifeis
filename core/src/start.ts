@@ -165,7 +165,7 @@ const sayList = (parts: string[]) => (parts.length < 2 ? parts.join('') : `${par
 /** Names as typed: trimmed, the empty ones dropped, the same name once. */
 function names(list: unknown, most: number, long: number): string[] {
   if (list === undefined || list === null) return [];
-  if (!Array.isArray(list) || list.some((n) => typeof n !== 'string')) throw new Problem(400, 'Names are words');
+  if (!Array.isArray(list) || list.some((n) => typeof n !== 'string')) throw new Problem(400, 'Type names, one after another.');
   const out: string[] = [];
   for (const n of list as string[]) {
     const said = clean(n, long);
@@ -534,9 +534,9 @@ export function start(db: Db, owner: number, clock: Clock = () => new Date()) {
       const saved = await working();
       const wanted = input.sets === undefined ? [] : input.sets;
       if (!Array.isArray(wanted) || wanted.some((s) => typeof s !== 'string')) throw new Problem(400, 'Sets are a list');
-      if (input.has_car !== undefined && input.has_car !== null && typeof input.has_car !== 'boolean') throw new Problem(400, 'Yes or no, is there a car');
+      if (input.has_car !== undefined && input.has_car !== null && typeof input.has_car !== 'boolean') throw new Problem(400, 'Say yes or no: is there a car?');
       const all = readySets(today()).map((s) => s.slug);
-      if ((wanted as string[]).some((s) => !all.includes(s))) throw new Problem(404, 'There is no such set');
+      if ((wanted as string[]).some((s) => !all.includes(s))) throw new Problem(404, "That ready-made set isn't one Life Is has.");
       const slugs = all.filter((s) => (wanted as string[]).includes(s));
       const jobs = upkeep(db, owner, clock);
       for (const slug of slugs) saved.made.jobs += (await jobs.addSet(slug)).added;
@@ -645,7 +645,7 @@ export function start(db: Db, owner: number, clock: Clock = () => new Date()) {
 
     /** Keep the weekly question going, or stop it. */
     async weeklyAnswer(answer: unknown): Promise<WeeklyState> {
-      if (answer !== 'keep' && answer !== 'stop') throw new Problem(400, 'Keep it or stop it');
+      if (answer !== 'keep' && answer !== 'stop') throw new Problem(400, 'Pick keep or stop.');
       const w = await weeklyRead();
       w.answered = true;
       w.stopped = answer === 'stop';

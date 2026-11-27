@@ -63,7 +63,7 @@ export function RemindersSettings() {
       await axios.post('/api/reminders/browsers', { endpoint: json.endpoint, keys: json.keys, label: browserName() });
       setState((await axios.put('/api/reminders', { push: true, zone: zone() })).data);
       setSaid((x) => ({ ...x, push: 'This browser will get them.' }));
-    } catch (err) { setSaid((x) => ({ ...x, push: err?.response ? errorMessage(err, "Couldn't turn them on") : err.message })); }
+    } catch (err) { setSaid((x) => ({ ...x, push: errorMessage(err, "Couldn't turn them on. Try again in a moment.") })); }
     setBusy('');
   };
   const forget = async (endpoint) => { setState((await axios.delete('/api/reminders/browsers', { params: { endpoint } })).data); };

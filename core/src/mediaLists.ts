@@ -73,7 +73,7 @@ export async function tidyUnowned(q: Queries, mediaId: number): Promise<void> {
 /** A title as it is put on a list: checked. */
 function checkedTitle(input: EntryInput): { type: string; title: string; creator: string | null; year: number | null } {
   const type = input.type ?? 'other';
-  if (!(LIST_TYPES as readonly string[]).includes(type)) throw new Problem(400, 'It is a film, a show, music, a book, a game, or something else');
+  if (!(LIST_TYPES as readonly string[]).includes(type)) throw new Problem(400, 'Pick one: a film, a show, music, a book, a game, or something else.');
   const title = clean(input.title, 300);
   if (!title) throw new Problem(400, 'Give it a title');
   if (input.year != null && !(Number.isInteger(input.year) && input.year >= 0 && input.year <= 9999)) throw new Problem(400, 'The year is a whole number');
@@ -98,7 +98,7 @@ export function mediaLists(db: Db, owner: number, clock: Clock = () => new Date(
     const row = await q.get<ListRow>(
       `SELECT l.id, l.owner_id, l.name, l.builtin, l.shared, ${shown('u')} AS owner_name FROM media_lists l JOIN users u ON u.id = l.owner_id
        WHERE l.id = ? AND (l.owner_id = ? OR l.shared = 1)`, [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That list isn't here anymore. It may have been deleted.");
     return row;
   }
   async function mine(q: Queries, id: number): Promise<ListRow> {
@@ -250,7 +250,7 @@ export function mediaLists(db: Db, owner: number, clock: Clock = () => new Date(
           await tx.run('UPDATE media SET wanted = 0, updated_at = ? WHERE id = ? AND owner_id = ?', [now(), mediaId, owner]);
         } else {
           const item = await tx.get<{ added_by: number | null }>('SELECT added_by FROM media_list_items WHERE list_id = ? AND media_id = ?', [id, mediaId]);
-          if (!item) throw new Problem(404, 'Not found');
+          if (!item) throw new Problem(404, "That title isn't here anymore. It may have been deleted.");
           await tx.run('DELETE FROM media_list_items WHERE list_id = ? AND media_id = ?', [id, mediaId]);
         }
         await tidyUnowned(tx, mediaId);
@@ -271,7 +271,7 @@ export function mediaLists(db: Db, owner: number, clock: Clock = () => new Date(
         if (row.builtin === WANTED) throw new Problem(400, 'Wanted is for what you do not have yet');
         const title = await tx.get<{ type: string; title: string; creator: string | null; year: number | null }>(
           'SELECT m.type, m.title, m.creator, m.year FROM media_list_items i JOIN media m ON m.id = i.media_id WHERE i.list_id = ? AND i.media_id = ?', [id, mediaId]);
-        if (!title) throw new Problem(404, 'Not found');
+        if (!title) throw new Problem(404, "That title isn't here anymore. It may have been deleted.");
         let mine = mediaId;
         if (row.owner_id !== owner) {
           const same = await findTitle(tx, owner, title.type, title.title);
@@ -290,13 +290,13 @@ export function mediaLists(db: Db, owner: number, clock: Clock = () => new Date(
 
     /** Move a title one place up or down a list (anyone who sees it; Wanted is in alphabetical order). */
     async move(id: number, mediaId: number, way: 'up' | 'down'): Promise<ListView> {
-      if (way !== 'up' && way !== 'down') throw new Problem(400, 'Up or down');
+      if (way !== 'up' && way !== 'down') throw new Problem(400, 'Pick up or down.');
       return atomic(db, async (tx) => {
         const row = await visible(tx, id);
         if (row.builtin === WANTED) throw new Problem(400, 'Wanted is kept in alphabetical order');
         const items = await tx.all<{ id: number; media_id: number }>('SELECT id, media_id FROM media_list_items WHERE list_id = ? ORDER BY sort_order, id', [id]);
         const at = items.findIndex((i) => i.media_id === mediaId);
-        if (at < 0) throw new Problem(404, 'Not found');
+        if (at < 0) throw new Problem(404, "That title isn't here anymore. It may have been deleted.");
         const to = way === 'up' ? at - 1 : at + 1;
         if (to >= 0 && to < items.length) {
           const [moved] = items.splice(at, 1);

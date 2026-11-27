@@ -12,7 +12,7 @@ import DontForget from '../components/DontForget';
 import Icon, { hasIcon } from '../components/Icon';
 import { whoText, whenText } from './Mail';
 import { money as moneyText } from '../components/Budget';
-import Modal, { buttonClass, quietButtonClass, cardClass, fromDateInput, minutesText, toDateInput } from '../components/ui';
+import Modal, { buttonClass, quietButtonClass, cardClass, fromDateInput, minutesText, toDateInput, Details, errorDetails } from '../components/ui';
 
 /** A weather mark from the server: an icon where there is one, else the mark as sent. */
 const Weather = ({ mark, size }) => (hasIcon(mark) ? <Icon of={mark} size={size} /> : <span aria-hidden="true">{mark}</span>);
@@ -60,8 +60,9 @@ const Flag = ({ children }) => <span className="rounded bg-honey-100 px-1.5 text
 /** The front page: what today holds and what wants attention, from every section you use. */
 export default function Home({ user }) {
   const [s, setS] = useState(null);
+  const [loadWhy, setLoadWhy] = useState('');
   const [choosing, setChoosing] = useState(false);
-  const load = useCallback(() => { axios.get('/api/home').then(({ data }) => setS(data)).catch(() => setS(false)); }, []);
+  const load = useCallback(() => { axios.get('/api/home').then(({ data }) => setS(data)).catch((err) => { setLoadWhy(errorDetails(err)); setS(false); }); }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     window.addEventListener(START_CHANGED, load);
@@ -83,7 +84,7 @@ export default function Home({ user }) {
   const wantsMail = Boolean(s && s.cards.includes('mail'));
   useEffect(() => { if (wantsMail) axios.get('/api/mail/glance').then(({ data }) => setPost(data)).catch(() => setPost(false)); }, [wantsMail]);
   if (s === null) return null;
-  if (s === false) return <Quiet>The front page couldn't be read. Try again in a moment.</Quiet>;
+  if (s === false) return <div className="text-sm text-gray-500 dark:text-life-300"><p>The front page didn't load. Try again in a moment.</p><Details error={loadWhy} /></div>;
   const shows = (key) => s.cards.includes(key);
   const today = s.day;
 

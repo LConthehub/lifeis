@@ -234,14 +234,14 @@ export function securityRoutes(db: Db, tools: SecurityTools) {
       notDemo();
       const name = cleanName(read.text(c.body, 'name'));
       const done = await db.run('UPDATE passkeys SET name = ? WHERE id = ? AND user_id = ?', [name, c.id, c.user.id]);
-      if (done.changes !== 1) throw new Refusal(404, 'Not found');
+      if (done.changes !== 1) throw new Refusal(404, "That passkey isn't here anymore. It may have been removed.");
       return { json: { id: c.id, name } };
     }],
 
     ['DELETE', /^\/api\/security\/passkeys\/(\d+)$/, async (c) => {
       notDemo();
       const done = await db.run('DELETE FROM passkeys WHERE id = ? AND user_id = ?', [c.id, c.user.id]);
-      if (done.changes !== 1) throw new Refusal(404, 'Not found');
+      if (done.changes !== 1) throw new Refusal(404, "That passkey isn't here anymore. It may have been removed.");
       return { status: 204 };
     }],
 
@@ -269,7 +269,7 @@ export function securityRoutes(db: Db, tools: SecurityTools) {
       if (!c.user.is_admin) throw new Refusal(403, 'Only the admin can do this');
       if (c.id === c.user.id) throw new Refusal(400, 'Change your own sign-in security under Sign-in security.');
       const them = await db.get<UserLine>(`SELECT u.id, u.username, ${shownName('u')} AS name, u.is_admin FROM users u WHERE u.id = ?`, [c.id]);
-      if (!them) throw new Refusal(404, 'Not found');
+      if (!them) throw new Refusal(404, "That person isn't here anymore.");
       const twoStep = Boolean((await securityOf(db, c.id))?.totp_secret);
       const keys = await countPasskeys(db, c.id);
       if (!twoStep && !keys) throw new Refusal(409, `${them.username} has no two-step sign-in or passkeys to turn off`);

@@ -88,7 +88,7 @@ export function serverUrl(given: string): string {
   } catch {
     throw new Problem(400, "That isn't a web address. It looks like http://192.168.1.20:8096");
   }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Problem(400, 'The address starts with http:// or https://');
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Problem(400, "That web address needs to start with http:// or https://.");
   if (url.username || url.password) throw new Problem(400, "Leave the name and password out of the address: the key goes in its own box");
   return (url.origin + url.pathname).replace(/\/+$/, '');
 }
@@ -105,7 +105,7 @@ async function ask(fetcher: Fetcher, kind: ServerKind, url: string, headers: Rec
       'use http://host.docker.internal and its port instead of localhost.');
   }
   if (answer.status === 401 || answer.status === 403) throw new Problem(400, `${NAMES[kind]} didn't accept that key`);
-  if (answer.status !== 200) throw new Problem(400, `${NAMES[kind]} answered with an error (${answer.status})`);
+  if (answer.status !== 200) throw new Problem(400, `${NAMES[kind]} couldn't answer just now. Try again in a moment.`);
   try {
     return await answer.json();
   } catch {
@@ -372,7 +372,7 @@ export function connections(db: Db, owner: number, clock: Clock, tools: { fetche
   async function row(q: Queries, id: number): Promise<ConnectionRow> {
     const found = await q.get<ConnectionRow>(
       'SELECT id, owner_id, kind, name, url, secret, every_hours, last_sync_at, last_ok, last_message FROM media_sources WHERE id = ? AND owner_id = ?', [id, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That connection isn't here anymore. It may have been deleted.");
     return found;
   }
 
@@ -385,7 +385,7 @@ export function connections(db: Db, owner: number, clock: Clock, tools: { fetche
   }
 
   function checked(input: ConnectionInput) {
-    if (!SERVER_KINDS.includes(input.kind as ServerKind)) throw new Problem(400, 'Life Is connects to Jellyfin or Emby');
+    if (!SERVER_KINDS.includes(input.kind as ServerKind)) throw new Problem(400, 'Life Is can connect to Jellyfin or Emby.');
     const every = input.every_hours ?? 0;
     if (!EVERY_CHOICES.includes(every)) throw new Problem(400, 'Choose one of the offered times');
     return { kind: input.kind as ServerKind, url: serverUrl(input.url), every, name: clean(input.name, 80) };

@@ -110,7 +110,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
 
   async function row(q: Queries, id: number): Promise<PlanRow> {
     const found = await q.get<PlanRow>('SELECT id, name, start_day, end_day, note, story FROM plans WHERE id = ? AND owner_id = ?', [id, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That plan isn't here anymore. It may have been deleted.");
     return found;
   }
 
@@ -141,7 +141,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
     if (!day) return null;
     if (servings != null && !(servings > 0 && servings <= 1000)) throw new Problem(400, 'Servings is a number above 0');
     const wanted = meal ?? 'dinner';
-    if (!MEALS.includes(wanted)) throw new Problem(400, 'Breakfast, lunch, dinner or a snack');
+    if (!MEALS.includes(wanted)) throw new Problem(400, 'Pick one: breakfast, lunch, dinner or a snack.');
     if (dayNumber(day) < dayNumber(plan.start_day) - EARLY_DAYS || dayNumber(day) > dayNumber(plan.end_day)) {
       throw new Problem(400, `Choose one of the plan's days, or one of the ${EARLY_DAYS} before it`);
     }
@@ -214,12 +214,12 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
 
   const planOfItem = async (q: Queries, itemId: number): Promise<number> => {
     const found = await q.get<{ plan_id: number }>('SELECT i.plan_id FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE i.id = ? AND p.owner_id = ?', [itemId, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That plan item isn't here anymore. It may have been deleted.");
     return found.plan_id;
   };
   const planOfPhoto = async (q: Queries, photoId: number): Promise<number> => {
     const found = await q.get<{ plan_id: number }>('SELECT f.plan_id FROM plan_photos f JOIN plans p ON p.id = f.plan_id WHERE f.id = ? AND p.owner_id = ?', [photoId, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That plan item isn't here anymore. It may have been deleted.");
     return found.plan_id;
   };
   async function roomForPhoto(q: Queries, planId: number): Promise<number> {

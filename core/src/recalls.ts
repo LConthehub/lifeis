@@ -175,7 +175,7 @@ export function recalls(db: Db, owner: number, clock: Clock = () => new Date(), 
     }
     // NHTSA answers 400 for a make, model and year it has no table for, which is not the same as no recalls.
     if (answer.status === 400 || answer.status === 404) return { result: 'not_listed', message: NOT_LISTED, recalls: [] };
-    if (answer.status !== 200) return { result: 'failed', message: `NHTSA answered with an error (${answer.status})`, recalls: [] };
+    if (answer.status !== 200) return { result: 'failed', message: "NHTSA couldn't answer just now. Try again in a moment.", recalls: [] };
     try {
       const data = await answer.json() as { results?: unknown };
       if (!data || typeof data !== 'object' || !Array.isArray(data.results)) throw new Error('not an answer');
@@ -227,7 +227,7 @@ export function recalls(db: Db, owner: number, clock: Clock = () => new Date(), 
 
   async function one(id: number): Promise<Recall> {
     const row = await db.get<RecallRow>(`SELECT ${RECALL_COLUMNS} FROM vehicle_recalls WHERE id = ? AND owner_id = ?`, [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That recall isn't here anymore. It may have been deleted.");
     return recall(row);
   }
 
@@ -283,7 +283,7 @@ export function recalls(db: Db, owner: number, clock: Clock = () => new Date(), 
     async forThing(itemId: number, options: { dismissed?: boolean } = {}): Promise<{
       available: boolean; on: boolean; is_vehicle: boolean; needs: string[] | null; vehicle: VehicleRecalls | null; dismissed_count: number; dismissed: Recall[];
     }> {
-      if (!await db.get('SELECT 1 AS yes FROM items WHERE id = ? AND owner_id = ?', [itemId, owner])) throw new Problem(404, 'Not found');
+      if (!await db.get('SELECT 1 AS yes FROM items WHERE id = ? AND owner_id = ?', [itemId, owner])) throw new Problem(404, "That thing isn't here anymore. It may have been deleted.");
       const { found, list } = await checkedVehicles();
       const mine = list.find((v) => v.item_id === itemId) ?? null;
       const lacking = found.needs.find((n) => n.item_id === itemId) ?? null;

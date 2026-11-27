@@ -53,7 +53,7 @@ export function ConnectorService() {
 
   const run = async (work, done) => {
     setMessage(null); setBusy(true);
-    try { setC((await work()).data); if (done) setMessage({ ok: done }); } catch (err) { setMessage({ error: errorMessage(err, 'Something went wrong') }); }
+    try { setC((await work()).data); if (done) setMessage({ ok: done }); } catch (err) { setMessage({ error: errorMessage(err, "That didn't work. Try again in a moment.") }); }
     setBusy(false);
   };
   const names = Object.fromEntries(c.sections.map((s) => [s.id, s.title]));

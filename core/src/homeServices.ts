@@ -184,7 +184,7 @@ export function homeServices(db: Db, user: number, clock: Clock = () => new Date
   /** A link the person may see, or a "not found": a link hidden from someone does not exist for them. */
   async function seen(id: number): Promise<Row> {
     const row = (await servicesSeenBy(db, user)).find((s) => s.id === id);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That link isn't here anymore. It may have been deleted.");
     return row;
   }
 

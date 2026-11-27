@@ -109,7 +109,7 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
   async function seenCategory(q: Queries, id: number): Promise<{ id: number; owner_id: number }> {
     const row = await q.get<{ id: number; owner_id: number }>(
       `SELECT c.id, c.owner_id FROM money_categories c WHERE c.id = ? AND (c.owner_id = ? OR EXISTS (SELECT 1 FROM money_shares s WHERE s.category_id = c.id AND s.user_id = ?))`, [id, owner, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That category isn't here anymore. It may have been deleted.");
     return row;
   }
   async function ownCategory(q: Queries, id: number) {
@@ -130,7 +130,7 @@ export function money(db: Db, owner: number, clock: Clock = () => new Date()) {
   async function changeable(q: Queries, id: number) {
     const row = await q.get<{ id: number }>(
       `SELECT e.id FROM money_entries e LEFT JOIN money_categories c ON c.id = e.category_id WHERE e.id = ? AND (e.owner_id = ? OR c.owner_id = ?)`, [id, owner, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That entry isn't here anymore. It may have been deleted.");
     if (await q.get('SELECT 1 AS x FROM money_entries WHERE id = ? AND project_id IS NOT NULL', [id])) throw new Problem(409, 'That is a cost on a project. Change it on the project.');
   }
   async function checkedEntry(q: Queries, input: EntryInput) {

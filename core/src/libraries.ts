@@ -133,7 +133,7 @@ async function get(fetcher: Fetcher, who: string, url: string, headers: Record<s
   }
   if (answer.status === 401 || answer.status === 403) throw new Problem(400, `${who} didn't accept that sign-in`);
   if (answer.status === 404) throw new Problem(400, `${who} has nothing at that address. Check the address, and that its catalog is turned on.`);
-  if (answer.status !== 200) throw new Problem(400, `${who} answered with an error (${answer.status})`);
+  if (answer.status !== 200) throw new Problem(400, `${who} couldn't answer just now. Try again in a moment.`);
   return answer;
 }
 
@@ -268,7 +268,7 @@ export function libraries(db: Db, owner: number, clock: Clock, tools: { fetcher:
 
   async function row(q: Queries, id: number): Promise<Row> {
     const found = await q.get<Row>('SELECT id, owner_id, kind, name, url, secret, every_hours, last_sync_at, last_ok, last_message FROM library_sources WHERE id = ? AND owner_id = ?', [id, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That library isn't here anymore. It may have been deleted.");
     return found;
   }
   async function list(q: Queries): Promise<Library[]> {

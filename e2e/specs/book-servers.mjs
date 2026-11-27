@@ -58,7 +58,7 @@ say('the day the list said it was read is in its log', /2024-03-05/.test(await t
 await page.getByRole('button', { name: /^Kindle/ }).first().click(); await wait();
 await field('A link that opens it').fill('javascript:alert(1)');
 await dialog().getByRole('button', { name: 'Save' }).click(); await wait(700);
-say('something that is not a link is refused: ' + (await dialog().locator('p.text-red-600').innerText().catch(() => '')), /A link starts with https/.test(await dialog().innerText()));
+say('something that is not a link is refused: ' + (await dialog().locator('p.text-red-600').innerText().catch(() => '')), /That link needs to start with https/.test(await dialog().innerText()));
 await field('A link that opens it').fill('https://read.amazon.com/?asin=B00B7NPRY8');
 await dialog().getByRole('button', { name: 'Save' }).click(); await wait(900);
 const open = page.getByRole('link', { name: 'Open in Kindle' });

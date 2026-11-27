@@ -207,7 +207,7 @@ export function HolidayPage() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { axios.get(`${API}/options`).then(({ data }) => setOptions(data)).catch(() => {}); }, []);
   if (holiday === undefined) return null;
-  if (holiday === null) return <p className="text-sm text-gray-500 dark:text-life-300">That holiday isn't there. <Link to="/plans/holidays" className="underline">All holidays</Link></p>;
+  if (holiday === null) return <p className="text-sm text-gray-500 dark:text-life-300">That holiday isn't here anymore. It may have been deleted. <Link to="/plans/holidays" className="underline">All holidays</Link></p>;
 
   /** Does something that answers with the year, and shows what came back. */
   const act = async (work) => {

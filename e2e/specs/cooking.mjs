@@ -187,5 +187,10 @@ await plain.goto(`${base}/recipes/${stew.id}`); await plain.waitForTimeout(1000)
 await plain.getByRole('button', { name: 'Start cooking' }).click(); await plain.waitForTimeout(600);
 check('without a screen lock, one quiet line says the screen may dim', (await plain.locator('[data-cooking]').innerText()).includes('This screen may dim on its own; tap now and then to keep it on.') && plainBad.length === 0, plainBad.join('; '));
 
+// A recipe that is not there says so in plain words and offers the way back.
+await page.goto(`${base}/recipes/99999`); await wait(1000);
+const gone = await page.locator('main').innerText();
+check('a recipe that is not there says so, and links back to the recipes: ' + gone.slice(0, 120), /That recipe isn't here anymore. It may have been deleted./.test(gone) && (await page.getByRole('link', { name: 'All recipes' }).count()) === 1);
+bad.length = 0;
 if (bad.length) check('no failed requests or page errors', false, bad.join('; '));
 await browser.close();

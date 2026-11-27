@@ -168,7 +168,7 @@ export default function FillPlace() {
   const makeHousehold = async () => { await axios.post('/api/things/kinds', { name: 'Household', icon: '🏠' }); await loadKinds(); };
 
   if (!places || !kinds) return null;
-  if (!place) return <p className="text-sm text-gray-500 dark:text-life-300">That place isn't there any more. <Link to="/things/places" className="underline">All places</Link></p>;
+  if (!place) return <p className="text-sm text-gray-500 dark:text-life-300">That place isn't here anymore. It may have been deleted. <Link to="/things/places" className="underline">All places</Link></p>;
   const lookupsOff = can?.available && (!can.books || !can.titles);
   const kind = kinds.find((k) => k.id === Number(kindId));
 

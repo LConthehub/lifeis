@@ -79,7 +79,7 @@ export async function deviceAnswers(db, outside = {}, held = null) {
       });
     } catch (problem) {
       if (problem instanceof Problem || problem instanceof Refusal) reply = { status: problem.status, json: { detail: problem.message } };
-      else { console.error(problem); reply = { status: 500, json: { detail: 'Something went wrong inside Life Is' } }; }
+      else { console.error(problem); reply = { status: 500, json: { detail: "That didn't work. Try again in a moment." } }; }
     }
     return { status: reply.status ?? 200, data: reply.json !== undefined ? reply.json : reply.body ?? '', headers: reply.headers ?? {} };
   };

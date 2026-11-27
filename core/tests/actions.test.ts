@@ -61,8 +61,8 @@ it('finds where a thing is kept', async () => {
   await things.createItem({ kind_id: kinds[0]!.id, name: '8x8 baking dish', place_id: shelf.id });
   const me = actions(db, ana, clock);
   expect((await me.run('where-is', { thing: 'baking dish' }, 'GET')).say).toBe('8x8 baking dish: Pantry shelf.');
-  expect((await me.run('where-is', { thing: 'kayak' }, 'GET')).say).toBe("I couldn't find kayak in your things.");
-  expect((await actions(db, ben, clock).run('where-is', { thing: 'baking dish' }, 'GET')).say).toMatch(/couldn't find/);
+  expect((await me.run('where-is', { thing: 'kayak' }, 'GET')).say).toBe("kayak isn't in your things.");
+  expect((await actions(db, ben, clock).run('where-is', { thing: 'baking dish' }, 'GET')).say).toMatch(/isn't in your things/);
 });
 
 it('asking never changes anything, and a change must be sent as one', async () => {

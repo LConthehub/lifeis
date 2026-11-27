@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import Icon from '../components/Icon';
 import axios from 'axios';
 import Picture from '../components/Picture';
@@ -99,7 +99,7 @@ export function PetPage() {
   }, [id]);
   useEffect(() => { load(); }, [load]);
   if (pet === undefined) return null;
-  if (pet === null) return <Navigate to="/things/pets" replace />;
+  if (pet === null) return <p className="text-sm text-gray-600 dark:text-life-200">That pet isn't here anymore. It may have been deleted. <Link to="/things/pets" className="underline">All pets</Link></p>;
 
   const photo = async (file) => {
     if (!file) return;

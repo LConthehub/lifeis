@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
-import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
+import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, Details, errorDetails } from '../components/ui';
 import { SectionTicks } from '../components/Connector';
 
 // The page an AI app sends a signed-in person to. They name the connection, tick what it may see, and answer.
@@ -12,17 +12,19 @@ export default function Connect() {
   const { search } = useLocation();
   const [ask, setAsk] = useState(null);
   const [refusal, setRefusal] = useState('');
+  const [refusalWhy, setRefusalWhy] = useState('');
   const [name, setName] = useState('');
   const [sections, setSections] = useState([]);
   const [mayAdd, setMayAdd] = useState(false);
   const [error, setError] = useState('');
+  const [why, setWhy] = useState('');
   const [busy, setBusy] = useState(false);
   const query = Object.fromEntries(new URLSearchParams(search));
 
   useEffect(() => {
     axios.get(`/api/connector/request${search}`)
       .then(({ data }) => { setAsk(data); setName(data.suggested_name ?? ''); })
-      .catch((err) => setRefusal(errorMessage(err, "This request can't be used.")));
+      .catch((err) => { setRefusal(errorMessage(err, "This request can't be used.")); setRefusalWhy(errorDetails(err)); });
   }, [search]);
 
   const answer = async (kind) => {
@@ -32,14 +34,14 @@ export default function Connect() {
     try {
       const { data } = await axios.post(`/api/connector/${kind}`, body);
       window.location.assign(data.redirect);
-    } catch (err) { setError(errorMessage(err, 'Something went wrong')); setBusy(false); }
+    } catch (err) { setError(errorMessage(err, "That didn't work. Try again in a moment.")); setWhy(errorDetails(err)); setBusy(false); }
   };
 
   return (
     <div className="mx-auto max-w-lg space-y-4 py-4" data-connect>
       <section className={`${cardClass} space-y-4`}>
         <h1 className="text-lg font-semibold text-life-800 dark:text-life-50">Connect an AI app to your Life Is</h1>
-        {refusal && <p className="text-sm text-gray-800 dark:text-life-50" role="alert" data-refusal>{refusal}</p>}
+        {refusal && <div className="text-sm text-gray-800 dark:text-life-50" role="alert" data-refusal><p>{refusal}</p><Details error={refusalWhy} /></div>}
         {!refusal && !ask && <p className="text-sm text-gray-600 dark:text-life-100">One moment…</p>}
         {ask && (
           <form onSubmit={(e) => { e.preventDefault(); answer('allow'); }} className="space-y-4">
@@ -55,7 +57,7 @@ export default function Connect() {
             </label>
             <p className="text-sm text-gray-600 dark:text-life-100">{ask.never}</p>
             <p className="text-sm text-gray-600 dark:text-life-100">A connection ends by itself if you don't use it for {ask.unused_days} days. You can change or cut it off in Settings at any time.</p>
-            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+            {error && <div className="text-sm text-red-600" role="alert"><p>{error}</p><Details error={why} /></div>}
             <div className="flex flex-wrap gap-2">
               <button type="submit" disabled={busy || !name.trim()} className={`${buttonClass} ${tall}`}>Allow</button>
               <button type="button" disabled={busy} onClick={() => answer('deny')} className={`${quietButtonClass} ${tall}`}>Don't allow</button>

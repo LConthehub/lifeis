@@ -92,7 +92,7 @@ function withinOf(all: Map<number, TagRow>, id: number): Set<number> {
 /** The ids of what carries this tag or one inside it, of one kind, among this person's things. Nothing stray. */
 export async function idsWithTag(q: Queries, owner: number, kind: TagKind, tagId: number): Promise<Set<number>> {
   const all = await allTags(q, owner);
-  if (!all.has(tagId)) throw new Problem(404, 'Not found');
+  if (!all.has(tagId)) throw new Problem(404, "That tag isn't here anymore. It may have been deleted.");
   const inside = [...withinOf(all, tagId)];
   const k = KINDS[kind];
   const rows = await q.all<{ id: number }>(
@@ -301,7 +301,7 @@ export function tags(db: Db, owner: number, clock: Clock = () => new Date()) {
   }
   async function mine(q: Queries, id: number): Promise<TagRow> {
     const found = await q.get<TagRow>('SELECT id, name, key, parent_id FROM tags WHERE id = ? AND owner_id = ?', [id, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That tag isn't here anymore. It may have been deleted.");
     return found;
   }
   async function sibling(q: Queries, parent: number | null, key: string, except?: number): Promise<TagRow | undefined> {
@@ -342,7 +342,7 @@ export function tags(db: Db, owner: number, clock: Clock = () => new Date()) {
     if (unique.length > MAX_TARGETS) throw new Problem(400, `Tag ${MAX_TARGETS} at most at once`);
     const k = KINDS[kind];
     const have = new Set((await q.all<{ id: number }>(`SELECT id FROM (${k.rows}) WHERE id IN (${unique.map(() => '?').join(',')})`, [...k.args(owner), ...unique])).map((r) => r.id));
-    if (unique.some((id) => !have.has(id))) throw new Problem(404, 'Not found');
+    if (unique.some((id) => !have.has(id))) throw new Problem(404, "One of those tags isn't here anymore. It may have been deleted.");
     return unique;
   }
   async function checkTags(q: Queries, ids: number[]): Promise<number[]> {
@@ -376,7 +376,7 @@ export function tags(db: Db, owner: number, clock: Clock = () => new Date()) {
     async page(id: number): Promise<TagPage> {
       const all = await allTags(db, owner);
       const t = all.get(id);
-      if (!t) throw new Problem(404, 'Not found');
+      if (!t) throw new Problem(404, "That tag isn't here anymore. It may have been deleted.");
       const inside = withinOf(all, id);
       const links = (await live(db)).filter((l) => inside.has(l.tag_id));
       const trail: TagRef[] = [];

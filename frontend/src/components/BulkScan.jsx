@@ -235,7 +235,7 @@ export default function BulkScan({ lookUp, ignoreCode, defaultType = 'film', onD
                     {l.another && <Field label="What the new copy is on"><input value={l.format} onChange={(e) => patch(l.key, { format: e.target.value })} className={`${inputClass} min-h-[44px]`} /></Field>}
                   </>
                 )}
-                {l.state === 'blank' && <p className="text-gray-700 dark:text-life-100">Not found: barcode {l.code}.{l.hint ? ` ${l.hint}` : ' Type a title for it.'}</p>}
+                {l.state === 'blank' && <p className="text-gray-700 dark:text-life-100">Nothing found for barcode {l.code}.{l.hint ? ` ${l.hint}` : ' Type a title for it.'}</p>}
                 {(l.state === 'found' || l.state === 'blank') && (
                   <div className="space-y-2">
                     <Field label={`Title for barcode ${l.code}`}><input value={l.title} onChange={(e) => patch(l.key, { title: e.target.value })} className={`${inputClass} min-h-[44px]`} /></Field>

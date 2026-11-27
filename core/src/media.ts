@@ -180,7 +180,7 @@ export function openLink(given: string | null | undefined): string | null {
   const text = given?.trim();
   if (!text) return null;
   if (text.length > 600 || !/^(https?|kindle|ibooks|applebooks|audible):/i.test(text) || /[\s<>"]/.test(text)) {
-    throw new Problem(400, 'A link starts with https:// (or kindle:// or ibooks://)');
+    throw new Problem(400, 'That link needs to start with https:// (or kindle:// or ibooks://).');
   }
   return text;
 }
@@ -284,7 +284,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
   async function owned(q: Queries, id: number): Promise<MediaRow> {
     const row = await q.get<MediaRow>(
       'SELECT id, type, title, creator, year, summary, genres, minutes, cover, wanted, listed_only, stars, ids, note, created_at, updated_at FROM media WHERE id = ? AND owner_id = ?', [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That title isn't here anymore. It may have been deleted.");
     return row;
   }
 
@@ -335,7 +335,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
 
   /** A title's own columns, checked, in the order the SQL below names them. */
   function titleValues(input: MediaInput): Value[] {
-    if (!MEDIA_TYPES.includes(input.type as MediaType)) throw new Problem(400, 'It is a film, a show, music, a book, a game, or something else');
+    if (!MEDIA_TYPES.includes(input.type as MediaType)) throw new Problem(400, 'Pick one: a film, a show, music, a book, a game, or something else.');
     const title = clean(input.title, 300);
     if (!title) throw new Problem(400, 'Give it a title');
     if (input.year != null && !(Number.isInteger(input.year) && input.year >= 0 && input.year <= 9999)) throw new Problem(400, 'The year is a whole number');
@@ -401,7 +401,7 @@ export function media(db: Db, owner: number, clock: Clock = () => new Date()) {
   async function ownedCopy(q: Queries, id: number): Promise<{ id: number; media_id: number }> {
     const row = await q.get<{ id: number; media_id: number }>(
       'SELECT c.id, c.media_id FROM media_copies c JOIN media m ON m.id = c.media_id WHERE c.id = ? AND m.owner_id = ?', [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That copy isn't here anymore. It may have been deleted.");
     return row;
   }
 

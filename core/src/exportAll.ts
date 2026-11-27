@@ -744,7 +744,7 @@ export async function exportEverything(db: Db, owner: number, clock: Clock = () 
   const out = new Out();
   let leftOut: string[] = [];
   const person = await db.get<{ username: string }>('SELECT username FROM users WHERE id = ?', [owner]);
-  if (!person) throw new Problem(404, 'Not found');
+  if (!person) throw new Problem(404, "That person isn't here anymore. It may have been deleted.");
   await atomic(db, async (tx) => {
     // The pictures are the weight: counted first, so a download too large is refused before any is read.
     let weight = 0;

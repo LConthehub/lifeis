@@ -177,7 +177,7 @@ describe('claiming', () => {
     await b.turn(true);
     const done = await b.connect(TOKEN);
     expect(done.connection).not.toBeNull();
-    expect(done.problem).toMatch(/error \(500\)/);
+    expect(done.problem).toMatch(/couldn't answer just now/);
     expect(done.accounts).toEqual([]);
     accountsStatus = 200;
     expect((await b.refresh()).accounts).toHaveLength(2);
@@ -276,8 +276,8 @@ describe('reading', () => {
     const b = bank();
     await b.turn(true);
     const done = await b.connect(TOKEN);
-    await expect(b.choose([{ id: done.accounts[0]!.id, chosen: true, category_id: theirs }])).rejects.toThrow(/Not found/);
-    await expect(b.choose([{ id: 999999, chosen: true }])).rejects.toThrow(/Not found/);
+    await expect(b.choose([{ id: done.accounts[0]!.id, chosen: true, category_id: theirs }])).rejects.toThrow(/isn't here anymore/);
+    await expect(b.choose([{ id: 999999, chosen: true }])).rejects.toThrow(/isn't here anymore/);
   });
   it('never brings the same transaction in twice, even when it is read again', async () => {
     accountsBody = answerWith([txn('D1', '2046-03-10', '-12.00', 'Pharmacy'), txn('D2', '2046-03-11', '-3.00', 'Bus')]);
@@ -338,7 +338,7 @@ describe('reading', () => {
     expect(said[0]).toMatch(/isn't paid up/);
     expect(said[1]).toMatch(/no longer accepts/);
     expect(said[2]).toMatch(/fewer readings/);
-    expect(said[3]).toMatch(/error \(500\)/);
+    expect(said[3]).toMatch(/couldn't answer just now/);
     for (const text of said) for (const secret of ['s3cret', 'user', 'ABC123', 'bridge.example.org/simplefin']) expect(text).not.toContain(secret);
     const down: Fetcher = async () => { throw new Error('connect ECONNREFUSED https://user:s3cret-pass@bridge.example.org'); };
     await expect(simplefin(db, me, clock, down, { sealer }).read()).rejects.toThrow(/couldn't be reached just now. Try again/);

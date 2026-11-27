@@ -13,6 +13,30 @@ export function errorMessage(err, fallback) {
   return fallback;
 }
 
+/** The technical side of a failed request (status, address, raw text), for reading out when asking for help. */
+export function errorDetails(err) {
+  const r = err?.response;
+  const bits = [];
+  if (r?.status) bits.push(`Status ${r.status}`);
+  if (err?.config?.url) bits.push(`${String(err.config.method || 'get').toUpperCase()} ${err.config.url}`);
+  const d = r?.data?.detail;
+  if (typeof d === 'string') bits.push(d);
+  else if (err?.message) bits.push(err.message);
+  return bits.join(' · ');
+}
+
+/** A small "Details" toggle holding errorDetails(err). Shows nothing when there is nothing to say. */
+export function Details({ error }) {
+  const text = typeof error === 'string' ? error : errorDetails(error);
+  if (!text) return null;
+  return (
+    <details className="mt-1 text-xs text-gray-500 dark:text-life-300" data-details>
+      <summary className="inline-block min-h-11 cursor-pointer py-2 underline">Details</summary>
+      <p className="break-words">{text}</p>
+    </details>
+  );
+}
+
 export function Field({ label, children }) {
   return (
     <label className="block space-y-1">

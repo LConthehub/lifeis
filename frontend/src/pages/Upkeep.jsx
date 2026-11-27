@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import Icon from '../components/Icon';
 import axios from 'axios';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
@@ -302,7 +302,7 @@ export function JobPage() {
   const load = useCallback(() => { axios.get(`/api/things/upkeep/${id}`).then(({ data }) => setJob(data)).catch(() => setJob(null)); }, [id]);
   useEffect(() => { load(); }, [load]);
   if (job === undefined) return null;
-  if (job === null) return <Navigate to="/things/upkeep" replace />;
+  if (job === null) return <p className="text-sm text-gray-600 dark:text-life-200">That job isn't here anymore. It may have been deleted. <Link to="/things/upkeep" className="underline">All jobs</Link></p>;
   const remove = async () => {
     if (!window.confirm(`Remove "${job.name}" and every time it was done?`)) return;
     await axios.delete(`/api/things/upkeep/${id}`);

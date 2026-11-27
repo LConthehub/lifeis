@@ -44,7 +44,7 @@ export default function WalkThrough() {
 
   if (!places || things === null) return null;
   const place = places.find((p) => p.id === placeId);
-  if (!place) return <p className="text-sm text-gray-500 dark:text-life-300">That place isn't there any more. <Link to="/things/places" className="underline">All places</Link></p>;
+  if (!place) return <p className="text-sm text-gray-500 dark:text-life-300">That place isn't here anymore. It may have been deleted. <Link to="/things/places" className="underline">All places</Link></p>;
   if (things === false) return <p className="text-sm text-gray-600 dark:text-life-200">The things here couldn't be listed just now.</p>;
 
   // The next room that still needs something: not this one (nor the room this shelf is in), the one lacking most first.

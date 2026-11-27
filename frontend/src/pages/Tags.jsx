@@ -132,7 +132,7 @@ export function TagPage() {
   const load = () => axios.get(`/api/tags/${id}`).then(({ data }) => setPage(data)).catch(() => setPage(null));
   useEffect(() => { setPage(undefined); load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (page === undefined) return null;
-  if (page === null) return <p className="text-sm text-gray-600 dark:text-life-200">That tag isn't here. <Link to="/tags" className="underline">All tags</Link></p>;
+  if (page === null) return <p className="text-sm text-gray-600 dark:text-life-200">That tag isn't here anymore. It may have been deleted. <Link to="/tags" className="underline">All tags</Link></p>;
   const node = (tags || []).find((t) => t.id === page.tag.id);
   return (
     <div className="space-y-4">

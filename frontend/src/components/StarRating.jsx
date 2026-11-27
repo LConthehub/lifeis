@@ -14,7 +14,7 @@ export default function StarRating({ id, stars, onSaved }) {
     try {
       const { data } = await axios.put(`/api/media/${id}/stars`, { stars: e.target.value === '' ? null : Number(e.target.value) });
       onSaved(data);
-    } catch (err) { setError(errorMessage(err, 'That rating was not kept')); }
+    } catch (err) { setError(errorMessage(err, "That rating didn't save. Try again.")); }
   };
   return (
     <div className="mt-2 flex flex-wrap items-end gap-3" data-rating>

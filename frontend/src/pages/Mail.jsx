@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../components/Icon';
 import axios from 'axios';
-import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
+import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, Details, errorDetails } from '../components/ui';
 
 export const whoText = (who) => (who ? who.name || who.address : 'Unknown sender');
 export const whenText = (iso) => {
@@ -15,13 +15,14 @@ export const whenText = (iso) => {
 /** Your inbox, read from your mail provider as you look. Nothing here is kept by Life Is. */
 export default function Mail() {
   const [setup, setSetup] = useState(null);
+  const [loadWhy, setLoadWhy] = useState('');
   const [accountId, setAccountId] = useState(null);
   const [inbox, setInbox] = useState(null);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(null);
 
   useEffect(() => {
-    axios.get('/api/mail').then(({ data }) => { setSetup(data); if (data.accounts[0]) setAccountId(data.accounts[0].id); }).catch(() => setSetup(false));
+    axios.get('/api/mail').then(({ data }) => { setSetup(data); if (data.accounts[0]) setAccountId(data.accounts[0].id); }).catch((err) => { setLoadWhy(errorDetails(err)); setSetup(false); });
   }, []);
   const load = useCallback(() => {
     if (!accountId) return;
@@ -31,7 +32,7 @@ export default function Mail() {
   useEffect(() => { load(); }, [load]);
 
   if (setup === null) return null;
-  if (setup === false) return <p className="text-sm text-gray-500 dark:text-life-300">Mail couldn't be read. Try again in a moment.</p>;
+  if (setup === false) return <div className="text-sm text-gray-500 dark:text-life-300"><p>Mail didn't load. Try again in a moment.</p><Details error={loadWhy} /></div>;
   if (setup.accounts.length === 0) {
     return (
       <div className="space-y-4">

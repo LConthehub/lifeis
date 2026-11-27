@@ -127,7 +127,7 @@ export function ProjectPage() {
   }, [id]);
   useEffect(() => { load(); }, [load]);
   if (project === undefined) return null;
-  if (project === null) return <p className="text-sm text-gray-600 dark:text-life-200">That project isn't here. <Link to="/projects" className="underline">All projects</Link></p>;
+  if (project === null) return <p className="text-sm text-gray-600 dark:text-life-200">That project isn't here anymore. It may have been deleted. <Link to="/projects" className="underline">All projects</Link></p>;
 
   const open = !['done', 'dropped'].includes(project.status);
   // The things that are for this project's activity, and where each is.

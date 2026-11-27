@@ -353,7 +353,7 @@ export function RecipePage() {
       .then(({ data }) => setR(data)).catch(() => setMissing(true));
   }, [id, servings]);
   useEffect(() => { load(); }, [load]);
-  if (missing) return <p className="text-sm text-gray-500">That recipe isn't here. <Link to="/recipes" className="underline">All recipes</Link></p>;
+  if (missing) return <p className="text-sm text-gray-500">That recipe isn't here anymore. It may have been deleted. <Link to="/recipes" className="underline">All recipes</Link></p>;
   if (!r) return null;
   const remove = async () => {
     if (!window.confirm(`Delete "${r.title}"? It can't be brought back.`)) return;

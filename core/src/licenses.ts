@@ -131,7 +131,7 @@ export function licenses(db: Db, owner: number, clock: Clock = () => new Date())
 
   async function rowOf(id: number): Promise<Row> {
     const found = await db.get<Row>(`SELECT ${COLUMNS} FROM licenses WHERE id = ? AND owner_id = ?`, [id, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That license isn't here anymore. It may have been deleted.");
     return found;
   }
 

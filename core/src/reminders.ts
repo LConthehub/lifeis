@@ -273,7 +273,7 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
         if (link) headers.Click = d.single ? `${s.origin}${d.single.link}` : link;
         if (d.single || d.lines.some((l) => l.urgent)) headers.Priority = 'high';
         const answer = await tools.fetcher(`${s.ntfy.server.replace(/\/+$/, '')}/${encodeURIComponent(s.ntfy.topic)}`, headers, { method: 'POST', body });
-        if (answer.status >= 300) throw new Problem(400, `the ntfy server answered with an error (${answer.status})`);
+        if (answer.status >= 300) throw new Problem(400, "The ntfy server couldn't answer just now. Try again in a moment.");
         sent.push('ntfy');
       } catch (problem) { problems.push(`ntfy: ${(problem as Error).message}`); }
     }

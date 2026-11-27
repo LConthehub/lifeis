@@ -63,7 +63,7 @@ export async function makeKey(db: Db, owner: number, input: { name: string; can:
 
 export async function turnKey(db: Db, owner: number, id: number, on: boolean): Promise<KeyInfo> {
   const done = await db.run('UPDATE personal_keys SET is_on = ? WHERE id = ? AND owner_id = ?', [on ? 1 : 0, id, owner]);
-  if (!done.changes) throw new Refusal(404, 'Not found');
+  if (!done.changes) throw new Refusal(404, "That key isn't here anymore. It may have been deleted.");
   return describe((await db.get<Row>(`SELECT ${COLUMNS} FROM personal_keys WHERE id = ?`, [id]))!);
 }
 

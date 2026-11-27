@@ -137,13 +137,13 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
 
   async function holidayRow(q: Queries, id: number): Promise<HolidayRow> {
     const found = await q.get<HolidayRow>(`SELECT ${HOLIDAY_COLUMNS} FROM holidays WHERE id = ? AND owner_id = ?`, [id, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That holiday isn't here anymore. It may have been deleted.");
     return found;
   }
   async function yearRow(q: Queries, planId: number): Promise<YearRow> {
     const found = await q.get<YearRow>(
       `SELECT ${YEAR_COLUMNS.split(', ').map((c) => `y.${c}`).join(', ')} FROM holiday_years y JOIN plans p ON p.id = y.plan_id WHERE y.plan_id = ? AND p.owner_id = ?`, [planId, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That holiday isn't here anymore. It may have been deleted.");
     return found;
   }
   const planRow = async (q: Queries, planId: number): Promise<PlanRow> => (await q.get<PlanRow>('SELECT id, name, start_day, end_day FROM plans WHERE id = ? AND owner_id = ?', [planId, owner]))!;
@@ -391,7 +391,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
 
   const planOf = async (table: string, id: number): Promise<number> => {
     const found = await db.get<{ plan_id: number }>(`SELECT t.plan_id FROM ${table} t JOIN plans p ON p.id = t.plan_id WHERE t.id = ? AND p.owner_id = ?`, [id, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That plan isn't here anymore. It may have been deleted.");
     return found.plan_id;
   };
 
@@ -467,7 +467,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
     /** Turn a birthday, anniversary or other yearly date on the calendar into a holiday: the same date every year, its age still shown. */
     async fromEvent(eventId: number): Promise<HolidaySummary> {
       const e = await db.get<{ id: number; title: string; day: string; yearly: number }>('SELECT id, title, day, yearly FROM events WHERE id = ? AND owner_id = ?', [eventId, owner]);
-      if (!e) throw new Problem(404, 'Not found');
+      if (!e) throw new Problem(404, "That event isn't here anymore. It may have been deleted.");
       if (e.yearly !== 1) throw new Problem(400, 'Only a date that comes every year can become a holiday');
       if (await db.get('SELECT 1 AS x FROM holidays WHERE owner_id = ? AND event_id = ?', [owner, eventId])) throw new Problem(409, 'That date is already a holiday');
       return this.create({ name: e.title, rule: { kind: 'fixed', month: Number(e.day.slice(5, 7)), day: Number(e.day.slice(8, 10)) }, event_id: eventId, first_year: Number(e.day.slice(0, 4)) });
@@ -558,7 +558,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
 
     async addPerson(planId: number, role: 'guest' | 'card', input: PersonInput): Promise<YearView> {
       await yearRow(db, planId);
-      if (role !== 'guest' && role !== 'card') throw new Problem(400, 'Guests or cards');
+      if (role !== 'guest' && role !== 'card') throw new Problem(400, 'Pick guests or cards.');
       const who = await whoIs(input);
       const name = clean(input.name, 100) ?? who.name;
       if (!name) throw new Problem(400, 'Say who');
@@ -598,7 +598,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       const planId = await planOf('holiday_gifts', id);
       const old = (await db.get<{ who: string; idea: string; status: GiftState; cents: number | null; note: string | null }>('SELECT who, idea, status, cents, note FROM holiday_gifts WHERE id = ?', [id]))!;
       const status = input.status === undefined || input.status === null ? old.status : (GIFT_STATES as readonly string[]).includes(input.status) ? input.status as GiftState : null;
-      if (status === null) throw new Problem(400, 'An idea, bought, wrapped or given');
+      if (status === null) throw new Problem(400, 'Pick one: an idea, bought, wrapped or given.');
       const cents = input.cents === undefined ? old.cents : input.cents;
       if (cents !== null && !(Number.isInteger(cents) && cents >= 0)) throw new Problem(400, 'What it cost is an amount of money');
       const idea = input.idea === undefined ? old.idea : clean(input.idea, 300);
@@ -645,7 +645,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       const spot = input.spot === undefined ? o.spot : clean(input.spot, 100);
       const label = input.label === undefined ? o.label : clean(input.label, 200);
       if (!spot || !label) throw new Problem(400, 'Say what it is and where it goes');
-      if (input.fix !== undefined && input.fix !== null && input.fix !== 'broke' && input.fix !== 'out') throw new Problem(400, 'Broke, or ran out');
+      if (input.fix !== undefined && input.fix !== null && input.fix !== 'broke' && input.fix !== 'out') throw new Problem(400, 'Pick one: it broke, or it ran out.');
       const box = input.box_id === undefined ? o.box_id : input.box_id;
       if (box !== null && !(await db.get('SELECT 1 AS x FROM places WHERE id = ? AND owner_id = ?', [box, owner]))) throw new Problem(404, "That box isn't there");
       const fix = input.fix === undefined ? o.fix : input.fix;

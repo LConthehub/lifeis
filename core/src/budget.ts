@@ -199,7 +199,7 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
     return { name, every, cents: cents(input.cents, 'The amount'), start, end: every === 'once' ? null : end };
   }
   async function ownIncome(q: Queries, id: number) {
-    if (!(await q.get('SELECT id FROM money_income WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Not found');
+    if (!(await q.get('SELECT id FROM money_income WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, "That income isn't here anymore. It may have been deleted.");
   }
 
   // ---------- goals ----------
@@ -248,7 +248,7 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
     });
   }
   async function ownGoal(q: Queries, id: number) {
-    if (!(await q.get('SELECT id FROM money_goals WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Not found');
+    if (!(await q.get('SELECT id FROM money_goals WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, "That savings goal isn't here anymore. It may have been deleted.");
   }
   function checkedGoal(input: GoalInput) {
     const name = clean(input.name, 80);
@@ -260,7 +260,7 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
   /** A plan of the person's own, or null for none. One plan has one goal. */
   async function ownPlan(q: Queries, id: number | null | undefined): Promise<number | null> {
     if (id === null || id === undefined) return null;
-    if (!(await q.get('SELECT id FROM plans WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Not found');
+    if (!(await q.get('SELECT id FROM plans WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, "That plan isn't here anymore. It may have been deleted.");
     if (await q.get('SELECT id FROM money_goals WHERE plan_id = ? AND owner_id = ?', [id, owner])) throw new Problem(409, 'That plan already has a goal');
     return id;
   }
@@ -274,7 +274,7 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
   /** A project of the person's own, or null for none. */
   async function ownProject(q: Queries, id: number | null | undefined): Promise<number | null> {
     if (id === null || id === undefined) return null;
-    if (!(await q.get('SELECT id FROM projects WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Not found');
+    if (!(await q.get('SELECT id FROM projects WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, "That project isn't here anymore. It may have been deleted.");
     return id;
   }
 
@@ -430,7 +430,7 @@ export function budget(db: Db, owner: number, clock: Clock = () => new Date()) {
     },
     async removeSaved(savedId: number): Promise<void> {
       const row = await db.get<{ goal_id: number }>('SELECT s.goal_id FROM money_goal_saved s JOIN money_goals g ON g.id = s.goal_id WHERE s.id = ? AND g.owner_id = ?', [savedId, owner]);
-      if (!row) throw new Problem(404, 'Not found');
+      if (!row) throw new Problem(404, "That saved amount isn't here anymore. It may have been deleted.");
       await db.run('DELETE FROM money_goal_saved WHERE id = ?', [savedId]);
     },
 

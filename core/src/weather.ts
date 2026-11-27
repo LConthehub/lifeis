@@ -60,7 +60,7 @@ async function ask(fetcher: Fetcher, url: string): Promise<Record<string, unknow
   } catch {
     throw new Problem(400, "The weather service couldn't be reached just now");
   }
-  if (answer.status !== 200) throw new Problem(400, `The weather service answered with an error (${answer.status})`);
+  if (answer.status !== 200) throw new Problem(400, "The weather service couldn't answer just now. Try again in a moment.");
   try {
     const data = await answer.json();
     if (typeof data !== 'object' || data === null) throw new Error('not an answer');

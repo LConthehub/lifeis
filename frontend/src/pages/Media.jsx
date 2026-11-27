@@ -587,7 +587,7 @@ export function MediaTitlePage() {
   const ready = title && title.copies.length === 0;
   useEffect(() => { if (wantsCopy && ready) setModal({ copy: {} }); }, [wantsCopy, ready]);
   if (title === undefined) return null;
-  if (title === null) return <p className="text-sm text-gray-600 dark:text-life-200">That isn't in your collection. <Link to="/media" className="underline">The whole collection</Link></p>;
+  if (title === null) return <p className="text-sm text-gray-600 dark:text-life-200">That title isn't here anymore. It may have been deleted. <Link to="/media" className="underline">The whole collection</Link></p>;
   const saved = (data) => { setTitle(data); setModal(null); };
   const did = DID[title.type];
   const today = async () => { saved((await axios.post(`/api/media/${id}/log`, { day: toDateInput(new Date()) })).data); };

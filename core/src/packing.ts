@@ -28,7 +28,7 @@ export function packing(db: Db, owner: number, clock: Clock = () => new Date()) 
 
   async function owned(id: number): Promise<{ id: number; box_state: BoxState | null }> {
     const row = await db.get<{ id: number; box_state: BoxState | null }>('SELECT id, box_state FROM places WHERE id = ? AND owner_id = ?', [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That place isn't here anymore. It may have been deleted.");
     return row;
   }
 

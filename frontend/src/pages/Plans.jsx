@@ -177,7 +177,7 @@ export function PlanPage() {
     axios.get(`/api/plans/${id}/cost`).then(({ data }) => setCost(data)).catch(() => setCost(null));
   }, [id, recipesKey]);
   if (plan === undefined) return null;
-  if (plan === null) return <p className="text-sm text-gray-500 dark:text-life-300">That plan isn't there. <Link to="/plans" className="underline">All plans</Link></p>;
+  if (plan === null) return <p className="text-sm text-gray-500 dark:text-life-300">That plan isn't here anymore. It may have been deleted. <Link to="/plans" className="underline">All plans</Link></p>;
 
   const act = async (work) => { setError(''); try { setPlan((await work()).data); } catch (err) { setError(errorMessage(err, "Couldn't do that")); } };
   const tasks = plan.items_list.filter((i) => i.kind === 'task');

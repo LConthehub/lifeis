@@ -24,7 +24,7 @@ export function PlacePage() {
   }, [id]);
   if (!places) return null;
   const place = places.find((p) => p.id === id);
-  if (!place) return <p className="text-sm text-gray-500 dark:text-life-300">That place isn't there any more. <Link to="/things/places" className="underline">All places</Link></p>;
+  if (!place) return <p className="text-sm text-gray-500 dark:text-life-300">That place isn't here anymore. It may have been deleted. <Link to="/things/places" className="underline">All places</Link></p>;
   const inside = places.filter((p) => p.parent_id === id);
   const above = places.find((p) => p.id === place.parent_id);
   // Something kept in a place inside this one says which.

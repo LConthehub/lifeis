@@ -141,7 +141,7 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
 
   async function projectRow(q: Queries, id: number): Promise<ProjectRow> {
     const row = await q.get<ProjectRow>(`SELECT ${PROJECT_COLUMNS} FROM projects WHERE id = ? AND owner_id = ?`, [id, owner]);
-    if (!row) throw new Problem(404, 'Project not found');
+    if (!row) throw new Problem(404, "That project isn't here anymore. It may have been deleted.");
     return row;
   }
 
@@ -254,7 +254,7 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
     const row = await q.get<{ id: number; project_id: number; item_id: number | null; label: string; quantity: number | null; unit: string | null; used_on: string | null }>(
       `SELECT l.id, l.project_id, l.item_id, l.label, l.quantity, l.unit, l.used_on FROM project_items l JOIN projects p ON p.id = l.project_id
        WHERE l.id = ? AND p.owner_id = ?`, [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That line isn't here anymore. It may have been deleted.");
     return row;
   }
 
@@ -268,7 +268,7 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
     const row = await q.get<Cost>(
       `SELECT c.id, c.project_id, c.label, c.planned_cents, c.actual_cents, c.paid_on, c.note, ${DRAWN} AS drawn_cents FROM project_costs c JOIN projects p ON p.id = c.project_id
        WHERE c.id = ? AND p.owner_id = ?`, [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That cost isn't here anymore. It may have been deleted.");
     return row;
   }
 
@@ -527,7 +527,7 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
         await projectRow(tx, projectId);
         if (goalId === null) await tx.run('UPDATE money_goals SET project_id = NULL WHERE project_id = ? AND owner_id = ?', [projectId, owner]);
         else {
-          if (!(await tx.get('SELECT 1 AS x FROM money_goals WHERE id = ? AND owner_id = ?', [goalId, owner]))) throw new Problem(404, 'Not found');
+          if (!(await tx.get('SELECT 1 AS x FROM money_goals WHERE id = ? AND owner_id = ?', [goalId, owner]))) throw new Problem(404, "That savings goal isn't here anymore. It may have been deleted.");
           await tx.run('UPDATE money_goals SET project_id = ? WHERE id = ?', [projectId, goalId]);
         }
         return project(tx, projectId);

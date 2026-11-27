@@ -97,7 +97,7 @@ export function manual(db: Db, owner: number, clock: Clock = () => new Date()) {
     },
 
     async updateEntry(id: number, input: EntryInput): Promise<Manual> {
-      if (!(await db.get('SELECT id FROM manual_entries WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Not found');
+      if (!(await db.get('SELECT id FROM manual_entries WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, "That entry isn't here anymore. It may have been deleted.");
       await db.run('UPDATE manual_entries SET section = ?, title = ?, body = ?, phone = ?, place_id = ?, private = ?, updated_at = ? WHERE id = ?', [...(await checked(input)), now(), id]);
       return get();
     },

@@ -245,7 +245,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
   };
   const storeRow = async (id: number) => {
     const row = await db.get<{ id: number; name: string }>('SELECT id, name FROM stores WHERE id = ? AND owner_id = ?', [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That store isn't here anymore. It may have been deleted.");
     return row;
   };
 
@@ -419,7 +419,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
   };
 
   const coupon = async (id: number) => {
-    if (!(await db.get('SELECT id FROM coupons WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Not found');
+    if (!(await db.get('SELECT id FROM coupons WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, "That coupon isn't here anymore. It may have been deleted.");
   };
 
   return {
@@ -488,7 +488,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
       const name = clean(input.name, 100);
       if (!name) throw new Problem(400, 'Give the store a name');
       const old = await db.get<{ name: string }>('SELECT name FROM stores WHERE id = ? AND owner_id = ?', [id, owner]);
-      if (!old) throw new Problem(404, 'Not found');
+      if (!old) throw new Problem(404, "That store isn't here anymore. It may have been deleted.");
       if (await db.get('SELECT id FROM stores WHERE owner_id = ? AND name = ? COLLATE NOCASE AND id != ?', [owner, name, id])) throw new Problem(409, "Another store already has that name");
       await db.run('UPDATE stores SET name = ?, note = ?, adjust_days = ? WHERE id = ?', [name, clean(input.note, 300), windowOf(input.adjust_days), id]);
       await db.run('UPDATE prices SET store = ? WHERE owner_id = ? AND store = ? COLLATE NOCASE', [name, owner, old.name]);
@@ -665,7 +665,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
      * somebody saw. It doesn't know how much of a packet a recipe uses, or what's already in the pantry.
      */
     async planCost(planId: number): Promise<PlanCost> {
-      if (!(await db.get('SELECT id FROM plans WHERE id = ? AND owner_id = ?', [planId, owner]))) throw new Problem(404, 'Not found');
+      if (!(await db.get('SELECT id FROM plans WHERE id = ? AND owner_id = ?', [planId, owner]))) throw new Problem(404, "That plan isn't here anymore. It may have been deleted.");
       const needed = await db.all<{ id: number; name: string }>(
         `SELECT DISTINCT i.id, i.name FROM plan_items p JOIN recipe_lines l ON l.recipe_id = p.ref_id AND l.part = 'ingredients'
          JOIN ingredients i ON i.id = l.ingredient_id
@@ -761,7 +761,7 @@ export function shopping(db: Db, owner: number, clock: Clock = () => new Date())
 
     /** Say a price was asked back (or is not going to be), so it is not offered again. */
     async claimDrop(id: number): Promise<Drop[]> {
-      if (!(await db.get('SELECT 1 AS x FROM prices WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Not found');
+      if (!(await db.get('SELECT 1 AS x FROM prices WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, "That price isn't here anymore. It may have been deleted.");
       await db.run('UPDATE prices SET claimed_on = ? WHERE id = ? AND owner_id = ?', [today(), id, owner]);
       return this.drops();
     },

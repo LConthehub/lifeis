@@ -153,13 +153,13 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
 
   async function tripRow(q: Queries, id: number): Promise<TripRow> {
     const found = await q.get<TripRow>(`SELECT ${TRIP_COLUMNS} FROM outdoor_trips WHERE id = ? AND owner_id = ?`, [id, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That trip isn't here anymore. It may have been deleted.");
     return found;
   }
   async function yearRow(q: Queries, planId: number): Promise<YearRow> {
     const found = await q.get<YearRow>(
       `SELECT ${YEAR_COLUMNS.split(', ').map((c) => `y.${c}`).join(', ')} FROM outdoor_trip_years y JOIN plans p ON p.id = y.plan_id WHERE y.plan_id = ? AND p.owner_id = ?`, [planId, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That trip isn't here anymore. It may have been deleted.");
     return found;
   }
   async function yearsOf(q: Queries, tripId: number): Promise<YearOf[]> {
@@ -167,7 +167,7 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
   }
   const planOf = async (table: string, id: number): Promise<number> => {
     const found = await db.get<{ plan_id: number }>(`SELECT t.plan_id FROM ${table} t JOIN plans p ON p.id = t.plan_id WHERE t.id = ? AND p.owner_id = ?`, [id, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That trip isn't here anymore. It may have been deleted.");
     return found.plan_id;
   };
   const roomFor = async (table: string, planId: number): Promise<void> => {
@@ -177,11 +177,11 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
   const partsChecked = (parts: string[] | undefined, fallback: TripRow | null): { camping: number; fishing: number; hunting: number } => {
     if (parts === undefined && fallback) return { camping: fallback.camping, fishing: fallback.fishing, hunting: fallback.hunting };
     const asked = parts ?? [];
-    for (const p of asked) if (!(PARTS as readonly string[]).includes(p)) throw new Problem(400, 'Camping, fishing or hunting');
+    for (const p of asked) if (!(PARTS as readonly string[]).includes(p)) throw new Problem(400, 'Pick one: camping, fishing or hunting.');
     return { camping: asked.includes('camping') ? 1 : 0, fishing: asked.includes('fishing') ? 1 : 0, hunting: asked.includes('hunting') ? 1 : 0 };
   };
   const partChecked = (trip: TripRow, part: string | null | undefined): Part => {
-    if (!part || !(PARTS as readonly string[]).includes(part)) throw new Problem(400, 'Camping, fishing or hunting');
+    if (!part || !(PARTS as readonly string[]).includes(part)) throw new Problem(400, 'Pick one: camping, fishing or hunting.');
     if (trip[part as Part] !== 1) throw new Problem(400, `Turn on ${part} for this trip first`);
     return part as Part;
   };
@@ -561,7 +561,7 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
     async updateGear(id: number, c: GearChange): Promise<YearView> {
       const planId = await planOf('outdoor_gear', id);
       const o = (await db.get<GearRow>(`SELECT ${GEAR_COLUMNS} FROM outdoor_gear WHERE id = ?`, [id]))!;
-      if (c.after_trip != null && !(AFTER_TRIP as readonly string[]).includes(c.after_trip)) throw new Problem(400, 'Dry, clean, repair or replace');
+      if (c.after_trip != null && !(AFTER_TRIP as readonly string[]).includes(c.after_trip)) throw new Problem(400, 'Pick one: dry, clean, repair or replace.');
       const after = c.after_trip === undefined ? o.after_trip : (c.after_trip as AfterTrip | null);
       if (c.quantity != null && !(Number.isFinite(c.quantity) && c.quantity > 0 && c.quantity < 1e7)) throw new Problem(400, 'How many is a number above nothing');
       const returned = c.returned ?? o.returned === 1;
@@ -605,7 +605,7 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
     },
     async removeMeal(itemId: number): Promise<YearView> {
       const found = await db.get<{ plan_id: number }>('SELECT i.plan_id FROM plan_items i JOIN plans p ON p.id = i.plan_id JOIN outdoor_trip_years y ON y.plan_id = p.id WHERE i.id = ? AND p.owner_id = ?', [itemId, owner]);
-      if (!found) throw new Problem(404, 'Not found');
+      if (!found) throw new Problem(404, "That meal isn't here anymore. It may have been deleted.");
       await plans().removeItem(itemId);
       return yearView(found.plan_id);
     },

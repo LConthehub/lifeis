@@ -112,7 +112,7 @@ export function dontForget(db: Db, owner: number, clock: Clock = () => new Date(
     async push(key: string, action: string, shown: string[] = []): Promise<Line[]> {
       if (action !== 'later' && action !== 'notnow') throw new Problem(400, 'Choose Later or Not now');
       const found = (await candidates()).find((c) => c.key === key);
-      if (!found) throw new Problem(404, 'Not found');
+      if (!found) throw new Problem(404, "That reminder isn't here anymore. It may have been deleted.");
       await db.run(
         `INSERT INTO dont_forget_hidden (user_id, key, until, sig) VALUES (?, ?, ?, ?)
          ON CONFLICT(user_id, key) DO UPDATE SET until = excluded.until, sig = excluded.sig`,

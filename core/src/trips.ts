@@ -118,7 +118,7 @@ export function trips(db: Db, owner: number, clock: Clock = () => new Date()) {
 
     /** The photo of a trip's receipt, or null when it has none. */
     async receipt(tripId: number): Promise<{ type: string; bytes: Uint8Array } | null> {
-      if (!(await db.get('SELECT 1 AS x FROM shopping_trips WHERE id = ? AND owner_id = ?', [tripId, owner]))) throw new Problem(404, 'Not found');
+      if (!(await db.get('SELECT 1 AS x FROM shopping_trips WHERE id = ? AND owner_id = ?', [tripId, owner]))) throw new Problem(404, "That shopping trip isn't here anymore. It may have been deleted.");
       return (await db.get<{ type: string; bytes: Uint8Array }>('SELECT type, bytes FROM trip_receipts WHERE trip_id = ? AND owner_id = ?', [tripId, owner])) ?? null;
     },
 
@@ -163,10 +163,10 @@ export function trips(db: Db, owner: number, clock: Clock = () => new Date()) {
         for (const p of kept) {
           if (p.project_id !== null) {
             const project = await tx.get<{ name: string }>('SELECT name FROM projects WHERE id = ? AND owner_id = ?', [p.project_id, owner]);
-            if (!project) throw new Problem(404, 'Not found');
+            if (!project) throw new Problem(404, "That project isn't here anymore. It may have been deleted.");
             await projects(db, owner, clock).spend(p.project_id, { label: `${name}: ${p.label ?? `${project.name} supplies`}`, cents: p.cents, day, trip: tripId }, tx);
           } else {
-            if (p.category_id !== null && !(await tx.get(`SELECT 1 AS x FROM (${SEEN}) WHERE id = ?`, [owner, owner, p.category_id]))) throw new Problem(404, 'Not found');
+            if (p.category_id !== null && !(await tx.get(`SELECT 1 AS x FROM (${SEEN}) WHERE id = ?`, [owner, owner, p.category_id]))) throw new Problem(404, "That category isn't here anymore. It may have been deleted.");
             await tx.run('INSERT INTO money_entries (owner_id, category_id, label, cents, day, note, created_at, trip_id) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)',
               [owner, p.category_id, kept.length > 1 ? `${name}: ${p.label ?? 'Other'}` : `Groceries at ${name}`, p.cents, day, stamp(clock()), tripId]);
           }

@@ -239,7 +239,7 @@ export function readImport(text: string): RecipeInput[] {
   try {
     data = JSON.parse(stripped);
   } catch {
-    throw new Problem(400, "That looks like JSON, but it couldn't be read");
+    throw new Problem(400, "That looks like a data file, but it couldn't be read.");
   }
   const several = Array.isArray(data) && data.length > 0 && data.every((d) => isObject(d) && d.name);
   return (several ? (data as unknown[]) : [data]).map(readSchemaOrg);

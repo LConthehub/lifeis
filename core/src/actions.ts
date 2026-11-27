@@ -124,7 +124,7 @@ const ACTIONS: Action[] = [
     async run(db, owner, clock, given) {
       const thing = text(given, 'thing', 'what you are looking for');
       const found = (await inventory(db, owner, clock).listItems({ q: thing })).slice(0, 3);
-      if (!found.length) return { say: `I couldn't find ${thing} in your things.`, open: '/things' };
+      if (!found.length) return { say: `${thing} isn't in your things.`, open: '/things' };
       const one = (i: (typeof found)[number]) => `${i.name}${i.place ? `: ${i.place}` : ', with no place written down'}`;
       return { say: found.length === 1 ? `${one(found[0]!)}.` : `Found ${found.length}. ${found.map(one).join('. ')}.`, open: '/things' };
     },

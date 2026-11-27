@@ -94,7 +94,7 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
 
   const event = async (id: number): Promise<Event> => {
     const row = await db.get<Kept>(`SELECT ${COLUMNS} FROM events WHERE id = ? AND owner_id = ?`, [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That event isn't here anymore. It may have been deleted.");
     return (await attachTags(db, owner, 'event', [asEvent(row)]))[0]!;
   };
 

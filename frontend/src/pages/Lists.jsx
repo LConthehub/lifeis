@@ -30,7 +30,7 @@ export default function ListsPage() {
   const make = async (e) => {
     e.preventDefault();
     setError('');
-    try { const { data } = await axios.post('/api/media/lists', { name: form.name, shared: form.shared }); navigate(`/media/lists/${data.id}`); } catch (err) { setError(errorMessage(err, 'That list could not be made')); }
+    try { const { data } = await axios.post('/api/media/lists', { name: form.name, shared: form.shared }); navigate(`/media/lists/${data.id}`); } catch (err) { setError(errorMessage(err, "That list couldn't be made. Try again.")); }
   };
   const mine = lists.filter((l) => l.mine);
   const theirs = lists.filter((l) => !l.mine);
@@ -96,10 +96,10 @@ export function ListPage() {
   const load = useCallback(() => { axios.get(`/api/media/lists/${id}`).then(({ data }) => { setList(data); setName(data.name); }).catch(() => setList(null)); }, [id]);
   useEffect(() => { load(); }, [load]);
   if (list === undefined) return null;
-  if (list === null) return <p className="text-sm text-gray-600 dark:text-life-200">That list isn't there. <Link to="/media/lists" className="underline">All the lists</Link></p>;
+  if (list === null) return <p className="text-sm text-gray-600 dark:text-life-200">That list isn't here anymore. It may have been deleted. <Link to="/media/lists" className="underline">All the lists</Link></p>;
   const run = async (promise) => {
     setError('');
-    try { const { data } = await promise; setList(data); setName(data.name); } catch (err) { setError(errorMessage(err, 'That did not work')); }
+    try { const { data } = await promise; setList(data); setName(data.name); } catch (err) { setError(errorMessage(err, "That didn't work. Try again in a moment.")); }
   };
   const act = (path, body) => run(axios.post(`/api/media/lists/${id}/${path}`, body));
   // Watched, read or heard today: it goes in the person's own log (on a shared list it comes off for everyone).
@@ -108,11 +108,11 @@ export function ListPage() {
     setError('');
     const day = toDateInput(new Date());
     if (list.builtin !== 'wanted') return act('watched', { media_id: e.media_id, day });
-    try { await axios.post(`/api/media/${e.media_id}/log`, { day }); load(); } catch (err) { setError(errorMessage(err, 'That did not work')); }
+    try { await axios.post(`/api/media/${e.media_id}/log`, { day }); load(); } catch (err) { setError(errorMessage(err, "That didn't work. Try again in a moment.")); }
   };
   const remove = async () => {
     if (!window.confirm(`Delete the list ${list.name}? No title is removed: the ones you do not own stay in search and can go on another list.`)) return;
-    try { await axios.delete(`/api/media/lists/${id}`); navigate('/media/lists'); } catch (err) { setError(errorMessage(err, 'That did not work')); }
+    try { await axios.delete(`/api/media/lists/${id}`); navigate('/media/lists'); } catch (err) { setError(errorMessage(err, "That didn't work. Try again in a moment.")); }
   };
   const makeFile = async () => {
     setError(''); setFiled('');
@@ -123,7 +123,7 @@ export function ListPage() {
       const { handOver } = await import('../device/handOver.js');
       await handOver(new TextEncoder().encode(data.csv), data.file_name);
       setFiled(`Saved ${data.films} ${data.films === 1 ? 'film' : 'films'} as ${data.file_name}.${left} On Letterboxd, use its Import your data page and choose the file.`);
-    } catch (err) { setError(errorMessage(err, 'That file could not be made')); }
+    } catch (err) { setError(errorMessage(err, "That file couldn't be made. Try again.")); }
   };
   const custom = list.mine && !list.builtin;
   const ordered = list.builtin !== 'wanted';

@@ -147,7 +147,7 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
       throw new Problem(400, `Couldn't reach ${k.url}. Is the model running? If it's on the computer that runs Life Is in Docker, use host.docker.internal instead of localhost.`);
     }
     if (answer.status === 401 || answer.status === 403) throw new Problem(400, "The model's server didn't accept the key");
-    if (answer.status >= 400) throw new Problem(400, `The model's server answered with an error (${answer.status})`);
+    if (answer.status >= 400) throw new Problem(400, "The AI's server couldn't answer just now. Try again in a moment.");
     try { return await answer.json() as Record<string, unknown>; } catch { throw new Problem(400, "The model's server sent something that isn't an answer"); }
   }
 
@@ -227,15 +227,15 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
     async save(input: AssistantInput): Promise<AssistantStatus> {
       const before = await kept();
       const source: Source = input.source === undefined ? before.source : input.source === 'phone' ? 'phone' : 'address';
-      if (source === 'phone' && !tools?.phone) throw new Problem(400, "This device has no built-in AI that Life Is can use");
+      if (source === 'phone' && !tools?.phone) throw new Problem(400, "This phone or computer doesn't have a built-in AI to use.");
       const url = input.url === undefined || input.url === null ? before.url : input.url.trim().replace(/\/+$/, '');
-      if (!/^https?:\/\/[^\s]+$/.test(url)) throw new Problem(400, 'The address starts with http:// or https://');
+      if (!/^https?:\/\/[^\s]+$/.test(url)) throw new Problem(400, "That web address needs to start with http:// or https://.");
       const cloudOk = input.cloud_ok ?? before.cloud_ok;
       // The address only matters when answers come from it; choosing the phone's own model never needs the tick.
       if (source === 'address' && !isLocal(url) && !cloudOk) {
         throw new Problem(400, "That address isn't on this computer or your own network. Check the box to allow a cloud AI, knowing what you ask about leaves this computer.");
       }
-      if (input.show !== undefined && !isShow(input.show)) throw new Problem(400, 'Where the Ask box shows is home, everywhere or nowhere');
+      if (input.show !== undefined && !isShow(input.show)) throw new Problem(400, 'Pick where the Ask box shows: on Home, on every page, or nowhere.');
       const typedKey = clean(input.key, 500);
       const next: Kept = {
         source, enabled: input.enabled ?? before.enabled, url, model: input.model === undefined || input.model === null ? before.model : input.model.trim().slice(0, 120), cloud_ok: cloudOk,
@@ -257,7 +257,7 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
 
     /** Whether the phone's built-in AI can answer right now, and if not, why not, in words. */
     async phoneCheck(): Promise<{ ready: boolean; why?: string; name: string }> {
-      if (!tools?.phone) throw new Problem(400, 'This device has no built-in AI that Life Is can use');
+      if (!tools?.phone) throw new Problem(400, "This phone or computer doesn't have a built-in AI to use.");
       try {
         return { name: tools.phone.name, ...(await tools.phone.check()) };
       } catch {
@@ -273,7 +273,7 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
     async readRecipePhoto(picture: { type?: string | null; base64?: string | null }): Promise<{ text: string }> {
       const type = picture.type ?? '';
       const data = (picture.base64 ?? '').replace(/\s+/g, '');
-      if (!/^image\/(jpeg|png|webp)$/.test(type) || !/^[A-Za-z0-9+/]+=*$/.test(data)) throw new Problem(400, 'Choose a photo (JPEG or PNG)');
+      if (!/^image\/(jpeg|png|webp)$/.test(type) || !/^[A-Za-z0-9+/]+=*$/.test(data)) throw new Problem(400, 'Choose a photo saved as JPEG or PNG.');
       if (data.length * 0.75 > MAX_PICTURE_BYTES) throw new Problem(400, 'That photo is too large to send. Take it again a little further back.');
       const k = await kept();
       if (!k.enabled) throw new Problem(409, 'Turn the assistant on in Settings, under "Connections"');

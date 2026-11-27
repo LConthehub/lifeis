@@ -53,7 +53,7 @@ function TwoStep({ status, reload, onCodes }) {
   const run = async (work) => {
     setMessage(null);
     setBusy(true);
-    try { await work(); } catch (err) { setMessage({ error: errorMessage(err, 'Something went wrong') }); } finally { setBusy(false); }
+    try { await work(); } catch (err) { setMessage({ error: errorMessage(err, "That didn't work. Try again in a moment.") }); } finally { setBusy(false); }
   };
   const reset = () => { setStep(null); setAction(null); setPassword(''); setCode(''); setSetup(null); setPicture(''); };
 

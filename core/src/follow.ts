@@ -226,9 +226,9 @@ function linkOf(given: string): string {
   try {
     url = new URL(given.trim().replace(/^webcals?:/i, 'https:'));
   } catch {
-    throw new Problem(400, "That isn't a calendar link. It starts with https:// or webcal://");
+    throw new Problem(400, "That isn't a calendar link. It needs to start with https:// or webcal://.");
   }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Problem(400, 'A calendar link starts with https:// or webcal://');
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Problem(400, "That calendar link needs to start with https:// or webcal://.");
   if (url.username || url.password) throw new Problem(400, 'Leave any name and password out of the link');
   return url.href;
 }
@@ -241,7 +241,7 @@ async function fetched(tools: Tools, url: string, zone: string, show: Show, toda
   try {
     const answer = await tools.fetcher(url, { Accept: 'text/calendar, text/plain;q=0.8, */*;q=0.5' });
     if (answer.status === 404 || answer.status === 410) throw new Problem(400, "There's no calendar at that link any more. If the link was replaced, give the new one.");
-    if (answer.status !== 200) throw new Problem(400, `The calendar's server answered with an error (${answer.status})`);
+    if (answer.status !== 200) throw new Problem(400, "The calendar's server couldn't answer just now. Try again in a moment.");
     const bytes = await answer.bytes();
     if (bytes.length > MAX_BYTES) throw new Problem(400, 'That calendar is too large to follow');
     text = new TextDecoder().decode(bytes);
@@ -299,7 +299,7 @@ export function followedCalendars(db: Db, owner: number, clock: Clock = () => ne
   };
   const row = async (id: number): Promise<Row> => {
     const found = await db.get<Row>(`SELECT ${COLUMNS} FROM followed_calendars WHERE id = ? AND owner_id = ?`, [id, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That calendar isn't here anymore. It may have been deleted.");
     return found;
   };
   async function list(): Promise<Followed[]> {

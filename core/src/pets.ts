@@ -59,7 +59,7 @@ export function pets(db: Db, owner: number, clock: Clock = () => new Date()) {
 
   async function row(q: Queries, id: number): Promise<Row> {
     const found = await q.get<Row>(`SELECT ${COLUMNS} FROM pets WHERE id = ? AND owner_id = ?`, [id, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That pet isn't here anymore. It may have been deleted.");
     return found;
   }
 

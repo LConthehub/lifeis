@@ -353,13 +353,13 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
   /** A routine the viewer may see, or a 404. */
   async function seen(q: Queries, id: number): Promise<RoutineRow> {
     const row = (await q.all<RoutineRow>(`${BASE} WHERE r.id = ? AND ${VISIBLE}`, [id, viewer, viewer]))[0];
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That routine isn't here anymore. It may have been deleted.");
     return row;
   }
   /** A routine the viewer owns, or a 404. */
   async function owned(q: Queries, id: number): Promise<RoutineRow> {
     const row = (await q.all<RoutineRow>(`${BASE} WHERE r.id = ? AND r.owner_id = ?`, [id, viewer]))[0];
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That routine isn't here anymore. It may have been deleted.");
     return row;
   }
 
@@ -503,7 +503,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
           if (night === null || !Number.isInteger(night) || night < 1 || night > cycle) throw new Problem(400, `Pick a night from 1 to ${cycle} for "${words}"`);
         }
         const itemId = s.item_id ?? null;
-        if (itemId !== null && !(await q.get('SELECT 1 AS one FROM items WHERE id = ? AND owner_id = ?', [itemId, owner]))) throw new Problem(404, 'That thing is not in your things');
+        if (itemId !== null && !(await q.get('SELECT 1 AS one FROM items WHERE id = ? AND owner_id = ?', [itemId, owner]))) throw new Problem(404, "That thing isn't in your things.");
         const wait = s.wait_seconds ?? null;
         if (wait !== null && !(Number.isInteger(wait) && wait >= 1 && wait <= MAX_WAIT_SECONDS)) throw new Problem(400, 'A wait is from 1 second to an hour');
         tidySteps.push({ id: s.id ?? null, words, rule, weekdays, night, item_id: itemId, wait_seconds: wait, nums: kind === 'workout' ? tidyNumbers(s.nums, words) : NO_NUMBERS });
@@ -622,7 +622,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
     /** Copies a ready-made routine to the viewer, for them. It is theirs to change. */
     async addStarter(slug: string, forUser?: number | null, forMember?: number | null, forPet?: number | null, food?: number | null): Promise<Routine> {
       const s = ROUTINE_STARTERS.find((x) => x.slug === slug);
-      if (!s) throw new Problem(404, 'Not found');
+      if (!s) throw new Problem(404, "That ready-made routine isn't one Life Is has.");
       if (s.pet && forPet == null) throw new Problem(400, `${s.name} is for a pet: pick which one`);
       const made = await this.create({
         name: s.name, cycle_length: s.cycle_length,
@@ -667,7 +667,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
     /** One time on a day, wherever it is shown. */
     async time(timeId: number, dayGiven?: string | null): Promise<DayTime> {
       const found = await db.get<{ routine_id: number }>('SELECT routine_id FROM routine_times WHERE id = ?', [timeId]);
-      if (!found) throw new Problem(404, 'Not found');
+      if (!found) throw new Problem(404, "That time isn't here anymore. It may have been deleted.");
       const day = dayGiven ?? today();
       dayNumber(day);
       const r = await whole(db, await seen(db, found.routine_id), day);
@@ -680,7 +680,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
       const day = tickDay(dayGiven);
       return atomic(db, async (tx) => {
         const found = await tx.get<{ time_id: number; routine_id: number }>('SELECT s.time_id, t.routine_id FROM routine_steps s JOIN routine_times t ON t.id = s.time_id WHERE s.id = ?', [stepId]);
-        if (!found) throw new Problem(404, 'Not found');
+        if (!found) throw new Problem(404, "That step isn't here anymore. It may have been deleted.");
         const r = await whole(tx, await seen(tx, found.routine_id), day);
         const t = r.times.find((x) => x.id === found.time_id)!;
         const view = await timeDay(tx, r, t, day);
@@ -697,7 +697,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
       const day = tickDay(dayGiven);
       return atomic(db, async (tx) => {
         const found = await tx.get<{ routine_id: number }>('SELECT routine_id FROM routine_times WHERE id = ?', [timeId]);
-        if (!found) throw new Problem(404, 'Not found');
+        if (!found) throw new Problem(404, "That time isn't here anymore. It may have been deleted.");
         const r = await whole(tx, await seen(tx, found.routine_id), day);
         const t = r.times.find((x) => x.id === timeId)!;
         const view = await timeDay(tx, r, t, day);
@@ -741,11 +741,11 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
      */
     async low(stepId: number): Promise<{ name: string; added: boolean; already: boolean }> {
       const found = await db.get<{ routine_id: number; item_id: number | null }>('SELECT t.routine_id, s.item_id FROM routine_steps s JOIN routine_times t ON t.id = s.time_id WHERE s.id = ?', [stepId]);
-      if (!found) throw new Problem(404, 'Not found');
+      if (!found) throw new Problem(404, "That step isn't here anymore. It may have been deleted.");
       const row = await seen(db, found.routine_id);
       if (found.item_id === null) throw new Problem(400, 'This step has no thing to run low on');
       const item = await db.get<{ id: number; name: string; quantity: number | null; low_at: number | null }>('SELECT id, name, quantity, low_at FROM items WHERE id = ? AND owner_id = ?', [found.item_id, row.owner_id]);
-      if (!item) throw new Problem(404, 'That thing is gone');
+      if (!item) throw new Problem(404, "That thing isn't here anymore.");
       if (item.low_at !== null && item.quantity !== null && item.quantity > item.low_at) {
         await db.run('UPDATE items SET quantity = ?, updated_at = ? WHERE id = ?', [item.low_at, now(), item.id]);
       }
@@ -758,7 +758,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
 
     /** Where a thing is used, for its page: "Skincare: Evening". */
     async usedIn(itemId: number): Promise<{ routine_id: number; routine: string; time: string; title: string }[]> {
-      if (!(await db.get('SELECT 1 AS one FROM items WHERE id = ? AND owner_id = ?', [itemId, viewer]))) throw new Problem(404, 'Not found');
+      if (!(await db.get('SELECT 1 AS one FROM items WHERE id = ? AND owner_id = ?', [itemId, viewer]))) throw new Problem(404, "That thing isn't here anymore. It may have been deleted.");
       const rows = await db.all<{ routine_id: number; routine: string; time: string }>(
         `SELECT DISTINCT r.id AS routine_id, r.name AS routine, t.name AS time, r.sort_order, t.sort_order AS time_order, t.id AS time_id
          FROM routine_steps s JOIN routine_times t ON t.id = s.time_id JOIN routines r ON r.id = t.routine_id

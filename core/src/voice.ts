@@ -115,7 +115,7 @@ export function readWhen(said: string | null | undefined, today: string): { day:
   take(/\b(?:at )?([01]?\d|2[0-3]):([0-5]\d)\b/, (m) => { if (!time) time = `${m[1]!.padStart(2, '0')}:${m[2]}`; });
   take(/\bat (\d{1,2})\b/, (m) => { const h = Number(m[1]); if (!time && h >= 1 && h <= 12) time = `${String(h < 7 ? h + 12 : h).padStart(2, '0')}:00`; });
   words = words.replace(/\b(?:at|on|for|the|by|around|this|next)\b/g, ' ').replace(/\s+/g, ' ').trim();
-  if (words) throw new Problem(400, `I didn't understand the time "${said!.trim().slice(0, 40)}". Try tomorrow at 3 PM.`);
+  if (words) throw new Problem(400, `That time wasn't clear: "${said!.trim().slice(0, 40)}". Try tomorrow at 3 PM.`);
   return { day: day ?? today, time };
 }
 
@@ -148,7 +148,7 @@ export function voice(db: Db, owner: number, clock: Clock = () => new Date()) {
     /** "milk, eggs and pie crust": each put on the list as if typed, what is already there left alone. */
     async addGroceries(said: string): Promise<string> {
       const things = splitGroceries(clean(said, 2000) ?? '');
-      if (things.length === 0) return "I didn't hear anything to add.";
+      if (things.length === 0) return "Nothing to add was heard.";
       if (things.length > MOST_SAID) throw new Problem(400, `That's more than ${MOST_SAID} things. Say it in two parts.`);
       const done = await kept().addGroceries(things);
       const onList = done.items.filter((g) => !g.done).length;
@@ -210,7 +210,7 @@ export function voice(db: Db, owner: number, clock: Clock = () => new Date()) {
     /** A reminder: a dated line on the calendar, with a time when one was said. It shows in the morning reminders too. */
     async addReminder(text: string, when?: string | null): Promise<string> {
       const title = clean(text, 200);
-      if (!title) return "I didn't hear what to remind you of.";
+      if (!title) return "No reminder was heard.";
       const today = day();
       const at = readWhen(when, today);
       await calendar(db, owner, clock).createEvent({ title, day: at.day, time: at.time });

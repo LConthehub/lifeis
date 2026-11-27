@@ -54,7 +54,7 @@ export function goals(db: Db, owner: number, clock: Clock = () => new Date()) {
 
   async function ownGoal(id: number): Promise<{ id: number }> {
     const found = await db.get<{ id: number }>('SELECT id FROM money_goals WHERE id = ? AND owner_id = ?', [id, owner]);
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That savings goal isn't here anymore. It may have been deleted.");
     return found;
   }
   function checkedLine(input: LineInput) {
@@ -117,14 +117,14 @@ export function goals(db: Db, owner: number, clock: Clock = () => new Date()) {
      */
     async forPlan(planId: number, viewer = owner): Promise<GoalPanel> {
       const plan = await db.get<{ id: number; name: string; start_day: string; end_day: string }>('SELECT id, name, start_day, end_day FROM plans WHERE id = ? AND owner_id = ?', [planId, owner]);
-      if (!plan) throw new Problem(404, 'Not found');
+      if (!plan) throw new Problem(404, "That plan isn't here anymore. It may have been deleted.");
       const mine = await db.get<{ id: number }>('SELECT id FROM money_goals WHERE plan_id = ? AND owner_id = ?', [planId, owner]);
       return this.panel({ kind: 'plan', id: plan.id, name: plan.name, day: plan.start_day, end: plan.end_day }, mine?.id ?? null, viewer);
     },
     /** A project's goal: the first one made for it. */
     async forProject(projectId: number, viewer = owner): Promise<GoalPanel> {
       const project = await db.get<{ id: number; name: string; due_on: string | null; status: string }>('SELECT id, name, due_on, status FROM projects WHERE id = ? AND owner_id = ?', [projectId, owner]);
-      if (!project) throw new Problem(404, 'Not found');
+      if (!project) throw new Problem(404, "That project isn't here anymore. It may have been deleted.");
       const mine = await db.get<{ id: number }>('SELECT id FROM money_goals WHERE project_id = ? AND owner_id = ? ORDER BY id LIMIT 1', [projectId, owner]);
       return this.panel({ kind: 'project', id: project.id, name: project.name, day: project.due_on, end: project.status === 'done' || project.status === 'dropped' ? '0000-00-00' : null }, mine?.id ?? null, viewer);
     },
@@ -154,7 +154,7 @@ export function goals(db: Db, owner: number, clock: Clock = () => new Date()) {
       const subject = isPlan
         ? await db.get<{ id: number; name: string; day: string | null }>('SELECT id, name, start_day AS day FROM plans WHERE id = ? AND owner_id = ?', [input.plan_id!, owner])
         : await db.get<{ id: number; name: string; day: string | null }>('SELECT id, name, due_on AS day FROM projects WHERE id = ? AND owner_id = ?', [input.project_id!, owner]);
-      if (!subject) throw new Problem(404, 'Not found');
+      if (!subject) throw new Problem(404, "That plan or project isn't here anymore. It may have been deleted.");
       if (!isPlan && await db.get('SELECT id FROM money_goals WHERE project_id = ? AND owner_id = ?', [subject.id, owner])) throw new Problem(409, 'That project already has a goal');
       const target = input.target_cents ?? (await costOf({ kind: isPlan ? 'plan' : 'project', id: subject.id, end: null }, null, owner)).total;
       if (!(target > 0)) throw new Problem(422, 'Say how much to aim for: the cost is not known yet');
@@ -170,14 +170,14 @@ export function goals(db: Db, owner: number, clock: Clock = () => new Date()) {
     },
     async updateLine(lineId: number, input: LineInput): Promise<void> {
       const found = await db.get<{ id: number }>('SELECT l.id FROM money_goal_lines l JOIN money_goals g ON g.id = l.goal_id WHERE l.id = ? AND g.owner_id = ?', [lineId, owner]);
-      if (!found) throw new Problem(404, 'Not found');
+      if (!found) throw new Problem(404, "That line isn't here anymore. It may have been deleted.");
       const l = checkedLine(input);
       await db.run('UPDATE money_goal_lines SET label = ?, cents = ? WHERE id = ?', [l.label, l.cents, lineId]);
       if (input.hidden_from !== undefined) await db.run('UPDATE money_goal_lines SET hidden_from = ? WHERE id = ?', [await personOk(input.hidden_from), lineId]);
     },
     async removeLine(lineId: number): Promise<void> {
       const found = await db.get<{ id: number }>('SELECT l.id FROM money_goal_lines l JOIN money_goals g ON g.id = l.goal_id WHERE l.id = ? AND g.owner_id = ?', [lineId, owner]);
-      if (!found) throw new Problem(404, 'Not found');
+      if (!found) throw new Problem(404, "That line isn't here anymore. It may have been deleted.");
       await db.run('DELETE FROM money_goal_lines WHERE id = ?', [lineId]);
     },
   };

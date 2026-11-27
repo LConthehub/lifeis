@@ -22,7 +22,7 @@ export type ScanWhat =
 
 export async function whatIsThis(db: Db, owner: number, read: string, clock: Clock = () => new Date()): Promise<ScanWhat> {
   const text = read.trim();
-  if (!text) throw new Problem(400, 'Scan or type something');
+  if (!text) throw new Problem(400, 'Scan a code or type a name first.');
   const things = inventory(db, owner, clock);
 
   // A thing's sticker: the thing it's on, or a blank one not on anything yet.

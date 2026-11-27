@@ -132,7 +132,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
 
   async function readRecipe(q: Queries, id: number, servings?: number | null): Promise<Recipe> {
     const row = await q.get<RecipeRow>('SELECT r.*, (SELECT p.added_at FROM recipe_photos p WHERE p.recipe_id = r.id) AS photo_added_at FROM recipes r WHERE r.id = ? AND r.owner_id = ?', [id, owner]);
-    if (!row) throw new Problem(404, 'Recipe not found');
+    if (!row) throw new Problem(404, "That recipe isn't here anymore. It may have been deleted.");
     const rows = await q.all<LineRow>(
       `SELECT l.*, i.name AS ingredient FROM recipe_lines l LEFT JOIN ingredients i ON i.id = l.ingredient_id
        WHERE l.recipe_id = ? ORDER BY l.part, l.sort_order`, [id]);
@@ -458,7 +458,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
     updateIngredient(id: number, body: { name?: string | null; aisle?: string | null }): Promise<Ingredient> {
       return atomic(db, async (tx) => {
         const row = await tx.get<Ingredient>('SELECT id, name, aisle FROM ingredients WHERE id = ? AND owner_id = ?', [id, owner]);
-        if (!row) throw new Problem(404, 'Not found');
+        if (!row) throw new Problem(404, "That ingredient isn't here anymore. It may have been deleted.");
         const name = clean(body.name, 120) || row.name;
         const key = units.nameKey(name);
         if (await tx.get('SELECT id FROM ingredients WHERE owner_id = ? AND key = ? AND id != ?', [owner, key, id])) {
@@ -535,7 +535,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
     async photo(id: number): Promise<{ type: string; bytes: Uint8Array } | null> {
       const row = await db.get<{ type: string; bytes: Uint8Array }>(
         'SELECT p.type, p.bytes FROM recipe_photos p JOIN recipes r ON r.id = p.recipe_id WHERE p.recipe_id = ? AND r.owner_id = ?', [id, owner]);
-      if (!row && !(await db.get('SELECT 1 AS there FROM recipes WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Recipe not found');
+      if (!row && !(await db.get('SELECT 1 AS there FROM recipes WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, "That recipe isn't here anymore. It may have been deleted.");
       return row ?? null;
     },
 
@@ -624,7 +624,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
     /** Set what you have of an ingredient (adding it to the pantry if it's new). */
     async savePantry(body: PantryInput): Promise<PantryItem> {
       if (body.quantity != null && !(body.quantity >= 0 && body.quantity < 1e7)) throw new Problem(400, 'The amount is 0 or more');
-      if (body.location != null && !LOCATIONS.includes(body.location)) throw new Problem(400, 'Unknown place');
+      if (body.location != null && !LOCATIONS.includes(body.location)) throw new Problem(400, "That isn't a place Life Is knows.");
       if (body.expires_on) dayNumber(body.expires_on);
       return atomic(db, async (tx) => {
         const ingredient = await ingredientId(tx, body.name);
@@ -734,7 +734,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
 
     async addPlan(body: PlanInput): Promise<PlannedMeal> {
       const meal = body.meal ?? 'dinner';
-      if (!MEALS.includes(meal)) throw new Problem(400, 'Breakfast, lunch, dinner or a snack');
+      if (!MEALS.includes(meal)) throw new Problem(400, 'Pick one: breakfast, lunch, dinner or a snack.');
       if (body.servings != null && !(body.servings > 0 && body.servings <= 1000)) throw new Problem(400, 'Servings is a number above 0');
       dayNumber(body.day);
       return atomic(db, async (tx) => {
@@ -826,7 +826,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
       return atomic(db, async (tx) => {
         const list = await readTemplates(tx);
         const one = list.find((t) => t.id === id);
-        if (!one) throw new Problem(404, 'Not found');
+        if (!one) throw new Problem(404, "That template isn't here anymore. It may have been deleted.");
         if (list.some((t) => t.id !== id && t.name.toLowerCase() === tidy.toLowerCase())) throw new Problem(409, 'You already have a template by that name');
         one.name = tidy;
         await writeTemplates(tx, list);
@@ -846,7 +846,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
       dayNumber(start);
       return atomic(db, async (tx) => {
         const one = (await readTemplates(tx)).find((t) => t.id === id);
-        if (!one) throw new Problem(404, 'Not found');
+        if (!one) throw new Problem(404, "That template isn't here anymore. It may have been deleted.");
         const described = await describeTemplate(tx, one);
         const items: MealCopy[] = described.meals.filter((m) => !m.missing).map((m) => ({
           day: addDays(start, m.weekday), meal: m.meal, recipe_id: m.recipe_id, title: m.title, servings: m.servings,
@@ -858,7 +858,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
     /** What one planned meal still needs that the pantry doesn't cover, by name. Nothing is changed. */
     async needsForMeal(id: number): Promise<string[]> {
       const meal = await db.get<{ day: string }>('SELECT day FROM meal_plan WHERE id = ? AND owner_id = ?', [id, owner]);
-      if (!meal) throw new Problem(404, 'Not found');
+      if (!meal) throw new Problem(404, "That meal isn't here anymore. It may have been deleted.");
       return (await shoppingNeeds(db, meal.day, meal.day, id)).buy.map((b) => b.label);
     },
 
@@ -875,7 +875,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
         const meal = await tx.get<PlannedMeal>(
           `SELECT m.*, r.title AS recipe_title, r.servings AS recipe_servings FROM meal_plan m LEFT JOIN recipes r ON r.id = m.recipe_id
            WHERE m.id = ? AND m.owner_id = ?`, [id, owner]);
-        if (!meal) throw new Problem(404, 'Not found');
+        if (!meal) throw new Problem(404, "That meal isn't here anymore. It may have been deleted.");
         if (meal.cooked_on) throw new Problem(409, 'That meal is already marked as cooked');
         const unchanged = new Set<string>();
         if (meal.recipe_id) {
@@ -964,7 +964,7 @@ export function kitchen(db: Db, owner: number, clock: Clock = () => new Date()) 
     tickGrocery(id: number, body: { done: boolean; put_away?: boolean }): Promise<GroceryItem[]> {
       return atomic(db, async (tx) => {
         const item = await tx.get<GroceryRow>('SELECT g.*, NULL AS aisle FROM grocery g WHERE id = ? AND owner_id = ?', [id, owner]);
-        if (!item) throw new Problem(404, 'Not found');
+        if (!item) throw new Problem(404, "That grocery item isn't here anymore. It may have been deleted.");
         if (body.done && !item.done && (body.put_away ?? true) && item.ingredient_id) {
           await addToPantry(tx, item.ingredient_id, item.quantity, item.unit);
         }

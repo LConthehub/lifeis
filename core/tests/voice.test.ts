@@ -47,7 +47,7 @@ it('adds groceries and says how many, matching what is already on the list by na
   // The same again: nothing is added twice, and it says so.
   expect(await say.addGroceries('Milk and bananas')).toBe("Added 1. One was already there. That's 16 on the list.");
   expect(await say.addGroceries('milk')).toBe("That was already on the list. That's 16 things on the list.");
-  expect(await say.addGroceries('   ')).toBe("I didn't hear anything to add.");
+  expect(await say.addGroceries('   ')).toBe("Nothing to add was heard.");
 });
 
 it('says what is left to buy, shortened, and for one store', async () => {
@@ -112,14 +112,14 @@ it('reads when a reminder is for', () => {
   expect(readWhen('in 3 days at noon', TUESDAY)).toEqual({ day: '2046-03-09', time: '12:00' });
   expect(readWhen('2046-04-01 18:45', TUESDAY)).toEqual({ day: '2046-04-01', time: '18:45' });
   expect(readWhen('12 am', TUESDAY).time).toBe('00:00');
-  expect(() => readWhen('whenever the cows come home', TUESDAY)).toThrow(/didn't understand/);
+  expect(() => readWhen('whenever the cows come home', TUESDAY)).toThrow(/time wasn't clear/);
 });
 
 it('adds a reminder as a dated line on the calendar, and says when', async () => {
   const say = voice(db, owner, clock);
   expect(await say.addReminder('Call the dentist', 'tomorrow at 3pm')).toBe('Reminder added for tomorrow at 3 PM: Call the dentist.');
   expect(await say.addReminder('Water the plants')).toBe('Reminder added for today: Water the plants.');
-  expect(await say.addReminder('  ')).toBe("I didn't hear what to remind you of.");
+  expect(await say.addReminder('  ')).toBe("No reminder was heard.");
   const entries = await calendar(db, owner, clock).between(TUESDAY, 2);
   expect(entries.map((e) => [e.day, e.time, e.title])).toEqual([[TUESDAY, null, 'Water the plants'], ['2046-03-07', '15:00', 'Call the dentist']]);
 });

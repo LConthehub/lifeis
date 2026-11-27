@@ -205,7 +205,7 @@ export function prep(db: Db, owner: number, clock: Clock = () => new Date()) {
   /** A planned meal's time to eat and its own prep steps (the recipe's are listed apart, as they belong to the recipe). */
   async function mealOf(mealId: number): Promise<{ meal_id: number; meal: Meal; eat_time: string | null; default_eat_time: string; steps: PrepStep[]; recipe_steps: PrepStep[] }> {
     const m = await db.get<{ id: number; meal: Meal; recipe_id: number | null; eat_time: string | null }>('SELECT id, meal, recipe_id, eat_time FROM meal_plan WHERE id = ? AND owner_id = ?', [mealId, owner]);
-    if (!m) throw new Problem(404, 'Not found');
+    if (!m) throw new Problem(404, "That meal isn't here anymore. It may have been deleted.");
     return {
       meal_id: m.id, meal: m.meal, eat_time: m.eat_time, default_eat_time: EAT_DEFAULTS[m.meal],
       steps: await steps(db, 'meal_plan_id', m.id), recipe_steps: m.recipe_id ? await steps(db, 'recipe_id', m.recipe_id) : [],
@@ -220,7 +220,7 @@ export function prep(db: Db, owner: number, clock: Clock = () => new Date()) {
     /** Replace a recipe's prep steps. */
     async setRecipeSteps(recipeId: number, list: PrepStepInput[]): Promise<PrepStep[]> {
       return atomic(db, async (tx) => {
-        if (!(await tx.get('SELECT 1 AS one FROM recipes WHERE id = ? AND owner_id = ?', [recipeId, owner]))) throw new Problem(404, 'Not found');
+        if (!(await tx.get('SELECT 1 AS one FROM recipes WHERE id = ? AND owner_id = ?', [recipeId, owner]))) throw new Problem(404, "That recipe isn't here anymore. It may have been deleted.");
         await replace(tx, 'recipe_id', recipeId, list);
         return steps(tx, 'recipe_id', recipeId);
       });
@@ -231,7 +231,7 @@ export function prep(db: Db, owner: number, clock: Clock = () => new Date()) {
     /** Change a planned meal's time to eat (null goes back to the usual) and/or replace its own prep steps. */
     async setMeal(mealId: number, change: { eat_time?: string | null; steps?: PrepStepInput[] }) {
       await atomic(db, async (tx) => {
-        if (!(await tx.get('SELECT 1 AS one FROM meal_plan WHERE id = ? AND owner_id = ?', [mealId, owner]))) throw new Problem(404, 'Not found');
+        if (!(await tx.get('SELECT 1 AS one FROM meal_plan WHERE id = ? AND owner_id = ?', [mealId, owner]))) throw new Problem(404, "That meal isn't here anymore. It may have been deleted.");
         if (change.eat_time !== undefined) {
           if (change.eat_time !== null && !timeOk(change.eat_time)) throw new Problem(400, 'Pick a time of day, like 18:00');
           await tx.run('UPDATE meal_plan SET eat_time = ? WHERE id = ?', [change.eat_time, mealId]);

@@ -60,7 +60,7 @@ export default function LetterboxdIn({ onDone }) {
       setSaved((await axios.post('/api/media/letterboxd', { files })).data);
       setReport(null); setFiles(null);
       onDone?.();
-    } catch (err) { setError(errorMessage(err, 'That could not be saved')); }
+    } catch (err) { setError(errorMessage(err, "That didn't save. Try again.")); }
     setBusy(false);
   };
   const made = saved ? saved.lists.filter((l) => l.made).length : 0;

@@ -316,7 +316,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
 
   async function kindRow(q: Queries, id: number): Promise<KindRow> {
     const row = await q.get<KindRow>('SELECT id, name, icon, unit, activity, guard FROM kinds WHERE id = ? AND owner_id = ?', [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That kind of thing isn't here anymore. It may have been deleted.");
     return row;
   }
 
@@ -382,7 +382,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     const row = await q.get<FieldRow>(
       `SELECT f.id, f.kind_id, f.name, f.type, f.unit, f.choices, f.sort_order FROM kind_fields f JOIN kinds k ON k.id = f.kind_id
        WHERE f.id = ? AND k.owner_id = ?`, [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That field isn't here anymore. It may have been deleted.");
     return asField(row);
   }
 
@@ -524,7 +524,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
 
   async function item(q: Queries, id: number): Promise<Item> {
     const found = (await items(q, 'AND i.id = ?', [id], 'any', true))[0];
-    if (!found) throw new Problem(404, 'Not found');
+    if (!found) throw new Problem(404, "That thing isn't here anymore. It may have been deleted.");
     return found;
   }
 
@@ -580,14 +580,14 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
 
   async function ownedItem(q: Queries, id: number): Promise<{ id: number; place_id: number | null; code: string | null }> {
     const row = await q.get<{ id: number; place_id: number | null; code: string | null }>('SELECT id, place_id, code FROM items WHERE id = ? AND owner_id = ?', [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That thing isn't here anymore. It may have been deleted.");
     return row;
   }
 
   /** A thing of a private kind that is the person's own, or 404: only these can be shared. */
   async function privateItem(q: Queries, id: number): Promise<void> {
     const row = await q.get<{ guard: string | null }>('SELECT k.guard FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.id = ? AND i.owner_id = ?', [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That thing isn't here anymore. It may have been deleted.");
     if (!row.guard) throw new Problem(400, 'Only guns and ammunition can be shared this way: other things stay with you');
   }
 
@@ -805,7 +805,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     /** Add a ready-made set's kinds. Kinds the person already has by that name are left exactly as they are. */
     async addStarter(slug: string): Promise<Kind[]> {
       const starter = STARTERS.find((one) => one.slug === slug);
-      if (!starter) throw new Problem(404, 'Not found');
+      if (!starter) throw new Problem(404, "That ready-made set isn't one Life Is has.");
       return atomic(db, async (tx) => {
         for (const kind of starter.kinds) {
           if (!(await tx.get('SELECT id FROM kinds WHERE owner_id = ? AND key = ?', [owner, labelKey(kind.name)]))) await createKindIn(tx, kind);
@@ -849,7 +849,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     /** Rename a place, or move it (and everything in it) into another. */
     updatePlace(id: number, input: PlaceInput): Promise<Place[]> {
       return atomic(db, async (tx) => {
-        if (!(await tx.get('SELECT id FROM places WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, 'Not found');
+        if (!(await tx.get('SELECT id FROM places WHERE id = ? AND owner_id = ?', [id, owner]))) throw new Problem(404, "That place isn't here anymore. It may have been deleted.");
         const place = await checkedPlace(tx, input, id);
         await tx.run('UPDATE places SET parent_id = ?, name = ?, note = ? WHERE id = ?', [place.parent, place.name, place.note, id]);
         return places(tx);
@@ -958,7 +958,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       return atomic(db, async (tx) => {
         const before = await item(tx, id);
         if (before.gone) throw new Problem(409, 'That is already marked as gone');
-        if (!GONE_HOW.includes(input.how as GoneHow)) throw new Problem(400, 'It was sold, given away, thrown out or stolen');
+        if (!GONE_HOW.includes(input.how as GoneHow)) throw new Problem(400, 'Pick one: sold, given away, thrown out or stolen.');
         if (input.day != null && input.day !== '' && !dayOrNull(input.day)) throw new Problem(400, 'Pick the day it went');
         const cents = input.price_cents ?? null;
         if (cents !== null && !(Number.isInteger(cents) && cents >= 0 && cents < 1e12)) throw new Problem(400, 'An amount of money is 0 or more');
@@ -1019,7 +1019,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     undoUse(historyId: number): Promise<HistoryEntry[]> {
       return atomic(db, async (tx) => {
         const found = await tx.get<{ item_id: number }>("SELECT h.item_id FROM item_history h JOIN items i ON i.id = h.item_id WHERE h.id = ? AND h.owner_id = ? AND i.owner_id = ? AND h.what = 'used'", [historyId, owner, owner]);
-        if (!found) throw new Problem(404, 'Not found');
+        if (!found) throw new Problem(404, "That entry isn't here anymore. It may have been deleted.");
         await tx.run('DELETE FROM item_history WHERE id = ?', [historyId]);
         return historyOf(tx, owner, { item_id: found.item_id });
       });
@@ -1058,7 +1058,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
     /** Keep a paper with a thing: a PDF or a photo of it. */
     async addDocument(itemId: number, input: { kind: string; name: string; bytes: Uint8Array }): Promise<ItemDocument[]> {
       await ownedItem(db, itemId);
-      if (!DOCUMENT_KINDS.includes(input.kind as DocumentKind)) throw new Problem(400, "It's a receipt, a manual, a warranty or something else");
+      if (!DOCUMENT_KINDS.includes(input.kind as DocumentKind)) throw new Problem(400, "Pick one: a receipt, a manual, a warranty or something else.");
       const starts = (...head: number[]) => head.every((b, i) => input.bytes[i] === b);
       const type = starts(0x25, 0x50, 0x44, 0x46) ? 'application/pdf' : pictureType(input.bytes);
       if (!type || !DOCUMENT_TYPES.includes(type)) throw new Problem(400, 'A paper is kept as a PDF or a photo (JPEG, PNG or WebP)');

@@ -31,7 +31,7 @@ export function measures(db: Db, viewer: number, clock: Clock = () => new Date()
   }
   async function mine(id: number) {
     const row = await db.get<{ id: number; name: string; unit: string; target: number | null }>('SELECT id, name, unit, target FROM measures WHERE id = ? AND owner_id = ?', [id, viewer]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That measure isn't here anymore. It may have been deleted.");
     return row;
   }
   function tidy(input: MeasureInput) {
@@ -84,7 +84,7 @@ export function measures(db: Db, viewer: number, clock: Clock = () => new Date()
 
     async removeEntry(entryId: number): Promise<Measure> {
       const e = await db.get<{ measure_id: number }>('SELECT e.measure_id FROM measure_entries e JOIN measures m ON m.id = e.measure_id WHERE e.id = ? AND m.owner_id = ?', [entryId, viewer]);
-      if (!e) throw new Problem(404, 'Not found');
+      if (!e) throw new Problem(404, "That reading isn't here anymore. It may have been deleted.");
       await db.run('DELETE FROM measure_entries WHERE id = ?', [entryId]);
       const m = await mine(e.measure_id);
       return whole(m.id, m.name, m.unit, m.target);

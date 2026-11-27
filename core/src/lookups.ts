@@ -140,7 +140,7 @@ export function lookups(db: Db, owner: number, _clock: Clock = () => new Date(),
     if (answer.status === 401) throw new Problem(400, "TMDB didn't accept that key. Check it at themoviedb.org, under your account's API settings, and type it in again.");
     if (answer.status === 404) return null;
     if (answer.status === 429) throw new Problem(400, 'TMDB asked Life Is to slow down. Try again in a moment.');
-    if (answer.status !== 200) throw new Problem(400, `TMDB answered with an error (${answer.status})`);
+    if (answer.status !== 200) throw new Problem(400, "TMDB couldn't answer just now. Try again in a moment.");
     try { return await answer.json() as Record<string, unknown>; } catch { throw new Problem(400, "TMDB's answer couldn't be read"); }
   };
   const words = (value: unknown, most = 300) => (typeof value === 'string' && value.trim() ? clean(value, most) : null);
@@ -149,7 +149,7 @@ export function lookups(db: Db, owner: number, _clock: Clock = () => new Date(),
   const kindOf = (kind: string): FilmKind => {
     if (kind === 'film' || kind === 'movie') return 'movie';
     if (kind === 'show' || kind === 'tv') return 'tv';
-    throw new Problem(400, 'TMDB knows films and shows');
+    throw new Problem(400, 'TMDB has films and shows only.');
   };
   /** A poster's picture, fetched through Life Is: nothing but the file name TMDB gave goes after its image address. */
   const picture = async (path: string, size: string): Promise<{ type: string; bytes: Uint8Array }> => {
@@ -270,10 +270,10 @@ export function lookups(db: Db, owner: number, _clock: Clock = () => new Date(),
      * Only this person's own titles.
      */
     async keepPoster(mediaId: number, path: string): Promise<{ cover: string }> {
-      if (!(await db.get('SELECT id FROM media WHERE id = ? AND owner_id = ?', [mediaId, owner]))) throw new Problem(404, 'Not found');
+      if (!(await db.get('SELECT id FROM media WHERE id = ? AND owner_id = ?', [mediaId, owner]))) throw new Problem(404, "That title isn't here anymore. It may have been deleted.");
       const { type, bytes } = await picture(path, 'w342');
       await atomic(db, async (tx) => {
-        if (!(await tx.get('SELECT id FROM media WHERE id = ? AND owner_id = ?', [mediaId, owner]))) throw new Problem(404, 'Not found');
+        if (!(await tx.get('SELECT id FROM media WHERE id = ? AND owner_id = ?', [mediaId, owner]))) throw new Problem(404, "That title isn't here anymore. It may have been deleted.");
         await tx.run('INSERT OR REPLACE INTO media_covers (media_id, type, bytes) VALUES (?, ?, ?)', [mediaId, type, bytes]);
         await tx.run('UPDATE media SET cover = ? WHERE id = ?', [`/api/media/${mediaId}/cover`, mediaId]);
       });
@@ -299,7 +299,7 @@ export function lookups(db: Db, owner: number, _clock: Clock = () => new Date(),
         }
         if (answer.status === 404) return null;
         if (answer.status === 429) throw new Problem(400, `${who} has had enough look-ups for today. Try again tomorrow, or type it in.`);
-        if (answer.status !== 200) throw new Problem(400, `${who} answered with an error (${answer.status})`);
+        if (answer.status !== 200) throw new Problem(400, `${who} couldn't answer just now. Try again in a moment.`);
         try { return await answer.json() as Record<string, unknown>; } catch { throw new Problem(400, `${who}'s answer couldn't be read`); }
       };
       const text = (value: unknown, most = 300) => (typeof value === 'string' && value.trim() ? clean(value, most) : null);
@@ -338,7 +338,7 @@ export function lookups(db: Db, owner: number, _clock: Clock = () => new Date(),
         throw new Problem(400, "Open Food Facts couldn't be reached just now");
       }
       if (answer.status === 404) return null;
-      if (answer.status !== 200) throw new Problem(400, `Open Food Facts answered with an error (${answer.status})`);
+      if (answer.status !== 200) throw new Problem(400, "Open Food Facts couldn't answer just now. Try again in a moment.");
       let data: { status?: unknown; product?: Record<string, unknown> };
       try {
         data = await answer.json() as typeof data;
@@ -362,7 +362,7 @@ export function lookups(db: Db, owner: number, _clock: Clock = () => new Date(),
       } catch {
         throw new Problem(400, "Open Library couldn't be reached just now");
       }
-      if (answer.status !== 200) throw new Problem(400, `Open Library answered with an error (${answer.status})`);
+      if (answer.status !== 200) throw new Problem(400, "Open Library couldn't answer just now. Try again in a moment.");
       let found: Record<string, unknown> | undefined;
       try {
         found = ((await answer.json()) as Record<string, Record<string, unknown>>)[`ISBN:${isbn}`];

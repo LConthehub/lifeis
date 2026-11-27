@@ -281,7 +281,7 @@ export function createApp(options: Options) {
     const method = req.method ?? 'GET';
     // Refuse changes that another website started.
     if (!SAFE_METHODS.has(method) && ['cross-site', 'same-site'].includes(String(req.headers['sec-fetch-site']))) {
-      throw new Refusal(403, 'Request blocked: it came from another website');
+      throw new Refusal(403, 'That was blocked because it came from another website.');
     }
     // A demo is shared by strangers: nobody may lock the others out, add people, or use it to put words on a
     // public page.
@@ -297,7 +297,7 @@ export function createApp(options: Options) {
     // the address this request was sent to, it is refused (the check on the passkey itself is stricter still).
     if (PASSKEY_PATHS.test(path) && req.headers.origin !== undefined
       && req.headers.origin !== (req.headers.host ? `${isHttps(req) ? 'https' : 'http'}://${String(req.headers.host).slice(0, 200)}` : null)) {
-      throw new Refusal(403, "Request blocked: it didn't come from this address");
+      throw new Refusal(403, "That was blocked because it didn't come from this address.");
     }
     const token = cookie(req, auth.SESSION_COOKIE);
     let user: auth.User | null = null;
@@ -314,7 +314,7 @@ export function createApp(options: Options) {
       user = { ...owner, is_admin: Boolean(owner.is_admin) };
     } else if (!PUBLIC_PATHS.has(path)) {
       user = await auth.userForToken(db, token, clock, idleDefault, req.headers['x-background'] !== '1');
-      if (!user) throw new Refusal(401, 'Not logged in');
+      if (!user) throw new Refusal(401, 'You are signed out. Sign in again.');
     }
     const here = routes.filter(([, pattern]) => pattern.test(path));
     if (here.length === 0) throw new Refusal(404, 'Not found');
@@ -383,7 +383,7 @@ export function createApp(options: Options) {
           : { status: problem.status, json: { detail: problem.message } };
       } else {
         (options.onError ?? console.error)(problem);
-        reply = { status: 500, json: { detail: 'Something went wrong inside Life Is' } };
+        reply = { status: 500, json: { detail: "That didn't work. Try again in a moment." } };
       }
     }
 

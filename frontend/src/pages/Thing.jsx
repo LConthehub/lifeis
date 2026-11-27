@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import Icon from '../components/Icon';
 import axios from 'axios';
 import Picture from '../components/Picture';
@@ -77,7 +77,7 @@ export default function Thing() {
   }, [load, id]);
 
   if (item === undefined) return null;
-  if (item === null) return <Navigate to="/things" replace />;
+  if (item === null) return <p className="text-sm text-gray-600 dark:text-life-200">That thing isn't here anymore. It may have been deleted. <Link to="/things" className="underline">All things</Link></p>;
 
   const move = async (placeId) => {
     setError('');

@@ -151,7 +151,7 @@ export function readStatement(text: string, options: ReadOptions = {}): Statemen
     if (cols) { at = i; break; }
   }
   if (!cols) {
-    throw new Problem(400, "I couldn't find the columns of a statement. Life Is looks for a heading line with a date (Date, Posting Date or Transaction Date) and an amount (Amount, or Debit and Credit). Check that this is the CSV from your bank's download or export, not a PDF or a summary.");
+    throw new Problem(400, "No columns of a statement were found. Life Is looks for a heading line with a date (Date, Posting Date or Transaction Date) and an amount (Amount, or Debit and Credit). Check that this is the CSV from your bank's download or export, not a PDF or a summary.");
   }
   const lines = table.slice(at + 1);
   if (lines.length > MAX_ROWS) throw new Problem(400, `That has more than ${MAX_ROWS.toLocaleString('en-US')} lines. Download a shorter stretch of time (a month or a year) and import it as more than one.`);
@@ -177,7 +177,7 @@ export function readStatement(text: string, options: ReadOptions = {}): Statemen
     const label = clean((row[cols.label] ?? '').replace(/\s+/g, ' '), 200) ?? clean((row[cols.memo] ?? '').replace(/\s+/g, ' '), 200) ?? '(no description)';
     raw.push({ day, label, hint: cols.hint >= 0 ? clean((row[cols.hint] ?? '').replace(/\s+/g, ' '), 80) : null, amount, said });
   }
-  if (raw.length === 0) throw new Problem(400, 'The columns were there, but no line had both a date and an amount I could read. Dates should look like 03/05/2046 or 2046-03-05.');
+  if (raw.length === 0) throw new Problem(400, 'The columns were there, but no line had both a date and an amount that could be read. Dates should look like 03/05/2046 or 2046-03-05.');
 
   // Which sign is spending, for the lines the file doesn't say outright: the commoner one.
   const negatives = raw.filter((r) => !r.said && r.amount.negative).length;

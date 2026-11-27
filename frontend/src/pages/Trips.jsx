@@ -148,7 +148,7 @@ export function TripPage() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { axios.get(`${API}/options`).then(({ data }) => setOptions(data)).catch(() => {}); }, [year?.plan_id]);
   if (trip === undefined) return null;
-  if (trip === null) return <p className="text-sm text-gray-500 dark:text-life-300">That trip isn't there. <Link to="/plans/trips" className="underline">All trips</Link></p>;
+  if (trip === null) return <p className="text-sm text-gray-500 dark:text-life-300">That trip isn't here anymore. It may have been deleted. <Link to="/plans/trips" className="underline">All trips</Link></p>;
 
   /** Does something that answers with the year, and shows what came back. */
   const act = async (work) => {

@@ -94,7 +94,7 @@ function pageAddress(given: string): string {
   } catch {
     throw new Problem(400, "That isn't a web address. It looks like https://example.com/a-recipe");
   }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Problem(400, 'A web address starts with https://');
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Problem(400, "That web address needs to start with https://.");
   if (url.username || url.password) throw new Problem(400, 'Leave any name and password out of the address');
   return url.href;
 }
@@ -109,7 +109,7 @@ export async function recipeFromWeb(fetcher: Fetcher | undefined, given: string)
     const answer = await fetcher(address, { Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5', 'Accept-Language': 'en', 'User-Agent': 'Mozilla/5.0 (compatible; LifeIs recipe reader)' });
     if (answer.status === 404 || answer.status === 410) throw new Problem(400, "There's no page at that address");
     if ([401, 403, 429, 451, 503].includes(answer.status)) throw new Problem(400, "That site wouldn't give the page to Life Is (many sites turn away anything that isn't a person's browser). Copy the recipe's text from the page and paste it in instead.");
-    if (answer.status !== 200) throw new Problem(400, `That site answered with an error (${answer.status})`);
+    if (answer.status !== 200) throw new Problem(400, "That site couldn't answer just now. Try again in a moment.");
     const bytes = await answer.bytes();
     if (bytes.length > MAX_PAGE) throw new Problem(400, 'That page is too large to read');
     html = new TextDecoder().decode(bytes);

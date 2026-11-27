@@ -452,7 +452,7 @@ export function connector(db: Db, owner: number, clock: Clock = () => new Date()
   /** One of this person's own connections that has not ended. Anyone else's is not there. */
   async function mine(id: number): Promise<Row> {
     const row = await db.get<Row>(`SELECT ${COLUMNS} FROM ai_connections WHERE id = ? AND owner_id = ?`, [id, owner]);
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That connection isn't here anymore. It may have been deleted.");
     if (!stillLive(row, today())) throw new Problem(409, 'That connection has ended');
     return row;
   }
@@ -499,7 +499,7 @@ export function connector(db: Db, owner: number, clock: Clock = () => new Date()
     /** Ends a connection now. The row stays, so the log still names it. */
     async cutOff(id: number): Promise<void> {
       const row = await db.get<Row>(`SELECT ${COLUMNS} FROM ai_connections WHERE id = ? AND owner_id = ?`, [id, owner]);
-      if (!row) throw new Problem(404, 'Not found');
+      if (!row) throw new Problem(404, "That connection isn't here anymore. It may have been deleted.");
       await db.run(`UPDATE ai_connections SET ended_at = COALESCE(ended_at, ?), ${CLEARED} WHERE id = ? AND owner_id = ?`, [stamp(clock()), id, owner]);
     },
 
@@ -507,7 +507,7 @@ export function connector(db: Db, owner: number, clock: Clock = () => new Date()
     async undo(logId: number): Promise<void> {
       const line = await db.get<{ id: number; kind: string; added_kind: string | null; added_ids: string | null; undone_at: string | null }>(
         'SELECT id, kind, added_kind, added_ids, undone_at FROM ai_log WHERE id = ? AND owner_id = ?', [logId, owner]);
-      if (!line) throw new Problem(404, 'Not found');
+      if (!line) throw new Problem(404, "That action isn't here anymore. It may have been deleted.");
       if (line.undone_at !== null) throw new Problem(409, 'That was already undone');
       if (line.kind !== 'add' || !line.added_ids || !line.added_kind) throw new Problem(409, 'There is nothing to undo on that line');
       const ids = line.added_ids.split(',');

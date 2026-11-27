@@ -397,7 +397,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
 
   async function seen(q: Queries, id: number): Promise<JobRow> {
     const row = (await rows(q, 'AND j.id = ?', [id]))[0];
-    if (!row) throw new Problem(404, 'Not found');
+    if (!row) throw new Problem(404, "That job isn't here anymore. It may have been deleted.");
     return row;
   }
   async function mine(q: Queries, id: number): Promise<JobRow> {
@@ -474,7 +474,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
 
   /** What kind it is, and what goes with that: an amount for a bill or renewal, points for a chore. */
   async function saveKind(q: Queries, jobId: number, input: JobInput, making: boolean) {
-    if (input.kind != null && !JOB_KINDS.includes(input.kind as JobKind)) throw new Problem(400, "It's a job, a bill, a renewal or a chore");
+    if (input.kind != null && !JOB_KINDS.includes(input.kind as JobKind)) throw new Problem(400, "Pick one: a job, a bill, a renewal or a chore.");
     if (input.amount_cents != null && !(Number.isInteger(input.amount_cents) && input.amount_cents >= 0 && input.amount_cents < 1e11)) throw new Problem(400, 'What it costs is an amount, 0 or more');
     if (input.points != null && !(Number.isInteger(input.points) && input.points >= 0 && input.points <= 1000)) throw new Problem(400, 'Points are a whole number, up to 1000');
     const sets: string[] = [];
@@ -594,7 +594,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
      */
     async addSet(slug: string, only?: string[] | null): Promise<SetAdded> {
       const set = readySets(today()).find((s) => s.slug === slug);
-      if (!set) throw new Problem(404, 'There is no such set');
+      if (!set) throw new Problem(404, "That ready-made set isn't one Life Is has.");
       const wanted = only ? new Set(only.map(labelKey)) : null;
       const have = new Set((await rows(db)).map((r) => labelKey(r.name)));
       const out: SetAdded = { set: set.name, added: 0, already: 0, added_names: [], already_names: [] };
@@ -730,7 +730,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
     /** Take back a time it was marked done (its spending entry stays: that is changed in spending). */
     async undo(doneId: number): Promise<Job & { done: DoneRecord[] }> {
       const found = await db.get<{ job_id: number }>('SELECT job_id FROM upkeep_done WHERE id = ?', [doneId]);
-      if (!found) throw new Problem(404, 'Not found');
+      if (!found) throw new Problem(404, "That entry isn't here anymore. It may have been deleted.");
       const row = await seen(db, found.job_id);
       await db.run('DELETE FROM upkeep_done WHERE id = ?', [doneId]);
       // A bill or renewal goes back to the date it was on.
@@ -879,7 +879,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
     async undoPaid(memberId: number): Promise<Allowance['history']> {
       const paid = await paidRecords();
       const record = paid[String(memberId)];
-      if (!record || record.payments.length === 0) throw new Problem(404, 'No payment to undo');
+      if (!record || record.payments.length === 0) throw new Problem(404, "There's no payment to undo.");
       record.payments.pop();
       const previous = record.payments[record.payments.length - 1];
       if (previous) record.through = previous.through; else delete paid[String(memberId)];
@@ -920,7 +920,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
     /** What a thing's latest reading is, and the place it's kept, for a job's page. */
     async thingReading(itemId: number): Promise<{ latest: number | null; place: string | null }> {
       const item = await db.get<{ place_id: number | null }>('SELECT place_id FROM items WHERE id = ? AND owner_id = ?', [itemId, viewer]);
-      if (!item) throw new Problem(404, 'Not found');
+      if (!item) throw new Problem(404, "That thing isn't here anymore. It may have been deleted.");
       const v = await db.get<{ v: number | null }>('SELECT MAX(value) AS v FROM readings WHERE item_id = ?', [itemId]);
       return { latest: v?.v ?? null, place: await placePath(db, viewer, item.place_id) };
     },
