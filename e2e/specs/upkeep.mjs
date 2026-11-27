@@ -163,6 +163,7 @@ await rowOf().getByRole('button', { name: /^Add details/ }).click(); await page.
 await page.getByRole('dialog').getByLabel('A note').fill('streaky'); await page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true }).click(); await page.waitForTimeout(1500);
 const kept = await page.evaluate(async () => { const all = await fetch('/api/things/upkeep').then((r) => r.json()); const id = all.find((j) => j.name === 'Wipe the counters').id; return (await fetch(`/api/things/upkeep/${id}`).then((r) => r.json())).done; });
 check('adding details replaces the quick record: one record, with the note', kept.length === 1 && kept[0].note === 'streaky', JSON.stringify(kept));
+check('once details are saved, Done is back without a reload', await rowOf().getByRole('button', { name: 'Wipe the counters done' }).isVisible() && !(await rowOf().getByRole('button', { name: /^Add details/ }).count()));
 await page.goto(`${base}/things/upkeep`); await page.waitForTimeout(1000);
 check('after a reload it reads Last done today', (await rowOf().innerText()).includes('Last done today'));
 await rowOf().getByRole('button', { name: 'Wipe the counters done' }).click(); await page.waitForTimeout(800);

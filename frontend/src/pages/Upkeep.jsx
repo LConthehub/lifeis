@@ -247,7 +247,8 @@ export default function UpkeepPage() {
                     {quick(j) && !didToday[j.id]?.rec && <span className="block text-xs text-gray-500 dark:text-life-300" data-last-done>{lastDoneText(j.last_done?.day, todayHere())}</span>}
                   </Link>
                   <DueBadge job={j} />
-                  {quick(j) && didToday[j.id]?.rec ? null : (
+                  {/* Hidden just after a tap, so a double tap is not two records; back once details are saved. */}
+                  {quick(j) && didToday[j.id]?.rec && !didToday[j.id].details ? null : (
                     <button type="button" onClick={() => (quick(j) ? didIt(j) : setModal({ done: j }))} aria-label={`${j.name} ${doneWord(j).toLowerCase()}`} className="shrink-0 rounded-full border border-life-200 px-2.5 py-1 text-xs text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100"><Icon of="done" size={14} /> {doneWord(j)}</button>
                   )}
                   {quick(j) && didToday[j.id]?.rec && (
