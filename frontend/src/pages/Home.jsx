@@ -105,7 +105,7 @@ export default function Home({ user }) {
       <AskCard />
       <AskBack />
 
-      {s.cards.length === 0 && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Every card is out of sight. Use "Choose what shows" to bring some back.</div>}
+      {s.cards.length === 0 && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Every card is hidden. Use "Choose what shows" to bring some back.</div>}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {shows('days') && (
@@ -434,7 +434,7 @@ function CardChooser({ choices, onDone }) {
   };
   return (
     <div className="space-y-3">
-      <p className="text-sm text-gray-600 dark:text-life-100">Uncheck a card to put it out of sight. Nothing in it is removed.</p>
+      <p className="text-sm text-gray-600 dark:text-life-100">Uncheck a card to hide it. Nothing in it is deleted.</p>
       <div className="space-y-2">
         {choices.map((c) => (
           <label key={c.key} className="flex cursor-pointer items-start gap-2 text-sm text-gray-800 dark:text-life-50">

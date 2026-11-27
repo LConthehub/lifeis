@@ -49,7 +49,7 @@ function explain(problem: unknown, what: 'reading' | 'sending', s: MailServer): 
     return new Problem(400, `Couldn't reach ${host} for ${what}. Check the server's name and port.`);
   }
   if (/certificate|self.signed|SSL|TLS/i.test(e.message ?? '')) {
-    return new Problem(400, `${host} couldn't be reached over an encrypted line that can be trusted. If it's a server on your own network, tick "On my own computer or network".`);
+    return new Problem(400, `${host} couldn't be reached over an encrypted line that can be trusted. If it's a server on your own network, check "On my own computer or network".`);
   }
   return new Problem(400, `${host} answered with an error while ${what}${e.message ? `: ${String(e.message).slice(0, 160)}` : ''}`);
 }

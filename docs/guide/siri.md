@@ -31,7 +31,7 @@ Keys are off until you make one. Each key shows what it may do and the last day 
 
 ## What a key can and cannot do
 
-A key can do only what you tick. Today that is up to five things:
+A key can do only what you check. Today that is up to five things:
 
 - Read your grocery list.
 - Add things to your grocery list.
@@ -108,6 +108,6 @@ You can say things like "tomorrow at 3 PM", "Friday 9:30 AM", "in 3 days", "noon
 - **The thing you want cannot be said in the same breath as the shortcut's name.** You cannot say "Hey Siri, add groceries milk and eggs". Siri runs the shortcut, then asks the question, and you answer. Saying it in one breath would need an iPhone app of Life Is's own, and there is not one yet.
 - **No one-tap install links.** Life Is does not offer downloadable shortcuts. A shortcut file has to be signed by Apple to be installed, and Life Is sends nothing to Apple. So you build each one by hand with the steps above.
 - **"That key isn't working."** This is all Life Is says to a wrong, turned-off or deleted key. It does not say which, so a stranger learns nothing. Check the key is on in Settings, and that the header reads `Bearer`, a space, then the key.
-- **"That key isn't allowed to do that."** The key is real but you did not tick that action. Delete it and make one that may, or make a second key.
+- **"That key isn't allowed to do that."** The key is real but you did not check that action. Delete it and make one that may, or make a second key.
 - **Making a second key** for each device, like an iPad, lets you turn one off without the other.
 - **The key is a password for those five things.** Anyone who has it can use it. Keep it in your notes app, not in a message you send.

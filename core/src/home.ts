@@ -30,7 +30,7 @@ import { weather, type Forecast, type WeatherPlace } from './weather.ts';
  */
 export const CARDS = [
   { key: 'days', label: 'Today and the next two days', section: 'planning' },
-  { key: 'routines', label: 'Routines: today’s checklists to tick', section: null },
+  { key: 'routines', label: 'Routines: today’s checklists to check off', section: null },
   { key: 'weather', label: 'The weather', section: null },
   { key: 'mail', label: 'Email: what’s unread', section: null },
   { key: 'dates', label: 'Birthdays and other yearly dates coming up', section: 'planning' },

@@ -12,7 +12,7 @@ A plan is anything with a day and things that belong to it: a vacation with its 
 
 On **Plans**, choose **+ New**. Give it a name, a first day, a last day if it is longer, and a few words on what it is for. Then open it and add what belongs to it:
 
-- **Checklist.** Anything to do. Tick each off.
+- **Checklist.** Anything to do. Check each one off.
 - **Food.** Recipes from your kitchen. Choose **+ Add**, pick a recipe, and say which day and meal it is for and how many it feeds. On the week's meals it counts toward the grocery list and the pans and dishes the meal needs. It moves if the plan moves. Or choose "Not on the week" to just note it on the plan.
 - **Things to have ready.** Things you keep, and how many are needed. If you are short, the plan says so.
 - **To watch, hear or read.** Titles from your collection.

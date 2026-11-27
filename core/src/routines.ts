@@ -445,7 +445,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
   function tickDay(given: string | null | undefined): string {
     const day = given ?? today();
     dayNumber(day);
-    if (day > today()) throw new Problem(400, "A day that hasn't come yet can't be ticked");
+    if (day > today()) throw new Problem(400, "A day that hasn't come yet can't be checked off");
     if (day < addDays(today(), -TICK_DAYS_BACK)) throw new Problem(400, `Only the last ${TICK_DAYS_BACK} days can be changed`);
     return day;
   }

@@ -146,7 +146,7 @@ export function TimeChecklist({ time, onChange, onGo }) {
         <button type="button" onClick={onGo} className={`${buttonClass} min-h-[44px]`}>Go through it</button>
         {time.finished
           ? <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, false))} className={`${quietButtonClass} min-h-[44px]`}>Start over</button>
-          : <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, true))} className={`${quietButtonClass} min-h-[44px]`}>Tick them all</button>}
+          : <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, true))} className={`${quietButtonClass} min-h-[44px]`}>Check them all off</button>}
       </div>
     </section>
   );
@@ -252,7 +252,7 @@ export function GoThrough({ time: start, onChange, onClose }) {
           <div className="flex flex-1 flex-col justify-center gap-4" data-finished-screen>
             <p className="text-3xl font-semibold text-life-800 dark:text-life-50">{time.finished ? 'All done' : `${doneText(time)}`}</p>
             <p className="text-base text-gray-700 dark:text-life-100">{lastText(time)}</p>
-            {!time.finished && <p className="text-sm text-gray-600 dark:text-life-200">Some steps were skipped. You can go back to them, or close and tick them later.</p>}
+            {!time.finished && <p className="text-sm text-gray-600 dark:text-life-200">Some steps were skipped. You can go back to them, or close and check them off later.</p>}
             <div className="flex flex-wrap gap-3">
               <button type="button" onClick={() => setAt(Math.max(0, time.steps.findIndex((s) => !s.ticked)))} disabled={time.finished} className={`${big} border-2 border-life-300 text-life-700 disabled:opacity-40 dark:text-life-100`}>Go back to the skipped</button>
               <button type="button" onClick={() => onClose(time)} className={`${big} flex-1 bg-gradient-to-br from-life-500 to-life-700 text-white shadow-md`}>Close</button>
@@ -288,7 +288,7 @@ export function RoutinesCard() {
     return (
       <section className={cardClass} data-section="routines">
         <div className="flex items-baseline gap-2"><h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">Routines</h2><Link to="/routines" className="text-xs text-life-600 hover:underline dark:text-life-200">Routines →</Link></div>
-        <p className="text-sm text-gray-500 dark:text-life-300">Nothing to tick today.</p>
+        <p className="text-sm text-gray-500 dark:text-life-300">Nothing to check off today.</p>
       </section>
     );
   }

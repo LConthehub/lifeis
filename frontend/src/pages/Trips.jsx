@@ -627,7 +627,7 @@ function After({ year, put }) {
   return (
     <section className={`${cardClass} space-y-2`} aria-label="After the trip">
       <Heading icon="packed">After the trip</Heading>
-      <Hint>Tick what came back, and say what each piece needs. A repair goes to Upkeep. A replacement goes on the grocery list.</Hint>
+      <Hint>Check off what came back, and say what each piece needs. A repair goes to Upkeep. A replacement goes on the grocery list.</Hint>
       <ul className="divide-y divide-life-100 dark:divide-life-700">
         {year.gear.map((g) => (
           <li key={g.id} className="space-y-1 py-1">

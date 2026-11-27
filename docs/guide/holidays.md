@@ -24,7 +24,7 @@ If you keep a birthday, an anniversary or another yearly date on the calendar, t
 
 ## Plan a year
 
-Open the holiday and start this year's. It starts from last year's: the same guests, cards, decorations and countdown steps, with nothing ticked. What broke or ran out last year goes on a **To buy for this year** list. If you left yourself a note last year, you see it at the top.
+Open the holiday and start this year's. It starts from last year's: the same guests, cards, decorations and countdown steps, with nothing checked off. What broke or ran out last year goes on a **To buy for this year** list. If you left yourself a note last year, you see it at the top.
 
 Each year is its own plan. Use the years along the top to look back. Past years stay.
 
@@ -47,7 +47,7 @@ Once you set when dinner is, Life Is works backward from it and lists what to do
 
 For a **frozen turkey**, Life Is says how many days it needs in the refrigerator: 24 hours for each 4 pounds, rounded up to be safe. It shows where that rule comes from.
 
-To add a step of your own, such as "Make the gravy", pick when: the night before or the morning of (with a time), or some hours before dinner. Tick steps as you do them. A step that is past its time says **late**.
+To add a step of your own, such as "Make the gravy", pick when: the night before or the morning of (with a time), or some hours before dinner. Check steps off as you do them. A step that is past its time says **late**.
 
 ## The menu
 
@@ -55,8 +55,8 @@ Add recipes from your kitchen to the menu. The full plan, with its checklist and
 
 ## Who came, and cards
 
-- **Who came.** Add who is invited, and tick them as they come. Pick people from your household or type a name. Next year starts with the same list.
-- **Cards.** Add who gets a card, and tick each as it is sent.
+- **Who came.** Add who is invited, and check each one off as they come. Pick people from your household or type a name. Next year starts with the same list.
+- **Cards.** Add who gets a card, and check each one off as you send it.
 
 ## Gifts
 
@@ -66,9 +66,9 @@ A gift for someone who signs in to Life Is is hidden from them until the day has
 
 ## Decorations
 
-Under **Decorations: put up**, add each decoration and where it goes: a room or a spot. A decoration can be one of your things, or something you name, kept in a box (a place). Take a photo of each spot. Next year the list shows last year's photo beside the spot, so you can put it back the same way. Tick each decoration as it goes up.
+Under **Decorations: put up**, add each decoration and where it goes: a room or a spot. A decoration can be one of your things, or something you name, kept in a box (a place). Take a photo of each spot. Next year the list shows last year's photo beside the spot, so you can put it back the same way. Check each decoration off as it goes up.
 
-Under **Take down**, tick each decoration as it comes down and again when it is back in its box. Mark one **Broke** or **Ran out** and it lands on next year's shopping list. When it is all done, choose **Everything is down and boxed**.
+Under **Take down**, check each decoration off as it comes down and again when it is back in its box. Mark one **Broke** or **Ran out** and it lands on next year's shopping list. When it is all done, choose **Everything is down and boxed**.
 
 ## Budget
 

@@ -102,7 +102,7 @@ check('marking Leo as paid records the day, and everything up to it is paid', /L
 const payments = (await allowance.getByRole('list', { name: 'Payments' }).innerText()).replace(/\s+/g, ' ');
 check('a line says what was paid: this week and last month\'s are both Leo\'s', payments.includes('Leo was paid $4.00 for 8 points') && !payments.includes('Mia'), payments);
 check('Mia is not paid by it', (await child('Mia')).includes('Still to pay: 6 points = $3.00'), await child('Mia'));
-await allowance.getByRole('button', { name: /Take back the payment to Leo/ }).click(); await page.waitForTimeout(2000);
+await allowance.getByRole('button', { name: /Undo the payment to Leo/ }).click(); await page.waitForTimeout(2000);
 check('a payment can be taken back', (await child('Leo')).includes('Still to pay: 4 points = $2.00') && (await allowance.getByRole('list', { name: 'Payments' }).count()) === 0, (await allowance.innerText()).replace(/\s+/g, ' '));
 await allowance.getByRole('button', { name: /Mark Leo as paid/ }).click(); await page.waitForTimeout(1200);
 await allowance.getByLabel('Period').selectOption({ label: 'Last month' }); await page.waitForTimeout(700);

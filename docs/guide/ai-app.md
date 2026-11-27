@@ -28,18 +28,18 @@ Each person connects their own.
 2. In Claude, add a custom connector and paste that address.
 3. Claude sends you to Life Is. Sign in to Life Is if it asks.
 4. Give the connection a name, like `Claude on my iPad`.
-5. Tick what it may see. Everything starts unticked.
-6. Tick **It may add things** only if you want that.
+5. Check what it may see. Everything starts unchecked.
+6. Check **It may add things** only if you want that.
 7. Choose **Allow**. Choose **Don't allow** to say no.
 
 The page tells you what will be sent, and to whom, before you choose.
 
 ## What it can read
 
-Only the sections you tick for that connection, and only what you can see yourself:
+Only the sections you check for that connection, and only what you can see yourself:
 
 - **Kitchen:** the grocery list, the week's meals, the pantry, and recipes.
-- **Calendar:** events and plans coming up. Meals, chores and project dates show there only when their own section is ticked too.
+- **Calendar:** events and plans coming up. Meals, chores and project dates show there only when their own section is checked too.
 - **Things:** what you own and where it is.
 - **Projects:** your projects.
 - **Lists:** your lists of films, shows, books and music.
@@ -47,7 +47,7 @@ Only the sections you tick for that connection, and only what you can see yourse
 
 ## What it can add
 
-Only when you tick **It may add things** and also tick the section it belongs to:
+Only when you check **It may add things** and also check the section it belongs to:
 
 - A line on the grocery list (Kitchen).
 - A calendar event (Calendar).
@@ -58,7 +58,7 @@ Each thing it adds is marked "Added by" and the connection's name. It **never** 
 
 ## What it never reaches
 
-Whatever you tick, it never reaches guns and ammunition, measures, gifts, passwords and keys, the house manual, or mail. Other calendars you follow show only as "busy".
+Whatever you check, it never reaches guns and ammunition, measures, gifts, passwords and keys, the house manual, or mail. Other calendars you follow show only as "busy".
 
 ## The log, and undo
 
@@ -66,7 +66,7 @@ Under **Use Life Is from your AI app** in Settings, the log lists what each conn
 
 ## Change it or cut it off
 
-- **Change a connection:** rename it, or tick and untick sections and the add tick. It takes effect at once.
+- **Change a connection:** rename it, or check and uncheck sections and the box for adding things. It takes effect at once.
 - **Cut it off:** it stops working at once. The log keeps its name, so you can still see what it did.
 - **The household switch:** when the person in charge turns it off, every connection ends at once. Nobody's AI app can reach Life Is until it is turned on and people connect again.
 - **Not used for 90 days:** a connection ends by itself. Each connection shows the day it will end if it is not used again.
@@ -76,7 +76,7 @@ Each person may have up to 10 live connections.
 
 ## What is sent, and to whom
 
-Only when your AI app asks, what Life Is holds in the sections ticked for that connection goes to the company that makes the app (Anthropic, for Claude), through that company's servers. That company's own privacy policy covers what it does with it. Nothing is sent at any other time. See the [privacy policy](../privacy#use-life-is-from-your-ai-app-only-on-a-life-is-you-host).
+Only when your AI app asks, what Life Is holds in the sections checked for that connection goes to the company that makes the app (Anthropic, for Claude), through that company's servers. That company's own privacy policy covers what it does with it. Nothing is sent at any other time. See the [privacy policy](../privacy#use-life-is-from-your-ai-app-only-on-a-life-is-you-host).
 
 ## For people who run their own Life Is
 

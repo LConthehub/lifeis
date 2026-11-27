@@ -879,7 +879,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
     async undoPaid(memberId: number): Promise<Allowance['history']> {
       const paid = await paidRecords();
       const record = paid[String(memberId)];
-      if (!record || record.payments.length === 0) throw new Problem(404, 'No payment to take back');
+      if (!record || record.payments.length === 0) throw new Problem(404, 'No payment to undo');
       record.payments.pop();
       const previous = record.payments[record.payments.length - 1];
       if (previous) record.through = previous.through; else delete paid[String(memberId)];

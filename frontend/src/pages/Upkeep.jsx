@@ -308,7 +308,7 @@ export function JobPage() {
     await axios.delete(`/api/things/upkeep/${id}`);
     navigate('/things/upkeep');
   };
-  const undo = async (d) => { if (window.confirm(`Take back ${dayText(d.day)}?`)) setJob((await axios.delete(`/api/things/upkeep/done/${d.id}`)).data); };
+  const undo = async (d) => { if (window.confirm(`Undo ${dayText(d.day)}?`)) setJob((await axios.delete(`/api/things/upkeep/done/${d.id}`)).data); };
   const steps = (job.steps || '').split('\n').map((s) => s.trim()).filter(Boolean);
 
   return (
@@ -382,7 +382,7 @@ export function JobPage() {
                 <span className="min-w-0 flex-1 text-xs text-gray-600 dark:text-life-200">
                   {[d.by, d.points != null && `${d.points} point${d.points === 1 ? '' : 's'}`, d.reading !== null && `${number(d.reading)}${job.reading_unit ? ` ${job.reading_unit}` : ''}`, d.minutes !== null && minutesText(d.minutes), d.cost_cents !== null && money(d.cost_cents), d.note].filter(Boolean).join(' · ')}
                 </span>
-                <button type="button" onClick={() => undo(d)} aria-label={`Take back ${d.day}`} className="text-xs text-gray-400 hover:text-red-600">✕</button>
+                <button type="button" onClick={() => undo(d)} aria-label={`Undo ${d.day}`} className="text-xs text-gray-400 hover:text-red-600">✕</button>
               </li>
             ))}
           </ul>
@@ -721,9 +721,9 @@ function Allowance({ scores, members }) {
     try { await axios.post('/api/things/upkeep/allowance/paid', { member_id: p.id, through: p.pay_through }); setSaid(`${p.name} is marked as paid through ${dayText(p.pay_through)}.`); setStamp((n) => n + 1); } catch (err) { setError(errorMessage(err, "Couldn't mark that")); }
   };
   const undo = async (h) => {
-    if (!window.confirm(`Take back the payment to ${h.name} through ${dayText(h.through)}?`)) return;
+    if (!window.confirm(`Undo the payment to ${h.name} through ${dayText(h.through)}?`)) return;
     setSaid(''); setError('');
-    try { await axios.delete(`/api/things/upkeep/allowance/paid/${h.id}`); setSaid('That payment is taken back.'); setStamp((n) => n + 1); } catch (err) { setError(errorMessage(err, "Couldn't take that back")); }
+    try { await axios.delete(`/api/things/upkeep/allowance/paid/${h.id}`); setSaid('That payment is undone.'); setStamp((n) => n + 1); } catch (err) { setError(errorMessage(err, "Couldn't undo that")); }
   };
   const worth = data?.point_cents ?? null;
   const lastFor = new Set();
@@ -772,7 +772,7 @@ function Allowance({ scores, members }) {
                   return (
                     <li key={`${h.id}-${h.through}-${i}`} className="flex flex-wrap items-center gap-x-2 text-sm text-gray-700 dark:text-life-100">
                       <span className="mr-auto min-w-0">{h.name} was paid {h.cents !== null ? `${centsText(h.cents)} for ` : ''}{pointsText(h.points)}, through {dayText(h.through)} (on {dayText(h.on)}).</span>
-                      {newest && <button type="button" onClick={() => undo(h)} aria-label={`Take back the payment to ${h.name} through ${dayText(h.through)}`} className="min-h-[44px] px-2 text-xs text-gray-500 underline hover:text-red-600">Take back</button>}
+                      {newest && <button type="button" onClick={() => undo(h)} aria-label={`Undo the payment to ${h.name} through ${dayText(h.through)}`} className="min-h-[44px] px-2 text-xs text-gray-500 underline hover:text-red-600">Undo</button>}
                     </li>
                   );
                 })}

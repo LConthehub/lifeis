@@ -204,7 +204,7 @@ export function RoutineForm({ routine, me, people, items, onDone, onGone, startW
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex flex-wrap items-center gap-2">
         {routine && !sure && <button type="button" onClick={() => setSure(true)} className="min-h-[44px] px-3 text-sm text-red-700 hover:underline dark:text-red-300">Delete this routine</button>}
-        {routine && sure && <button type="button" onClick={remove} className="min-h-[44px] rounded-xl bg-red-600 px-4 text-sm font-semibold text-white">Yes, delete it and what was ticked</button>}
+        {routine && sure && <button type="button" onClick={remove} className="min-h-[44px] rounded-xl bg-red-600 px-4 text-sm font-semibold text-white">Yes, delete it and what was checked off</button>}
         <button type="submit" className={`${buttonClass} ml-auto min-h-[44px]`}>Save</button>
       </div>
     </form>
@@ -284,7 +284,7 @@ export default function RoutinesPage() {
         <button type="button" onClick={() => setModal({ routine: null })} className={`${buttonClass} min-h-[44px]`}>+ New</button>
         <button type="button" onClick={() => setModal({ routine: null, kind: 'workout' })} className={`${quietButtonClass} min-h-[44px]`}>+ New workout</button>
       </div>
-      <p className="text-sm text-gray-600 dark:text-life-100">Checklists for parts of the day. They show on the front page, where you tick them off or go through one a step at a time. A workout is a routine whose steps can carry numbers.</p>
+      <p className="text-sm text-gray-600 dark:text-life-100">Checklists for parts of the day. They show on the front page, where you check them off or go through one a step at a time. A workout is a routine whose steps can carry numbers.</p>
       <div className="flex flex-wrap items-center gap-2">
         <TagFilter value={tag} onChange={setTag} />
         {(list.length > 0 || tag) && <SelectButton sel={sel} />}
@@ -381,7 +381,7 @@ export function PetRoutines({ pet }) {
           <h2 className="mr-auto font-semibold text-life-800 dark:text-life-50">Routines</h2>
           <button type="button" onClick={() => setModal({ routine: null })} className="min-h-[44px] px-2 text-sm text-life-600 hover:underline dark:text-life-200">+ Make your own</button>
         </div>
-        <p className="text-xs text-gray-500 dark:text-life-300">A routine for {pet.name} shows on everyone's front page. Anyone can tick a step, and then everyone sees who did it and when. Monthly meds and flea treatment are in Care above, where Life Is reminds you.</p>
+        <p className="text-xs text-gray-500 dark:text-life-300">A routine for {pet.name} shows on everyone's front page. Anyone can check off a step, and then everyone sees who did it and when. Monthly meds and flea treatment are in Care above, where Life Is reminds you.</p>
         {mine.length > 0 && (
           <ul className="divide-y divide-life-50 dark:divide-life-700">
             {mine.map((r) => (

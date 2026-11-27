@@ -23,9 +23,9 @@ A recipe can say which pans and dishes it needs, from the things you keep. Plann
 
 ## The cooking view
 
-Open a recipe and choose **Start cooking**. The recipe fills the screen: big ingredients, then the steps, each with a large box to tick. Tick a step and the next one that is not done scrolls to the middle. If you set a number of servings first, the amounts are scaled and shown beside each ingredient.
+Open a recipe and choose **Start cooking**. The recipe fills the screen: big ingredients, then the steps, each with a large checkbox. Check off a step and the next one that is not done scrolls to the middle. If you set a number of servings first, the amounts are scaled and shown beside each ingredient.
 
-Where the phone or browser allows it, the screen stays on while the view is open. If it cannot, a note says the screen may dim, so tap now and then. The ticks are only for this cooking. Nothing is saved, and they are gone when you choose **Done cooking** or press Escape.
+Where the phone or browser allows it, the screen stays on while the view is open. If it cannot, a note says the screen may dim, so tap now and then. The checks are only for this cooking. Nothing is saved, and they are gone when you choose **Done cooking** or press Escape.
 
 ### Timers
 

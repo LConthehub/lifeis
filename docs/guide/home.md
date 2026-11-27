@@ -110,7 +110,7 @@ Each pet has a profile: what they are, their breed and birthday, their vet with 
 
 A pet's **care** is upkeep that belongs to them. Pick from what suits their kind (heartworm prevention for a dog, the litter box for a cat) or add anything else. Say when it was last done and Life Is knows when it is next due. Care works like any other job in [Upkeep](upkeep.html): it shows in your morning reminder and on the calendar, and each time it was done is kept. Monthly meds belong here.
 
-A pet can also have a day-to-day **routine**, such as feed, fresh water and walk. It shows on every person's front page, and anyone can tick a step so everyone sees who did it and when. See [Routines for a pet](routines.html#routines-for-a-pet).
+A pet can also have a day-to-day **routine**, such as feed, fresh water and walk. It shows on every person's front page, and anyone can check off a step so everyone sees who did it and when. See [Routines for a pet](routines.html#routines-for-a-pet).
 
 ## The House Manual
 
@@ -129,7 +129,7 @@ Press **Print** and choose how:
 - **Fridge sheet:** one page with emergency numbers, the Wi-Fi code, and how to feed the pets.
 - **Pocket zine:** one sheet, printed on one side, with eight small panels. Fold it in half, cut the dashed line between the middle four panels, and fold it into a little book. Anything too long for a panel says "More in the full manual."
 
-Private entries are left off the paper unless you tick the box. The Wi-Fi code is drawn on your device. Choose a **Print style** first: Life Is look, Plain chocolate or Plain black.
+Private entries are left off the paper unless you check the box. The Wi-Fi code is drawn on your device. Choose a **Print style** first: Life Is look, Plain chocolate or Plain black.
 
 Or use **Share it by a link**, for a sitter. The link opens the manual on their phone with no sign-in. You choose how long it works: a day, a week, or until you turn it off. Making a new link stops the old one.
 

@@ -251,7 +251,7 @@ function Sharing({ item }) {
       <h2 className="font-semibold text-life-800 dark:text-life-50">Who can see this</h2>
       <p className="text-sm text-gray-600 dark:text-life-100">
         {state.people.length === 0 ? 'Only you. It is kept out of search, the Home page and every report, and nobody else in the house can see it.'
-          : 'You, and the people ticked below. They can look at it, with its photo and serial number, but not change it.'}
+          : 'You, and the people checked below. They can look at it, with its photo and serial number, but not change it.'}
       </p>
       {state.choices.length === 0 ? <p className="text-sm text-gray-500 dark:text-life-300">Nobody else has signed in here.</p> : (
         <ul>

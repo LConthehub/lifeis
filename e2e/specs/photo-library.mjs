@@ -50,7 +50,7 @@ await page.screenshot({ path: shots + '/immich-settings.png', fullPage: true });
 await page.goto(base + '/plans'); await wait(900);
 await page.getByRole('link', { name: /Saturday sewing/ }).click(); await wait(1200);
 await page.getByRole('button', { name: '+ From Immich' }).click(); await wait(2500);
-say('the plan offers the photos taken on its day', (await dialog.locator('img').count()) === 2 && await loaded(dialog.locator('img').first()) && /Tick the ones that belong here/.test(await dialog.innerText()));
+say('the plan offers the photos taken on its day', (await dialog.locator('img').count()) === 2 && await loaded(dialog.locator('img').first()) && /Check the ones that belong here/.test(await dialog.innerText()));
 await page.screenshot({ path: shots + '/immich-pick.png' });
 await dialog.locator('input[type=checkbox]').first().check();
 await dialog.getByRole('button', { name: 'Link 1' }).click(); await wait(2000);

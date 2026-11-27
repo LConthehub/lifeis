@@ -102,7 +102,7 @@ export function ConnectorService() {
               <ol className="list-decimal space-y-0.5 pl-5 text-sm text-gray-700 dark:text-life-100">
                 <li>Paste the address in your AI app.</li>
                 <li>Sign in to Life Is when the app sends you here.</li>
-                <li>Name the connection and tick what it may see.</li>
+                <li>Name the connection and check what it may see.</li>
               </ol>
 
               {message && <p className={`text-sm ${message.error ? 'text-red-600' : 'text-life-700 dark:text-life-200'}`} role={message.error ? 'alert' : 'status'}>{message.error || message.ok}</p>}

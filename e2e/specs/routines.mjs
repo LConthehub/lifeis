@@ -82,7 +82,7 @@ say(`the evening has ${retinoidToday ? 'the retinoid step today (Monday or Thurs
   : (await eve.innerText()).includes('0 of 2 done') && !(await eve.innerText()).includes('Retinoid'));
 await morning.getByRole('checkbox').first().click(); await wait(600);
 say('ticking one step says 1 of 3 done', (await morning.innerText()).includes('1 of 3 done'));
-await morning.getByRole('button', { name: 'Tick them all' }).click(); await wait(700);
+await morning.getByRole('button', { name: 'Check them all off' }).click(); await wait(700);
 say('ticking them all finishes it, and it counts the day: 1 of the last 7 days', (await morning.innerText()).includes('3 of 3 done') && (await morning.innerText()).includes('1 of the last 7 days'));
 await page.reload(); await wait(1500);
 say('the ticks are still there after reloading', (await morning.innerText()).includes('3 of 3 done'));

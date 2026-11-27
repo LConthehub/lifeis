@@ -135,7 +135,7 @@ export function AssistantService() {
             <summary className="cursor-pointer text-sm font-medium text-honey-700">A cloud AI instead (off unless you allow it)</summary>
             <p className="mt-2 text-sm text-honey-700">
               A cloud AI (ChatGPT, Claude, Gemini and others) runs on someone else's computers. Whatever you check above, and your question, would leave this computer and be handled under that company's terms,
-              which may include keeping it. Life Is can't take it back once sent.
+              which may include keeping it. Life Is can't undo it once sent.
             </p>
             <label className="mt-2 flex items-start gap-2 text-sm text-honey-700">
               <input type="checkbox" checked={form.cloud_ok} onChange={set('cloud_ok')} className="mt-1" />

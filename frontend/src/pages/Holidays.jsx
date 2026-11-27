@@ -265,7 +265,7 @@ function NextYear({ holiday, year, start }) {
   return (
     <section className={`${cardClass} space-y-2`}>
       <Heading icon="plan">{manual ? `When is this year's ${holiday.name}?` : `Start this year's ${holiday.name}`}</Heading>
-      <Hint>{manual ? "You set its day each year. Next year's starts from this one: the same guests, cards, decorations and countdown, with nothing ticked." : "Starts from last year's: the same guests, cards, decorations and countdown, with nothing ticked, and what broke or ran out last year on the shopping list."}</Hint>
+      <Hint>{manual ? "You set its day each year. Next year's starts from this one: the same guests, cards, decorations and countdown, with nothing checked off." : "Starts from last year's: the same guests, cards, decorations and countdown, with nothing ticked, and what broke or ran out last year on the shopping list."}</Hint>
       {manual && <Field label="The day"><input type="date" value={day} onChange={(e) => setDay(e.target.value)} className={field} /></Field>}
       <button type="button" onClick={() => start(manual ? day : null)} className={button}>Start it</button>
     </section>
@@ -422,7 +422,7 @@ function People({ year, options, post, put, del, role }) {
   return (
     <section className={`${cardClass} space-y-2`} aria-label={title}>
       <Heading icon={role === 'guest' ? 'guests' : 'email'} aside={list.length > 0 ? <span className="text-xs text-gray-500 dark:text-life-300">{done} of {list.length} {role === 'guest' ? 'came' : 'sent'}</span> : null}>{title}</Heading>
-      {list.length === 0 && <Hint>{role === 'guest' ? 'Add who is invited, and tick them as they come. Next year starts with the same list.' : 'Add who gets a card, and tick each one as it is sent.'}</Hint>}
+      {list.length === 0 && <Hint>{role === 'guest' ? 'Add who is invited, and check each one off as they come. Next year starts with the same list.' : 'Add who gets a card, and check each one off as you send it.'}</Hint>}
       <ul className="divide-y divide-life-100 dark:divide-life-700">
         {list.map((p) => (
           <li key={p.id} className="flex items-center gap-1">

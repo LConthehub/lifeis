@@ -794,7 +794,7 @@ const FILE_ABOUT: [string, string][] = [
   ['upkeep.csv', 'Jobs that come round again, bills, renewals and chores: how often, when last done and next due.'],
   ['upkeep-history.csv', 'Each time each job was done.'],
   ['household.csv', 'People in the household, and the chore points each has earned.'],
-  ['routines.csv', 'Routines: one row for each step, with its time of day, which days it falls on and the thing it uses. routine-history.csv has the days each time was finished, and routine-ticks.csv each step ticked, when, by whom and with what numbers. A workout is marked in the Kind column, and its steps carry their numbers.'],
+  ['routines.csv', 'Routines: one row for each step, with its time of day, which days it falls on and the thing it uses. routine-history.csv has the days each time was finished, and routine-ticks.csv each step checked off, when, by whom and with what numbers. A workout is marked in the Kind column, and its steps carry their numbers.'],
   ['measures.csv', 'Your own measures: one row for each entry, with its unit and target. They are private to you, so only your own download holds them.'],
   ['pets.csv', 'Your pets.'],
   ['pet-weights.csv', 'Your pets’ weights over time. Their care is in upkeep.csv, with the pet’s name.'],

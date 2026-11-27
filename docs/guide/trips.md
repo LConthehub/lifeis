@@ -22,8 +22,8 @@ When the year is over, choose **Start next year's trip**. It starts from this ye
 ## Every trip
 
 - **License check.** If you have fishing or hunting on the trip, Life Is looks in [Licenses](licenses.html) and tells you whether each one covers the days of the trip. It says so if you have none.
-- **Bring list.** Choose **Add my camping gear** (or fishing, or hunting) to fill it from your things, or add things one at a time, or type something that is not one of your things. Tick each as you pack it. Next year starts with the same list, nothing packed. The fishing gear comes from things of the kind Fishing tackle, and the hunting gear from the kind Hunting gear.
-- **After the trip.** Tick what came back and say what each piece needs: dry, clean, repair or replace. A repair becomes a job in [Upkeep](upkeep.html). A replacement goes on the grocery list.
+- **Bring list.** Choose **Add my camping gear** (or fishing, or hunting) to fill it from your things, or add things one at a time, or type something that is not one of your things. Check each one off as you pack it. Next year starts with the same list, nothing packed. The fishing gear comes from things of the kind Fishing tackle, and the hunting gear from the kind Hunting gear.
+- **After the trip.** Check off what came back and say what each piece needs: dry, clean, repair or replace. A repair becomes a job in [Upkeep](upkeep.html). A replacement goes on the grocery list.
 - **What it cost.** Adds up the spending you tag with the trip's name, around its days. Set a budget to compare. See [Tags](tags.html).
 - **How it went.** Write a note, and write what next year should remember, such as "Bring a second tarp." You see it at the top next year.
 

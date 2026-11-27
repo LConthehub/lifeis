@@ -142,7 +142,7 @@ export function BankReadingService() {
                   <input type="date" value={from} min={ago(s.max_days)} max={ago(0)} onChange={(e) => setFrom(e.target.value)} className={`${inputClass} ${touch}`} />
                 </Field>
                 <button type="button" disabled={busy || chosen === 0 || !from} onClick={readNow} className={`${buttonClass} ${touch}`}>Read now</button>
-                <p className="text-xs text-gray-500 dark:text-life-300">{chosen === 0 ? 'Tick at least one account first. ' : ''}Nothing is read by itself: SimpleFIN limits how often an account may be read, so Life Is reads only when you press this. Money out that has settled becomes spending. Money in, and what is still pending, is left out.</p>
+                <p className="text-xs text-gray-500 dark:text-life-300">{chosen === 0 ? 'Check at least one account first. ' : ''}Nothing is read by itself: SimpleFIN limits how often an account may be read, so Life Is reads only when you press this. Money out that has settled becomes spending. Money in, and what is still pending, is left out.</p>
               </div>
               <button type="button" disabled={busy} onClick={disconnect} className={`${quietButtonClass} ${touch}`}>Disconnect</button>
             </>

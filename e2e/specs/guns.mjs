@@ -136,7 +136,7 @@ check('her gun page offers the other people, and the person in charge is only on
 await sharing.first().getByLabel('bob').click(); await wait(1200);
 const mine = (await api(ana, 'GET', `/api/things/items/${rifleId}/sharing`)).json;
 check('ticking bob keeps him on the list', mine.people.length === 1 && mine.choices.find((c) => c.id === mine.people[0])?.name === 'bob', JSON.stringify(mine));
-check('sharing is kept and the page says who sees it', /You, and the people ticked below/.test(await ana.locator('main').innerText()));
+check('sharing is kept and the page says who sees it', /You, and the people checked below/.test(await ana.locator('main').innerText()));
 await bob.goto(base + '/things'); await wait(1500);
 const shared = bob.locator('[data-shared]');
 check('bob sees a Shared with you card with the rifle, from ana', (await shared.count()) > 0 && /Deer rifle/.test(await shared.innerText()) && /from ana/.test(await shared.innerText()));

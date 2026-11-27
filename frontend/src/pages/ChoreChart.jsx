@@ -145,7 +145,7 @@ export default function ChoreChart() {
         {!nothing && sheets.length === 0 && <p className="text-sm text-gray-600 dark:text-life-100">Pick at least one person to print.</p>}
         {routines.length > 0 && (
           <div className="space-y-3" data-section="member-routines">
-            <h2 className="text-lg font-semibold text-life-800 dark:text-life-50">Routines to tick today</h2>
+            <h2 className="text-lg font-semibold text-life-800 dark:text-life-50">Routines to check off today</h2>
             <div className="grid gap-3 md:grid-cols-2"><Checklists times={routines} setTimes={setRoutines} /></div>
           </div>
         )}

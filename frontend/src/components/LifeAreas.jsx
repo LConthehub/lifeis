@@ -49,7 +49,7 @@ export function LifeAreasPicker({ onSaved, onSkip, saveLabel = 'Save' }) {
       ))}
       <p className="text-xs text-gray-500 dark:text-life-300">
         Life Is shows the parts that fit. Each thing you make and do adds ready-made kinds of things to start from, which you can rename, change or remove.
-        Unchecking something later only puts it out of sight: nothing you've saved is removed.
+        Unchecking something later only hides it: nothing you've saved is deleted.
       </p>
       {message && <p className={`rounded-lg px-3 py-2 text-sm ${message.ok ? 'bg-life-50 text-life-800 dark:bg-life-700 dark:text-life-50' : 'bg-red-50 text-red-700'}`}>{message.ok || message.error}</p>}
       <div className="flex justify-end gap-2">

@@ -40,7 +40,7 @@ Life Is refuses any token that is not an https address, or that points at your o
 
 ## Choose accounts
 
-After you connect, your accounts are listed with their balances. Tick the ones to bring in. For each one you can pick a category. Spending from that account goes in that category. If you pick none, it goes in no category and you can sort it later. Press **Save my choices**.
+After you connect, your accounts are listed with their balances. Check the ones to bring in. For each one you can pick a category. Spending from that account goes in that category. If you pick none, it goes in no category and you can sort it later. Press **Save my choices**.
 
 Life Is does not convert money. Amounts are brought in as the bank writes them, so choose accounts in the currency you use here.
 

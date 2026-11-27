@@ -4,7 +4,7 @@ blurb: Checklists for parts of the day, workouts with numbers, your own measures
 ---
 # Routines and the chore chart
 
-A routine is a checklist for part of a day: morning, bedtime, after school, a weekly reset. It is in the **on track** section, on the **Routines** tab. Today's routines also show on the front page, where you tick steps off.
+A routine is a checklist for part of a day: morning, bedtime, after school, a weekly reset. It is in the **on track** section, on the **Routines** tab. Today's routines also show on the front page, where you check steps off.
 
 ## Make a routine
 
@@ -30,7 +30,7 @@ A pet can have a routine, such as a dog's morning: feed, fresh water, walk. It s
 
 1. Open the pet's page (in **Pets**) and look under **Routines**. Under **Add a routine for** the pet's name, choose **Add** on **Dog, daily** or **Cat, daily**. They are plain steps to copy, and every part is yours to change. Or choose **+ Make your own**.
 2. To use the pet's food, pick it under **Food** before you add. The feed steps then use it. Or open the routine with **Change** and choose **A thing it uses** on a step.
-3. Anyone who signs in to this Life Is can tick a step. Each tick keeps who ticked it and when, and everyone then reads it under the step, such as "Done at 7:10 AM by Sam". So nobody feeds the dog twice. Someone without a sign-in who ticks on your screen is kept under your name.
+3. Anyone who signs in to this Life Is can check off a step. Each check keeps who checked it off and when, and everyone then reads it under the step, such as "Done at 7:10 AM by Sam". So nobody feeds the dog twice. Someone without a sign-in who checks off a step on your screen is kept under your name.
 4. On a feed step that uses the food, **running low** puts the food on the grocery list. Life Is does not count the food down.
 
 Each time of day shows "5 of the last 7 days". It never counts a streak.
@@ -61,11 +61,11 @@ Some routines go round over several nights, such as a skin routine with a differ
 
 ## Using it
 
-On the front page each time of day shows the steps that fall today as boxes. Tick them off. **Tick them all** does the rest at once, and **Start over** clears the ticks.
+On the front page each time of day shows the steps that fall today as boxes. Check them off. **Check them all off** does the rest at once, and **Start over** clears the checks.
 
-Choose **Go through it** to do the routine one big step at a time. **Done** ticks the step and moves on. **Back** and **Skip** move without ticking. If a step has a wait, **Start the timer** counts it down. The timer is only for looking at. It does not stop anything.
+Choose **Go through it** to do the routine one big step at a time. **Done** checks the step off and moves on. **Back** and **Skip** move without checking. If a step has a wait, **Start the timer** counts it down. The timer is only for looking at. It does not stop anything.
 
-Ticking routines is free in the phone app, even after the trial of the paid parts.
+Checking off routines is free in the phone app, even after the trial of the paid parts.
 
 ## The chore chart
 

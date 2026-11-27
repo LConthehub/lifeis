@@ -33,8 +33,8 @@ export type SectionId = 'kitchen' | 'calendar' | 'things' | 'projects' | 'lists'
 
 export const CONNECTOR_SERVICE = {
   name: 'Use Life Is from your AI app' as const,
-  sends: 'Only when the AI app asks: what Life Is holds in the sections you tick for that connection goes to the company that makes that AI app, through that company\'s servers. ' +
-    'With "It may add things" ticked, it can add a grocery line, a calendar event, a reminder or a title on a list, and it never changes or deletes anything. ' +
+  sends: 'Only when the AI app asks: what Life Is holds in the sections you check for that connection goes to the company that makes that AI app, through that company\'s servers. ' +
+    'With "It may add things" checked, it can add a grocery line, a calendar event, a reminder or a title on a list, and it never changes or deletes anything. ' +
     'Nothing is sent at any other time.',
 };
 
@@ -45,13 +45,13 @@ export const CONNECTOR_SECTIONS: readonly { id: SectionId; title: string; says: 
   { id: 'projects', title: 'Projects', says: 'Projects still going, what they use, and their budgets.' },
   { id: 'lists', title: 'Lists', says: 'Your lists of films, shows, music, books and games.' },
   { id: 'money', title: 'Money', says: "This month's spending: what was bought, how much, and the budget for each category.",
-    warning: 'This is your spending, with names and amounts. Tick it only if you are comfortable with the company that makes the AI app seeing it.' },
+    warning: 'This is your spending, with names and amounts. Check it only if you are comfortable with the company that makes the AI app seeing it.' },
 ];
 const SECTION_IDS = CONNECTOR_SECTIONS.map((s) => s.id) as readonly SectionId[];
 const titleOf = (id: SectionId) => CONNECTOR_SECTIONS.find((s) => s.id === id)!.title;
 
-export const CONNECTOR_NEVER = 'Never included, whatever you tick: guns and ammunition, measures, gift ideas and spending made for gifts, passwords and keys, the house manual, mail, and notes on the calendar.';
-export const CONNECTOR_ADDS = 'With "It may add things" ticked, it can add only a grocery line, a calendar event, a reminder, or a title on one of your own lists. It never changes or deletes anything, and you can undo what it added.';
+export const CONNECTOR_NEVER = 'Never included, whatever you check: guns and ammunition, measures, gift ideas and spending made for gifts, passwords and keys, the house manual, mail, and notes on the calendar.';
+export const CONNECTOR_ADDS = 'With "It may add things" checked, it can add only a grocery line, a calendar event, a reminder, or a title on one of your own lists. It never changes or deletes anything, and you can undo what it added.';
 
 /** A connection that has not been used for this many days ends by itself. */
 export const UNUSED_DAYS = 90;
@@ -423,7 +423,7 @@ export async function callTool(db: Db, clock: Clock, live: Live, tool: string, a
   const def = TOOLS.find((t) => t.name === tool);
   if (!def) throw new Problem(404, `There is no tool called ${tool}`);
   if (!live.sections.includes(def.section)) throw new Problem(403, `This connection was not allowed to use ${titleOf(def.section)}. Change what it may use in Settings, under Connections.`);
-  if (def.add && !live.may_add) throw new Problem(403, 'This connection may not add things. Tick "It may add things" for it in Settings, under Connections.');
+  if (def.add && !live.may_add) throw new Problem(403, 'This connection may not add things. Check "It may add things" for it in Settings, under Connections.');
   if (args === null || typeof args !== 'object' || Array.isArray(args)) throw new Problem(400, 'The arguments must be an object');
   const today = todayOf(clock);
   const done = await def.run({ db, clock, live, today }, args);
