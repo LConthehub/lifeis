@@ -17,8 +17,11 @@ cat > "$fakes/docker" <<'EOF'
 #!/usr/bin/env bash
 echo "docker $*" >> "$FAKE_LOG"
 if [ "$1" = "run" ]; then
-  case "${FAKE_BACKUP:-ok}" in
-    ok) head -c 300000 /dev/urandom ;;
+  # The backup comes in two parts: everything but the live database while running (FAKE_FIRST), then the live
+  # database and keys while stopped (FAKE_BACKUP). A good part is a real little tar, so the two can be joined.
+  mode="${FAKE_BACKUP:-ok}"; case " $* " in *"--exclude"*) mode="${FAKE_FIRST:-ok}" ;; esac
+  case "$mode" in
+    ok) d=$(mktemp -d) && head -c 300000 /dev/urandom > "$d/part" && tar cf - -C "$d" part; rm -rf "$d" ;;
     empty) : ;;
     small) printf 'only a little'; exit 1 ;;
   esac
@@ -63,7 +66,7 @@ check "it stops with an error" '[ $code -ne 0 ]'
 check "the new version is never started (no compose up)" '[ "$(log "compose up")" -eq 0 ]'
 check "the version from before is started again (compose start)" '[ "$(log "compose start")" -eq 1 ]'
 check "it says so" 'grep -q "the version from before was started again, and the new one was not" "$here/out.log"'
-check "no empty backup file is left behind" '[ -z "$(ls private/backups 2>/dev/null)" ]'
+check "no empty backup file is left behind" '[ -z "$(find private/backups -type f -empty 2>/dev/null)" ]'
 check "main is not merged or pushed" '[ "$(git rev-parse main)" != "$(git rev-parse plain)" ] && [ "$(git -C "$here/remote.git" rev-parse main)" = "$(git rev-parse main)" ]'
 
 echo "3. The backup breaks off after a few bytes"
@@ -82,6 +85,18 @@ echo "5. Empty backup, and the version from before does not answer afterward"
 fresh plain; FAKE_BACKUP=empty FAKE_HEALTH=down try
 check "it stops with an error and says to check" '[ $code -ne 0 ] && grep -q "did not answer after being started again" "$here/out.log"'
 check "the new version is still never started" '[ "$(log "compose up")" -eq 0 ]'
+
+echo "6. The first part of the backup, made while Life Is runs, comes out empty"
+fresh plain; FAKE_FIRST=empty try
+check "it stops with an error" '[ $code -ne 0 ] && grep -q "Life Is was not stopped" "$here/out.log"'
+check "nothing is stopped or started" '[ "$(log "compose stop")" -eq 0 ] && [ "$(log "compose up")" -eq 0 ] && [ "$(log "compose start")" -eq 0 ]'
+check "no empty backup file is left behind" '[ -z "$(find private/backups -type f -empty 2>/dev/null)" ]'
+
+echo "7. A good backup holds both parts: the first part is copied before the stop, the live database after"
+fresh plain; FAKE_BACKUP=ok try
+check "it finishes" '[ $code -eq 0 ]'
+check "the first part is copied while running, then the stop, then the live database" '[ "$(grep -n -e "--exclude" -e "compose stop" -e "data/lifeis.db\* keys" "$FAKE_LOG" | cut -d: -f2 | cut -c1-20 | tr "\n" "|")" = "docker run --rm -v l|docker compose stop|docker run --rm -v l|" ]'
+check "the backup has both parts in it" '[ "$(gzip -dc private/backups/before-plain-*.tgz | tar tf - | wc -l)" -eq 2 ]'
 
 echo
 echo "$pass passed, $bad failed"
