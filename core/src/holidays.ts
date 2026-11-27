@@ -260,10 +260,29 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
   }
 
   /** Spending tagged to the holiday around this year's day, counting tags inside the holiday's tag too. */
-  async function budgetOf(h: HolidayRow, day: string, target: number | null): Promise<YearView['budget']> {
+  /**
+   * Spending tagged with the holiday in the months around the day. A gift bought on a year's page counts toward
+   * that year whatever day it was bought (next Thanksgiving's gift bought the day after this one), and never
+   * toward another year.
+   */
+  async function budgetOf(h: HolidayRow, planId: number, day: string, target: number | null): Promise<YearView['budget']> {
     if (h.tag_id === null) return { tag: null, spent_cents: 0, count: 0, target_cents: target };
-    const found = (await spendingByTag(db, owner, addDays(day, -SPEND_BEFORE), addDays(day, SPEND_AFTER))).find((t) => t.id === h.tag_id);
-    return { tag: found?.path ?? (await db.get<{ name: string }>('SELECT name FROM tags WHERE id = ?', [h.tag_id]))?.name ?? null, spent_cents: found?.cents ?? 0, count: found?.count ?? 0, target_cents: target };
+    const from = addDays(day, -SPEND_BEFORE);
+    const to = addDays(day, SPEND_AFTER);
+    const found = (await spendingByTag(db, owner, from, to)).find((t) => t.id === h.tag_id);
+    const gifts = await db.all<{ plan_id: number; cents: number; day: string }>(
+      `SELECT g.plan_id, e.cents, e.day FROM holiday_gifts g JOIN holiday_years y ON y.plan_id = g.plan_id
+       JOIN money_entries e ON e.id = g.entry_id AND e.owner_id = ?
+       JOIN tag_links l ON l.kind = 'spending' AND l.target_id = e.id AND l.tag_id = ?
+       WHERE y.holiday_id = ?`, [owner, h.tag_id, h.id]);
+    let cents = found?.cents ?? 0;
+    let count = found?.count ?? 0;
+    for (const g of gifts) {
+      const inWindow = g.day >= from && g.day <= to;
+      if (g.plan_id === planId && !inWindow) { cents += g.cents; count += 1; }
+      if (g.plan_id !== planId && inWindow) { cents -= g.cents; count -= 1; }
+    }
+    return { tag: found?.path ?? (await db.get<{ name: string }>('SELECT name FROM tags WHERE id = ?', [h.tag_id]))?.name ?? null, spent_cents: cents, count, target_cents: target };
   }
 
   /** The meal countdown: each step counted back from when dinner is. */
@@ -362,7 +381,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       budget_cents: y.budget_cents, notes_next: y.notes_next, notes_done: y.notes_done === 1, last_notes: last?.notes_next ?? null, previous,
       plan, guests: await peopleOf(planId, 'guest'), cards: await peopleOf(planId, 'card'), gifts: await giftsOf(planId, h, y.year),
       spots: await spotsOf(planId, previous, decor), shopping: decor.filter((d) => d.need !== null),
-      countdown: await countdownOf(planId, y, plan.start_day), budget: await budgetOf(h, plan.start_day, y.budget_cents),
+      countdown: await countdownOf(planId, y, plan.start_day), budget: await budgetOf(h, planId, plan.start_day, y.budget_cents),
       stage: (await standing(h, years)).stage,
     };
   }

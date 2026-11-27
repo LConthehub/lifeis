@@ -400,3 +400,15 @@ it('rolls back a gift or decoration that is not valid, and refuses what is not t
   await mine().create({ ...THANKSGIVING, name: 'thanksgiving' }).catch(() => undefined);
   expect((await tags(db, owner, clock).list()).map((t) => t.path)).toEqual(['Thanksgiving']);
 });
+
+it('a gift bought the day after the holiday, on the page for next year, counts toward next year and not this one', async () => {
+  const made = await mine().create(THANKSGIVING); // 2026-11-26
+  const thisYear = made.years[0]!.plan_id;
+  day = '2026-11-27';
+  const next = (await mine().startYear(made.id)).plan_id;
+  expect((await mine().year(next)).day).toBe('2027-11-25');
+  await mine().addGift(next, { who: 'Maya', idea: 'A scarf' });
+  await mine().updateGift((await mine().year(next)).gifts[0]!.id, { status: 'bought', cents: 4000 });
+  expect((await mine().year(next)).budget).toMatchObject({ spent_cents: 4000, count: 1 });
+  expect((await mine().year(thisYear)).budget).toMatchObject({ spent_cents: 0, count: 0 });
+});
