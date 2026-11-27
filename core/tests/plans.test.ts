@@ -253,3 +253,32 @@ it('a plan says how many its food is for, and the grocery list follows', async (
   await mine.updateItem(now.items_list[0]!.id, { day: '2046-03-08', servings: 12 });
   expect((await mine.copy(plan.id, { start_day: '2047-03-14' })).items_list[0]!.on_week).toEqual({ day: '2047-03-14', meal: 'dinner', cooked: false, servings: 12 }); // next year, the same crowd
 });
+
+it('a plan uses the parts it needs: chosen when made, changed later, kept when taken off, and copied with it', async () => {
+  const plain = await mine.create({ name: 'Sunday lunch', start_day: '2046-03-11' });
+  expect(plain.parts).toEqual(['food', 'budget', 'tasks', 'bring']); // none chosen: the first few
+  const trip = await mine.create({ name: 'Lake weekend', start_day: '2046-06-13', end_day: '2046-06-15', parts: ['bring', 'more_days', 'tasks', 'bring'] });
+  expect(trip.parts).toEqual(['more_days', 'tasks', 'bring']); // each once, in the order they show
+  expect((await mine.create({ name: 'Painting', start_day: '2046-03-05', end_day: '2046-03-06' })).parts).toEqual(['food', 'budget', 'more_days', 'tasks', 'bring']);
+  await expect(mine.create({ name: 'Odd', start_day: '2046-03-11', parts: ['sailing'] })).rejects.toEqual(problem(400));
+
+  const withTask = (await mine.addItem(plain.id, { kind: 'task', label: 'Set the table' }));
+  expect(withTask.parts).toEqual(['food', 'budget', 'tasks', 'bring']);
+  const changed = await mine.setParts(plain.id, ['food', 'budget']);
+  expect(changed.parts).toEqual(['food', 'budget']);
+  expect(changed.items_list.map((i) => i.label)).toEqual(['Set the table']); // kept, only not shown
+  expect((await mine.copy(plain.id, { start_day: '2046-03-18' })).parts).toEqual(['food', 'budget']);
+  expect((await mine.addItem(plain.id, { kind: 'task', label: 'Buy ice' })).parts).toEqual(['food', 'budget', 'tasks']); // adding to a hidden part checks it
+  await expect(mine.setParts(plain.id, ['food', 'nope'])).rejects.toEqual(problem(400));
+});
+
+it('a plan from before parts shows the parts it has something in', async () => {
+  const p = await mine.create({ name: 'Painting week', start_day: '2046-03-05', end_day: '2046-03-09' });
+  await db.run('UPDATE plans SET parts = NULL WHERE id = ?', [p.id]);
+  const things = inventory(db, owner, clock);
+  const kind = (await things.addStarter('cookware'))[0]!;
+  const item = await things.createItem({ kind_id: kind.id, name: 'Drop cloth', quantity: 1 });
+  await mine.addItem(p.id, { kind: 'thing', ref_id: item.id });
+  expect((await mine.get(p.id)).parts).toEqual(['budget', 'more_days', 'bring']);
+  expect((await mine.list()).find((x) => x.id === p.id)!.parts).toEqual(['budget', 'more_days', 'bring']);
+});

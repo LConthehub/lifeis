@@ -1896,6 +1896,15 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE routine_steps ADD COLUMN every_from TEXT`,
     ],
   },
+  {
+    number: 62,
+    name: 'The parts a plan uses',
+    // Which parts a plan shows (Food, Helpers and tasks, Bring list...), as their keys joined by commas (plans.ts PLAN_PARTS).
+    // NULL for a plan made before: it shows the parts it has something in.
+    statements: [
+      `ALTER TABLE plans ADD COLUMN parts TEXT`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

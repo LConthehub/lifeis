@@ -11,11 +11,16 @@ import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, err
 const ENTRY_ICONS = { meal: 'meal', session: 'session', media: 'media' };
 // What a plan can hold besides its checklist, where each is listed, and how one of them is named.
 const HOLDS = {
-  recipe: { title: 'Food', add: 'a recipe', icon: 'meal', from: '/api/kitchen/recipes', name: (r) => r.title },
-  thing: { title: 'Things to have ready', add: 'one of your things', icon: 'thing', from: '/api/things/items', name: (t) => `${t.name} (${t.amount}${t.place ? `, ${t.place}` : ''})` },
-  media: { title: 'To watch, hear or read', add: 'something from the collection', icon: 'media', from: '/api/media', name: (m) => `${m.title}${m.year ? ` (${m.year})` : ''}` },
-  project: { title: 'Projects', add: 'a project', icon: 'project', from: '/api/projects', name: (p) => p.name },
+  recipe: { part: 'food', title: 'Food', add: 'a recipe', icon: 'meal', from: '/api/kitchen/recipes', name: (r) => r.title },
+  thing: { part: 'bring', title: 'Bring list', add: 'one of your things', icon: 'thing', from: '/api/things/items', name: (t) => `${t.name} (${t.amount}${t.place ? `, ${t.place}` : ''})` },
+  media: { part: 'media', title: 'To watch, hear or read', add: 'something from the collection', icon: 'media', from: '/api/media', name: (m) => `${m.title}${m.year ? ` (${m.year})` : ''}` },
+  project: { part: 'projects', title: 'Projects', add: 'a project', icon: 'project', from: '/api/projects', name: (p) => p.name },
 };
+
+/** The parts a plan can check now, in the order they show. More come as holidays and trips join plans. */
+const PARTS = [['food', 'Food'], ['budget', 'Budget'], ['more_days', 'More than one day'], ['tasks', 'Helpers and tasks'], ['bring', 'Bring list'], ['media', 'To watch, hear or read'], ['projects', 'Projects']];
+const partOrder = (key) => PARTS.findIndex(([k]) => k === key);
+const ITEM_PART = { task: 'tasks', recipe: 'food', thing: 'bring', media: 'media', project: 'projects' };
 
 const dayText = (day, long = false) => fromDateInput(day).toLocaleDateString(undefined, long ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'short', year: 'numeric' });
 const daysText = (p, long = false) => (p.end_day === p.start_day ? dayText(p.start_day, long) : `${dayText(p.start_day)} to ${dayText(p.end_day)}`);
@@ -172,21 +177,27 @@ export default function PlansPage() {
 
 function PlanForm({ plan, onDone }) {
   const [form, setForm] = useState({ name: plan.name || '', start_day: plan.start_day, end_day: plan.end_day && plan.end_day !== plan.start_day ? plan.end_day : '', note: plan.note || '' });
+  const [longer, setLonger] = useState(Boolean(plan.parts?.includes('more_days') || (plan.end_day && plan.end_day !== plan.start_day)));
   const [tags, setTags] = useState(plan.tag_list || []);
   const [error, setError] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const submit = async (e) => {
     e.preventDefault();
-    const body = { name: form.name, start_day: form.start_day, end_day: form.end_day || null, note: form.note || null, story: plan.story ?? null };
+    const body = { name: form.name, start_day: form.start_day, end_day: (longer && form.end_day) || null, note: form.note || null, story: plan.story ?? null };
     try { const { data } = plan.id ? await axios.put(`/api/plans/${plan.id}`, body) : await axios.post('/api/plans', body); data.tag_list = await saveTags('plan', data.id, tags); onDone(data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   return (
     <form onSubmit={submit} className="space-y-3">
       <Field label="What it is *"><input required autoFocus={!plan.id} value={form.name} onChange={set('name')} placeholder="e.g. Thanksgiving, Saturday sewing" className={inputClass} /></Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Day *"><input required type="date" value={form.start_day} onChange={set('start_day')} className={inputClass} /></Field>
-        <Field label="Until (if longer)"><input type="date" min={form.start_day} value={form.end_day} onChange={set('end_day')} className={inputClass} /></Field>
+        <Field label={longer ? 'From *' : 'Day *'}><input required type="date" value={form.start_day} onChange={set('start_day')} className={inputClass} /></Field>
+        {longer && <Field label="Until"><input type="date" min={form.start_day} value={form.end_day} onChange={set('end_day')} className={inputClass} /></Field>}
       </div>
+      {!plan.id && (
+        <label className="flex min-h-[44px] items-center gap-2 text-sm text-gray-700 dark:text-life-100">
+          <input type="checkbox" checked={longer} onChange={(e) => setLonger(e.target.checked)} className="h-5 w-5 accent-life-600" /> More than one day
+        </label>
+      )}
       <Field label="What it's for"><textarea rows={2} value={form.note} onChange={set('note')} className={inputClass} /></Field>
       <TagPicker value={tags} onChange={setTags} />
       {!plan.id && <p className="text-xs text-gray-500 dark:text-life-300">A day that has already gone is fine: that's a memory, written down afterwards.</p>}
@@ -217,6 +228,7 @@ export function PlanPage() {
 
   const act = async (work) => { setError(''); try { setPlan((await work()).data); } catch (err) { setError(errorMessage(err, "Couldn't do that")); } };
   const tasks = plan.items_list.filter((i) => i.kind === 'task');
+  const uses = (part) => plan.parts.includes(part);
   const short = plan.items_list.filter((i) => i.short);
   const remove = async () => {
     if (!window.confirm(`Remove ${plan.name}, with its checklist and photos? Its meals still to be cooked come off the week. What it points at (recipes, things, titles) stays.`)) return;
@@ -226,7 +238,7 @@ export function PlanPage() {
   const BADGE = { ahead: 'Coming up', now: 'Now', past: 'A memory' };
   return (
     <div className="space-y-4">
-      <Link to="/plans" className="text-sm text-life-600 hover:underline dark:text-life-200">← Plans and memories</Link>
+      <Link to="/plans" className="text-sm text-life-600 hover:underline dark:text-life-200">← Plans</Link>
       <div className="flex flex-wrap items-start gap-2">
         <div className="mr-auto">
           <h1 className="text-2xl font-semibold text-life-800 dark:text-life-50">{plan.name} <span className="ml-1 rounded bg-life-100 px-1.5 align-middle text-[11px] font-normal text-life-700">{BADGE[plan.when]}</span></h1>
@@ -234,10 +246,11 @@ export function PlanPage() {
           {plan.note && <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700 dark:text-life-100">{plan.note}</p>}
         </div>
         <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Change</button>
+        <button type="button" onClick={() => setModal('parts')} className={quietButtonClass}>Parts</button>
         <button type="button" onClick={() => setModal('again')} className={quietButtonClass}>Do it again</button>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      {cost && cost.ingredients > 0 && plan.when !== 'past' && (
+      {cost && cost.ingredients > 0 && plan.when !== 'past' && (uses('food') || uses('budget')) && (
         <div className="rounded-lg bg-life-50 px-3 py-2 text-sm text-gray-700 dark:bg-life-800 dark:text-life-100" data-plan-cost>
           {cost.priced === 0 ? <p>No prices yet for this plan's food. Type prices as you shop and a rough cost shows here.</p> : (
             <p><span className="font-semibold text-life-800 dark:text-life-50">The food: about {cost.currency}{(cost.cents / 100).toFixed(2)}</span>, going by the last price of {cost.priced} of its {cost.ingredients} ingredients.</p>
@@ -246,16 +259,16 @@ export function PlanPage() {
           {cost.priced > 0 && <p className="mt-0.5 text-xs text-gray-500 dark:text-life-300">Rough: one of each at the size you last bought, with nothing taken off for what's already in the pantry.</p>}
         </div>
       )}
-      <PlanGoal kind="plan" id={plan.id} />
-      {short.length > 0 && plan.when !== 'past' && (
+      {uses('budget') && <PlanGoal kind="plan" id={plan.id} />}
+      {short.length > 0 && plan.when !== 'past' && uses('bring') && (
         <ul className="space-y-1 rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">
           {short.map((i) => <li key={i.id}>{i.label}: {i.short}</li>)}
         </ul>
       )}
 
       <div className="grid gap-3 md:grid-cols-2">
-        <section className={cardClass}>
-          <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">Checklist {tasks.length > 0 && <span className="text-sm font-normal text-gray-500 dark:text-life-300">{tasks.filter((t) => t.done).length} of {tasks.length}</span>}</h2>
+        {uses('tasks') && <section className={cardClass} style={{ order: partOrder('tasks') }}>
+          <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">Helpers and tasks {tasks.length > 0 && <span className="text-sm font-normal text-gray-500 dark:text-life-300">{tasks.filter((t) => t.done).length} of {tasks.length}</span>}</h2>
           <ul className="space-y-1">
             {tasks.map((t) => (
               <li key={t.id} className="flex items-start gap-2 text-sm">
@@ -268,12 +281,12 @@ export function PlanPage() {
             ))}
           </ul>
           <AddTask onAdd={(label) => act(() => axios.post(`/api/plans/${plan.id}/items`, { kind: 'task', label }))} />
-        </section>
+        </section>}
 
-        {Object.entries(HOLDS).map(([kind, hold]) => {
+        {Object.entries(HOLDS).filter(([, hold]) => uses(hold.part)).map(([kind, hold]) => {
           const mine = plan.items_list.filter((i) => i.kind === kind);
           return (
-            <section key={kind} className={cardClass}>
+            <section key={kind} className={cardClass} style={{ order: partOrder(hold.part) }}>
               <div className="mb-2 flex items-baseline gap-2">
                 <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">{hold.title}</h2>
                 <button type="button" onClick={() => setModal({ add: kind })} className="text-sm text-life-600 hover:underline dark:text-life-200">+ Add</button>
@@ -330,11 +343,43 @@ export function PlanPage() {
       <button type="button" onClick={remove} className="text-sm text-red-600 hover:underline">Remove this plan</button>
 
       {modal === 'edit' && <Modal title={plan.name} onClose={() => setModal(null)}><PlanForm plan={plan} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
+      {modal === 'parts' && <Modal title="Parts of this plan" onClose={() => setModal(null)}><PartsForm plan={plan} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
       {modal === 'again' && <Modal title={`${plan.name}, again`} onClose={() => setModal(null)}><AgainForm plan={plan} onDone={(p) => { setModal(null); navigate(`/plans/${p.id}`); }} /></Modal>}
       {modal?.add && <Modal title={`Add ${HOLDS[modal.add].add}`} onClose={() => setModal(null)}><Picker kind={modal.add} plan={plan} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
       {modal?.eaten && <Modal title={modal.eaten.label} onClose={() => setModal(null)}><EatenForm plan={plan} item={modal.eaten} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
       {modal?.photo && <Modal title="Photo" wide onClose={() => setModal(null)}><PhotoView photo={modal.photo} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
     </div>
+  );
+}
+
+/** Check the parts a plan uses. A part taken off keeps what is in it, and shows it again when checked. */
+function PartsForm({ plan, onDone }) {
+  const [chosen, setChosen] = useState(plan.parts);
+  const [error, setError] = useState('');
+  const count = (part) => plan.items_list.filter((i) => ITEM_PART[i.kind] === part).length;
+  const hidden = PARTS.filter(([key]) => plan.parts.includes(key) && !chosen.includes(key) && count(key) > 0);
+  const save = async (e) => {
+    e.preventDefault();
+    try { onDone((await axios.put(`/api/plans/${plan.id}/parts`, { parts: chosen })).data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+  };
+  return (
+    <form onSubmit={save} className="space-y-3">
+      <p className="text-sm text-gray-600 dark:text-life-200">Check what this plan needs. Parts left unchecked are hidden.</p>
+      <ul>
+        {PARTS.map(([key, label]) => (
+          <li key={key}>
+            <label className="flex min-h-[44px] items-center gap-3 text-sm text-gray-800 dark:text-life-50">
+              <input type="checkbox" checked={chosen.includes(key)} onChange={(e) => setChosen(e.target.checked ? [...chosen, key] : chosen.filter((k) => k !== key))} className="h-5 w-5 accent-life-600" />
+              <span className="flex-1">{label}</span>
+              {count(key) > 0 && <span className="text-xs text-gray-500 dark:text-life-300">{count(key)} in it</span>}
+            </label>
+          </li>
+        ))}
+      </ul>
+      {hidden.length > 0 && <p className="rounded-lg bg-life-50 px-3 py-2 text-xs text-gray-700 dark:bg-life-800 dark:text-life-100">What is in {hidden.map(([, l]) => l).join(' and ')} is kept, and shows again if you check it later.</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="text-right"><button type="submit" className={buttonClass}>Save</button></div>
+    </form>
   );
 }
 

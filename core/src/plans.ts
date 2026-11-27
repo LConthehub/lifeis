@@ -28,6 +28,51 @@ import { pictureType } from './small.ts';
 export { pictureType };
 
 export const PLAN_ITEM_KINDS = ['task', 'recipe', 'thing', 'media', 'project'] as const;
+
+/**
+ * The parts a plan can use, in the order they show. A plan checks the ones it needs, so a birthday is not asked
+ * about decorations and a trip is not asked about cards. `ready` parts can be checked now; the rest come with the
+ * holiday and trip pages joining plans.
+ */
+export const PLAN_PARTS = [
+  { key: 'food', label: 'Food', ready: true },
+  { key: 'guests', label: 'Guests', ready: false },
+  { key: 'cards', label: 'Cards', ready: false },
+  { key: 'gifts', label: 'Gifts', ready: false },
+  { key: 'decorations', label: 'Decorations', ready: false },
+  { key: 'budget', label: 'Budget', ready: true },
+  { key: 'more_days', label: 'More than one day', ready: true },
+  { key: 'when_where', label: 'When and where', ready: false },
+  { key: 'traditions', label: 'Traditions', ready: false },
+  { key: 'tasks', label: 'Helpers and tasks', ready: true },
+  { key: 'bring', label: 'Bring list', ready: true },
+  { key: 'seasons', label: 'Seasons and licenses', ready: false },
+  { key: 'harvest', label: 'Harvest log', ready: false },
+  { key: 'after_trip', label: 'After the trip', ready: false },
+  { key: 'media', label: 'To watch, hear or read', ready: true },
+  { key: 'projects', label: 'Projects', ready: true },
+] as const;
+export type PlanPart = (typeof PLAN_PARTS)[number]['key'];
+const PART_KEYS: readonly string[] = PLAN_PARTS.map((p) => p.key);
+/** Which part holds each kind of item. */
+const PART_OF_ITEM: Record<PlanItemKind, PlanPart> = { task: 'tasks', recipe: 'food', thing: 'bring', media: 'media', project: 'projects' };
+/** What a new plan shows, unless it says otherwise. */
+const FIRST_PARTS: PlanPart[] = ['food', 'budget', 'tasks', 'bring'];
+
+/** The parts asked for, checked: known keys only, each once, in the order they show. */
+export function partsChecked(parts: readonly string[]): PlanPart[] {
+  for (const p of parts) if (!PART_KEYS.includes(p)) throw new Problem(400, `${p} isn't one of a plan's parts`);
+  return PLAN_PARTS.map((p) => p.key).filter((key) => parts.includes(key));
+}
+/** A plan's parts: those it saved, or for a plan from before parts, the ones it has something in. */
+function partsOf(saved: string | null, kinds: string[], days: number): PlanPart[] {
+  if (saved !== null) return PLAN_PARTS.map((p) => p.key).filter((key) => saved.split(',').includes(key));
+  // Budget too: every plan had its goal box before parts.
+  const used = new Set<string>(['budget', ...kinds.map((k) => PART_OF_ITEM[k as PlanItemKind]).filter(Boolean)]);
+  if (days > 1) used.add('more_days');
+  if (used.size === 0) for (const p of FIRST_PARTS) used.add(p);
+  return PLAN_PARTS.map((p) => p.key).filter((key) => used.has(key));
+}
 export type PlanItemKind = (typeof PLAN_ITEM_KINDS)[number];
 
 export type PlanInput = {
@@ -39,6 +84,8 @@ export type PlanInput = {
   note?: string | null;
   /** How it went, written afterwards. */
   story?: string | null;
+  /** The parts it uses, for a new plan. Left out: Food, Budget, Helpers and tasks and Bring list, and More than one day when it is. */
+  parts?: string[] | null;
 };
 export type PlanItemInput = {
   kind: string;
@@ -74,6 +121,8 @@ export type PlanWhen = 'ahead' | 'now' | 'past';
 export type PlanSummary = {
   id: number; name: string; start_day: string; end_day: string; when: PlanWhen; note: string | null;
   items: number; tasks_left: number; photos: number; cover_photo: number | null; tag_list: TagRef[];
+  /** The parts it shows, in order. */
+  parts: PlanPart[];
 };
 export type Plan = PlanSummary & { story: string | null; items_list: PlanItem[]; photos_list: PlanPhoto[]; /** What the calendar holds for its days, once they've come. */ happened: Entry[] };
 
@@ -190,14 +239,17 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
     q.all<{ id: number; source: 'kept' | 'immich'; caption: string | null }>('SELECT id, source, caption FROM plan_photos WHERE plan_id = ? ORDER BY sort_order, id', [planId]);
 
   async function summaries(where: string, args: Value[]): Promise<PlanSummary[]> {
-    const rows = await db.all<PlanRow & { items: number; tasks_left: number; photos: number; cover_photo: number | null }>(
-      `SELECT p.id, p.name, p.start_day, p.end_day, p.note, p.story,
+    const rows = await db.all<PlanRow & { items: number; tasks_left: number; photos: number; cover_photo: number | null; parts: string | null; kinds: string | null }>(
+      `SELECT p.id, p.name, p.start_day, p.end_day, p.note, p.story, p.parts,
+         (SELECT GROUP_CONCAT(DISTINCT i.kind) FROM plan_items i WHERE i.plan_id = p.id) AS kinds,
          (SELECT COUNT(*) FROM plan_items i WHERE i.plan_id = p.id) AS items,
          (SELECT COUNT(*) FROM plan_items i WHERE i.plan_id = p.id AND i.kind = 'task' AND i.done = 0) AS tasks_left,
          (SELECT COUNT(*) FROM plan_photos f WHERE f.plan_id = p.id) AS photos,
          (SELECT f.id FROM plan_photos f WHERE f.plan_id = p.id ORDER BY f.sort_order, f.id LIMIT 1) AS cover_photo
        FROM plans p WHERE p.owner_id = ? ${where} ORDER BY p.start_day DESC, p.id DESC`, [owner, ...args]);
-    return (await attachTags(db, owner, 'plan', rows)).map(({ story: _story, ...r }) => ({ ...r, when: when(r) }));
+    return (await attachTags(db, owner, 'plan', rows)).map(({ story: _story, parts, kinds, ...r }) => ({
+      ...r, when: when(r), parts: partsOf(parts, kinds ? kinds.split(',') : [], dayNumber(r.end_day) - dayNumber(r.start_day) + 1),
+    }));
   }
 
   async function whole(id: number): Promise<Plan> {
@@ -235,9 +287,19 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
     get: whole,
 
     async create(input: PlanInput): Promise<Plan> {
-      const made = await db.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [owner, ...checked(input), now(), now()]);
+      const values = checked(input);
+      const longer = values[2] !== values[1];
+      const parts = partsChecked(input.parts ?? [...FIRST_PARTS, ...(longer ? ['more_days'] : [])]).join(',');
+      const made = await db.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [owner, ...values, parts, now(), now()]);
       return whole(made.lastId);
+    },
+
+    /** Choose the parts a plan shows. What is in a part taken off is kept, and shows again when it is checked. */
+    async setParts(id: number, parts: string[]): Promise<Plan> {
+      await row(db, id);
+      await db.run('UPDATE plans SET parts = ?, updated_at = ? WHERE id = ? AND owner_id = ?', [partsChecked(parts).join(','), now(), id, owner]);
+      return whole(id);
     },
 
     /** Change a plan. Moved to other days, its meals on the week move with it. */
@@ -277,7 +339,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
         const old = await row(tx, id);
         const length = dayNumber(old.end_day) - dayNumber(old.start_day);
         const values = checked({ name: clean(input.name, 200) ?? old.name, start_day: input.start_day, end_day: addDays(input.start_day, length), note: old.note });
-        const made = await tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [owner, ...values, now(), now()]);
+        const made = await tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, (SELECT parts FROM plans WHERE id = ?), ?, ?)', [owner, ...values, id, now(), now()]);
         const moved = dayNumber(input.start_day) - dayNumber(old.start_day);
         for (const item of await tx.all<ItemRow>(`SELECT ${ITEM_COLUMNS} FROM plan_items WHERE plan_id = ? ORDER BY sort_order, id`, [id])) {
           // Food that was on the week goes on the new week, the same number of days in.
@@ -302,6 +364,12 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
         const last = (await tx.get<{ last: number | null }>('SELECT MAX(sort_order) AS last FROM plan_items WHERE plan_id = ?', [planId]))!.last ?? 0;
         await tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)',
           [planId, v.kind, v.ref, v.label, v.quantity, v.note, last + 1, slot ? await putOnWeek(tx, v.ref!, slot) : null]);
+        // Something added to a part the plan doesn't show (from a recipe's page, say) checks that part.
+        const saved = (await tx.get<{ parts: string | null }>('SELECT parts FROM plans WHERE id = ?', [planId]))!.parts;
+        const part = PART_OF_ITEM[v.kind];
+        if (saved !== null && !saved.split(',').includes(part)) {
+          await tx.run('UPDATE plans SET parts = ? WHERE id = ?', [partsChecked([...saved.split(',').filter(Boolean), part]).join(','), planId]);
+        }
       }).then(() => whole(planId));
     },
 

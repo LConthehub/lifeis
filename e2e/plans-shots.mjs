@@ -58,6 +58,25 @@ try {
       check(`${tag}: no old Coming round, Holidays or Plans coming up cards`, !/Coming round|Plans coming up/.test(await page.locator('main').innerText()) && (await page.getByRole('region', { name: 'Holidays', exact: true }).count()) === 0);
       await coming.scrollIntoViewIfNeeded();
       await coming.screenshot({ path: path.join(shots, `home-coming-${sizeName}-${look}.png`) });
+      // A plan of its own: a memorial lunch with food and helpers, and its Parts box.
+      if (look === 'light' || sizeName === 'phone') {
+        const plan = await page.evaluate(async () => {
+          const day = new Date(Date.now() + 12 * 86400000).toISOString().slice(0, 10);
+          const made = await (await fetch('/api/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: "Grandpa's memorial lunch", start_day: day, note: 'At the church hall after the service', parts: ['food', 'tasks'] }) })).json();
+          await fetch(`/api/plans/${made.id}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'task', label: 'Ask Loretta to bring the photo board' }) });
+          await fetch(`/api/plans/${made.id}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'task', label: 'Set up chairs' }) });
+          return made;
+        });
+        await page.goto(base + `/plans/${plan.id}`); await page.waitForTimeout(1500);
+        const heads = await page.locator('main section h2').allInnerTexts();
+        check(`${tag}: the plan shows only its parts`, heads.some((h) => /Food/.test(h)) && heads.some((h) => /Helpers and tasks/.test(h)) && !heads.some((h) => /Bring list|Projects/.test(h)), heads.join(', '));
+        await page.locator('main').screenshot({ path: path.join(shots, `plan-${sizeName}-${look}.png`) });
+        await page.getByRole('button', { name: 'Parts', exact: true }).click(); await page.waitForTimeout(500);
+        const dialog = page.getByRole('dialog');
+        const boxes = await dialog.getByRole('checkbox').evaluateAll((bs) => bs.map((b) => Math.round(b.closest('label').getBoundingClientRect().height)));
+        check(`${tag}: every part row is 44px or taller`, boxes.length === 7 && boxes.every((h) => h >= 44), boxes.join(','));
+        await dialog.screenshot({ path: path.join(shots, `parts-${sizeName}-${look}.png`) });
+      }
       await context.close();
     }
   }

@@ -497,6 +497,15 @@ it('twins that cannot be told apart are tagged one for one, and a tag on somethi
   expect(await db.get('SELECT 1 AS n FROM tags WHERE owner_id = ? AND name = ?', [carol, 'Treats'])).toBeDefined();
 });
 
+it('a plan keeps its parts through the download and back in', async () => {
+  const plan = await plans(db, ana, clock).create({ name: 'Memorial lunch', start_day: '2046-08-01', parts: ['food', 'tasks'] });
+  const zip = (await exportEverything(db, ana, clock)).bytes;
+  const done = await bringIn(bob, zip, ['plans']);
+  for (const kind of done.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  const theirs = (await plans(db, bob, clock).list()).find((p) => p.name === plan.name)!;
+  expect(theirs.parts).toEqual(['food', 'tasks']);
+});
+
 it('a plan photo goes only to a plan of the person, once, and never twice the same picture', async () => {
   const plan = await plans(db, ana, clock).create({ name: 'Trip', start_day: '2046-08-01', end_day: '2046-08-02' });
   const other = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9, 9, 9]);

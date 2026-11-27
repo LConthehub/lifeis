@@ -35,6 +35,7 @@ import { clean, dayNumber, labelKey, pictureType, stamp, todayOf, type Clock } f
 import { ensurePath, exportRows, setByPaths, tagKindOfLabel, tagsOnto, targetsByTitle, type TagKind } from './tags.ts';
 import * as units from './units.ts';
 import { dueOf } from './upkeep.ts';
+import { PLAN_PARTS } from './plans.ts';
 
 // ==================== limits ====================
 
@@ -600,9 +601,10 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('project-costs.csv', ['Project', 'What', 'Planned', 'Spent', 'Paid on', 'Notes'],
     (await all('SELECT c.project_id, c.label, c.planned_cents, c.actual_cents, c.paid_on, c.note FROM project_costs c JOIN projects p ON p.id = c.project_id WHERE p.owner_id = ? ORDER BY c.project_id, c.sort_order, c.id'))
       .map((c) => [str(projectOf.get(c.project_id as number)?.name), str(c.label), dollars(c.planned_cents), dollars(c.actual_cents), str(c.paid_on), str(c.note)]));
-  const plans = await all('SELECT id, name, start_day, end_day, note, story FROM plans WHERE owner_id = ? ORDER BY start_day, id');
+  const plans = await all('SELECT id, name, start_day, end_day, note, story, parts FROM plans WHERE owner_id = ? ORDER BY start_day, id');
   const planOf = new Map(plans.map((p) => [p.id as number, p]));
-  out.csv('plans.csv', ['Plan', 'Starts', 'Ends', 'Notes', 'The story'], plans.map((p) => [str(p.name), str(p.start_day), str(p.end_day), str(p.note), str(p.story)]));
+  out.csv('plans.csv', ['Plan', 'Starts', 'Ends', 'Notes', 'The story', 'Parts'], plans.map((p) => [str(p.name), str(p.start_day), str(p.end_day), str(p.note), str(p.story),
+    p.parts === null ? '' : String(p.parts).split(',').map((k) => PLAN_PARTS.find((x) => x.key === k)?.label ?? k).join('; ')]));
   out.csv('plan-items.csv', ['Plan', 'Kind', 'What', 'Amount', 'Done', 'Notes'],
     (await all('SELECT i.plan_id, i.kind, i.label, i.quantity, i.done, i.note FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ? ORDER BY i.plan_id, i.sort_order, i.id'))
       .map((i) => [str(planOf.get(i.plan_id as number)?.name), str(i.kind), str(i.label), str(i.quantity), yes(i.done), str(i.note)]));
@@ -2029,8 +2031,11 @@ ${mediaId}`);
       const key = labelKey(name);
       if (seen.take(`${key}\n${start}`)) { d.already += 1; continue; }
       const end = dayOf(cellOf(row, 'Ends'));
-      const made = await c.tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [c.owner, name, start, end && end >= start ? end : start, clean(row.notes, 5000),clean(cellOf(row, 'The story'), 20000), c.at, c.at]);
+      // Parts in words ("Food; Bring list"); words not known are left out, and none at all means the plan shows what it has.
+      const partWords = cellOf(row, 'Parts').split(';').map((w) => w.trim().toLowerCase()).filter(Boolean);
+      const parts = partWords.length ? PLAN_PARTS.filter((p) => partWords.includes(p.label.toLowerCase())).map((p) => p.key).join(',') || null : null;
+      const made = await c.tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, name, start, end && end >= start ? end : start, clean(row.notes, 5000),clean(cellOf(row, 'The story'), 20000), parts, c.at, c.at]);
       d.fresh += 1;
       if (filled.has(key)) continue;
       filled.add(key);

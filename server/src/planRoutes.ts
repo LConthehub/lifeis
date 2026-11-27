@@ -54,7 +54,8 @@ export function planRoutes(db: Db, tools?: PhotoTools): Route[] {
     // Every plan in one list by date: one-time plans, holidays and trips by year, and unplanned birthdays.
     ['GET', at('/all'), async (c) => ({ json: await planList(db, c.user.id, c.clock).list() })],
     ['GET', at(''), async (c) => ({ json: await mine(c).list({ tag: queryNumber(c.query, 'tag') }) })],
-    ['POST', at(''), async (c) => ({ status: 201, json: await mine(c).create(planFrom(c.body)) })],
+    ['POST', at(''), async (c) => ({ status: 201, json: await mine(c).create({ ...planFrom(c.body), parts: sent(c.body, 'parts') ? read.texts(c.body, 'parts') : null }) })],
+    ['PUT', at('/:id/parts'), async (c) => ({ json: await mine(c).setParts(c.id, read.texts(c.body, 'parts')) })],
     ['GET', at('/:id'), async (c) => ({ json: await mine(c).get(c.id) })],
     ['PUT', at('/:id'), async (c) => ({ json: await mine(c).update(c.id, planFrom(c.body)) })],
     ['DELETE', at('/:id'), async (c) => (await mine(c).remove(c.id), { status: 204 })],
