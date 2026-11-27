@@ -122,7 +122,7 @@ it('plans come up on the Coming up card, and coupons about to run out get a card
   expect((await front.summary()).choices.map((c) => c.key)).not.toContain('coupons');
 
   const mine = plans(db, owner, clock);
-  const easter = await mine.create({ name: 'Easter', start_day: addDays(TODAY, 12), end_day: addDays(TODAY, 14), note: null, story: null });
+  const spring = await mine.create({ name: 'Spring break', start_day: addDays(TODAY, 12), end_day: addDays(TODAY, 14), note: null, story: null });
   await mine.create({ name: 'House guests', start_day: addDays(TODAY, -1), end_day: addDays(TODAY, 1), note: null, story: null });
   await mine.create({ name: 'Last summer', start_day: addDays(TODAY, -200), end_day: addDays(TODAY, -190), note: null, story: null });
   await mine.create({ name: 'Next year', start_day: addDays(TODAY, 300), end_day: addDays(TODAY, 300), note: null, story: null });
@@ -134,8 +134,8 @@ it('plans come up on the Coming up card, and coupons about to run out get a card
 
   const s = await front.summary();
   expect([s.cards.includes('coming'), s.cards.includes('coupons')]).toEqual([true, true]);
-  expect(s.coming.lines.map((p) => [p.name, p.days_until])).toEqual([['House guests', 0], ['Easter', 12]]);
-  expect(s.coming.lines[1]!.link).toBe(`/plans/${easter.id}`);
+  expect(s.coming.lines.map((p) => [p.name, p.days_until])).toEqual([['House guests', 0], ['Spring break', 12]]);
+  expect(s.coming.lines[1]!.link).toBe(`/plans/${spring.id}`);
   expect(s.coupons.soon.map((c) => [c.label, c.days_left, c.store])).toEqual([['Whole shop', 0, null], ['Coffee', 2, 'Aldi']]);
   expect(s.coupons.currency).toBe('$');
 });
