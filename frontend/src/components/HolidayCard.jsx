@@ -5,7 +5,14 @@ import Icon from './Icon';
 import { buttonClass, quietButtonClass, cardClass, errorMessage, fromDateInput, inputClass, toDateInput } from './ui';
 
 const API = '/api/plans/holidays';
-const when = (card) => (card.days_until === null ? '' : card.days_until === 0 ? 'today' : card.days_until === 1 ? 'tomorrow' : `in ${card.days_until} days`);
+/** "today", "tomorrow", or "Thu, Nov 26 · in 23 days", like the other lines on Home. */
+const when = (card) => {
+  if (card.days_until === null) return '';
+  if (card.days_until === 0) return 'today';
+  if (card.days_until === 1) return 'tomorrow';
+  const date = card.day ? `${fromDateInput(card.day).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} · ` : '';
+  return `${date}in ${card.days_until} days`;
+};
 
 /**
  * Front page: each holiday with something to say. Six weeks ahead (or the lead time the person chose) it says
@@ -35,15 +42,15 @@ export function HolidayRow({ card, onChange }) {
   const heading = (
     <span className="flex items-baseline gap-2">
       <span className="self-start"><Icon of="holiday" /></span>
-      <span className="flex-1 font-medium text-gray-800 dark:text-life-50">{card.name}{card.year ? ` ${card.year}` : ''}</span>
-      <span className="text-xs text-gray-500 dark:text-life-300">{when(card)}{card.day && card.days_until !== 0 ? ` · ${fromDateInput(card.day).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` : ''}</span>
+      <span className="flex-1 text-gray-800 dark:text-life-50">{card.name}{card.year ? ` ${card.year}` : ''}</span>
+      <span className="text-xs text-gray-500 dark:text-life-300">{when(card)}</span>
     </span>
   );
   return (
     <li className="space-y-1 text-sm" data-holiday-card={card.stage}>
       <Link to={card.link} className="block hover:underline">{heading}</Link>
-      {card.stage === 'planning' && <p className="pl-6 text-gray-700 dark:text-life-100">Next: {card.next}</p>}
-      {card.stage === 'take_down' && <p className="pl-6 text-gray-700 dark:text-life-100">{card.next}</p>}
+      {card.stage === 'planning' && <p className="pl-6 text-xs text-gray-600 dark:text-life-200">Next: {card.next}</p>}
+      {card.stage === 'take_down' && <p className="pl-6 text-xs text-gray-600 dark:text-life-200">{card.next}</p>}
       {card.stage === 'start' && (
         <div className="pl-6">
           <button type="button" onClick={() => run(async () => { const { data } = await axios.post(`${API}/${card.holiday_id}/years`, {}); navigate(`/plans/holidays/${card.holiday_id}/${data.plan_id}`); })} className={`${quietButtonClass} min-h-[44px]`}>Start this year's from last year's</button>

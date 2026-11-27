@@ -77,8 +77,8 @@ function ComingUp({ coming, today, onChange }) {
             <Link to={l.link} className="flex items-baseline gap-2 hover:underline">
               <span className="self-start"><Icon of={COMING_ICONS[l.kind]} /></span>
               <span className="min-w-0 flex-1">
-                <span className="block text-gray-800 dark:text-life-50">{l.name}{l.years && <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{l.years} {l.years === 1 ? 'year' : 'years'}</span>}</span>
-                {(l.next || l.not_started) && <span className="block text-xs text-gray-600 dark:text-life-200">{l.not_started ? 'Not started yet' : l.next}</span>}
+                <span className="block text-gray-800 dark:text-life-50">{l.name}</span>
+                {(l.years || l.next || l.not_started) && <span className="block text-xs text-gray-600 dark:text-life-200">{l.years ? `${l.years} ${l.years === 1 ? 'year' : 'years'}` : l.not_started ? 'Not started yet' : l.next}</span>}
               </span>
               <span className="text-xs text-gray-500 dark:text-life-300">{l.days_until === 0 ? (l.end_day === today ? 'today' : 'now') : inDays(l.start_day, today)}</span>
             </Link>

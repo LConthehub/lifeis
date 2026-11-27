@@ -30,7 +30,7 @@ const data = mkdtempSync(path.join(tmpdir(), 'lifeis-plans-'));
 const port = await freePort(); const base = `http://127.0.0.1:${port}`;
 const server = spawn(process.execPath, ['server/src/main.ts'], { cwd: root, stdio: 'ignore',
   env: { ...process.env, DATA_DIR: data, PORT: String(port), HOST: '127.0.0.1', STATIC_DIR: 'frontend/dist', DEMO_MODE: '1', DEMO_PASSWORD: 'a-demo-password-for-walk-throughs' } });
-for (let i = 0; i < 100; i += 1) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch { /* not up yet */ } await new Promise((r) => setTimeout(r, 200)); }
+for (let i = 0; i < 300; i += 1) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch { /* not up yet */ } await new Promise((r) => setTimeout(r, 200)); }
 
 const SIZES = { phone: { width: 375, height: 812 }, desktop: { width: 1280, height: 800 } };
 const browser = await chromium.launch(browserChoice);
@@ -52,6 +52,12 @@ try {
       check(`${tag}: sections`, sections.length > 0, sections.join(', '));
       await page.getByRole('button', { name: 'Yearly' }).click(); await page.waitForTimeout(400);
       await page.locator('main').screenshot({ path: path.join(shots, `yearly-${sizeName}-${look}.png`) });
+      await page.goto(base + '/'); await page.waitForTimeout(1500);
+      const coming = page.getByRole('region', { name: 'Coming up', exact: true });
+      check(`${tag}: Home has the Coming up card`, await coming.isVisible());
+      check(`${tag}: no old Coming round, Holidays or Plans coming up cards`, !/Coming round|Plans coming up/.test(await page.locator('main').innerText()) && (await page.getByRole('region', { name: 'Holidays', exact: true }).count()) === 0);
+      await coming.scrollIntoViewIfNeeded();
+      await coming.screenshot({ path: path.join(shots, `home-coming-${sizeName}-${look}.png`) });
       await context.close();
     }
   }
