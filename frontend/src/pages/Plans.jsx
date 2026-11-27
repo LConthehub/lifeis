@@ -61,7 +61,7 @@ function WhenEaten({ plan, day, meal, servings, onChange }) {
 export const photoAddress = (photo) => `/api/plans/photos/${photo.id ?? photo}`;
 
 
-const KINDS = [['all', 'All'], ['yearly', 'Every year'], ['trip', 'Trips'], ['gathering', 'Gatherings']];
+const KINDS = [['all', 'All'], ['yearly', 'Yearly'], ['trip', 'Trips'], ['gathering', 'Gatherings']];
 const LINE_ICONS = { trip: 'trip', gathering: 'plan', birthday: 'birthday' };
 const awayText = (line) => (line.band === 'past' ? null : line.days_until === 0 ? 'now' : line.days_until === 1 ? 'tomorrow' : `in ${line.days_until} days`);
 /** "Dec 15", or "Dec 15, 2027" outside this year; a span says "Dec 15 to 17" or "Dec 30 to Jan 2". */
@@ -117,7 +117,7 @@ export default function PlansPage() {
             <span className="min-w-0 flex-1">
               <span className="block font-medium text-life-800 dark:text-life-50">{l.name}</span>
               <span className="block text-xs text-gray-500 dark:text-life-300">
-                {[spanText(l), l.yearly && 'Every year'].filter(Boolean).join(' · ')}
+                {[spanText(l), l.yearly && 'Yearly'].filter(Boolean).join(' · ')}
               </span>
               {(l.next || l.not_started) && <span className="mt-0.5 block text-xs text-gray-700 dark:text-life-100">{l.not_started ? 'Not started yet: start from last year' : l.next}</span>}
             </span>

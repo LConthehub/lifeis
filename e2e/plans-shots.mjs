@@ -1,5 +1,5 @@
 // Pictures of the one-list Plans page on the demo household, for the owner's OK: phone (375) and desktop (1280),
-// light and dark, with All and with Every year chosen. It also checks nothing scrolls sideways and the chips are
+// light and dark, with All and with Yearly chosen. It also checks nothing scrolls sideways and the chips are
 // at least 44px tall.
 //
 //   node e2e/plans-shots.mjs      (build the pages first: cd frontend && npx vite build)
@@ -50,7 +50,7 @@ try {
       check(`${tag}: four chips, each 44px or taller`, chips.length === 4 && chips.every((h) => h >= 44), chips.join(','));
       const sections = await page.locator('main section h2').allInnerTexts();
       check(`${tag}: sections`, sections.length > 0, sections.join(', '));
-      await page.getByRole('button', { name: 'Every year' }).click(); await page.waitForTimeout(400);
+      await page.getByRole('button', { name: 'Yearly' }).click(); await page.waitForTimeout(400);
       await page.locator('main').screenshot({ path: path.join(shots, `yearly-${sizeName}-${look}.png`) });
       await context.close();
     }
