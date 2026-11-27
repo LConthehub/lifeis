@@ -13,6 +13,13 @@ import { placePaths } from './inventory.ts';
 import { pets } from './pets.ts';
 import { Problem } from './problem.ts';
 import { addDays, clean, stamp, todayOf, type Clock } from './small.ts';
+import { MONTHS, WEEKDAY_NAMES, weekdayOf } from './holidayDates.ts';
+
+/** "Monday, November 30" for a 2026-11-30 day: how long a shared link works, in words. */
+export function untilWords(day: string): string {
+  const [, month, date] = day.split('-').map(Number);
+  return `${WEEKDAY_NAMES[weekdayOf(day)]}, ${MONTHS[month! - 1]} ${date}`;
+}
 
 export const MANUAL_SECTIONS = [
   { id: 'emergency', title: 'In an emergency', hint: 'Where to shut things off, and what to grab.', ideas: ['Water shut-off', 'Gas shut-off', 'Breaker box', 'Fire extinguisher', 'First-aid kit', 'Where to meet outside'] },
@@ -206,7 +213,7 @@ b{font-weight:850}
 .foot{color:var(--soft);font-size:.9rem;margin-top:2rem}
 .top{margin-top:0}
 @media print{body{background:#fff;color:#000}.bar{background:none;color:#000;box-shadow:none;border-bottom:2px solid #000}.e{box-shadow:none;border:1px solid #999;background:#fff}a,.where,.grp,small,.foot{color:#000}h2{border-bottom-color:#000}}
-</style></head><body><header class="bar"><div><img src="/mark-192.png" alt="" width="36" height="36"><span>Life is</span></div></header><main><h1>House Manual</h1><p class="foot top">Shared with you${m.expires_on ? `. This link works until ${esc(m.expires_on)}` : ''}.</p>
+</style></head><body><header class="bar"><div><img src="/mark-192.png" alt="" width="36" height="36"><span>Life is</span></div></header><main><h1>House Manual</h1>${m.expires_on ? `<p class="foot top">Available until ${esc(untilWords(m.expires_on))}.</p>` : ''}
 ${m.sections.map((s) => `<h2>${esc(s.title)}</h2>${s.entries.map(entry).join('')}`).join('')}
 ${m.pets.length ? `<h2>Pets</h2>${m.pets.map(pet).join('')}` : ''}
 ${m.services.length ? `<h2>Links</h2>${services}` : ''}

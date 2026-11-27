@@ -2,7 +2,7 @@
 import { beforeEach, expect, it } from 'vitest';
 import type { Db } from '../src/db.ts';
 import { inventory } from '../src/inventory.ts';
-import { manual, manualFor, manualHtml, type ManualStore } from '../src/manual.ts';
+import { manual, manualFor, manualHtml, untilWords, type ManualStore } from '../src/manual.ts';
 import { LATEST, migrate } from '../src/migrations.ts';
 import { pets } from '../src/pets.ts';
 import { memoryDb } from './memoryDb.ts';
@@ -63,7 +63,7 @@ it('the shared link shows everything but what is private, with the pets, until i
   // In Life Is's look, loading nothing from another site, with the quiet credit on by default.
   expect(page).toContain('<meta name="robots" content="noindex, nofollow">');
   expect(page).toContain('prefers-color-scheme:dark');
-  expect(page).toContain('Shared with you');
+  expect(page).not.toContain('Shared with you');
   expect(page).toContain('Nothing on this page can be changed from here.');
   expect(page).toContain('Made with Life Is, a private home organizer you run yourself. <a href="https://lifeis.living" rel="noopener noreferrer">lifeis.living</a>');
   const outside = [...page.matchAll(/(?:src|href)="(https?:[^"]*)"|url\((https?:[^)]*)\)/g)].map((x) => x[1] ?? x[2]);
@@ -93,4 +93,8 @@ it('the shared link shows everything but what is private, with the pets, until i
   expect(await manualFor(db, open.token!, clock)).toBeNull();
   expect(await manualFor(db, 'not-a-token', clock)).toBeNull();
   await expect(book.shareFor(0)).rejects.toEqual(problem(400));
+});
+
+it('says how long a shared link works in plain words', () => {
+  expect([untilWords('2026-11-30'), untilWords('2026-11-28'), untilWords('2027-01-01')]).toEqual(['Monday, November 30', 'Saturday, November 28', 'Friday, January 1']);
 });
