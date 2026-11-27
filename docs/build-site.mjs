@@ -314,7 +314,7 @@ ${androidSection}
 // ---------- the guides ----------
 
 /** Whether Life Is for your own computer can be downloaded yet. Until it can, the install page says so. */
-const RELEASED = false;
+const RELEASED = true;
 const IMAGE = 'ghcr.io/lconthehub/lifeis:latest';
 // The order the guides are listed in.
 const GUIDES = ['getting-started', 'install', 'home', 'upkeep', 'licenses', 'kitchen', 'money', 'routines', 'plans', 'holidays', 'trips', 'tags', 'collection', 'mail', 'bank-reading', 'phone', 'siri', 'ai-app', 'your-data', 'troubleshooting'];
