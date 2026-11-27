@@ -412,3 +412,27 @@ it('a gift bought the day after the holiday, on the page for next year, counts t
   expect((await mine().year(next)).budget).toMatchObject({ spent_cents: 4000, count: 1 });
   expect((await mine().year(thisYear)).budget).toMatchObject({ spent_cents: 0, count: 0 });
 });
+
+it('guests, cards, gifts and decorations work on any plan, not only a holiday', async () => {
+  const lunch = await plans(db, owner, clock).create({ name: 'Memorial lunch', start_day: '2026-10-10', parts: ['guests', 'gifts'] });
+  await mine().addPerson(lunch.id, 'guest', { name: 'Aunt June' });
+  await mine().addPerson(lunch.id, 'card', { name: 'Grandma' });
+  await mine().addDecor(lunch.id, { spot: 'Hall', label: 'Photo board' });
+  const added = await mine().addGift(lunch.id, { who: 'Hank', idea: 'A frame' });
+  expect(added.holiday).toBeNull();
+  const g = added.gifts[0]!;
+  const bought = await mine().updateGift(g.id, { status: 'bought', cents: 1800 });
+  expect(bought.gifts.map((x) => [x.idea, x.status, x.cents, x.before])).toEqual([['A frame', 'bought', 1800, []]]);
+  // The spending entry is named after the plan, with no category and no tag.
+  expect(await db.get('SELECT label, category_id, cents FROM money_entries WHERE owner_id = ?', [owner])).toEqual({ label: 'Memorial lunch gift: A frame', category_id: null, cents: 1800 });
+  expect(await db.get("SELECT COUNT(*) AS n FROM tag_links WHERE kind = 'spending'")).toEqual({ n: 0 });
+  const view = await mine().gathering(lunch.id);
+  expect([view.guests.map((p) => p.name), view.cards.map((p) => p.name), view.spots.map((s) => [s.name, s.items.map((i) => i.label)])]).toEqual([['Aunt June'], ['Grandma'], [['Hall', ['Photo board']]]]);
+  await mine().updateDecor(view.spots[0]!.items[0]!.id, { fix: 'broke' }); // no next year to pass it on to: fine
+  await mine().removeGift(g.id);
+  expect(await db.get('SELECT 1 AS x FROM money_entries WHERE owner_id = ?', [owner])).toBeUndefined();
+  // Someone else's plan is not theirs to add to.
+  const other = (await db.run("INSERT INTO users (username, password_hash, created_at) VALUES ('other', 'x', 'now')")).lastId;
+  await expect(holidays(db, other, clock).addGift(lunch.id, { who: 'Hank', idea: 'A frame' })).rejects.toEqual(problem(404));
+  await expect(holidays(db, other, clock).gathering(lunch.id)).rejects.toEqual(problem(404));
+});

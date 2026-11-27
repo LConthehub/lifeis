@@ -98,6 +98,15 @@ export type YearView = {
   budget: { tag: string | null; spent_cents: number; count: number; target_cents: number | null };
   stage: Stage;
 };
+/**
+ * Guests, cards, gifts and decorations work on any plan, not only a holiday's year: a birthday has gifts, a
+ * memorial lunch has guests. For a plan that is not a holiday's year, this is what those parts show.
+ */
+export type GatheringView = {
+  holiday: null; plan_id: number; day: string; when: 'ahead' | 'now' | 'past';
+  guests: Person[]; cards: Person[]; gifts: Gift[]; spots: Spot[];
+};
+
 export type HolidayCard = {
   holiday_id: number; plan_id: number | null; name: string; year: number | null; day: string | null; days_until: number | null; stage: Stage;
   /** What is next, in words. */
@@ -214,10 +223,10 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       'SELECT id, name, user_id, member_id, done, note FROM holiday_people WHERE plan_id = ? AND role = ? ORDER BY sort_order, id', [planId, role])).map((p) => ({ ...p, done: p.done === 1 }));
   }
 
-  async function giftsOf(planId: number, h: HolidayRow, year: number): Promise<Gift[]> {
+  async function giftsOf(planId: number, h: HolidayRow | null, year: number): Promise<Gift[]> {
     const rows = await db.all<{ id: number; who: string; for_user: number | null; for_member: number | null; idea: string; status: GiftState; cents: number | null; note: string | null }>(
       'SELECT id, who, for_user, for_member, idea, status, cents, note FROM holiday_gifts WHERE plan_id = ? ORDER BY sort_order, id', [planId]);
-    const earlier = await db.all<{ year: number; who: string; for_user: number | null; for_member: number | null; idea: string }>(
+    const earlier = h === null ? [] : await db.all<{ year: number; who: string; for_user: number | null; for_member: number | null; idea: string }>(
       `SELECT y.year, g.who, g.for_user, g.for_member, g.idea FROM holiday_gifts g JOIN holiday_years y ON y.plan_id = g.plan_id JOIN plans p ON p.id = g.plan_id
        WHERE y.holiday_id = ? AND y.year < ? AND p.owner_id = ? AND g.status != 'idea' ORDER BY y.year DESC, g.id`, [h.id, year, owner]);
     return rows.map((g) => ({
@@ -365,6 +374,26 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       years, latest, stage: where.stage, next: where.next };
   }
 
+  /** The plan, checked to be this person's; any plan, holiday year or not. */
+  async function ownPlan(q: Queries, planId: number): Promise<PlanRow> {
+    const found = await q.get<PlanRow>('SELECT id, name, start_day, end_day FROM plans WHERE id = ? AND owner_id = ?', [planId, owner]);
+    if (!found) throw new Problem(404, "That plan isn't here anymore. It may have been deleted.");
+    return found;
+  }
+  const isYear = async (q: Queries, planId: number) => Boolean(await q.get('SELECT 1 AS x FROM holiday_years WHERE plan_id = ?', [planId]));
+
+  /** Guests, cards, gifts and decorations of a plan that is not a holiday's year. */
+  async function gatheringView(planId: number): Promise<GatheringView> {
+    const plan = await plans().get(planId);
+    return {
+      holiday: null, plan_id: planId, day: plan.start_day, when: plan.when,
+      guests: await peopleOf(planId, 'guest'), cards: await peopleOf(planId, 'card'), gifts: await giftsOf(planId, null, 0),
+      spots: await spotsOf(planId, null, await decorOf(planId)),
+    };
+  }
+  /** What a change hands back: the year of a holiday, or the gathering parts of any other plan. */
+  const viewOf = async (planId: number): Promise<YearView | GatheringView> => ((await isYear(db, planId)) ? yearView(planId) : gatheringView(planId));
+
   async function yearView(planId: number): Promise<YearView> {
     const y = await yearRow(db, planId);
     const h = await holidayRow(db, y.holiday_id);
@@ -417,8 +446,8 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
   /** Gives a gift its spending entry (no category, tagged to the holiday), changes it, or takes it away. */
   async function syncGift(tx: Queries, planId: number, id: number): Promise<void> {
     const g = (await tx.get<{ idea: string; for_user: number | null; status: GiftState; cents: number | null; entry_id: number | null }>('SELECT idea, for_user, status, cents, entry_id FROM holiday_gifts WHERE id = ?', [id]))!;
-    const y = await yearRow(tx, planId);
-    const h = await holidayRow(tx, y.holiday_id);
+    // A holiday's gift is named after the holiday and tagged with it; any other plan's, after the plan, untagged.
+    const h = (await isYear(tx, planId)) ? await holidayRow(tx, (await yearRow(tx, planId)).holiday_id) : { name: (await ownPlan(tx, planId)).name, tag_id: null };
     const spent = g.status !== 'idea' && g.cents !== null;
     // A gift for someone who signs in is not named in the label, and the entry has no category.
     const label = g.for_user !== null ? `${h.name} gift` : `${h.name} gift: ${g.idea}`.slice(0, 200);
@@ -437,6 +466,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
 
   /** When something changes what broke at the take-down and next year's page is already there, it hears of it. */
   async function passOnNeed(tx: Queries, planId: number, spot: string, label: string, fix: Fix | null): Promise<void> {
+    if (!(await isYear(tx, planId))) return;
     const y = await yearRow(tx, planId);
     const next = await tx.get<{ plan_id: number }>('SELECT plan_id FROM holiday_years WHERE holiday_id = ? AND year > ? ORDER BY year LIMIT 1', [y.holiday_id, y.year]);
     if (!next) return;
@@ -445,6 +475,12 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
 
   return {
     /** Who and what a person can pick from: people in the household (with and without a sign-in) and the boxes. */
+    /** Guests, cards, gifts and decorations of any plan; for a holiday's year, its whole year. */
+    async gathering(planId: number): Promise<YearView | GatheringView> {
+      await ownPlan(db, planId);
+      return viewOf(planId);
+    },
+
     async options(): Promise<{ members: { id: number; name: string }[]; users: { id: number; name: string }[]; boxes: { id: number; path: string }[]; dates: { id: number; title: string; day: string }[] }> {
       return {
         /** Birthdays, anniversaries and other yearly dates on the calendar that are not holidays yet. */
@@ -575,8 +611,8 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
 
     // ---------- guests and cards ----------
 
-    async addPerson(planId: number, role: 'guest' | 'card', input: PersonInput): Promise<YearView> {
-      await yearRow(db, planId);
+    async addPerson(planId: number, role: 'guest' | 'card', input: PersonInput): Promise<YearView | GatheringView> {
+      await ownPlan(db, planId);
       if (role !== 'guest' && role !== 'card') throw new Problem(400, 'Pick guests or cards.');
       const who = await whoIs(input);
       const name = clean(input.name, 100) ?? who.name;
@@ -584,26 +620,26 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       if (await db.get('SELECT 1 AS x FROM holiday_people WHERE plan_id = ? AND role = ? AND LOWER(name) = LOWER(?)', [planId, role, name])) throw new Problem(409, "They're already on the list");
       await db.run('INSERT INTO holiday_people (plan_id, role, name, user_id, member_id, done, note, sort_order) VALUES (?, ?, ?, ?, ?, 0, ?, ?)',
         [planId, role, name, who.user_id, who.member_id, clean(input.note, 500), await roomFor('holiday_people', planId)]);
-      return yearView(planId);
+      return viewOf(planId);
     },
-    async updatePerson(id: number, input: { done?: boolean; note?: string | null; name?: string | null }): Promise<YearView> {
+    async updatePerson(id: number, input: { done?: boolean; note?: string | null; name?: string | null }): Promise<YearView | GatheringView> {
       const planId = await planOf('holiday_people', id);
       const old = (await db.get<{ done: number; note: string | null; name: string }>('SELECT done, note, name FROM holiday_people WHERE id = ?', [id]))!;
       const name = input.name === undefined ? old.name : clean(input.name, 100);
       if (!name) throw new Problem(400, 'Say who');
       await db.run('UPDATE holiday_people SET done = ?, note = ?, name = ? WHERE id = ?', [(input.done ?? old.done === 1) ? 1 : 0, input.note === undefined ? old.note : clean(input.note, 500), name, id]);
-      return yearView(planId);
+      return viewOf(planId);
     },
-    async removePerson(id: number): Promise<YearView> {
+    async removePerson(id: number): Promise<YearView | GatheringView> {
       const planId = await planOf('holiday_people', id);
       await db.run('DELETE FROM holiday_people WHERE id = ?', [id]);
-      return yearView(planId);
+      return viewOf(planId);
     },
 
     // ---------- gifts ----------
 
-    async addGift(planId: number, input: GiftInput): Promise<YearView> {
-      await yearRow(db, planId);
+    async addGift(planId: number, input: GiftInput): Promise<YearView | GatheringView> {
+      await ownPlan(db, planId);
       const who = await whoIs({ user_id: input.for_user, member_id: input.for_member });
       const name = clean(input.who, 100) ?? who.name;
       const idea = clean(input.idea, 300);
@@ -611,9 +647,9 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       if (!idea) throw new Problem(400, 'Say what the idea is');
       await db.run('INSERT INTO holiday_gifts (plan_id, who, for_user, for_member, idea, status, cents, note, sort_order) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)',
         [planId, name, who.user_id, who.member_id, idea, 'idea', clean(input.note, 500), await roomFor('holiday_gifts', planId)]);
-      return yearView(planId);
+      return viewOf(planId);
     },
-    async updateGift(id: number, input: GiftInput): Promise<YearView> {
+    async updateGift(id: number, input: GiftInput): Promise<YearView | GatheringView> {
       const planId = await planOf('holiday_gifts', id);
       const old = (await db.get<{ who: string; idea: string; status: GiftState; cents: number | null; note: string | null }>('SELECT who, idea, status, cents, note FROM holiday_gifts WHERE id = ?', [id]))!;
       const status = input.status === undefined || input.status === null ? old.status : (GIFT_STATES as readonly string[]).includes(input.status) ? input.status as GiftState : null;
@@ -627,22 +663,22 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
         await tx.run('UPDATE holiday_gifts SET who = ?, idea = ?, status = ?, cents = ?, note = ? WHERE id = ?', [who, idea, status, cents, input.note === undefined ? old.note : clean(input.note, 500), id]);
         await syncGift(tx, planId, id);
       });
-      return yearView(planId);
+      return viewOf(planId);
     },
-    async removeGift(id: number): Promise<YearView> {
+    async removeGift(id: number): Promise<YearView | GatheringView> {
       const planId = await planOf('holiday_gifts', id);
       await atomic(db, async (tx) => {
         await tx.run("UPDATE holiday_gifts SET status = 'idea' WHERE id = ?", [id]);
         await syncGift(tx, planId, id);
         await tx.run('DELETE FROM holiday_gifts WHERE id = ?', [id]);
       });
-      return yearView(planId);
+      return viewOf(planId);
     },
 
     // ---------- decorations ----------
 
-    async addDecor(planId: number, input: DecorInput): Promise<YearView> {
-      await yearRow(db, planId);
+    async addDecor(planId: number, input: DecorInput): Promise<YearView | GatheringView> {
+      await ownPlan(db, planId);
       const spot = clean(input.spot, 100);
       if (!spot) throw new Problem(400, 'Say where it goes: a room or a spot');
       let label = clean(input.label, 200);
@@ -655,9 +691,9 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       if (input.box_id != null && !(await db.get('SELECT 1 AS x FROM places WHERE id = ? AND owner_id = ?', [input.box_id, owner]))) throw new Problem(404, "That box isn't there");
       await db.run('INSERT INTO holiday_decor (plan_id, spot, label, thing_id, box_id, note, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [planId, spot, label, input.thing_id ?? null, input.box_id ?? null, clean(input.note, 500), await roomFor('holiday_decor', planId)]);
-      return yearView(planId);
+      return viewOf(planId);
     },
-    async updateDecor(id: number, input: DecorInput): Promise<YearView> {
+    async updateDecor(id: number, input: DecorInput): Promise<YearView | GatheringView> {
       const planId = await planOf('holiday_decor', id);
       const o = (await db.get<{ spot: string; label: string; box_id: number | null; put_up: number; taken_down: number; boxed: number; fix: Fix | null; need_done: number; note: string | null }>(
         'SELECT spot, label, box_id, put_up, taken_down, boxed, fix, need_done, note FROM holiday_decor WHERE id = ?', [id]))!;
@@ -675,28 +711,28 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
             input.note === undefined ? o.note : clean(input.note, 500), id]);
         if (fix !== o.fix) await passOnNeed(tx, planId, spot, label, fix);
       });
-      return yearView(planId);
+      return viewOf(planId);
     },
-    async removeDecor(id: number): Promise<YearView> {
+    async removeDecor(id: number): Promise<YearView | GatheringView> {
       const planId = await planOf('holiday_decor', id);
       await db.run('DELETE FROM holiday_decor WHERE id = ?', [id]);
-      return yearView(planId);
+      return viewOf(planId);
     },
     /** Everything is down and back in its box: the take-down is finished. */
-    async finishTakeDown(planId: number): Promise<YearView> {
-      await yearRow(db, planId);
+    async finishTakeDown(planId: number): Promise<YearView | GatheringView> {
+      await ownPlan(db, planId);
       await db.run('UPDATE holiday_decor SET taken_down = 1, boxed = 1 WHERE plan_id = ?', [planId]);
       await db.run('UPDATE holiday_years SET taken_down_on = ? WHERE plan_id = ?', [today(), planId]);
-      return yearView(planId);
+      return viewOf(planId);
     },
     /** A photo of one spot, kept with the year's photos under the spot's name: next year's put-up list shows it. */
-    async keepSpotPhoto(planId: number, spot: string, bytes: Uint8Array): Promise<YearView> {
-      await yearRow(db, planId);
+    async keepSpotPhoto(planId: number, spot: string, bytes: Uint8Array): Promise<YearView | GatheringView> {
+      await ownPlan(db, planId);
       const name = clean(spot, 100);
       if (!name) throw new Problem(400, 'Say which spot it is of');
       await plans().keepPhoto(planId, bytes, name);
       await db.run('UPDATE plan_photos SET spot = ? WHERE id = (SELECT MAX(id) FROM plan_photos WHERE plan_id = ?)', [name, planId]);
-      return yearView(planId);
+      return viewOf(planId);
     },
 
     // ---------- the countdown ----------

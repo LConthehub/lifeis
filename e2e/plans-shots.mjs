@@ -42,6 +42,8 @@ try {
       await page.goto(base + '/'); await page.waitForTimeout(1000);
       await page.getByRole('button', { name: 'Try the demo' }).click(); await page.waitForTimeout(2500);
       await page.goto(base + '/plans'); await page.waitForTimeout(1500);
+      // The phone bar is fixed to the screen; hide it so it does not land in the middle of long pictures.
+      await context.addInitScript(() => { addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = 'nav[aria-label="Home and sections"]{display:none!important}'; document.head.append(s); }); });
       const tag = `${look} ${sizeName}`;
       await page.locator('main').screenshot({ path: path.join(shots, `all-${sizeName}-${look}.png`) });
       const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -62,20 +64,35 @@ try {
       if (look === 'light' || sizeName === 'phone') {
         const plan = await page.evaluate(async () => {
           const day = new Date(Date.now() + 12 * 86400000).toISOString().slice(0, 10);
-          const made = await (await fetch('/api/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: "Grandpa's memorial lunch", start_day: day, note: 'At the community center, 1 pm', parts: ['food', 'tasks'] }) })).json();
+          const made = await (await fetch('/api/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: "Grandpa's memorial lunch", start_day: day, note: 'At the community center, 1 pm', parts: ['food', 'guests', 'tasks'] }) })).json();
+          const send = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          for (const name of ['Aunt Dot', 'Uncle Ray', 'The Millers']) await send(`/api/plans/holidays/years/${made.id}/people`, { role: 'guest', name });
+          const party = await (await send('/api/plans', { name: "Hank's birthday", start_day: new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10), parts: ['food', 'gifts', 'decorations'] })).json();
+          await send(`/api/plans/holidays/years/${party.id}/gifts`, { who: 'Hank', idea: 'A fishing reel' });
+          await send(`/api/plans/holidays/years/${party.id}/gifts`, { who: 'Hank', idea: 'Records' });
+          await send(`/api/plans/holidays/years/${party.id}/decor`, { spot: 'Back porch', label: 'String lights' });
+          await send(`/api/plans/holidays/years/${party.id}/decor`, { spot: 'Back porch', label: 'Balloons' });
+          made.party = party.id;
           await fetch(`/api/plans/${made.id}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'task', label: 'Ask Loretta to bring the photo board' }) });
           await fetch(`/api/plans/${made.id}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'task', label: 'Set up chairs' }) });
           return made;
         });
         await page.goto(base + `/plans/${plan.id}`); await page.waitForTimeout(1500);
         const heads = await page.locator('main section h2').allInnerTexts();
-        check(`${tag}: the plan shows only its parts`, heads.some((h) => /Food/.test(h)) && heads.some((h) => /Helpers and tasks/.test(h)) && !heads.some((h) => /Bring list|Projects/.test(h)), heads.join(', '));
+        check(`${tag}: the plan shows only its parts`, heads.some((h) => /Food/.test(h)) && heads.some((h) => /Guests/.test(h)) && heads.some((h) => /Helpers and tasks/.test(h)) && !heads.some((h) => /Bring list|Projects|Gifts/.test(h)), heads.join(', '));
         await page.locator('main').screenshot({ path: path.join(shots, `plan-${sizeName}-${look}.png`) });
         await page.getByRole('button', { name: 'Parts', exact: true }).click(); await page.waitForTimeout(500);
         const dialog = page.getByRole('dialog');
         const boxes = await dialog.getByRole('checkbox').evaluateAll((bs) => bs.map((b) => Math.round(b.closest('label').getBoundingClientRect().height)));
-        check(`${tag}: every part row is 44px or taller`, boxes.length === 7 && boxes.every((h) => h >= 44), boxes.join(','));
+        check(`${tag}: every part row is 44px or taller`, boxes.length === 11 && boxes.every((h) => h >= 44), boxes.join(','));
         await dialog.screenshot({ path: path.join(shots, `parts-${sizeName}-${look}.png`) });
+        await page.keyboard.press('Escape');
+        await page.goto(base + `/plans/${plan.party}`); await page.waitForTimeout(1500);
+        const partyHeads = await page.locator('main section h2').allInnerTexts();
+        check(`${tag}: the birthday shows food, gifts and decorations`, ['Food', 'Gifts', 'Decorations'].every((w) => partyHeads.some((h) => h.includes(w))), partyHeads.join(', '));
+        const wide2 = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+        check(`${tag}: the birthday does not scroll sideways`, wide2 <= 0, `${wide2}px over`);
+        await page.locator('main').screenshot({ path: path.join(shots, `birthday-${sizeName}-${look}.png`) });
       }
       await context.close();
     }

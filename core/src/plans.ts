@@ -36,10 +36,10 @@ export const PLAN_ITEM_KINDS = ['task', 'recipe', 'thing', 'media', 'project'] a
  */
 export const PLAN_PARTS = [
   { key: 'food', label: 'Food', ready: true },
-  { key: 'guests', label: 'Guests', ready: false },
-  { key: 'cards', label: 'Cards', ready: false },
-  { key: 'gifts', label: 'Gifts', ready: false },
-  { key: 'decorations', label: 'Decorations', ready: false },
+  { key: 'guests', label: 'Guests', ready: true },
+  { key: 'cards', label: 'Cards', ready: true },
+  { key: 'gifts', label: 'Gifts', ready: true },
+  { key: 'decorations', label: 'Decorations', ready: true },
   { key: 'budget', label: 'Budget', ready: true },
   { key: 'more_days', label: 'More than one day', ready: true },
   { key: 'when_where', label: 'When and where', ready: false },

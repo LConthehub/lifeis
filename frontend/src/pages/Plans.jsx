@@ -5,6 +5,7 @@ import axios from 'axios';
 import { shrink } from '../components/shrink';
 import Picture from '../components/Picture';
 import { PlanGoal } from '../components/Goals';
+import { Decor, Gifts, People } from './Holidays';
 import { BulkBar, PickBox, SelectButton, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, fromDateInput } from '../components/ui';
 
@@ -18,8 +19,38 @@ const HOLDS = {
 };
 
 /** The parts a plan can check now, in the order they show. More come as holidays and trips join plans. */
-const PARTS = [['food', 'Food'], ['budget', 'Budget'], ['more_days', 'More than one day'], ['tasks', 'Helpers and tasks'], ['bring', 'Bring list'], ['media', 'To watch, hear or read'], ['projects', 'Projects']];
+const PARTS = [['food', 'Food'], ['guests', 'Guests'], ['cards', 'Cards'], ['gifts', 'Gifts'], ['decorations', 'Decorations'], ['budget', 'Budget'], ['more_days', 'More than one day'], ['tasks', 'Helpers and tasks'], ['bring', 'Bring list'], ['media', 'To watch, hear or read'], ['projects', 'Projects']];
 const partOrder = (key) => PARTS.findIndex(([k]) => k === key);
+const GATHERING = ['guests', 'cards', 'gifts', 'decorations'];
+const HOLIDAY_API = '/api/plans/holidays';
+
+/**
+ * Guests, cards, gifts and decorations on any plan, using the same sections as a holiday's year. Each sits in the
+ * plan's grid in its part's place.
+ */
+function Gathering({ plan }) {
+  const [view, setView] = useState(null);
+  const [options, setOptions] = useState(null);
+  const [error, setError] = useState('');
+  const load = useCallback(() => { axios.get(`${HOLIDAY_API}/gathering/${plan.id}`).then(({ data }) => setView(data)).catch(() => setView(null)); }, [plan.id]);
+  useEffect(() => { load(); axios.get(`${HOLIDAY_API}/options`).then(({ data }) => setOptions(data)).catch(() => setOptions({ members: [], users: [], boxes: [], dates: [] })); }, [load]);
+  if (!view || !options) return null;
+  const act = async (work) => { setError(''); try { setView((await work()).data); } catch (err) { setError(errorMessage(err, "Couldn't do that")); } };
+  const post = (path, body) => act(() => axios.post(`${HOLIDAY_API}/${path}`, body));
+  const put = (path, body) => act(() => axios.put(`${HOLIDAY_API}/${path}`, body));
+  const del = (path) => act(() => axios.delete(`${HOLIDAY_API}/${path}`));
+  const uses = (part) => plan.parts.includes(part);
+  const box = (part, child) => <div style={{ order: partOrder(part) }}>{child}</div>;
+  return (
+    <>
+      {error && <p className="text-sm text-red-600" style={{ order: 0 }}>{error}</p>}
+      {uses('guests') && box('guests', <People year={view} options={options} post={post} put={put} del={del} role="guest" />)}
+      {uses('cards') && box('cards', <People year={view} options={options} post={post} put={put} del={del} role="card" />)}
+      {uses('gifts') && box('gifts', <Gifts year={view} options={options} post={post} put={put} del={del} />)}
+      {uses('decorations') && box('decorations', <Decor year={view} options={options} post={post} put={put} del={del} act={act} mode={plan.when === 'past' ? 'down' : 'up'} />)}
+    </>
+  );
+}
 const ITEM_PART = { task: 'tasks', recipe: 'food', thing: 'bring', media: 'media', project: 'projects' };
 
 const dayText = (day, long = false) => fromDateInput(day).toLocaleDateString(undefined, long ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'short', year: 'numeric' });
@@ -267,6 +298,7 @@ export function PlanPage() {
       )}
 
       <div className="grid gap-3 md:grid-cols-2">
+        {GATHERING.some(uses) && <Gathering plan={plan} />}
         {uses('tasks') && <section className={cardClass} style={{ order: partOrder('tasks') }}>
           <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">Helpers and tasks {tasks.length > 0 && <span className="text-sm font-normal text-gray-500 dark:text-life-300">{tasks.filter((t) => t.done).length} of {tasks.length}</span>}</h2>
           <ul className="space-y-1">

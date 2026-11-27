@@ -36,6 +36,8 @@ export function holidayRoutes(db: Db): Route[] {
     ['GET', at('/options'), async (c) => ({ json: await mine(c).options() })],
     ['GET', at('/given-to-me'), async (c) => ({ json: await givenTo(db, c.user.id, c.clock) })],
     ['GET', at('/cards'), async (c) => ({ json: await mine(c).cards() })],
+    // Guests, cards, gifts and decorations of any plan (a birthday's gifts, a lunch's guests), changed through the addresses below.
+    ['GET', at('/gathering/:id'), async (c) => ({ json: await mine(c).gathering(c.id) })],
     ['POST', at('/from-event'), async (c) => ({ status: 201, json: await mine(c).fromEvent(needed(read.maybeWhole(c.body, 'event_id'), 'event_id')) })],
     ['GET', at('/:id'), async (c) => ({ json: await mine(c).get(c.id) })],
     ['PUT', at('/:id'), async (c) => ({

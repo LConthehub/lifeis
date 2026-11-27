@@ -407,7 +407,7 @@ function Menu({ year, act, reload }) {
 }
 
 /** Who came, or who gets a card: names from the household, or typed. */
-function People({ year, options, post, put, del, role }) {
+export function People({ year, options, post, put, del, role }) {
   const list = role === 'guest' ? year.guests : year.cards;
   const [pick, setPick] = useState('');
   const [name, setName] = useState('');
@@ -418,7 +418,8 @@ function People({ year, options, post, put, del, role }) {
     setPick(''); setName('');
   };
   const done = list.filter((p) => p.done).length;
-  const title = role === 'guest' ? 'Who came' : 'Cards';
+  // A holiday's year says who came; any other plan just has guests.
+  const title = role === 'guest' ? (year.holiday === null ? 'Guests' : 'Who came') : 'Cards';
   return (
     <section className={`${cardClass} space-y-2`} aria-label={title}>
       <Heading icon={role === 'guest' ? 'guests' : 'email'} aside={list.length > 0 ? <span className="text-xs text-gray-500 dark:text-life-300">{done} of {list.length} {role === 'guest' ? 'came' : 'sent'}</span> : null}>{title}</Heading>
@@ -445,7 +446,7 @@ function People({ year, options, post, put, del, role }) {
 }
 
 /** Gift ideas through the year, bought, wrapped, given, and what was given before. */
-function Gifts({ year, options, post, put, del }) {
+export function Gifts({ year, options, post, put, del }) {
   const [pick, setPick] = useState('');
   const [who, setWho] = useState('');
   const [idea, setIdea] = useState('');
@@ -538,7 +539,7 @@ function Shopping({ year, put }) {
  * Decorations by spot. "Put up": each spot with last year's photo and this year's, the things that go there and the
  * box each is kept in. "Take down": tick each one down and back in its box, and mark what broke or ran out.
  */
-function Decor({ year, options, post, put, del, act, mode }) {
+export function Decor({ year, options, post, put, del, act, mode }) {
   const up = mode === 'up';
   const [things, setThings] = useState([]);
   const [form, setForm] = useState({ spot: '', label: '', thing: '', box: '' });
