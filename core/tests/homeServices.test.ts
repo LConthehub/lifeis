@@ -1,4 +1,4 @@
-/** Home services: who sees each link, who may change them, pins, search, the Home card, the guest view and the download. */
+/** Home lab: who sees each link, who may change them, pins, search, the Home card, the guest view and the download. */
 import { beforeEach, expect, it } from 'vitest';
 import type { Db } from '../src/db.ts';
 import { bringInDownload, exportEverything, splitDownload } from '../src/exportAll.ts';
@@ -123,6 +123,9 @@ it('the shared house manual shows only links marked for guests, and only the awa
   const page = manualHtml(shared);
   expect(page).toContain('https://watch.example.com');
   expect(page).toContain('Only works at home.');
+  expect(page).toContain('<h2>Links</h2>');
+  expect(page).not.toContain('Home lab');
+  expect(page).not.toContain('Home services');
   for (const left of ['192.168.1.20', '192.168.1.30', 'Router', 'Photos', 'Wiki', '192.168.1.1']) expect(page).not.toContain(left);
   // A person who cannot see a link cannot hand it to guests, whatever it is marked.
   await of(boss).update((await of(boss).list()).services[0]!.id, { name: 'Jellyfin', address: 'http://192.168.1.20:8096', address_at: 'home', address2: 'https://watch.example.com', address2_at: 'away', who: 'me', guests: true });

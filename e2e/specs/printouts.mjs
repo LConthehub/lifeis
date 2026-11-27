@@ -168,7 +168,7 @@ const full = await page.locator('[data-sheet="full"]').evaluate((el) => ({
   qr: el.querySelector('[data-wifi] img')?.naturalWidth > 0, head: el.querySelector('.pf-phrase').textContent, title: el.querySelector('.pf-title').textContent,
   services: [...el.querySelectorAll('[data-service]')].map((s) => s.dataset.service),
 }));
-check('the full manual: emergencies and contacts first, then Wi-Fi, pets, how the house works, home services', full.parts.join(',') === 'emergencies,contacts,wifi,pets,quirks,services', full.parts.join(','));
+check('the full manual: emergencies and contacts first, then Wi-Fi, pets, how the house works, Home lab (not "Home services")', full.parts.join(',') === 'emergencies,contacts,wifi,pets,quirks,services' && /Home lab/.test(full.text) && !/Home services/.test(full.text), full.parts.join(','));
 check('it has the Wi-Fi code (drawn on this device) and the password in words, the pet, and no private entry', full.qr && /SampleHome/.test(full.text) && /made-up-for-the-test/.test(full.text) && /Biscuit/.test(full.text) && !/4821/.test(full.text));
 check('it has "Life is in order" and the title, and the links this person can see', full.head === 'Life is in order' && full.title === 'House Manual' && full.services.join(',') === 'Family photos,Router', full.services.join(','));
 await picture('manual-full');

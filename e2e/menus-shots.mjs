@@ -90,8 +90,8 @@ try {
   await go('/routines'); await page.getByRole('link', { name: 'Measures', exact: true }).first().click(); await page.waitForTimeout(1200);
   check('the Measures chip opens /measures', new URL(page.url()).pathname === '/measures');
   await shot('routines-measures'); await sideways('measures');
-  await go('/manual'); await page.getByRole('link', { name: 'Home services', exact: true }).click(); await page.waitForTimeout(1200);
-  check('the Home services chip opens /manual/services', new URL(page.url()).pathname === '/manual/services'); await sideways('home services');
+  await go('/manual'); await page.getByRole('link', { name: 'Home lab', exact: true }).click(); await page.waitForTimeout(1200);
+  check('the Home lab chip opens /manual/services', new URL(page.url()).pathname === '/manual/services'); await sideways('home lab');
   await go('/things'); await page.getByRole('link', { name: 'Licenses', exact: true }).first().click(); await page.waitForTimeout(1200);
   check('the Licenses chip opens /things/licenses', new URL(page.url()).pathname === '/things/licenses');
   await shot('things-licenses'); await sideways('licenses');

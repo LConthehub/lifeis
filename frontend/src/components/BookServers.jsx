@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
+import AddToHomeLab, { useHomeLab } from './AddToHomeLab';
 import { CopyLine } from './Copy';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from './ui';
 
@@ -21,7 +22,8 @@ export default function BookServers() {
   const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(null);
   const [message, setMessage] = useState(null);
-  const load = useCallback(() => { axios.get('/api/libraries').then(({ data }) => setServers(data)).catch(() => setServers([])); }, []);
+  const lab = useHomeLab();
+  const load =useCallback(() => { axios.get('/api/libraries').then(({ data }) => setServers(data)).catch(() => setServers([])); }, []);
   useEffect(() => { load(); }, [load]);
   if (!servers) return null;
   const sync = async (s) => {
@@ -69,7 +71,10 @@ export default function BookServers() {
               <p className={`text-xs ${s.last_ok === false ? 'text-red-600' : 'text-gray-500 dark:text-life-300'}`}>
                 {s.last_sync_at ? `${s.last_ok ? 'Synced' : 'Tried'} ${when(s.last_sync_at)}: ${s.last_message}` : 'Not synced yet.'}
               </p>
-              <button type="button" disabled={busy === s.id} onClick={() => sync(s)} className={`${quietButtonClass} mt-3`}>{busy === s.id ? 'Syncing…' : 'Sync now'}</button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" disabled={busy === s.id} onClick={() => sync(s)} className={`${quietButtonClass} min-h-[44px]`}>{busy === s.id ? 'Syncing…' : 'Sync now'}</button>
+                <AddToHomeLab lab={lab} name={s.name} url={s.url} icon={s.kind === 'audiobookshelf' ? 'music' : 'book'} />
+              </div>
             </section>
           ))}
         </div>

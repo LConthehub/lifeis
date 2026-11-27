@@ -48,7 +48,7 @@ function PageRules({ margin, numbers = false, landscape = false }) {
   return <style>{`@page { size: letter${landscape ? ' landscape' : ''}; margin: ${margin}; ${numbers ? `@bottom-center { content: "Page " counter(page); font: 600 9pt "Nunito Variable", sans-serif; color: ${ink}; }` : ''} }`}</style>;
 }
 
-/** The full manual, on letter pages: emergencies and who to call first, then the Wi-Fi, pets, how the house works, and home services. */
+/** The full manual, on letter pages: emergencies and who to call first, then the Wi-Fi, pets, how the house works, and the Home lab. */
 function FullManual({ parts, services, wifiPicture }) {
   const pets = parts.pets;
   return (
@@ -75,7 +75,7 @@ function FullManual({ parts, services, wifiPicture }) {
         </Part>
       )}
       {services.length > 0 && (
-        <Part id="services" title="Home services">
+        <Part id="services" title="Home lab">
           {services.map((s) => (
             <div key={s.id} className="pm-entry" data-service={s.name}>
               <b>{s.name}</b>{s.group && <span> · {s.group}</span>}
@@ -220,7 +220,7 @@ function ZinePanel({ page, turn, content, parts, services, wifiPicture, feeding 
     const all = [...parts.quirks, ...parts.daily];
     body = all.length ? <Fitted entries={all} /> : nothing('Nothing written yet.');
   } else if (content === 'services') {
-    title = 'Home services';
+    title = 'Home lab';
     const rows = services.map((s) => ({ id: s.id, title: s.name, body: hostOf(s.address), phone: null, place: null }));
     body = rows.length ? <Fitted entries={rows} /> : nothing('No links yet.');
   }

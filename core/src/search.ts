@@ -114,7 +114,7 @@ export async function search(db: Db, owner: number, query: string, only?: Search
   if (wants('service')) {
     // Home services by name, group and note: only the ones this person may see. A link someone cannot see is never here.
     for (const s of (await servicesSeenBy(db, owner)).filter((r) => words.every((w) => [r.name, r.grp, r.note].some((t) => (t ?? '').toLowerCase().includes(w)))).slice(0, PER_KIND)) {
-      out.push({ kind: 'service', id: s.id, icon: '🔗', title: s.name, detail: join('Home services', s.grp), link: '/manual/services' });
+      out.push({ kind: 'service', id: s.id, icon: '🔗', title: s.name, detail: join('Home lab', s.grp), link: '/manual/services' });
     }
   }
   if (wants('project')) {

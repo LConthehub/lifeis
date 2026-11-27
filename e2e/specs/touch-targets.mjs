@@ -60,7 +60,7 @@ t = await text();
 say('the front page shows the plan coming up: ' + flat(t).match(/Sunday lunch.{0,40}/)?.[0], /Plans coming up[\s\S]*Sunday lunch[\s\S]*in 9 days/.test(t));
 say('and the coupon about to run out: ' + flat(t).match(/Coffee.{0,40}/)?.[0], /Coupons about to run out[\s\S]*Coffee[\s\S]*\$1\.50 off · Costco[\s\S]*tomorrow/.test(t));
 await page.screenshot({ path: shots + '/front-cards.png', fullPage: true });
-await page.getByRole('button', { name: 'Choose what shows' }).click(); await wait(400);
+await page.getByRole('button', { name: 'Customize' }).click(); await wait(400);
 say('both can be put out of sight like any card', /Plans coming up/.test(await dialog.innerText()) && /Coupons about to run out/.test(await dialog.innerText()));
 // Sharing the list as text: the sheet, its choices, Copy, and Share where the browser has one.
 await page.addInitScript(() => {

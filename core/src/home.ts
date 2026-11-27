@@ -42,7 +42,7 @@ export const CARDS = [
   { key: 'projects', label: 'Projects underway', section: 'making' },
   { key: 'upkeep', label: 'Upkeep: jobs due around the home', section: 'keeping' },
   { key: 'things', label: 'Things running low', section: 'keeping' },
-  { key: 'services', label: 'Home services: the links you pinned', section: 'keeping' },
+  { key: 'services', label: 'Home lab: the links you pinned', section: 'keeping' },
   { key: 'collection', label: 'Collection: lent out, and lately watched, read or heard', section: 'enjoying' },
   { key: 'week', label: 'This week in numbers', section: null },
 ] as const satisfies readonly { key: string; label: string; section: Section | null }[];

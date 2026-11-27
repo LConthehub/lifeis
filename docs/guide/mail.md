@@ -38,7 +38,7 @@ On the front page, the **Email** card shows how many messages are unread and the
 
 Life Is shows the plain words of a message. It does not start new messages, and it does not file or delete them.
 
-To hide the Email card from the front page, use **Choose what shows**.
+To hide the Email card from the front page, use **Customize**.
 
 ## Reminders by email
 

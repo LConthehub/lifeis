@@ -33,7 +33,7 @@ Life Is reads as a sentence: "Life is" and then a word. There are five words, an
 |---|---|
 | **on track** | The calendar, routines (with measures), plans (with holidays and trips), projects and activities. See [Routines](routines.html), [Plans and projects](plans.html), [Holidays](holidays.html) and [Outdoor trips](trips.html). |
 | **cooking** | The week, groceries, recipes, the pantry, prices. See [The kitchen](kitchen.html). |
-| **in order** | The House Manual (with home services), upkeep, pets, places and things (with licenses). See [Your home](home.html), [Upkeep](upkeep.html) and [Licenses and recalls](licenses.html). |
+| **in order** | The House Manual (with the Home lab), upkeep, pets, places and things (with licenses). See [Your home](home.html), [Upkeep](upkeep.html) and [Licenses and recalls](licenses.html). |
 | **budgeted** | Money: this month, income and bills, goals, and the year. See [Money and budget](money.html). |
 | **entertaining** | Your collection of books, films, shows, music and games, your lists, and your connections to servers. See [Films, music and books](collection.html). |
 

@@ -84,6 +84,7 @@ t = await text();
 say('all three are connected: ' + flat(t).match(/Book servers[\s\S]*/)?.[0].slice(380, 620), /Audiobookshelf/.test(t) && /Calibre-Web/.test(t) && /Kavita/.test(t) && (t.match(/Not synced yet/g) ?? []).length === 3);
 const content = await page.content();
 say('no sign-in is anywhere on the page', !/trial-abs-token|trial-calibre-pass|trial-kavita-key/.test(content));
+say('each book server offers "Add it to Home lab"', (await page.getByRole('button', { name: 'Add it to Home lab' }).count()) === 3);
 for (const [n, want] of [[0, /In step: 2 on Audiobookshelf, 2 added, 2 covers kept\./], [1, /In step: 3 on Calibre-Web, 3 added(, \d covers? kept)?\./], [2, /In step: 1 on Kavita, 1 added\./]]) {
   await page.getByRole('button', { name: 'Sync now' }).nth(n).click(); await wait(2500);
   const said = flat(await text()).match(/In step:[^.]*\./)?.[0];

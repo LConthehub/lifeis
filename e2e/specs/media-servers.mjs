@@ -50,6 +50,39 @@ t = await text();
 say('syncing says what it did: ' + flat(t).match(/In step:[^.]*\./)?.[0], /In step: 5 on Trial media box, 5 added, 3 covers kept\./.test(flat(t)) && /5 in the collection/.test(t));
 await page.screenshot({ path: shots + '/servers.png' });
 
+// ---- Home lab: the connected server can be added as a link ----
+const addIt = page.getByRole('button', { name: 'Add it to Home lab' });
+say('the person in charge is offered "Add it to Home lab" on the connection', await addIt.isVisible() && (await page.getByRole('link', { name: 'In Home lab' }).count()) === 0);
+await addIt.click(); await wait(1200);
+{
+  const lab = page.getByRole('dialog');
+  const labText = await lab.innerText();
+  say('it opens the Home lab form with the name, the address, the Media icon and a hint about Docker addresses',
+    new URL(page.url()).pathname === '/manual/services' && (await page.locator('h1').innerText()) === 'Home lab'
+    && (await lab.getByLabel('What it is called *').inputValue()) === 'Trial media box' && (await lab.getByLabel('Address *').inputValue()) === 'http://127.0.0.1:8097'
+    && (await lab.getByRole('radio', { name: 'Media', exact: true }).getAttribute('aria-checked')) === 'true'
+    && /Use an address your browser can open\. An address like http:\/\/jellyfin:8096 works only inside Docker\./.test(labText) && /Who sees it/.test(labText));
+  say('the key is not in the form', !labText.includes('trial-jellyfin-key') && !(await page.content()).includes('trial-jellyfin-key'));
+  await lab.getByRole('button', { name: 'Save' }).click(); await wait(1200);
+}
+t = await text();
+say('saving makes a link on the Home lab page: ' + flat(t).slice(0, 120), /Trial media box/.test(t) && /Everyone sees it/.test(t));
+await page.goto(base + '/media/connections'); await wait(1500);
+{
+  const there = page.getByRole('link', { name: 'In Home lab' });
+  say('the connection now says "In Home lab", and links to it', await there.isVisible() && (await page.getByRole('button', { name: 'Add it to Home lab' }).count()) === 0 && (await there.getAttribute('href')) === '/manual/services');
+  // Pictures at phone size, twice the pixels.
+  const phone = await browser.newContext({ storageState: await page.context().storageState(), viewport: { width: 375, height: 812 }, deviceScaleFactor: 2 });
+  const small = await phone.newPage();
+  await small.goto(base + '/media/connections'); await small.waitForTimeout(1500);
+  say('the Connections page fits 375px with "In Home lab" showing', await small.getByRole('link', { name: 'In Home lab' }).isVisible() && await small.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+  await small.screenshot({ path: shots + '/home-lab-connections-375.png', fullPage: true });
+  await small.goto(base + '/manual/services'); await small.waitForTimeout(1500);
+  say('the Home lab page fits 375px', await small.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+  await small.screenshot({ path: shots + '/home-lab-link-375.png', fullPage: true });
+  await phone.close();
+}
+
 await page.getByRole('link', { name: 'Collection' }).first().click(); await wait(1200);
 t = await text();
 say('the library sits beside the tape, and Alien is one film with both: ' + flat(t).slice(0, 230), /Alien[\s\S]*VHS\s*Jellyfin/.test(t) && /Twin Peaks/.test(t) && /Joni Mitchell/.test(t) && /Everything 5/.test(flat(t)));

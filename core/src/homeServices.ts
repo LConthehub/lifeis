@@ -194,7 +194,7 @@ export function homeServices(db: Db, user: number, clock: Clock = () => new Date
     async create(input: ServiceInput): Promise<ServiceList> {
       await mustBeInCharge();
       const v = await checked(input);
-      if ((await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM home_services'))!.n >= MAX_SERVICES) throw new Problem(400, `Home services holds ${MAX_SERVICES} links at most`);
+      if ((await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM home_services'))!.n >= MAX_SERVICES) throw new Problem(400, `Home lab holds ${MAX_SERVICES} links at most`);
       const made = await db.run(
         'INSERT INTO home_services (name, url, url_at, url2, url2_at, icon, color, grp, sort_order, note, who, guests, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [v.name, v.url, v.url_at, v.url2, v.url2_at, v.icon, v.color, v.grp, v.order, v.note, v.who, v.guests, user, now(), now()]);

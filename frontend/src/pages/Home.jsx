@@ -95,7 +95,7 @@ export default function Home({ user }) {
           <h1 className="text-2xl font-semibold text-life-800 dark:text-life-50">{greeting()}{onDevice() && user.name === user.username ? '' : `, ${user.name ?? user.username}`}</h1>
           <p className="text-sm text-gray-600 dark:text-life-200">{fromDateInput(today).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
         </div>
-        <button type="button" onClick={() => setChoosing(true)} className={quietButtonClass}>Choose what shows</button>
+        <button type="button" onClick={() => setChoosing(true)} className={quietButtonClass}>Customize</button>
       </div>
 
       <StartCard onChanged={load} />
@@ -106,7 +106,7 @@ export default function Home({ user }) {
       <AskCard />
       <AskBack />
 
-      {s.cards.length === 0 && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Every card is hidden. Use "Choose what shows" to bring some back.</div>}
+      {s.cards.length === 0 && <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Every card is hidden. Tap Customize to bring some back.</div>}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {shows('days') && (
@@ -337,8 +337,8 @@ export default function Home({ user }) {
         )}
 
         {shows('services') && (
-          <Card title="Home services" to="/manual/services" link="All links">
-            {s.services.length === 0 ? <Quiet>Nothing pinned. Pin links on the Home services page.</Quiet> : (
+          <Card title="Home lab" to="/manual/services" link="All links">
+            {s.services.length === 0 ? <Quiet>Nothing pinned. Pin links on the Home lab page.</Quiet> : (
               <ul className="divide-y divide-life-50 dark:divide-life-700">
                 {s.services.map((v) => (
                   <li key={v.id} className="flex flex-wrap items-center gap-3 py-2">
@@ -418,7 +418,7 @@ export default function Home({ user }) {
       </div>
 
       {choosing && (
-        <Modal title="Choose what shows" onClose={() => setChoosing(false)}>
+        <Modal title="Customize Home" onClose={() => setChoosing(false)}>
           <CardChooser choices={s.choices} onDone={(data) => { setS(data); setChoosing(false); }} />
         </Modal>
       )}

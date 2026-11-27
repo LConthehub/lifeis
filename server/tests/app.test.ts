@@ -1725,7 +1725,7 @@ it('lists of titles answer over the web: private by default, shared with the hou
   expect(again.kinds.map((k: { fresh: number }) => k.fresh)).toEqual([0, 0]);
 });
 
-it('home services over the web: who sees each link in the list, search, the Home card and the download; only the person in charge changes them; guests see the away address', async () => {
+it('Home lab over the web: who sees each link in the list, search, the Home card and the download; only the person in charge changes them; guests see the away address', async () => {
   const admin = await owner();
   const ana = await member(admin, 'ana');
   const bob = await member(admin, 'bob');

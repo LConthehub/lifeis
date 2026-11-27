@@ -1,4 +1,4 @@
-// Home services, on a 375px phone: the person in charge adds Jellyfin (a home and an away address, an icon and a color, for
+// Home lab, on a 375px phone: the person in charge adds Jellyfin (a home and an away address, an icon and a color, for
 // everyone) and the router (for only them); a second person sees Jellyfin but not the router, in the tab or in search, and pins
 // Jellyfin to their Home page; a link marked for guests shows on the shared House Manual with only its away address.
 // Pictures at 375px, light and dark, of the tab and the Home card.
@@ -36,8 +36,8 @@ watch(chief, 'in charge');
 await signIn(chief, 'ana', true);
 await chief.goto(base + '/manual'); await wait(1000);
 const tabs = flat(await chief.locator('nav[aria-label="Life is in order"]').innerText());
-check('the in order tabs start with House Manual, and Home services is a chip on it: ' + tabs, /^House Manual\s+Upkeep/.test(tabs) && await chief.getByRole('link', { name: 'Home services', exact: true }).isVisible());
-await chief.getByRole('link', { name: 'Home services', exact: true }).click(); await wait(900);
+check('the in order tabs start with House Manual, and Home lab is a chip on it: ' + tabs, /^House Manual\s+Upkeep/.test(tabs) && await chief.getByRole('link', { name: 'Home lab', exact: true }).isVisible());
+await chief.getByRole('link', { name: 'Home lab', exact: true }).click(); await wait(900);
 check('the page starts empty and says what to add', /No links yet/.test(await chief.locator('main').innerText()));
 
 async function add(fields, { who, icon, color, guests } = {}) {
@@ -72,6 +72,7 @@ form = await add({ name: 'Router', address: '192.168.1.1', group: 'House' }, { i
 await form.getByRole('button', { name: 'Save' }).click(); await wait(1200);
 
 let main = await chief.locator('main').innerText();
+check('the page is called Home lab', (await chief.locator('h1').innerText()) === 'Home lab' && !/Home services/.test(main));
 check('the person in charge sees both, in their groups', /Watch[\s\S]*Jellyfin[\s\S]*House[\s\S]*Router/.test(main), flat(main).slice(0, 160));
 check('Jellyfin offers an at-home button and an away button', (await chief.getByRole('link', { name: 'At home: Jellyfin' }).getAttribute('href')) === 'http://192.168.1.20:8096' && (await chief.getByRole('link', { name: 'Away: Jellyfin' }).getAttribute('href')) === 'https://watch.example.com');
 check('the buttons open in a new tab', (await chief.getByRole('link', { name: 'At home: Jellyfin' }).getAttribute('target')) === '_blank');
@@ -106,15 +107,15 @@ check('typing "jelly" finds Jellyfin for them', (await bob.getByRole('dialog', {
 await bob.keyboard.press('Escape'); await wait(300);
 // The Home card.
 await bob.goto(base + '/'); await wait(1500);
-const card = bob.getByRole('region', { name: 'Home services' }).or(bob.locator('section').filter({ has: bob.getByRole('heading', { name: 'Home services' }) }));
-check('their Home page has a Home services card with Jellyfin', (await card.count()) > 0 && /Jellyfin/.test(await card.first().innerText()) && !/Router/.test(await card.first().innerText()));
+const card = bob.getByRole('region', { name: 'Home lab' }).or(bob.locator('section').filter({ has: bob.getByRole('heading', { name: 'Home lab' }) }));
+check('their Home page has a Home lab card with Jellyfin', (await card.count()) > 0 && /Jellyfin/.test(await card.first().innerText()) && !/Router/.test(await card.first().innerText()));
 check('no horizontal scroll on Home at 375px', (await sideways(bob)) <= 0);
 await bob.screenshot({ path: `${shots}/home-card-375-light.png`, fullPage: true });
 await card.first().scrollIntoViewIfNeeded();
 await card.first().screenshot({ path: `${shots}/home-card-only-375-light.png` });
 // The card can be hidden.
-await bob.getByRole('button', { name: /Choose what shows|What shows/ }).first().click().catch(() => {}); await wait(500);
-check('the Home services card is in the list of cards to show or hide', /Home services: the links you pinned/.test(await bob.locator('body').innerText()));
+await bob.getByRole('button', { name: /Customize/ }).first().click().catch(() => {}); await wait(500);
+check('the Home lab card is in the list of cards to show or hide', /Home lab: the links you pinned/.test(await bob.locator('body').innerText()));
 await bob.keyboard.press('Escape'); await wait(300);
 
 // ---- the shared House Manual: guests ----
@@ -123,6 +124,7 @@ const guest = await (await phone()).newPage();
 await guest.goto(`${base}/m/${share.share.token}`); await wait(800);
 const html = await guest.content();
 check('the shared manual shows Jellyfin with only its away address', /Jellyfin/.test(html) && html.includes('https://watch.example.com') && !html.includes('192.168.1.20'));
+check('the shared manual calls them Links, not Home lab or Home services', /<h2>Links<\/h2>/.test(html) && !/Home lab|Home services/.test(html));
 check('the shared manual has no router', !/Router/.test(html) && !html.includes('192.168.1.1'));
 await guest.screenshot({ path: `${shots}/home-services-guest-375.png`, fullPage: true });
 

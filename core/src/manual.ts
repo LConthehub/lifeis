@@ -169,7 +169,7 @@ a{color:#1c5a55}.foot{color:#5c6b6a;font-size:.85rem;margin-top:2rem}
 </style></head><body><main><h1>House Manual</h1><p class="foot" style="margin-top:0">Shared with you${m.expires_on ? `. This link works until ${esc(m.expires_on)}` : ''}.</p>
 ${m.sections.map((s) => `<h2>${esc(s.title)}</h2>${s.entries.map(entry).join('')}`).join('')}
 ${m.pets.length ? `<h2>Pets</h2>${m.pets.map(pet).join('')}` : ''}
-${m.services.length ? `<h2>Home services</h2>${services}` : ''}
+${m.services.length ? `<h2>Links</h2>${services}` : ''}
 ${!m.sections.length && !m.pets.length && !m.services.length ? '<p>Nothing has been written here yet.</p>' : ''}
 <p class="foot">Made with Life Is. Nothing on this page can be changed from here.</p></main></body></html>`;
 }

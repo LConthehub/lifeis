@@ -50,7 +50,7 @@ export default function ManualPage() {
 
   return (
     <div className="space-y-4">
-      <SubChips items={MANUAL_CHIPS} label="House manual and home services" />
+      <SubChips items={MANUAL_CHIPS} label="House manual and Home lab" />
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">House Manual</h1>
       </div>
@@ -154,7 +154,7 @@ function Sharing({ manual, onChanged }) {
       {share.on ? (
         <>
           <p className="text-sm text-gray-600 dark:text-life-100">
-            Anyone with this link can read the manual without signing in{share.expires_on ? `, until ${share.expires_on}` : ', until you turn it off'}. They can't change anything or see anything else. Home services you marked for guests are on it, with only the address that works away from home.
+            Anyone with this link can read the manual without signing in{share.expires_on ? `, until ${share.expires_on}` : ', until you turn it off'}. They can't change anything or see anything else. Home lab links you marked for guests are on it under Links, with only the address that works away from home.
             {hidden > 0 && ` ${hidden} private ${hidden === 1 ? 'entry is' : 'entries are'} left out.`}{!share.pets && ' Pets are left out.'}
           </p>
           <input readOnly value={address} aria-label="The link" onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs`} />

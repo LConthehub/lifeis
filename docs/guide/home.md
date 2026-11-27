@@ -4,7 +4,7 @@ blurb: Places, things, records for your insurer, filling a shelf by scanning, pe
 ---
 # Your home
 
-The **in order** section holds what you own, where it is, what it is for, and where it has been. It also holds the records that go with each thing, your pets, your [licenses](licenses.html) and a House Manual for a sitter. Jobs that come round again are in [Upkeep](upkeep.html). Its tabs are House Manual, Upkeep, Pets, Places and Things. Home services is a chip at the top of the House Manual, and Licenses is a chip on Things.
+The **in order** section holds what you own, where it is, what it is for, and where it has been. It also holds the records that go with each thing, your pets, your [licenses](licenses.html) and a House Manual for a sitter. Jobs that come round again are in [Upkeep](upkeep.html). Its tabs are House Manual, Upkeep, Pets, Places and Things. Home lab is a chip at the top of the House Manual, and Licenses is a chip on Things.
 
 ## Places
 
@@ -125,7 +125,7 @@ An entry can say where a thing is, using the places you already keep, and carry 
 
 Press **Print** and choose how:
 
-- **Full manual:** letter pages with page numbers. Emergencies and who to call come first, then the Wi-Fi with a code a phone can read to join, the pets, how the house works, and your home services.
+- **Full manual:** letter pages with page numbers. Emergencies and who to call come first, then the Wi-Fi with a code a phone can read to join, the pets, how the house works, and your Home lab.
 - **Fridge sheet:** one page with emergency numbers, the Wi-Fi code, and how to feed the pets.
 - **Pocket zine:** one sheet, printed on one side, with eight small panels. Fold it in half, cut the dashed line between the middle four panels, and fold it into a little book. Anything too long for a panel says "More in the full manual."
 
@@ -135,14 +135,16 @@ Or use **Share it by a link**, for a sitter. The link opens the manual on their 
 
 Mark an entry **private**, such as an alarm code, and it is never on the shared link. The shared page is plain: nothing on it can be changed, and it shows nothing else of your Life Is.
 
-## Home services
+## Home lab
 
-**Home services** is a chip at the top of the House Manual. It holds links to the programs you run at home: a media server, a photos app, the page for your router. Tap a link and it opens in a new tab (in the phone app, in the phone's own browser).
+**Home lab** is a chip at the top of the House Manual. It holds links to the programs you run at home: a media server, a photos app, the page for your router. Tap a link and it opens in a new tab (in the phone app, in the phone's own browser).
 
 The person in charge adds and changes the links. Each one has a name, an address, a color and an icon from the set Life Is already uses, and a note. You can add a second address and say which works **at home** and which works **away**; the link then has a button for each. You can also name a group (Watch, Files, House) and give an order.
 
-The person in charge picks who sees each link: **everyone**, **chosen people**, or **only me**. A link you cannot see is not there for you at all: not in the tab, not in search, not in your download. Each person can **pin** the links they use. Pinned links show on a **Home services** card on your Home page, which you can hide like any other card.
+The person in charge picks who sees each link: **everyone**, **chosen people**, or **only me**. A link you cannot see is not there for you at all: not in the tab, not in search, not in your download. Each person can **pin** the links they use. Pinned links show on a **Home lab** card on your Home page, which you can hide like any other card.
 
 Life Is only opens an address when you tap it. It does not look up logos or check whether a program is running. There is no place to keep a password, and an address with a name and password in it is refused: sign in on the page itself.
 
-Mark a link **Show to guests** and it is on the shared House Manual too, with only the address that works away from home. A link that only has a home address says it only works at home. Home services are in the download, and come back with **Bring it in** (the person in charge does that).
+Mark a link **Show to guests** and it is on the shared House Manual too, with only the address that works away from home. A link that only has a home address says it only works at home. On the shared page, guests see these under **Links**. Home lab links are in the download, and come back with **Bring it in** (the person in charge does that).
+
+A server you have connected under Connections (Jellyfin, Emby, Audiobookshelf, Calibre-Web and the other book servers) has an **Add it to Home lab** button, for the person in charge. It opens the add form with the server's name, an icon and its address filled in. Change the address before you save if your browser needs a different one: an address like `http://jellyfin:8096` works only inside Docker. Once the link is there, the button says **In Home lab**. The server's key or password is never part of the link, and nothing is sent anywhere.

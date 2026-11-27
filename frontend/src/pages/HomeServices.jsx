@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import SubChips, { MANUAL_CHIPS } from '../components/SubChips';
 import { Badge, COLOR_CLASSES, COLOR_WORDS, ICON_WORDS, Open, inGroups } from '../components/ServiceLinks';
@@ -6,17 +7,25 @@ import Icon from '../components/Icon';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 
 /**
- * Home services: links to the programs run at home (a media server, a photos app, the router). The person in charge
- * adds and changes them and picks who sees each. Everyone pins the ones they want to their own Home page.
- * Nothing is fetched from an address, and there is no place to keep a password.
+ * Home lab (called home services in the code): links to the programs run at home (a media server, a photos app, the router).
+ * The person in charge adds and changes them and picks who sees each. Everyone pins the ones they want to their own Home page.
+ * Nothing is fetched from an address, and there is no place to keep a password. Connections can send a connected server
+ * here with its name, an icon and its address filled in (`state.add`); the person checks it and saves.
  */
 export default function HomeServicesPage() {
   const [data, setData] = useState(null);
   const [editing, setEditing] = useState(null); // a link, or {} for a new one
+  const { state } = useLocation();
+  const navigate = useNavigate();
   const load = () => axios.get('/api/home-services').then(({ data: d }) => setData(d)).catch(() => setData(false));
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!state?.add || !data?.can_change) return;
+    setEditing({ ...state.add, fromConnection: true });
+    navigate('.', { replace: true, state: null });
+  }, [state, data, navigate]);
   if (data === null) return null;
-  if (data === false) return <p className="text-sm text-gray-600 dark:text-life-200">Home services couldn't be opened just now.</p>;
+  if (data === false) return <p className="text-sm text-gray-600 dark:text-life-200">Home lab couldn't be opened just now.</p>;
 
   const pin = async (s) => {
     try { setData((await (s.pinned ? axios.delete(`/api/home-services/${s.id}/pin`) : axios.put(`/api/home-services/${s.id}/pin`))).data); } catch { load(); }
@@ -24,9 +33,9 @@ export default function HomeServicesPage() {
 
   return (
     <div className="space-y-4">
-      <SubChips items={MANUAL_CHIPS} label="House manual and home services" />
+      <SubChips items={MANUAL_CHIPS} label="House manual and Home lab" />
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Home services</h1>
+        <h1 className="mr-auto text-xl font-semibold text-life-800 dark:text-life-50">Home lab</h1>
         {data.can_change && <button type="button" onClick={() => setEditing({})} className={`${buttonClass} min-h-[44px]`}>+ Add a link</button>}
       </div>
       <p className="text-sm text-gray-600 dark:text-life-100">
@@ -67,7 +76,7 @@ export default function HomeServicesPage() {
       ))}
 
       {editing && (
-        <Modal title={editing.id ? editing.name : 'A home service'} onClose={() => setEditing(null)}>
+        <Modal title={editing.id ? editing.name : 'A Home lab link'} onClose={() => setEditing(null)}>
           <ServiceForm service={editing} data={data} onDone={(d) => { setData(d); setEditing(null); }} />
         </Modal>
       )}
@@ -103,6 +112,7 @@ function ServiceForm({ service, data, onDone }) {
     <form onSubmit={submit} className="space-y-3">
       <Field label="What it is called *"><input required autoFocus value={form.name} onChange={set('name')} placeholder="Jellyfin" className={inputClass} /></Field>
       <Field label="Address *"><input required inputMode="url" autoCapitalize="none" autoCorrect="off" value={form.address} onChange={set('address')} placeholder="http://192.168.1.20:8096" className={inputClass} /></Field>
+      {service.fromConnection && <p className="text-xs text-gray-500 dark:text-life-300">Use an address your browser can open. An address like http://jellyfin:8096 works only inside Docker.</p>}
       <Field label="This address works">
         <select value={form.address_at} onChange={set('address_at')} className={`${inputClass} min-h-[44px]`}>
           <option value="any">Anywhere</option><option value="home">Only at home</option><option value="away">Only away from home</option>
