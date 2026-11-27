@@ -53,6 +53,11 @@ export type Outside = {
 
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
+/** ?cards=days,pantry: the Home cards on screen, so "Don't forget" does not repeat them. */
+function shownCards(query: URLSearchParams): string[] {
+  return (query.get('cards') ?? '').split(',').filter((key) => /^[a-z]{1,20}$/.test(key)).slice(0, 40);
+}
+
 /** A picture sent as base64 text, as the pages send them. Too large or damaged: refused. */
 function pictureFrom(text: string): Uint8Array {
   if (text.length > MAX_THING_PHOTO * 1.4 || !BASE64.test(text)) throw new Refusal(400, 'That picture is too large to keep, or was damaged on the way');
@@ -155,8 +160,8 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
 
     // The front page: what today holds, gathered from every section the person uses.
     ['GET', /^\/api\/home$/, async (c) => ({ json: await home(db, c.user.id, c.clock, outside).summary() })],
-    ['GET', /^\/api\/home\/dont-forget$/, async (c) => ({ json: await dontForget(db, c.user.id, c.clock).lines() })],
-    ['POST', /^\/api\/home\/dont-forget\/([a-z]{3,8}-\d{1,15})$/, async (c) => ({ json: await dontForget(db, c.user.id, c.clock).push(c.path.split('/').pop()!, read.text(c.body, 'action')) })],
+    ['GET', /^\/api\/home\/dont-forget$/, async (c) => ({ json: await dontForget(db, c.user.id, c.clock).lines(shownCards(c.query)) })],
+    ['POST', /^\/api\/home\/dont-forget\/([a-z]{3,8}-\d{1,15})$/, async (c) => ({ json: await dontForget(db, c.user.id, c.clock).push(c.path.split('/').pop()!, read.text(c.body, 'action'), shownCards(c.query)) })],
     ['PUT', /^\/api\/home\/cards$/, async (c) => {
       if (!Array.isArray(c.body.hidden)) throw notUnderstood('hidden');
       return { json: await home(db, c.user.id, c.clock, outside).hideCards(read.texts(c.body, 'hidden')) };

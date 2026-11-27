@@ -27,7 +27,11 @@ export type Line = {
   job_id: number | null;
 };
 
-type Candidate = Line & { score: number; sig: string };
+type Candidate = Line & { score: number; sig: string; on: string[] };
+
+/** The Home cards that already say a line, so the card does not say it twice. */
+const pantryCards = ['pantry'];
+const dueCards = ['days', 'upkeep'];
 
 /** "12 days", "3 weeks", "4 months". */
 export function span(days: number): string {
@@ -49,7 +53,7 @@ export function dontForget(db: Db, owner: number, clock: Clock = () => new Date(
       if (item.days_left === null || item.days_left > 2) continue;
       const left = item.days_left;
       const when = left < 0 ? 'past its use-by date' : left === 0 ? 'use by today' : left === 1 ? 'use by tomorrow' : `use within ${left} days`;
-      found.push({ key: `pantry-${item.id}`, text: `${item.name}: ${when}`, to: '/pantry', job_id: null, score: left, sig: item.expires_on ?? '' });
+      found.push({ key: `pantry-${item.id}`, text: `${item.name}: ${when}`, to: '/pantry', job_id: null, score: left, sig: item.expires_on ?? '', on: pantryCards });
     }
 
     // A project of theirs left alone for two weeks or more.
@@ -60,7 +64,7 @@ export function dontForget(db: Db, owner: number, clock: Clock = () => new Date(
       const touched = [project.updated_at.slice(0, 10), project.last_session ?? ''].sort().pop()!;
       const idle = now - dayNumber(touched);
       if (idle < 14) continue;
-      found.push({ key: `project-${project.id}`, text: `${project.name}: untouched for ${span(idle)}`, to: `/projects/${project.id}`, job_id: null, score: 6, sig: touched });
+      found.push({ key: `project-${project.id}`, text: `${project.name}: untouched for ${span(idle)}`, to: `/projects/${project.id}`, job_id: null, score: 6, sig: touched, on: [] });
     }
 
     for (const job of await upkeep(db, owner, clock).list()) {
@@ -68,7 +72,7 @@ export function dontForget(db: Db, owner: number, clock: Clock = () => new Date(
       if ((job.kind === 'bill' || job.kind === 'renewal') && !job.autopay && job.due.days_left !== null && job.due.days_left <= 7 && !job.due.needs_date) {
         const left = job.due.days_left;
         const when = left < 0 ? `due ${span(-left)} ago` : left === 0 ? 'due today' : left === 1 ? 'due tomorrow' : `due in ${left} days`;
-        found.push({ key: `bill-${job.id}`, text: `${job.name}: ${when}`, to: `/things/upkeep/${job.id}`, job_id: null, score: left + 0.5, sig: `${job.last_done?.day ?? ''}|${job.due.next_day ?? ''}` });
+        found.push({ key: `bill-${job.id}`, text: `${job.name}: ${when}`, to: `/things/upkeep/${job.id}`, job_id: null, score: left + 0.5, sig: `${job.last_done?.day ?? ''}|${job.due.next_day ?? ''}`, on: left <= 2 ? dueCards : ['upkeep'] });
         continue;
       }
       // It's been a while: a chore or job of theirs, long past how often it is usually done.
@@ -76,7 +80,7 @@ export function dontForget(db: Db, owner: number, clock: Clock = () => new Date(
         const gap = job.every.n * GAP_DAYS[job.every.unit];
         const since = now - dayNumber(job.last_done.day);
         if (since < Math.max(gap * 2, gap + 5)) continue;
-        found.push({ key: `job-${job.id}`, text: `${job.name}: it's been a while (${span(since)})`, to: `/things/upkeep/${job.id}`, job_id: job.id, score: 4, sig: job.last_done.day });
+        found.push({ key: `job-${job.id}`, text: `${job.name}: it's been a while (${span(since)})`, to: `/things/upkeep/${job.id}`, job_id: job.id, score: 4, sig: job.last_done.day, on: dueCards });
       }
     }
     return found.sort((a, b) => a.score - b.score || (a.text < b.text ? -1 : 1));
@@ -88,21 +92,24 @@ export function dontForget(db: Db, owner: number, clock: Clock = () => new Date(
   }
 
   return {
-    /** Up to three lines, the most pressing first; none when nothing qualifies. */
-    async lines(): Promise<Line[]> {
+    /**
+     * Up to three lines, the most pressing first; none when nothing qualifies. `shown` is the Home cards on screen:
+     * what one of them already lists (food going off, a bill or chore due in the next three days) is left out.
+     */
+    async lines(shown: string[] = []): Promise<Line[]> {
       const day = today();
       const away = await pushedAway();
       return (await candidates())
         .filter((c) => {
           const hidden = away.get(c.key);
-          return !(hidden && hidden.until > day && (hidden.sig === null || hidden.sig === c.sig));
+          return !(hidden && hidden.until > day && (hidden.sig === null || hidden.sig === c.sig)) && !c.on.some((card) => shown.includes(card));
         })
         .slice(0, MOST_LINES)
-        .map(({ score: _score, sig: _sig, ...line }) => line);
+        .map(({ score: _score, sig: _sig, on: _on, ...line }) => line);
     },
 
     /** Later: out of sight for a week. Not now: out of sight until the thing changes, or 30 days. */
-    async push(key: string, action: string): Promise<Line[]> {
+    async push(key: string, action: string, shown: string[] = []): Promise<Line[]> {
       if (action !== 'later' && action !== 'notnow') throw new Problem(400, 'Choose Later or Not now');
       const found = (await candidates()).find((c) => c.key === key);
       if (!found) throw new Problem(404, 'Not found');
@@ -112,7 +119,7 @@ export function dontForget(db: Db, owner: number, clock: Clock = () => new Date(
         [owner, key, addDays(today(), action === 'later' ? LATER_DAYS : NOT_NOW_DAYS), action === 'later' ? null : found.sig]);
       // Old rows are cleared as they lapse, so the table stays small.
       await db.run('DELETE FROM dont_forget_hidden WHERE user_id = ? AND until <= ?', [owner, today()]);
-      return this.lines();
+      return this.lines(shown);
     },
   };
 }

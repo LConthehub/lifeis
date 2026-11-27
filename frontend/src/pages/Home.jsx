@@ -100,7 +100,7 @@ export default function Home({ user }) {
       <StartCard onChanged={load} />
       <WeeklyCard />
 
-      <DontForget />
+      <DontForget cards={s.cards} />
 
       <AskCard />
       <AskBack />

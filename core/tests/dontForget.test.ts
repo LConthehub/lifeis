@@ -44,6 +44,20 @@ it('names food near its date, a project left alone, a bill coming and a chore no
   expect((await mine().lines()).map((l) => l.text)).toEqual(['Milk: use by tomorrow', "Wipe the counters: it's been a while (12 days)", 'Garden shed: untouched for 3 weeks']);
 });
 
+it('leaves out what the Home cards on screen already list', async () => {
+  await kitchen(db, owner, clock).savePantry({ name: 'Milk', quantity: 1, unit: 'cup', expires_on: ymd(1) });
+  const p = await projects(db, owner, clock).createProject({ name: 'Garden shed', status: 'active' });
+  await db.run('UPDATE projects SET updated_at = ? WHERE id = ?', [`${ymd(-21)}T09:00:00+00:00`, p.id]);
+  const jobs = upkeep(db, owner, clock);
+  await jobs.create({ name: 'Wipe the counters', kind: 'chore', every_n: 1, every_unit: 'day', last_done: { day: ymd(-12) } });
+  await jobs.create({ name: 'Electricity', kind: 'bill', first_due: ymd(5), every_n: 1, every_unit: 'month' });
+  const texts = async (shown: string[]) => (await mine().lines(shown)).map((l) => l.text);
+  // The next three days lists the late chore, the pantry card lists the milk; the bill in 5 days is past that window.
+  expect(await texts(['days', 'pantry'])).toEqual(['Electricity: due in 5 days', 'Garden shed: untouched for 3 weeks']);
+  // The upkeep card lists every bill and job coming up.
+  expect(await texts(['days', 'pantry', 'upkeep'])).toEqual(['Garden shed: untouched for 3 weeks']);
+});
+
 it('Later hides a line for a week, and Not now until the thing changes', async () => {
   const k = kitchen(db, owner, clock);
   await k.savePantry({ name: 'Milk', quantity: 1, unit: 'cup', expires_on: ymd(1) });
