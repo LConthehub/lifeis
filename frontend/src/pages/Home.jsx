@@ -300,7 +300,7 @@ export default function Home({ user }) {
         )}
 
         {shows('projects') && (
-          <Card title="Projects underway" to="/projects" link="All projects">
+          <Card title="Projects" to="/projects" link="All projects">
             {s.projects.length === 0 ? <Quiet>Nothing underway. Ideas wait on the projects page.</Quiet> : (
               <ul className="divide-y divide-life-50 dark:divide-life-700">
                 {s.projects.map((p) => (

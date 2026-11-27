@@ -39,7 +39,7 @@ export const CARDS = [
   { key: 'kitchen', label: 'Cooking: today’s meals, the grocery list, pans you’re short of', section: 'eating' },
   { key: 'pantry', label: 'Pantry: running low and use soon', section: 'eating' },
   { key: 'coupons', label: 'Coupons about to run out', section: 'eating' },
-  { key: 'projects', label: 'Projects underway', section: 'making' },
+  { key: 'projects', label: 'Projects', section: 'making' },
   { key: 'upkeep', label: 'Upkeep: jobs due around the home', section: 'keeping' },
   { key: 'things', label: 'Things running low', section: 'keeping' },
   { key: 'services', label: 'Home lab: the links you pinned', section: 'keeping' },
