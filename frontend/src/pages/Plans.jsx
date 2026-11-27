@@ -142,7 +142,7 @@ export default function PlansPage() {
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Show">
         {KINDS.map(([key, text]) => (
           <button key={key} type="button" aria-pressed={kind === key} onClick={() => setKind(key)}
-            className={`flex min-h-[44px] items-center rounded-full px-4 py-2 text-sm ${kind === key ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`}>{text}</button>
+            className={`flex min-h-[44px] items-center rounded-full px-3 py-1 text-sm ${kind === key ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`}>{text}</button>
         ))}
       </div>
       <div className="flex flex-wrap items-center gap-2">
