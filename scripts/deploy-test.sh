@@ -17,11 +17,14 @@ cat > "$fakes/docker" <<'EOF'
 #!/usr/bin/env bash
 echo "docker $*" >> "$FAKE_LOG"
 if [ "$1" = "run" ]; then
+  # Putting the database back after a start that failed: takes the copy in, and works unless FAKE_PUTBACK says no.
+  case " $* " in *"failed-"*) cat > /dev/null; [ "${FAKE_PUTBACK:-ok}" = ok ]; exit ;; esac
   # The backup comes in two parts: everything but the live database while running (FAKE_FIRST), then the live
   # database and keys while stopped (FAKE_BACKUP). A good part is a real little tar, so the two can be joined.
   mode="${FAKE_BACKUP:-ok}"; case " $* " in *"--exclude"*) mode="${FAKE_FIRST:-ok}" ;; esac
   case "$mode" in
     ok) d=$(mktemp -d) && head -c 300000 /dev/urandom > "$d/part" && tar cf - -C "$d" part; rm -rf "$d" ;;
+    db) d=$(mktemp -d) && mkdir "$d/data" && head -c 300000 /dev/urandom > "$d/data/lifeis.db" && tar cf - -C "$d" data; rm -rf "$d" ;;
     empty) : ;;
     small) printf 'only a little'; exit 1 ;;
   esac
@@ -30,7 +33,10 @@ exit 0
 EOF
 cat > "$fakes/curl" <<'EOF'
 #!/usr/bin/env bash
-case " $* " in *" -w "*) printf 200 ;; *) [ "${FAKE_HEALTH:-up}" = up ] && printf '{"status":"ok"}' ;; esac
+# FAKE_HEALTH: up, down, or back (the new version never answers; the one from before does, once it is started again)
+case " $* " in *" -w "*) printf 200 ;; *)
+  case "${FAKE_HEALTH:-up}" in up) printf '{"status":"ok"}' ;; back) grep -q -- "compose up -d --build" "$FAKE_LOG" && printf '{"status":"ok"}' ;; esac ;;
+esac
 exit 0
 EOF
 printf '#!/usr/bin/env bash\nexit 0\n' > "$fakes/node"
@@ -97,6 +103,24 @@ fresh plain; FAKE_BACKUP=ok try
 check "it finishes" '[ $code -eq 0 ]'
 check "the first part is copied while running, then the stop, then the live database" '[ "$(grep -n -e "--exclude" -e "compose stop" -e "data/lifeis.db\* keys" "$FAKE_LOG" | cut -d: -f2 | cut -c1-20 | tr "\n" "|")" = "docker run --rm -v l|docker compose stop|docker run --rm -v l|" ]'
 check "the backup has both parts in it" '[ "$(gzip -dc private/backups/before-plain-*.tgz | tar tf - | wc -l)" -eq 2 ]'
+
+echo "8. The new version does not start: the version from before and its database are put back"
+fresh plain; FAKE_BACKUP=db FAKE_HEALTH=back try
+check "it stops with an error" '[ $code -ne 0 ]'
+check "the database is put back after the stop and before the version from before is started" '[ "$(grep -n -e "^docker compose stop" -e "^docker run --rm -i" -e "^docker compose up -d --build" "$FAKE_LOG" | cut -d: -f2 | cut -c1-17 | tr "\n" "|")" = "docker compose st|docker compose st|docker run --rm -|docker compose up|" ]'
+check "it says the data is as it was, and where the failed database is kept" 'grep -q "the previous one is running again, with the data as it was before this deploy" "$here/out.log" && grep -q "kept in the data folder as failed-" "$here/out.log"'
+check "the backup is kept and no scratch copy is left" 'ls private/backups/before-plain-*.tgz >/dev/null 2>&1 && [ -z "$(ls -d private/backups/putback-* 2>/dev/null)" ]'
+check "main is not merged or pushed" '[ "$(git rev-parse main)" != "$(git rev-parse plain)" ] && [ "$(git -C "$here/remote.git" rev-parse main)" = "$(git rev-parse main)" ]'
+
+echo "9. The new version does not start, and the database can't be put back"
+fresh plain; FAKE_BACKUP=db FAKE_PUTBACK=no FAKE_HEALTH=down try
+check "it stops with an error and says so" '[ $code -ne 0 ] && grep -q "could NOT be put back" "$here/out.log" && grep -q "restore from" "$here/out.log"'
+check "the backup is still kept" 'ls private/backups/before-plain-*.t* >/dev/null 2>&1'
+
+echo "10. The new version does not start, and the backup has no database in it to put back"
+fresh plain; FAKE_BACKUP=ok FAKE_HEALTH=back try
+check "nothing in the data folder is touched" '[ "$(log "failed-")" -eq 0 ]'
+check "it says the database could not be put back" 'grep -q "could NOT be put back" "$here/out.log"'
 
 echo
 echo "$pass passed, $bad failed"

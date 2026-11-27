@@ -12,7 +12,8 @@
 # is not. Only with a good copy does the new version start. The copy is squeezed into
 # the final private/backups/before-<branch>-<stamp>.tgz AFTER the health check (or after the previous version is
 # back, if the new one failed), and the .tar is removed only once the .tgz is written and its size checked. If the
-# new version does not come up healthy the previous version is put back. After a good deploy only the 5 newest
+# new version does not come up healthy the previous version is put back, and so is the database copied while stopped
+# (the new version may have upgraded it, and the previous version can't open an upgraded one). After a good deploy only the 5 newest
 # before-*.tgz backups are kept; nothing else in private/backups is ever deleted.
 # Run only when the owner has said to deploy.
 set -euo pipefail
@@ -33,7 +34,28 @@ compress_backup() { # squeezes $raw into $backup (the app is running again); rem
   echo "warning: the backup could not be compressed; the uncompressed copy is kept at $raw" >&2
   backup="$raw"; return 1
 }
+put_database_back() { # $1 = the data volume, $2 = an image with sh and tar, $3 = the copy made while stopped (.tar), $4 = stamp
+  # A version that did not start may already have upgraded the database, and the version from before can't open an
+  # upgraded one. So the database it left is set aside (kept, in the data folder's failed-<stamp>), and the one copied
+  # a moment ago, while Life Is was stopped, is put back. Nothing was saved in between: Life Is was stopped all along.
+  # The copy is read out first; if it is not there, nothing in the data folder is touched.
+  local out="private/backups/putback-$4" ok=1
+  rm -rf "$out" && mkdir -p "$out" || return 1
+  if tar -xf "$3" -C "$out" --wildcards 'data/lifeis.db*' 2>/dev/null && [ -s "$out/data/lifeis.db" ]; then
+    tar -cf - -C "$out" data | docker run --rm -i -v "$1":/data --entrypoint sh "$2" -c '
+      cd / && mkdir -p "data/failed-'"$4"'" || exit 1
+      for f in data/lifeis.db*; do [ ! -e "$f" ] || mv "$f" "data/failed-'"$4"'/" || exit 1; done
+      tar xf - && [ -s data/lifeis.db ] && exit 0
+      for f in data/lifeis.db*; do [ ! -e "$f" ] || rm -f "$f"; done   # a half-written copy of our own; the real one goes back
+      mv "data/failed-'"$4"'"/* data/; exit 1' && ok=0
+  fi
+  rm -rf "$out" # only our own scratch copy; the backup itself is kept
+  return $ok
+}
 
+# From here on the script is one block, so bash has read all of it before any of it runs: switching branches below
+# (to put a previous version back, or to merge) can then never change the script halfway through a run.
+{
 branch=$(git branch --show-current)
 [ -n "$branch" ] || fail "no branch is checked out"
 [ -z "$(git status --porcelain)" ] || fail "there are changes not yet committed; commit them first"
@@ -96,16 +118,22 @@ echo "copy of the data: $raw ($((size / 1048576)) MB); it is compressed after th
 say "Starting the new version"
 docker compose up -d
 if ! healthy 8020; then
-  say "It did not start; putting the previous version back"
+  say "It did not start; putting the previous version and its data back"
+  docker compose stop || true
+  if put_database_back lifeis_lifeis_data lifeis-lifeis "$raw" "$stamp"; then
+    data="with the data as it was before this deploy; the database the new version left is kept in the data folder as failed-$stamp"
+  else
+    data="but the database from before could NOT be put back, so it may not open"
+  fi
   git checkout -q "$previous"
   docker compose up -d --build
   git checkout -q "$branch"
   if healthy 8020; then
     compress_backup || true
-    fail "the new version did not start; the previous one is running again (backup: $backup)"
+    fail "the new version did not start; the previous one is running again, $data (backup: $backup)"
   fi
   compress_backup || true
-  fail "the new version did not start, and neither did the previous one; restore from $backup"
+  fail "the new version did not start, and neither did the previous one ($data); restore from $backup"
 fi
 docker logs lifeis-lifeis-1 2>&1 | grep -i "upgrad" | tail -1 || true
 if compress_backup; then
@@ -139,3 +167,5 @@ for url in https://lifeis.living/ https://demo.lifeis.living/api/health; do
 done
 
 say "Done. Live: your Life Is, the demo and the website. Backup: $backup"
+exit 0
+}
