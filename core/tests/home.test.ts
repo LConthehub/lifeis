@@ -146,3 +146,18 @@ it('Coming up stays hidden for someone who had hidden all three cards it replace
   await db.run("UPDATE user_settings SET value = ? WHERE user_id = ? AND key = 'home_hidden_cards'", [JSON.stringify(['dates']), owner]);
   expect((await front.summary()).cards).toContain('coming');
 });
+
+it('Coming up holds a renewal or a yearly job coming due in two months, not chores, bills or jobs far off', async () => {
+  const { upkeep } = await import('../src/upkeep.ts');
+  const jobs = upkeep(db, owner, clock);
+  await jobs.create({ name: 'Car tabs', kind: 'renewal', every_n: 1, every_unit: 'year', first_due: '2046-04-10' });
+  await jobs.create({ name: 'Clean the gutters', every_n: 1, every_unit: 'year', first_due: '2046-03-20' });
+  await jobs.create({ name: 'Passport', kind: 'renewal', every_n: 10, every_unit: 'year', first_due: '2047-01-01' });
+  await jobs.create({ name: 'Rent', kind: 'bill', every_n: 1, every_unit: 'month', first_due: '2046-03-10' });
+  await jobs.create({ name: 'Vacuum', kind: 'chore', every_n: 1, every_unit: 'week' });
+  await jobs.create({ name: 'Furnace filter', every_n: 3, every_unit: 'month', first_due: '2046-03-15' });
+  expect((await front.summary()).coming.upkeep.map((j) => [j.name, j.kind, j.day, j.days_until])).toEqual([
+    ['Clean the gutters', 'job', '2046-03-20', 15],
+    ['Car tabs', 'renewal', '2046-04-10', 36],
+  ]);
+});

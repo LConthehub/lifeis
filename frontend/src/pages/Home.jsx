@@ -57,22 +57,26 @@ const inDays = (day, today) => {
 const Quiet = ({ children }) => <p className="text-sm text-gray-500 dark:text-life-300">{children}</p>;
 const Flag = ({ children }) => <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">{children}</span>;
 
-const COMING_ICONS = { trip: 'trip', gathering: 'plan', birthday: 'birthday' };
+const COMING_ICONS = { trip: 'trip', gathering: 'plan', birthday: 'birthday', renewal: 'renewal', job: 'chore' };
 
 /**
  * Coming up: plans, holidays, trips and birthdays under way or in the next two months, each once, with its next
  * step. A holiday with something to do now (start planning, take down, notes for next year) shows its own line
- * with that step. Not shown at all when there is nothing.
+ * with that step. A renewal or a once-a-year job coming due sits among them by date. Not shown at all when there is nothing.
  */
 function ComingUp({ coming, today, onChange }) {
   const actions = new Map(coming.holidays.map((h) => [`holiday-${h.holiday_id}`, h]));
   const onList = new Set(coming.lines.map((l) => l.key));
   const loose = coming.holidays.filter((h) => !onList.has(`holiday-${h.holiday_id}`));
+  // Plans and upkeep together by date; upkeep becomes a line like the rest.
+  const upkeepLines = coming.upkeep.map((j) => ({ key: `upkeep-${j.id}`, name: j.name, kind: j.kind, start_day: j.day, end_day: j.day, days_until: j.days_until,
+    link: `/things/upkeep/${j.id}`, next: j.kind === 'renewal' ? 'Renewal' : 'Yearly upkeep', late: j.days_until < 0 }));
+  const all = [...coming.lines, ...upkeepLines].sort((a, b) => (a.late === b.late ? a.start_day.localeCompare(b.start_day) : a.late ? -1 : 1));
   return (
     <Card title="Coming up" to="/plans" link="All plans">
       <ul className="space-y-3 text-sm">
         {loose.map((h) => <HolidayRow key={`h-${h.holiday_id}`} card={h} onChange={onChange} />)}
-        {coming.lines.map((l) => actions.has(l.key) ? <HolidayRow key={l.key} card={actions.get(l.key)} onChange={onChange} /> : (
+        {all.map((l) => actions.has(l.key) ? <HolidayRow key={l.key} card={actions.get(l.key)} onChange={onChange} /> : (
           <li key={l.key}>
             <Link to={l.link} className="flex items-baseline gap-2 hover:underline">
               <span className="self-start"><Icon of={COMING_ICONS[l.kind]} /></span>
@@ -80,7 +84,7 @@ function ComingUp({ coming, today, onChange }) {
                 <span className="block text-gray-800 dark:text-life-50">{l.name}</span>
                 {(l.years || l.next || l.not_started) && <span className="block text-xs text-gray-600 dark:text-life-200">{l.years ? `${l.years} ${l.years === 1 ? 'year' : 'years'}` : l.not_started ? 'Not started yet' : l.next}</span>}
               </span>
-              <span className="text-xs text-gray-500 dark:text-life-300">{l.days_until === 0 ? (l.end_day === today ? 'today' : 'now') : inDays(l.start_day, today)}</span>
+              {l.late ? <Flag>late</Flag> : <span className="text-xs text-gray-500 dark:text-life-300">{l.days_until === 0 ? (l.end_day === today ? 'today' : 'now') : inDays(l.start_day, today)}</span>}
             </Link>
           </li>
         ))}
@@ -231,7 +235,7 @@ export default function Home({ user }) {
           </Card>
         )}
 
-        {shows('coming') && (s.coming.lines.length > 0 || s.coming.holidays.length > 0) && <ComingUp coming={s.coming} today={today} onChange={load} />}
+        {shows('coming') && (s.coming.lines.length > 0 || s.coming.holidays.length > 0 || s.coming.upkeep.length > 0) && <ComingUp coming={s.coming} today={today} onChange={load} />}
 
         {shows('kitchen') && (
           <Card title="Cooking" to="/week" link="The week" lead={s.first === 'kitchen'}>

@@ -7,7 +7,7 @@
  */
 import { upkeep, type DueState } from './upkeep.ts';
 import { calendar, type Entry } from './calendar.ts';
-import { planList, type PlanLine } from './planList.ts';
+import { planList, PLAN_SOON_DAYS, type PlanLine } from './planList.ts';
 import type { Fetcher } from './connections.ts';
 import type { Db } from './db.ts';
 import { homeServices, type ServiceView } from './homeServices.ts';
@@ -80,9 +80,10 @@ export type HomeSummary = {
   /**
    * Plans, holiday and trip years, and birthdays under way or in the next sixty days, soonest first, each once;
    * and the holidays with something to say today (start planning, take-down, notes for next year), which the card
-   * shows in place of that holiday's line.
+   * shows in place of that holiday's line. `upkeep` is the big things coming due in the same two months: a renewal,
+   * or a job done once a year or less often (clean the gutters). Weekly chores and monthly bills stay on Upkeep.
    */
-  coming: { lines: PlanLine[]; holidays: HolidayCard[] };
+  coming: { lines: PlanLine[]; holidays: HolidayCard[]; upkeep: ComingUpkeep[] };
   /** Unused coupons with a week or less left, soonest first. */
   coupons: { currency: string; soon: { id: number; label: string; store: string | null; cents_off: number | null; percent_off: number | null; days_left: number }[] };
   weather: { place: WeatherPlace; forecast: Forecast | null } | null;
@@ -93,6 +94,12 @@ export type HomeSummary = {
     sessions: number | null; minutes: number | null; enjoyed: number | null;
   };
 };
+
+export type ComingUpkeep = { id: number; name: string; kind: 'renewal' | 'job'; day: string; /** Below 0 is late. */ days_until: number };
+
+/** A renewal, or a job done once a year or less often. */
+const bigUpkeep = (j: { kind: string; every: { n: number; unit: string } | null }) =>
+  j.kind === 'renewal' || (j.kind === 'job' && j.every !== null && (j.every.unit === 'year' || (j.every.unit === 'month' && j.every.n >= 12)));
 
 const SETTING = 'home_hidden_cards';
 
@@ -135,7 +142,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
         choices: offered.map((card) => ({ key: card.key, label: card.label, shown: !out.includes(card.key) })),
         days: [], kitchen: { meals: [], to_buy: 0, short: [], use_up: null }, pantry: { low: [], expiring: [] }, projects: [],
         services: [], things: { low: [], total: 0 }, ammo: [], upkeep: [], collection: { total: 0, wanted: 0, lent: [], lately: [], added: [], added_count: 0 },
-        coming: { lines: [], holidays: [] }, coupons: { currency: '$', soon: [] }, weather: null,
+        coming: { lines: [], holidays: [], upkeep: [] }, coupons: { currency: '$', soon: [] }, weather: null,
         week: { start: day, end: day, events: null, meals_planned: null, meals_cooked: null, sessions: null, minutes: null, enjoyed: null },
       };
       // Only what will be shown is read, so a section put out of sight costs nothing.
@@ -199,7 +206,12 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
       }
       if (shows('coming')) {
         const lines = (await planList(db, owner, clock).list()).filter((l) => l.band === 'soon').slice(0, 8);
-        summary.coming = { lines, holidays: await holidays(db, owner, clock).cards() };
+        const soon = addDays(day, PLAN_SOON_DAYS);
+        const big = (await upkeep(db, owner, clock).list())
+          .filter((j) => bigUpkeep(j) && j.due.next_day !== null && j.due.next_day <= soon)
+          .map((j) => ({ id: j.id, name: j.name, kind: j.kind === 'renewal' ? 'renewal' as const : 'job' as const, day: j.due.next_day!, days_until: j.due.days_left ?? 0 }))
+          .sort((a, b) => a.day.localeCompare(b.day) || a.name.localeCompare(b.name)).slice(0, 4);
+        summary.coming = { lines, holidays: await holidays(db, owner, clock).cards(), upkeep: big };
       }
       if (shows('coupons')) {
         const sign = await db.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'shopping_currency'", [owner]);
