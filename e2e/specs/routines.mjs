@@ -82,7 +82,7 @@ say(`the evening has ${retinoidToday ? 'the retinoid step today (Monday or Thurs
   : (await eve.innerText()).includes('0 of 2 done') && !(await eve.innerText()).includes('Retinoid'));
 await morning.getByRole('checkbox').first().click(); await wait(600);
 say('ticking one step says 1 of 3 done', (await morning.innerText()).includes('1 of 3 done'));
-await morning.getByRole('button', { name: 'Check them all off' }).click(); await wait(700);
+await morning.getByRole('button', { name: 'All done' }).click(); await wait(700);
 const folded = page.locator('[data-routine-done="Skincare: Morning"]');
 say('checking them all off folds it to one line: all done', (await folded.innerText()).includes('Skincare: Morning: all done') && !(await morning.isVisible()));
 await folded.scrollIntoViewIfNeeded(); await page.screenshot({ path: shots + '/routines-home-folded-375.png' });
@@ -97,15 +97,15 @@ say('Home\'s routines have 44px buttons and fit 375px' + (homeSmall.length ? ` (
 await page.screenshot({ path: shots + '/routines-home-375.png', fullPage: true });
 
 // ---------- going through the cycle one step at a time ----------
-await cycle.getByRole('button', { name: 'Go through it' }).click(); await wait(600);
+await cycle.getByRole('button', { name: 'Step by step' }).click(); await wait(600);
 const go = page.locator('[data-go-through]');
-say('Go through it shows one big step at a time, starting with step 1 of 3', (await go.locator('[data-step-count]').innerText()).startsWith('Step 1 of 3') && (await go.locator('[data-step]').innerText()).includes('Wash your face'));
+say('Step by step shows one big step at a time, starting with step 1 of 3', (await go.locator('[data-step-count]').innerText()).startsWith('Step 1 of 3') && (await go.locator('[data-step]').innerText()).includes('Wash your face'));
 await go.getByRole('button', { name: 'Done', exact: true }).click(); await wait(500);
 say('Done ticks the step and moves to exfoliating, which has a wait', (await go.locator('[data-step]').innerText()).includes('Exfoliate') && (await go.locator('[data-wait]').innerText()).includes('Wait 1 min'));
 await go.getByRole('button', { name: 'Start the timer' }).click(); await wait(1500);
 say('the timer counts down', /^(1:00|0:5\d)/.test((await go.locator('[data-timer]').innerText()).trim()));
 const goSmall = await tooSmall([go.locator('button')]);
-say('every button in Go through it is 44px or more, and nothing scrolls sideways' + (goSmall.length ? ` (too small: ${goSmall})` : ''), goSmall.length === 0 && await noSideways());
+say('every button in Step by step is 44px or more, and nothing scrolls sideways' + (goSmall.length ? ` (too small: ${goSmall})` : ''), goSmall.length === 0 && await noSideways());
 await page.screenshot({ path: shots + '/routines-go-375.png' });
 await go.getByRole('button', { name: 'Done', exact: true }).click(); await wait(500);
 say('then the last step, moisturizer', (await go.locator('[data-step-count]').innerText()).startsWith('Step 3 of 3'));

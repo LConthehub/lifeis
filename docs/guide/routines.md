@@ -61,9 +61,9 @@ Some routines go round over several nights, such as a skin routine with a differ
 
 ## Using it
 
-On the front page each time of day shows the steps that fall today as boxes. Check them off. **Check them all off** does the rest at once, and **Start over** clears the checks.
+On the front page each time of day shows the steps that fall today as boxes. Check them off. **All done** checks off the rest at once, and **Start over** clears the checks.
 
-Choose **Go through it** to do the routine one big step at a time. **Done** checks the step off and moves on. **Back** and **Skip** move without checking. If a step has a wait, **Start the timer** counts it down. The timer is only for looking at. It does not stop anything.
+Choose **Step by step** to do the routine one big step at a time. **Done** checks the step off and moves on. **Back** and **Skip** move without checking. If a step has a wait, **Start the timer** counts it down. The timer is only for looking at. It does not stop anything.
 
 Checking off routines is free in the phone app, even after the trial of the paid parts.
 

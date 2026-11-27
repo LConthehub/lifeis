@@ -89,15 +89,17 @@ say('they are still there after reloading', (await card.innerText()).includes('D
 await card.getByRole('checkbox').nth(1).click(); await wait(800);
 say('the other numbered step keeps what it started as', (await card.innerText()).includes('Done: 25 min, 1.2 km'));
 await card.getByRole('checkbox').nth(2).click(); await wait(800);
+say('with every step checked, the workout folds to one line on Home', (await page.locator('[data-routine-done="Leg day: Workout"]').innerText()).includes('all done'));
+await page.getByRole('button', { name: 'Show Leg day: Workout again' }).click(); await wait(500);
 say('the plain step is just ticked', (await card.innerText()).includes('3 of 3 done') && (await card.locator('[data-numbers]').count()) === 0);
 
 // ---------- going through it ----------
 await card.getByRole('button', { name: 'Start over' }).click(); await wait(800);
-await card.getByRole('button', { name: 'Go through it' }).click(); await wait(600);
+await card.getByRole('button', { name: 'Step by step' }).click(); await wait(600);
 const go = page.locator('[data-go-through]');
-say('Go through it shows last time and the boxes on a numbered step', (await go.locator('[data-step]').innerText()).includes('Goblet squat') && (await go.locator('[data-last-time]').innerText()).startsWith('Last time:') && (await go.locator('[data-numbers] input').count()) === 3);
+say('Step by step shows last time and the boxes on a numbered step', (await go.locator('[data-step]').innerText()).includes('Goblet squat') && (await go.locator('[data-last-time]').innerText()).startsWith('Last time:') && (await go.locator('[data-numbers] input').count()) === 3);
 const goSmall = await tooSmall([go.locator('button'), go.locator('input'), go.locator('select')]);
-say('every control in Go through it is 44px or more, and nothing scrolls sideways' + (goSmall.length ? ` (too small: ${goSmall})` : ''), goSmall.length === 0 && await noSideways());
+say('every control in Step by step is 44px or more, and nothing scrolls sideways' + (goSmall.length ? ` (too small: ${goSmall})` : ''), goSmall.length === 0 && await noSideways());
 await go.getByRole('button', { name: 'Close' }).last().click(); await wait(500);
 
 // ---------- looking back ----------

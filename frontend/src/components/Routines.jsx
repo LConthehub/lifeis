@@ -7,7 +7,7 @@ import { lastDoneText, todayHere } from '../ago';
 import { buttonClass, cardClass, quietButtonClass, errorMessage } from './ui';
 
 /**
- * Routines as they are used: a checklist to tick (on the front page and the chore chart), and "Go through it",
+ * Routines as they are used: a checklist to tick (on the front page and the chore chart), and "Step by step",
  * one big step at a time with an optional wait timer. What each time holds, and which steps fall today, is worked
  * out on the server (core/src/routines.ts). Ticking is free for good, even after the trial of the paid parts.
  */
@@ -143,10 +143,10 @@ export function TimeChecklist({ time, onChange, onGo, onClose }) {
       </ul>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="mt-2 flex flex-wrap gap-2">
-        <button type="button" onClick={onGo} className={`${buttonClass} min-h-[44px]`}>Go through it</button>
+        <button type="button" onClick={onGo} className={`${buttonClass} min-h-[44px]`}>Step by step</button>
         {time.finished
           ? <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, false))} className={`${quietButtonClass} min-h-[44px]`}>Start over</button>
-          : <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, true))} className={`${quietButtonClass} min-h-[44px]`}>Check them all off</button>}
+          : <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, true))} className={`${quietButtonClass} min-h-[44px]`}>All done</button>}
         {onClose && <button type="button" onClick={onClose} aria-label={`Close ${time.title} for today`} className="ml-auto inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200">Close for today</button>}
       </div>
     </section>
@@ -266,7 +266,7 @@ export function GoThrough({ time: start, onChange, onClose }) {
   );
 }
 
-/** A list of times to tick, with "Go through it" for each. `times` is what /api/routine-day (or a chart's) gave. */
+/** A list of times to tick, with "Step by step" for each. `times` is what /api/routine-day (or a chart's) gave. */
 export function Checklists({ times, setTimes, onClose, hidden }) {
   const [going, setGoing] = useState(null);
   const change = (next) => setTimes((before) => before.map((t) => (t.id === next.id ? next : t)));
