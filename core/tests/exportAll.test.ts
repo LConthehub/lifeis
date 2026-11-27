@@ -574,6 +574,38 @@ it('holidays go out and come back: how each finds its day, each year, its lists 
   expect((await rows(ana).list())[0]!.years).toHaveLength(2);
 });
 
+it('a plain plan keeps its guest, card, gift and decoration through a download, the gift still joined to its spending, once', async () => {
+  const plan = await plans(db, ana, clock).create({ name: 'Maya birthday', start_day: '2046-09-10' });
+  const mine = holidays(db, ana, clock);
+  await mine.addPerson(plan.id, 'guest', { name: 'Aunt June' });
+  await mine.addPerson(plan.id, 'card', { name: 'Grandma' });
+  await mine.addDecor(plan.id, { spot: 'Table', label: 'Banner' });
+  await mine.addGift(plan.id, { who: 'Maya', idea: 'A kite' });
+  const gift = await db.get<{ id: number }>('SELECT g.id FROM holiday_gifts g WHERE g.plan_id = ?', [plan.id]);
+  await mine.updateGift(gift!.id, { status: 'bought', cents: 1800 });
+  const zip = (await exportEverything(db, ana, clock)).bytes;
+  const done = await bringIn(bob, zip, ['money', 'plans', 'holidays']);
+  for (const kind of done.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  const kept = async () => {
+    const there = (await db.get<{ id: number }>('SELECT id FROM plans WHERE owner_id = ? AND name = ?', [bob, 'Maya birthday']))!.id;
+    return {
+      people: (await db.all<{ role: string; name: string }>('SELECT role, name FROM holiday_people WHERE plan_id = ? ORDER BY role', [there])).map((p) => [p.role, p.name]),
+      decor: (await db.all<{ spot: string; label: string }>('SELECT spot, label FROM holiday_decor WHERE plan_id = ?', [there])).map((d) => [d.spot, d.label]),
+      gifts: (await db.all<{ who: string; idea: string; status: string; cents: number; label: string | null }>(
+        'SELECT g.who, g.idea, g.status, g.cents, e.label FROM holiday_gifts g LEFT JOIN money_entries e ON e.id = g.entry_id AND e.owner_id = ? WHERE g.plan_id = ?', [bob, there])).map((g) => [g.who, g.idea, g.status, g.cents, g.label]),
+      entries: (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM money_entries WHERE owner_id = ?', [bob]))!.n,
+    };
+  };
+  const first = await kept();
+  expect(first.people).toEqual([['card', 'Grandma'], ['guest', 'Aunt June']]);
+  expect(first.decor).toEqual([['Table', 'Banner']]);
+  expect(first.gifts).toEqual([['Maya', 'A kite', 'bought', 1800, 'Maya birthday gift: A kite']]); // joined to its spending again
+  expect(first.entries).toBe(1);
+  // The same file again adds nothing.
+  await bringIn(bob, zip, ['money', 'plans', 'holidays']);
+  expect(await kept()).toEqual(first);
+});
+
 it('what is new about things goes out and comes back in: asset numbers, insured, gone, and fields of your own', async () => {
   const stuff = inventory(db, ana, clock);
   const kind = (await stuff.createKind({ name: 'Household' }))[0]!.id;

@@ -1005,6 +1005,52 @@ async function ingredientFor(tx: Queries, owner: number, name: string): Promise<
 
 type Importer = (c: Ctx) => Promise<Done>;
 
+/** The guests, cards, gifts, decorations and countdown steps one plan keeps. A gift's spending entry is named after the holiday, or after the plan when it is not a holiday's year. */
+async function putLists(c: Ctx, plan: number, labelName: string, rows: Record<string, string>[]): Promise<void> {
+  const name = labelName;
+  let order = 1;
+  for (const l of rows) {
+    const list = cellOf(l, 'List').toLowerCase();
+    const label = clean(cellOf(l, 'Name'), 300);
+    const also = cellOf(l, 'Also');
+    if (!label) continue;
+    if (list === 'guest' || list === 'card') {
+      const member = also ? await c.tx.get<{ id: number }>('SELECT id FROM household_members WHERE owner_id = ? AND name = ? COLLATE NOCASE LIMIT 1', [c.owner, also]) : undefined;
+      await c.tx.run('INSERT INTO holiday_people (plan_id, role, name, user_id, member_id, done, note, sort_order) VALUES (?, ?, ?, NULL, ?, ?, ?, ?)',
+        [plan, list, label.slice(0, 100), member?.id ?? null, yesOf(cellOf(l, 'Done')) ? 1 : 0, clean(cellOf(l, 'Note'), 500), order]);
+    } else if (list === 'gift') {
+      const status = cellOf(l, 'Status').toLowerCase();
+      const member = also ? await c.tx.get<{ id: number }>('SELECT id FROM household_members WHERE owner_id = ? AND name = ? COLLATE NOCASE LIMIT 1', [c.owner, also]) : undefined;
+      const kept = ['idea', 'bought', 'wrapped', 'given'].includes(status) ? status : 'idea';
+      const cents = kept === 'idea' ? null : centsOf(cellOf(l, 'Amount'));
+      // The spending entry a bought gift made comes in with the spending; it is found again here so editing the gift does not make a second.
+      const entry = cents === null ? undefined : await c.tx.get<{ id: number }>(
+        `SELECT e.id FROM money_entries e WHERE e.owner_id = ? AND e.cents = ? AND e.label IN (?, ?) AND NOT EXISTS (SELECT 1 FROM holiday_gifts g WHERE g.entry_id = e.id) ORDER BY e.id LIMIT 1`,
+        [c.owner, cents, `${name} gift: ${label}`.slice(0, 200), `${name} gift`]);
+      // A gift for someone with a sign-in stays words only: the person is not looked up, so nothing links to another account.
+      await c.tx.run('INSERT INTO holiday_gifts (plan_id, who, for_user, for_member, idea, status, cents, entry_id, note, sort_order) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)',
+        [plan, (clean(cellOf(l, 'Where, or who it is for'), 100) ?? 'Someone'), member?.id ?? null, label, kept, cents, entry?.id ?? null, clean(cellOf(l, 'Note'), 500), order]);
+    } else if (list === 'decoration') {
+      const spot = clean(cellOf(l, 'Where, or who it is for'), 100);
+      if (!spot) continue;
+      const status = cellOf(l, 'Status').toLowerCase();
+      const thing = also ? await c.tx.get<{ id: number }>('SELECT id FROM items WHERE owner_id = ? AND name = ? COLLATE NOCASE ORDER BY id DESC LIMIT 1', [c.owner, also]) : undefined;
+      const fix = /found (broke|out)/.exec(status)?.[1] ?? null;
+      const need = /need (broke|out)/.exec(status)?.[1] ?? null;
+      await c.tx.run('INSERT INTO holiday_decor (plan_id, spot, label, thing_id, box_id, put_up, taken_down, boxed, fix, need, need_done, note, sort_order) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [plan, spot, label.slice(0, 200), thing?.id ?? null, status.includes('put up') ? 1 : 0, status.includes('taken down') ? 1 : 0, status.includes('boxed') ? 1 : 0, fix, need, status.includes('bought') ? 1 : 0, clean(cellOf(l, 'Note'), 500), order]);
+    } else if (list === 'countdown step') {
+      const rule = cellOf(l, 'Status');
+      if (!['night_before', 'morning_of', 'hours_before'].includes(rule)) continue;
+      const at = cellOf(l, 'Also');
+      const hours = wholeOf(cellOf(l, 'Amount'));
+      await c.tx.run('INSERT INTO holiday_steps (plan_id, words, rule, at_time, hours, done, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [plan, label, rule, /^([01]\d|2[0-3]):[0-5]\d$/.test(at) ? at : null, hours !== null && hours >= 1 && hours <= 72 ? hours : null, yesOf(cellOf(l, 'Done')) ? 1 : 0, order]);
+    } else continue;
+    order += 1;
+  }
+}
+
 const importers: Record<string, Importer> = {
   async places(c) {
     const d = blank();
@@ -2021,6 +2067,8 @@ ${mediaId}`);
     const seen = new Seen((await c.tx.all<{ name: string; start_day: string }>('SELECT name, start_day FROM plans WHERE owner_id = ?', [c.owner])).map((p) => `${labelKey(p.name)}\n${p.start_day}`));
     const items = tableOf(c.files, 'plan-items.csv')?.rows ?? [];
     const photos = tableOf(c.files, 'plan-photos.csv')?.rows ?? [];
+    const lists = tableOf(c.files, 'holiday-lists.csv')?.rows ?? [];
+    const yearKeys = new Set((tableOf(c.files, 'holiday-years.csv')?.rows ?? []).map((y) => `${labelKey(cellOf(y, 'Plan'))}\n${dayOf(cellOf(y, 'Starts'))}`));
     const filled = new Set<string>();
     let library = 0;
     for (const [at, row] of t.rows.entries()) {
@@ -2059,6 +2107,8 @@ ${mediaId}`);
         else library += 1;
       }
       if (lost) d.unlinked += 1;
+      // A holiday's year gets its lists when the holidays come in; any other plan gets them here, with its gifts named after the plan.
+      if (!yearKeys.has(`${key}\n${start}`)) await putLists(c, made.lastId, name, lists.filter((r) => labelKey(cellOf(r, 'Plan')) === key && dayOf(cellOf(r, 'Starts')) === start));
     }
     if (library) d.note = `${library} photo${library === 1 ? ' that is' : 's that are'} in your photo library, not in the download, ${library === 1 ? 'was' : 'were'} left out`;
     return d;
@@ -2111,47 +2161,7 @@ ${mediaId}`);
           [plan, id, year, /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : null, pounds !== null && pounds > 0 ? pounds : null, dayOf(cellOf(y, 'Put up on')), dayOf(cellOf(y, 'Take down on')),
             dayOf(cellOf(y, 'Taken down on')), centsOf(cellOf(y, 'Budget')), clean(cellOf(y, 'Notes for next year'), 5000), yesOf(cellOf(y, 'Notes for next year asked for')) ? 1 : 0]);
         // What a year keeps comes with a year that is new, never added to one already kept.
-        let order = 1;
-        for (const l of lists.filter((r) => cellOf(r, 'Plan').toLowerCase() === cellOf(y, 'Plan').toLowerCase() && cellOf(r, 'Starts') === start)) {
-          const list = cellOf(l, 'List').toLowerCase();
-          const label = clean(cellOf(l, 'Name'), 300);
-          const also = cellOf(l, 'Also');
-          if (!label) continue;
-          if (list === 'guest' || list === 'card') {
-            const member = also ? await c.tx.get<{ id: number }>('SELECT id FROM household_members WHERE owner_id = ? AND name = ? COLLATE NOCASE LIMIT 1', [c.owner, also]) : undefined;
-            await c.tx.run('INSERT INTO holiday_people (plan_id, role, name, user_id, member_id, done, note, sort_order) VALUES (?, ?, ?, NULL, ?, ?, ?, ?)',
-              [plan, list, label.slice(0, 100), member?.id ?? null, yesOf(cellOf(l, 'Done')) ? 1 : 0, clean(cellOf(l, 'Note'), 500), order]);
-          } else if (list === 'gift') {
-            const status = cellOf(l, 'Status').toLowerCase();
-            const member = also ? await c.tx.get<{ id: number }>('SELECT id FROM household_members WHERE owner_id = ? AND name = ? COLLATE NOCASE LIMIT 1', [c.owner, also]) : undefined;
-            const kept = ['idea', 'bought', 'wrapped', 'given'].includes(status) ? status : 'idea';
-            const cents = kept === 'idea' ? null : centsOf(cellOf(l, 'Amount'));
-            // The spending entry a bought gift made comes in with the spending; it is found again here so editing the gift does not make a second.
-            const entry = cents === null ? undefined : await c.tx.get<{ id: number }>(
-              `SELECT e.id FROM money_entries e WHERE e.owner_id = ? AND e.cents = ? AND e.label IN (?, ?) AND NOT EXISTS (SELECT 1 FROM holiday_gifts g WHERE g.entry_id = e.id) ORDER BY e.id LIMIT 1`,
-              [c.owner, cents, `${name} gift: ${label}`.slice(0, 200), `${name} gift`]);
-            // A gift for someone with a sign-in stays words only: the person is not looked up, so nothing links to another account.
-            await c.tx.run('INSERT INTO holiday_gifts (plan_id, who, for_user, for_member, idea, status, cents, entry_id, note, sort_order) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)',
-              [plan, (clean(cellOf(l, 'Where, or who it is for'), 100) ?? 'Someone'), member?.id ?? null, label, kept, cents, entry?.id ?? null, clean(cellOf(l, 'Note'), 500), order]);
-          } else if (list === 'decoration') {
-            const spot = clean(cellOf(l, 'Where, or who it is for'), 100);
-            if (!spot) continue;
-            const status = cellOf(l, 'Status').toLowerCase();
-            const thing = also ? await c.tx.get<{ id: number }>('SELECT id FROM items WHERE owner_id = ? AND name = ? COLLATE NOCASE ORDER BY id DESC LIMIT 1', [c.owner, also]) : undefined;
-            const fix = /found (broke|out)/.exec(status)?.[1] ?? null;
-            const need = /need (broke|out)/.exec(status)?.[1] ?? null;
-            await c.tx.run('INSERT INTO holiday_decor (plan_id, spot, label, thing_id, box_id, put_up, taken_down, boxed, fix, need, need_done, note, sort_order) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)',
-              [plan, spot, label.slice(0, 200), thing?.id ?? null, status.includes('put up') ? 1 : 0, status.includes('taken down') ? 1 : 0, status.includes('boxed') ? 1 : 0, fix, need, status.includes('bought') ? 1 : 0, clean(cellOf(l, 'Note'), 500), order]);
-          } else if (list === 'countdown step') {
-            const rule = cellOf(l, 'Status');
-            if (!['night_before', 'morning_of', 'hours_before'].includes(rule)) continue;
-            const at = cellOf(l, 'Also');
-            const hours = wholeOf(cellOf(l, 'Amount'));
-            await c.tx.run('INSERT INTO holiday_steps (plan_id, words, rule, at_time, hours, done, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
-              [plan, label, rule, /^([01]\d|2[0-3]):[0-5]\d$/.test(at) ? at : null, hours !== null && hours >= 1 && hours <= 72 ? hours : null, yesOf(cellOf(l, 'Done')) ? 1 : 0, order]);
-          } else continue;
-          order += 1;
-        }
+        await putLists(c, plan, name, lists.filter((r) => cellOf(r, 'Plan').toLowerCase() === cellOf(y, 'Plan').toLowerCase() && cellOf(r, 'Starts') === start));
       }
     }
     return d;
