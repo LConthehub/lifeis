@@ -323,6 +323,18 @@ say('an event is changed by tapping it', /Dentist, moved/.test(await text()));
 await page.getByRole('link', { name: /Shirt dress/ }).first().click(); await wait(800);
 say('and a project line on the calendar leads to the project', page.url().includes('/projects/'));
 
+// A very long title and genre, as a big server library can have, still fit a phone, and a year far off is not shown.
+await page.evaluate(async () => {
+  await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'book', title: 'Capital_All_Volumes_and_The_Communist_Manifesto_Complete_Unabridged_Edition', year: 2200, genres: ['Political Philosophy & Economic History & Social Theory Classics'], copy: { format: 'Audiobook' } }) });
+});
+await page.setViewportSize({ width: 375, height: 900 });
+await page.goto(base + '/media'); await wait(1200);
+const longCard = await page.locator('li', { hasText: 'Capital_All_Volumes' }).first().innerText();
+say('a long title and a long genre do not make the collection scroll sideways at 375 px', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+say('a year far in the future is left off', !longCard.includes('2200'), longCard.slice(0, 80));
+await page.locator('li', { hasText: 'Capital_All_Volumes' }).first().scrollIntoViewIfNeeded();
+await page.screenshot({ path: shots + '/collection-long-375.png' });
+
 await page.setViewportSize({ width: 390, height: 780 });
 await page.goto(base + '/calendar'); await wait(900);
 await page.screenshot({ path: shots + '/calendar-phone.png' });

@@ -171,7 +171,7 @@ export default function MediaPage({ library = null }) {
             <p className="text-sm text-gray-600 dark:text-life-200" data-format-hint>{emptyHint(type, format)}</p>
           )}
           {mine.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a title, a person, a genre or a format" aria-label="Find in the collection" className={`${inputClass} ${control} max-w-sm`} />}
-          <div className="grid grid-cols-2 items-end gap-3 sm:flex sm:flex-wrap" role="group" aria-label="Sort and narrow down">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-end gap-3 sm:flex sm:flex-wrap" role="group" aria-label="Sort and narrow down">
             {mine.length > 1 && (
               <div className="col-span-2 space-y-1 sm:col-span-1">
                 <span id="sort-by" className="block text-xs font-medium text-gray-600 dark:text-life-200">Sort by</span>
@@ -218,9 +218,9 @@ export default function MediaPage({ library = null }) {
           <BulkBar sel={sel} kind="title" list={shown.map((m) => m.id)} noun="titles" onDone={load} />
           <CollectionSummary titles={shown} />
           {shown.length === 0 ? <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>Nothing matches.</div> : (
-            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {shown.map((m) => (
-                <li key={m.id}>
+                <li key={m.id} className="min-w-0">
                   <div className={`${cardClass} flex h-full flex-col gap-2 hover:ring-life-300`}>
                   <div className="flex gap-2">
                   <PickBox sel={sel} id={m.id} name={m.title} />
@@ -228,7 +228,7 @@ export default function MediaPage({ library = null }) {
                     {localCover(m.cover) ? <img src={m.cover} alt="" loading="lazy" className="h-20 w-14 flex-none rounded object-cover" />
                       : <span aria-hidden="true" className="flex h-20 w-14 flex-none items-center justify-center rounded bg-life-50 text-2xl dark:bg-life-700"><Icon of={typeOf(m.type)[2]} size={28} /></span>}
                     <span className="min-w-0 flex-1">
-                      <span className="block font-medium text-life-800 dark:text-life-50">{m.title}{m.year ? <span className="font-normal text-gray-500 dark:text-life-300"> ({m.year})</span> : null}</span>
+                      <span className="block break-words font-medium text-life-800 dark:text-life-50">{m.title}{m.year && m.year <= new Date().getFullYear() + 5 ? <span className="font-normal text-gray-500 dark:text-life-300"> ({m.year})</span> : null}</span>
                       {m.creator && <span className="block truncate text-xs text-gray-500 dark:text-life-300">{m.creator}</span>}
                       <span className="mt-1 flex flex-wrap gap-1">
                         {m.formats.map((f) => <span key={f} className="rounded bg-life-50 px-1.5 text-[11px] text-life-700 dark:bg-life-700 dark:text-life-100">{[f, piecesText(f, m.pieces?.[f])].filter(Boolean).join(' · ')}</span>)}
