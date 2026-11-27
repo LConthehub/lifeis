@@ -130,7 +130,9 @@ async function fill(db: Db, me: number): Promise<void> {
   await making.addLine(dress.id, { label: '9 inch zipper', quantity: 1 });
   await making.addSession(dress.id, { day: day(-3), minutes: 90, note: 'Cut out the pieces' });
   await things.logUse(machine.id, { project_id: dress.id, day: day(-3) });
-  await making.createProject({ name: 'Garage shelves', activity: 'Woodworking', status: 'planned' });
+  // Left alone for three weeks, so the front page's "Don't forget" has something to say about it.
+  const shelves = await making.createProject({ name: 'Garage shelves', activity: 'Woodworking', status: 'planned' });
+  await db.run('UPDATE projects SET updated_at = ? WHERE id = ?', [`${day(-21)}T09:00:00+00:00`, shelves.id]);
 
   // ---- upkeep: jobs, bills, renewals, chores ----
   const jobs = upkeep(db, me);
@@ -144,6 +146,7 @@ async function fill(db: Db, me: number): Promise<void> {
   await jobs.create({ name: 'Internet', kind: 'bill', amount_cents: 6000, every_n: 1, every_unit: 'month', first_due: day(14), autopay: true });
   await jobs.create({ name: 'Car registration', kind: 'renewal', activity: 'Car', item_id: car.id, amount_cents: 18000, every_n: 1, every_unit: 'year', first_due: day(48) });
   await jobs.create({ name: 'Passport', kind: 'renewal', activity: 'Papers', every_n: 10, every_unit: 'year', first_due: day(700) });
+  await jobs.create({ name: 'Wipe the counters', kind: 'chore', every_n: 1, every_unit: 'day', last_done: { day: day(-12) } });
   const family = await jobs.addMember('Leo');
   const leo = family[0]!.id;
   const mia = (await jobs.addMember('Mia')).find((m) => m.name === 'Mia')!.id;

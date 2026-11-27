@@ -967,6 +967,25 @@ it('a recipe says what it is cooked in, and the week flags a meal that needs mor
   expect((await other.post('/api/kitchen/recipes', { title: 'Theirs', equipment: [{ item_id: dish.id }] })).status).toBe(404);
 });
 
+it("Don't forget names a few things quietly, and Later and Not now put one away for each person", async () => {
+  const admin = await owner();
+  const ana = await member(admin, 'ana');
+  expect((await admin.get('/api/home/dont-forget')).json).toEqual([]);
+  const soon = new Date(Date.now() + 86_400_000);
+  const soonDay = `${soon.getFullYear()}-${String(soon.getMonth() + 1).padStart(2, '0')}-${String(soon.getDate()).padStart(2, '0')}`;
+  await admin.put('/api/kitchen/pantry', { name: 'milk', quantity: 1, unit: 'cup', expires_on: soonDay });
+  const lines = (await admin.get('/api/home/dont-forget')).json;
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toMatchObject({ text: expect.stringMatching(/^milk: use by /), to: '/pantry', job_id: null });
+  // Someone else in the house sees nothing of it, and cannot put it away.
+  expect((await ana.get('/api/home/dont-forget')).json).toEqual([]);
+  expect((await ana.post(`/api/home/dont-forget/${lines[0].key}`, { action: 'later' })).status).toBe(404);
+  expect((await admin.post(`/api/home/dont-forget/${lines[0].key}`, { action: 'sometimes' })).status).toBe(400);
+  const after = await admin.post(`/api/home/dont-forget/${lines[0].key}`, { action: 'notnow' });
+  expect([after.status, after.json]).toEqual([200, []]);
+  expect((await admin.get('/api/home/dont-forget')).json).toEqual([]);
+});
+
 it('the front page gathers today, and each person chooses what it shows', async () => {
   const admin = await owner();
   const day = { 'X-Local-Day': new Date().toISOString().slice(0, 10) };
@@ -1074,7 +1093,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   await database.db.run('DROP TABLE personal_keys');
   await database.db.run('DROP TABLE item_shares');
   await database.db.run('ALTER TABLE kinds DROP COLUMN guard');
-  for (const table of ['ai_log', 'ai_connections', 'ai_clients', 'measure_entries', 'measures', 'home_service_pins', 'home_service_people', 'home_services', 'media_list_items', 'media_lists', 'item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients', 'measure_entries', 'measures', 'home_service_pins', 'home_service_people', 'home_services', 'media_list_items', 'media_lists', 'item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.

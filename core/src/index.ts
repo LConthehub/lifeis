@@ -35,6 +35,8 @@ export { connections, connectionsDue, EVERY_CHOICES, SERVER_KINDS } from './conn
 export type { Answer, Connection as ServerConnection, ConnectionInput, Connections, Fetcher, Sealer, ServerKind, SyncResult } from './connections.ts';
 export { displayName, shown as shownName, MAX_NAME } from './displayName.ts';
 export { home, CARDS } from './home.ts';
+export { dontForget } from './dontForget.ts';
+export type { DontForget, Line as DontForgetLine } from './dontForget.ts';
 export type { CardKey, Home, HomeSummary } from './home.ts';
 export { weather, sky, readForecast, WEATHER_SERVICE } from './weather.ts';
 export type { Forecast, FoundPlace, Units, Weather, WeatherDay, WeatherOf, WeatherPlace } from './weather.ts';

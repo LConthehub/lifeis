@@ -8,6 +8,7 @@ import { Badge, Open } from '../components/ServiceLinks';
 import { StartCard, WeeklyCard, START_CHANGED } from '../components/Start';
 import { RoutinesCard } from '../components/Routines';
 import HolidayCard from '../components/HolidayCard';
+import DontForget from '../components/DontForget';
 import Icon, { hasIcon } from '../components/Icon';
 import { whoText, whenText } from './Mail';
 import { money as moneyText } from '../components/Budget';
@@ -98,6 +99,8 @@ export default function Home({ user }) {
 
       <StartCard onChanged={load} />
       <WeeklyCard />
+
+      <DontForget />
 
       <AskCard />
       <AskBack />

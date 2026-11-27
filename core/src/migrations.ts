@@ -1856,6 +1856,21 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_ai_log_owner ON ai_log(owner_id, id)`,
     ],
   },
+  {
+    number: 59,
+    name: "Don't forget: what a person pushed away for a while",
+    // One row per person and line (pantry-12, project-3, job-5, bill-8). `until` is the last day it stays out of sight; `sig` is what the thing looked like
+    // when put off with Not now, so a change brings it back (empty for Later, which only waits). Nothing else about the lines is kept.
+    statements: [
+      `CREATE TABLE dont_forget_hidden (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        key TEXT NOT NULL,
+        until TEXT NOT NULL,
+        sig TEXT,
+        PRIMARY KEY (user_id, key)
+      )`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

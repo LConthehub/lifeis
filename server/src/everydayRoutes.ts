@@ -13,7 +13,7 @@ import { search, type SearchKind } from '../../core/src/index.ts';
 import { homeServices, manual } from '../../core/src/index.ts';
 import { prep, type PrepStepInput } from '../../core/src/index.ts';
 import { reminders, COVERS, EMAIL_SERVICE, NTFY_SERVICE, PUSH_SERVICE, type PushSender, type ReminderSettings } from '../../core/src/index.ts';
-import { displayName, home, life, lookups, MAX_THING_PHOTO, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
+import { displayName, dontForget, home, life, lookups, MAX_THING_PHOTO, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
 import { FILM_SERVICE, fillFrom, TMDB_API, TMDB_IMAGES } from '../../core/src/lookups.ts';
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
 import type { AssistantTools } from '../../core/src/index.ts';
@@ -155,6 +155,8 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
 
     // The front page: what today holds, gathered from every section the person uses.
     ['GET', /^\/api\/home$/, async (c) => ({ json: await home(db, c.user.id, c.clock, outside).summary() })],
+    ['GET', /^\/api\/home\/dont-forget$/, async (c) => ({ json: await dontForget(db, c.user.id, c.clock).lines() })],
+    ['POST', /^\/api\/home\/dont-forget\/([a-z]{3,8}-\d{1,15})$/, async (c) => ({ json: await dontForget(db, c.user.id, c.clock).push(c.path.split('/').pop()!, read.text(c.body, 'action')) })],
     ['PUT', /^\/api\/home\/cards$/, async (c) => {
       if (!Array.isArray(c.body.hidden)) throw notUnderstood('hidden');
       return { json: await home(db, c.user.id, c.clock, outside).hideCards(read.texts(c.body, 'hidden')) };
