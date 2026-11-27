@@ -83,9 +83,14 @@ say(`the evening has ${retinoidToday ? 'the retinoid step today (Monday or Thurs
 await morning.getByRole('checkbox').first().click(); await wait(600);
 say('ticking one step says 1 of 3 done', (await morning.innerText()).includes('1 of 3 done'));
 await morning.getByRole('button', { name: 'Check them all off' }).click(); await wait(700);
-say('ticking them all finishes it, and it counts the day: 1 of the last 7 days', (await morning.innerText()).includes('3 of 3 done') && (await morning.innerText()).includes('1 of the last 7 days'));
+const folded = page.locator('[data-routine-done="Skincare: Morning"]');
+say('checking them all off folds it to one line: all done', (await folded.innerText()).includes('Skincare: Morning: all done') && !(await morning.isVisible()));
+await folded.scrollIntoViewIfNeeded(); await page.screenshot({ path: shots + '/routines-home-folded-375.png' });
+await folded.getByRole('button', { name: 'Show Skincare: Morning again' }).click(); await wait(500);
+say('Show it brings it back, counted: 3 of 3, 1 of the last 7 days', (await morning.innerText()).includes('3 of 3 done') && (await morning.innerText()).includes('1 of the last 7 days'));
 await page.reload(); await wait(1500);
-say('the ticks are still there after reloading', (await morning.innerText()).includes('3 of 3 done'));
+say('after reloading, a time that is all done is not on Home', !(await morning.isVisible()) && !(await folded.isVisible()));
+say('its checks are still kept', (await send('GET', '/api/routine-day')).find((x) => x.title === 'Skincare: Morning')?.finished === true);
 say('the cycle starts on night 1: exfoliate, not the retinoid', (await cycle.innerText()).includes('night 1 of 4') && (await cycle.innerText()).includes('Exfoliate') && !(await cycle.innerText()).includes('Retinoid'));
 const homeSmall = await tooSmall([page.locator('[data-section="routines"], [data-routine-time]').locator('button')]);
 say('Home\'s routines have 44px buttons and fit 375px' + (homeSmall.length ? ` (too small: ${homeSmall})` : ''), homeSmall.length === 0 && await noSideways());
@@ -107,7 +112,11 @@ say('then the last step, moisturizer', (await go.locator('[data-step-count]').in
 await go.getByRole('button', { name: 'Done', exact: true }).click(); await wait(500);
 say('and it ends on All done', (await go.innerText()).includes('All done'));
 await go.getByRole('button', { name: 'Close' }).last().click(); await wait(600);
-say('closing leaves the checklist at 3 of 3', (await cycle.innerText()).includes('3 of 3 done'));
+say('closing leaves it all done, folded to one line', (await page.locator('[data-routine-done="4-night skin cycle: Evening"]').innerText()).includes('all done'));
+await eve.getByRole('button', { name: 'Close Skincare: Evening for today' }).click(); await wait(500);
+say('Close for today takes a time off Home', !(await eve.isVisible()));
+await page.reload(); await wait(1500);
+say('and it stays closed after reloading, though nothing in it was checked', !(await eve.isVisible()) && (await send('GET', '/api/routine-day')).find((x) => x.title === 'Skincare: Evening')?.finished === false);
 
 // ---------- the cycle waits ----------
 const night = async (n) => (await send('GET', `/api/routine-day?day=${inDays(n)}`)).find((x) => x.title === '4-night skin cycle: Evening')?.night;

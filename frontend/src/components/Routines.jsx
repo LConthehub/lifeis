@@ -102,7 +102,7 @@ export function StepNumbers({ step, value, onChange, big }) {
 }
 
 /** One time of a routine, with the steps that fall today as boxes to tick. */
-export function TimeChecklist({ time, onChange, onGo }) {
+export function TimeChecklist({ time, onChange, onGo, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [nums, setNums] = useState({});
@@ -147,6 +147,7 @@ export function TimeChecklist({ time, onChange, onGo }) {
         {time.finished
           ? <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, false))} className={`${quietButtonClass} min-h-[44px]`}>Start over</button>
           : <button type="button" disabled={busy} onClick={() => run(() => finishTime(time, true))} className={`${quietButtonClass} min-h-[44px]`}>Check them all off</button>}
+        {onClose && <button type="button" onClick={onClose} aria-label={`Close ${time.title} for today`} className="ml-auto inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200">Close for today</button>}
       </div>
     </section>
   );
@@ -266,24 +267,52 @@ export function GoThrough({ time: start, onChange, onClose }) {
 }
 
 /** A list of times to tick, with "Go through it" for each. `times` is what /api/routine-day (or a chart's) gave. */
-export function Checklists({ times, setTimes }) {
+export function Checklists({ times, setTimes, onClose, hidden }) {
   const [going, setGoing] = useState(null);
   const change = (next) => setTimes((before) => before.map((t) => (t.id === next.id ? next : t)));
   const open = times.find((t) => t.id === going);
   return (
     <>
-      {times.map((t) => <TimeChecklist key={t.id} time={t} onChange={change} onGo={() => setGoing(t.id)} />)}
+      {times.filter((t) => !hidden?.has(t.id)).map((t) => <TimeChecklist key={t.id} time={t} onChange={change} onGo={() => setGoing(t.id)} onClose={onClose && (() => onClose(t))} />)}
       {open && <GoThrough key={open.id} time={open} onChange={change} onClose={(last) => { change(last); setGoing(null); }} />}
     </>
   );
 }
 
-/** The front page's card: today's routines for this person and for everyone. Nothing shows when none falls today. */
+/** Times closed on the front page for today, kept on this device only: { day, ids }. */
+const CLOSED_KEY = 'lifeis.routines.closed';
+function closedToday() {
+  try { const c = JSON.parse(localStorage.getItem(CLOSED_KEY) || 'null'); return c && c.day === todayHere() ? c.ids : []; } catch { return []; }
+}
+function closeForToday(id) {
+  try { localStorage.setItem(CLOSED_KEY, JSON.stringify({ day: todayHere(), ids: [...new Set([...closedToday(), id])] })); } catch { /* private mode: closes until the page is left */ }
+}
+
+/**
+ * The front page's card: today's routines for this person and for everyone. A time that is all done, or closed for
+ * today, is not shown. One finished on this visit folds to a single line, with Show it, until the page is left.
+ */
 export function RoutinesCard() {
   const [times, setTimes] = useState(null);
-  const load = useCallback(() => { axios.get('/api/routine-day').then(({ data }) => setTimes(data)).catch(() => setTimes([])); }, []);
+  const [gone, setGone] = useState(() => new Set(closedToday()));
+  const [finishedHere, setFinishedHere] = useState(() => new Set());
+  const [allDone, setAllDone] = useState(false); // every time today was already done when the page opened
+  const load = useCallback(() => {
+    axios.get('/api/routine-day').then(({ data }) => { setAllDone(data.length > 0 && data.every((t) => t.finished)); setTimes(data.filter((t) => !t.finished)); }).catch(() => setTimes([]));
+  }, []);
   useEffect(() => { load(); }, [load]);
+  const track = (next) => setTimes((before) => {
+    const list = typeof next === 'function' ? next(before) : next;
+    // Only a time that just changed folds or unfolds, so one shown again stays shown while others are ticked.
+    const changed = list.filter((t) => !before.includes(t));
+    setFinishedHere((s) => { const n = new Set(s); changed.forEach((t) => (t.finished ? n.add(t.id) : n.delete(t.id))); return n; });
+    return list;
+  });
   if (times === null) return null;
+  const close = (t) => { closeForToday(t.id); setGone((g) => new Set([...g, t.id])); };
+  const open = times.filter((t) => !gone.has(t.id) && !finishedHere.has(t.id));
+  const folded = times.filter((t) => !gone.has(t.id) && finishedHere.has(t.id));
+  if (allDone || (times.length > 0 && open.length === 0 && folded.length === 0)) return null;
   if (times.length === 0) {
     return (
       <section className={cardClass} data-section="routines">
@@ -292,5 +321,15 @@ export function RoutinesCard() {
       </section>
     );
   }
-  return <div className="contents" data-section="routines"><Checklists times={times} setTimes={setTimes} /></div>;
+  return (
+    <div className="contents" data-section="routines">
+      {folded.map((t) => (
+        <section key={t.id} className={`${cardClass} flex flex-wrap items-center gap-x-4`} data-routine-done={t.title}>
+          <p role="status" className="mr-auto text-sm text-gray-700 dark:text-life-100">{t.title}: all done</p>
+          <button type="button" onClick={() => setFinishedHere((s) => { const n = new Set(s); n.delete(t.id); return n; })} aria-label={`Show ${t.title} again`} className="inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200">Show it</button>
+        </section>
+      ))}
+      <Checklists times={times.filter((t) => !gone.has(t.id))} hidden={finishedHere} setTimes={track} onClose={close} />
+    </div>
+  );
 }
