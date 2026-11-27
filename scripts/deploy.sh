@@ -5,8 +5,9 @@
 #   bash scripts/deploy.sh --check   run every test first, and stop if any fails
 #
 # Order matters, and is why this is a script: the new image is built BEFORE the running copy is stopped (so a build
-# that fails leaves Life Is running). While it is stopped, the data is only COPIED (a plain .tar, no compression,
-# so the downtime is short) and the copy's size is checked. If the copy can't be written the script stops before
+# that fails leaves Life Is running). The data is COPIED as a plain .tar, no compression: everything but the live
+# database while Life Is still runs, then only the live database and the keys while it is stopped, so the downtime is
+# a minute or two, and the copy's size is checked. If the copy can't be written the script stops before
 # stopping anything; if it comes out missing or too small, the version from before is started again and the new one
 # is not. Only with a good copy does the new version start. The copy is squeezed into
 # the final private/backups/before-<branch>-<stamp>.tgz AFTER the health check (or after the previous version is
@@ -70,9 +71,19 @@ raw="private/backups/before-$name-$stamp.tar" # a quick uncompressed copy, made 
 [ ! -e "$backup" ] && [ ! -e "$raw" ] && [ ! -e "$backup.partial" ] || fail "a backup named before-$name-$stamp already exists; wait a minute and try again (nothing was changed)"
 # Before anything is stopped: the backup's file must be one that can be written here.
 mkdir -p private/backups 2>/dev/null && : 2>/dev/null > "$raw" || fail "the backup file $raw can't be written; Life Is was not stopped and nothing was changed"
+# The copy is made in two parts, so Life Is is stopped only for the small one. First, while it still runs: every file
+# but the live database. That is nearly all of it (the copies the app keeps before each upgrade never change once
+# written), and it is the slow part. GNU tar answers 1 when a folder changed while it was read; that is fine here,
+# as the live database, the only file that changes, is copied in the second part.
+live="$raw.live"
+docker run --rm -v lifeis_lifeis_data:/data:ro --entrypoint sh lifeis-lifeis -c 'cd / && tar cf - --exclude="data/lifeis.db*" data; [ $? -le 1 ]' > "$raw" && [ -s "$raw" ] \
+  || { rm -f "$raw"; fail "the first part of the backup could not be copied; Life Is was not stopped and nothing was changed"; }
 docker compose stop
-docker run --rm -v lifeis_lifeis_data:/data:ro -v lifeis_lifeis_keys:/keys:ro --entrypoint tar lifeis-lifeis cf - /data /keys > "$raw" && size=$(wc -c < "$raw") || size=0
-if [ ! -s "$raw" ] || [ "$size" -le 100000 ]; then
+# Second, while stopped: the live database and the keys, added to the end of the first part.
+docker run --rm -v lifeis_lifeis_data:/data:ro -v lifeis_lifeis_keys:/keys:ro --entrypoint sh lifeis-lifeis -c 'cd / && tar cf - data/lifeis.db* keys' > "$live" \
+  && [ "$(wc -c < "$live")" -gt 100000 ] && tar -A -f "$raw" "$live" && rm -f "$live" && size=$(wc -c < "$raw") || size=0
+if [ "$size" -le 100000 ]; then
+  [ -s "$live" ] && echo "the live database's copy is kept at $live" || rm -f "$live"
   # No good backup, so the new version must not start. `docker compose up` would start the image just built;
   # `docker compose start` wakes the same container that was stopped a moment ago, which is the version from before.
   [ -s "$raw" ] && kept="kept at $raw" || { rm -f "$raw"; kept="nothing was kept"; } # an empty file of our own making is not a backup
