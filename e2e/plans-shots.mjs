@@ -62,7 +62,7 @@ try {
       if (look === 'light' || sizeName === 'phone') {
         const plan = await page.evaluate(async () => {
           const day = new Date(Date.now() + 12 * 86400000).toISOString().slice(0, 10);
-          const made = await (await fetch('/api/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: "Grandpa's memorial lunch", start_day: day, note: 'At the church hall after the service', parts: ['food', 'tasks'] }) })).json();
+          const made = await (await fetch('/api/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: "Grandpa's memorial lunch", start_day: day, note: 'At the community center, 1 pm', parts: ['food', 'tasks'] }) })).json();
           await fetch(`/api/plans/${made.id}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'task', label: 'Ask Loretta to bring the photo board' }) });
           await fetch(`/api/plans/${made.id}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'task', label: 'Set up chairs' }) });
           return made;
