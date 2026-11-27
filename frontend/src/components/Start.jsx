@@ -235,7 +235,7 @@ export function StartDialog({ onDone, onClose, fresh = false }) {
           </label>
           <label className="block space-y-1">
             <span className="block text-sm font-medium text-gray-700 dark:text-life-100">Children</span>
-            <input value={children} onChange={(e) => setChildren(e.target.value)} placeholder="Mia, Leo" autoComplete="off" className={field} />
+            <input value={children} onChange={(e) => setChildren(e.target.value)} placeholder="Hank, Loretta" autoComplete="off" className={field} />
             <span className="block text-xs text-gray-500 dark:text-life-300">They are added to the household, so chores can be given to them.</span>
           </label>
           <label className="block space-y-1">

@@ -468,7 +468,7 @@ function Seasons({ year, post, del }) {
       </ul>
       <form onSubmit={add} className="space-y-2">
         <div className="grid grid-cols-2 gap-2">
-          <input required value={form.label} onChange={set('label')} aria-label="Season name" placeholder="Name, e.g. Walleye opener" className={`${field} col-span-2`} />
+          <input required value={form.label} onChange={set('label')} aria-label="Season name" placeholder="Name, e.g. Deer season" className={`${field} col-span-2`} />
           {parts.length > 1 && <select value={form.part} onChange={set('part')} aria-label="Season for" className={`${field} col-span-2`}>{parts.map((p) => <option key={p} value={p}>{p === 'fishing' ? 'Fishing' : 'Hunting'}</option>)}</select>}
           <Field label="Opens"><input type="date" required value={form.opens_on} onChange={set('opens_on')} className={field} /></Field>
           <Field label="Closes"><input type="date" value={form.closes_on} min={form.opens_on} onChange={set('closes_on')} className={field} /></Field>
@@ -536,7 +536,7 @@ function Catches({ year, options, post, put, del }) {
       )}
       <form onSubmit={add} className="space-y-2 border-t border-life-100 pt-3 dark:border-life-700">
         <div className="grid grid-cols-2 gap-2">
-          <input required value={form.fish} onChange={set('fish')} aria-label="Fish" placeholder="Fish, e.g. walleye" className={`${field} col-span-2`} />
+          <input required value={form.fish} onChange={set('fish')} aria-label="Fish" placeholder="Fish, e.g. spot" className={`${field} col-span-2`} />
           <Field label="Day"><input type="date" value={form.day} onChange={set('day')} aria-label="Day caught" className={field} /></Field>
           <Field label="Water"><input value={form.water} onChange={set('water')} aria-label="Water" placeholder="In words" className={field} /></Field>
           <input type="number" min="0" step="any" value={form.length} onChange={set('length')} aria-label="Length (inches)" placeholder="Length, inches" className={field} />

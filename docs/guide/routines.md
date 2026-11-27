@@ -26,7 +26,7 @@ For a routine for a household member, you can also set the **chore points** each
 
 ## Routines for a pet
 
-A pet can have a routine, such as a dog's morning: feed, fresh water, walk. It shows on **every** person's front page, headed with the pet's name, like "Biscuit: Morning". It also shows on the pet's own page.
+A pet can have a routine, such as a dog's morning: feed, fresh water, walk. It shows on **every** person's front page, headed with the pet's name, like "George: Morning". It also shows on the pet's own page.
 
 1. Open the pet's page (in **Pets**) and look under **Routines**. Under **Add a routine for** the pet's name, choose **Add** on **Dog, daily** or **Cat, daily**. They are plain steps to copy, and every part is yours to change. Or choose **+ Make your own**.
 2. To use the pet's food, pick it under **Food** before you add. The feed steps then use it. Or open the routine with **Change** and choose **A thing it uses** on a step.
