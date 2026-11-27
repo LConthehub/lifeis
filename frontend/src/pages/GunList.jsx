@@ -106,7 +106,7 @@ export default function GunList() {
         </section>
       </div>
 
-      <PrintFrame phrase="Life is careful" title="List of guns" className="gun-sheet space-y-3 rounded-xl bg-card p-4 text-black print:bg-white sm:p-6" aria-label="The list">
+      <PrintFrame phrase="Life is cautious" title="List of guns" className="gun-sheet space-y-3 rounded-xl bg-card p-4 text-black print:bg-white sm:p-6" aria-label="The list">
         <header>
           <p className="text-sm text-gray-700">Made on {dayText(today())}</p>
           <p className="text-sm" data-totals>{plural(here.length, 'gun', 'guns')}{away.length ? ` here · ${away.length} no longer owned` : ''}</p>
