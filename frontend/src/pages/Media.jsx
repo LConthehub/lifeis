@@ -77,7 +77,12 @@ const emptyHint = (type, group) => Object.values(LIBRARIES).find((l) => l.type =
   ?? `Nothing on ${formatGroupName(type, group) || 'that format'} yet. Add a copy and say what it's on.`;
 
 const SORT_KEY = 'lifeis.mediaSort';
-const savedSort = () => { try { const s = localStorage.getItem(SORT_KEY); return SORTS.some(([id]) => id === s) ? s : 'title'; } catch { return 'title'; } };
+// ?sort=added (from Home's New line) wins for this visit; otherwise the person's last choice.
+const savedSort = () => {
+  const asked = new URLSearchParams(window.location.search).get('sort');
+  if (SORTS.some(([id]) => id === asked)) return asked;
+  try { const s = localStorage.getItem(SORT_KEY); return SORTS.some(([id]) => id === s) ? s : 'title'; } catch { return 'title'; }
+};
 const saveSort = (how) => { try { localStorage.setItem(SORT_KEY, how); } catch { /* remembered for this visit only */ } };
 const control = 'min-h-[44px]';
 

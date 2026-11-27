@@ -335,6 +335,18 @@ say('a year far in the future is left off', !longCard.includes('2200'), longCard
 await page.locator('li', { hasText: 'Capital_All_Volumes' }).first().scrollIntoViewIfNeeded();
 await page.screenshot({ path: shots + '/collection-long-375.png' });
 
+// Home's Collection card shows what is new: everything here was added today.
+await page.goto(base + '/'); await wait(1500);
+const fresh = page.locator('[data-new-titles]');
+await fresh.scrollIntoViewIfNeeded();
+const freshLinks = await fresh.getByRole('list', { name: 'New in the collection' }).getByRole('link').count();
+say('Home\'s Collection card has a New row of up to 8 titles, newest first', freshLinks === 8 && (await fresh.getByRole('link').first().getAttribute('aria-label')).startsWith('Capital_All_Volumes'));
+const more = fresh.getByRole('link', { name: /^and \d+ more$/ });
+say('and a link to the rest, sorted newest first, with no sideways scroll', await more.isVisible() && (await more.getAttribute('href')) === '/media?sort=added' && await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+await page.screenshot({ path: shots + '/home-new-titles-375.png' });
+await more.click(); await wait(1500);
+say('the collection opens sorted by recently added', (await page.getByLabel('Sort by').inputValue()) === 'added');
+
 await page.setViewportSize({ width: 390, height: 780 });
 await page.goto(base + '/calendar'); await wait(900);
 await page.screenshot({ path: shots + '/calendar-phone.png' });

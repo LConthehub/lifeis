@@ -386,6 +386,26 @@ export default function Home({ user }) {
             {s.collection.total === 0 ? <Quiet>Nothing in the collection yet.</Quiet> : (
               <div className="space-y-2 text-sm text-gray-800 dark:text-life-50">
                 <p className="text-xs text-gray-500 dark:text-life-300">{s.collection.total} titles{s.collection.wanted ? ` · ${s.collection.wanted} wanted` : ''}</p>
+                {s.collection.added?.length > 0 && (
+                  <div data-new-titles>
+                    <p className="font-medium">New</p>
+                    <ul className="mt-1 flex w-0 min-w-full gap-2 overflow-x-auto pb-1" aria-label="New in the collection">
+                      {s.collection.added.map((t) => (
+                        <li key={t.id} className="w-16 flex-none">
+                          <Link to={`/media/${t.id}`} className="block" aria-label={t.title}>
+                            {typeof t.cover === 'string' && t.cover.startsWith('/api/')
+                              ? <img src={t.cover} alt="" loading="lazy" className="h-24 w-16 rounded object-cover" />
+                              : <span aria-hidden="true" className="flex h-24 w-16 items-center justify-center rounded bg-life-50 dark:bg-life-700"><Icon of={t.type} size={24} /></span>}
+                            <span className="mt-1 block max-h-[2.5em] overflow-hidden break-words text-[11px] leading-tight text-gray-700 dark:text-life-100">{t.title}</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                    {s.collection.added_count > s.collection.added.length && (
+                      <Link to="/media?sort=added" className="inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200">and {s.collection.added_count - s.collection.added.length} more</Link>
+                    )}
+                  </div>
+                )}
                 {s.collection.lent.length > 0 && (
                   <p><span className="font-medium">Lent out:</span> {s.collection.lent.map((l, i) => (
                     <span key={`${l.id}-${l.to}`}>{i > 0 && ', '}<Link to={`/media/${l.id}`} className="hover:underline">{l.title}</Link> (with {l.to})</span>

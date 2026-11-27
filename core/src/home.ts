@@ -43,7 +43,7 @@ export const CARDS = [
   { key: 'upkeep', label: 'Upkeep: jobs due around the home', section: 'keeping' },
   { key: 'things', label: 'Things running low', section: 'keeping' },
   { key: 'services', label: 'Home lab: the links you pinned', section: 'keeping' },
-  { key: 'collection', label: 'Collection: lent out, and lately watched, read or heard', section: 'enjoying' },
+  { key: 'collection', label: 'Collection: what is new, lent out, and lately watched, read or heard', section: 'enjoying' },
   { key: 'week', label: 'This week in numbers', section: null },
 ] as const satisfies readonly { key: string; label: string; section: Section | null }[];
 export type CardKey = (typeof CARDS)[number]['key'];
@@ -74,6 +74,9 @@ export type HomeSummary = {
     wanted: number;
     lent: { id: number; title: string; to: string }[];
     lately: { id: number; title: string; type: string; day: string }[];
+    /** Added in the last two weeks (by hand, a scan or a server sync), newest first: the first eight, and how many in all. */
+    added: { id: number; title: string; type: string; cover: string | null }[];
+    added_count: number;
   };
   /** Yearly dates in the next sixty days, soonest first. */
   dates: YearlyDate[];
@@ -131,7 +134,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
         day, cards, first: cards.find((key) => key === asked) ?? null,
         choices: offered.map((card) => ({ key: card.key, label: card.label, shown: !out.includes(card.key) })),
         days: [], kitchen: { meals: [], to_buy: 0, short: [], use_up: null }, pantry: { low: [], expiring: [] }, projects: [],
-        services: [], things: { low: [], total: 0 }, ammo: [], upkeep: [], collection: { total: 0, wanted: 0, lent: [], lately: [] },
+        services: [], things: { low: [], total: 0 }, ammo: [], upkeep: [], collection: { total: 0, wanted: 0, lent: [], lately: [], added: [], added_count: 0 },
         dates: [], plans: [], holidays: [], coupons: { currency: '$', soon: [] }, weather: null,
         week: { start: day, end: day, events: null, meals_planned: null, meals_cooked: null, sessions: null, minutes: null, enjoyed: null },
       };
@@ -186,7 +189,13 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
           lent: titles.flatMap((t) => t.lent_to.map((to) => ({ id: t.id, title: t.title, to }))).slice(0, 12),
           lately: titles.filter((t) => t.last_on).sort((a, b) => (a.last_on! < b.last_on! ? 1 : -1)).slice(0, 5)
             .map((t) => ({ id: t.id, title: t.title, type: t.type, day: t.last_on! })),
+          added: [], added_count: 0,
         };
+        // New in the collection: owned titles added in the last 14 days (a wanted title is not new to the shelf).
+        const since = addDays(day, -14);
+        const fresh = titles.filter((t) => !t.wanted && !t.unowned && t.added_at.slice(0, 10) >= since).sort((a, b) => (a.added_at < b.added_at ? 1 : a.added_at > b.added_at ? -1 : b.id - a.id));
+        summary.collection.added = fresh.slice(0, 8).map((t) => ({ id: t.id, title: t.title, type: t.type, cover: t.cover ?? null }));
+        summary.collection.added_count = fresh.length;
       }
       if (shows('plans')) {
         summary.plans = (await db.all<{ id: number; name: string; start_day: string; end_day: string }>(

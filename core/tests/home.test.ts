@@ -33,7 +33,7 @@ it('an empty home shows every card, with nothing on them', async () => {
   expect([s.day, s.cards]).toEqual([TODAY, ['days', 'dates', 'kitchen', 'pantry', 'projects', 'upkeep', 'things', 'collection', 'week']]);
   expect(s.days.map((d) => [d.day, d.entries])).toEqual([[TODAY, []], ['2046-03-06', []], ['2046-03-07', []]]);
   expect([s.kitchen, s.pantry, s.projects, s.things, s.collection]).toEqual([
-    { meals: [], to_buy: 0, short: [], use_up: null }, { low: [], expiring: [] }, [], { low: [], total: 0 }, { total: 0, wanted: 0, lent: [], lately: [] }]);
+    { meals: [], to_buy: 0, short: [], use_up: null }, { low: [], expiring: [] }, [], { low: [], total: 0 }, { total: 0, wanted: 0, lent: [], lately: [], added: [], added_count: 0 }]);
 });
 
 it('the kitchen card names what is going off, and the best recipe for it, when something is', async () => {
@@ -89,7 +89,11 @@ it('it gathers today from every section', async () => {
   expect(s.pantry).toEqual({ low: ['Cream'], expiring: [{ name: 'Cream', days_left: 1 }] });
   expect(s.projects.map((p) => [p.name, p.status, p.short_count])).toEqual([['Shirt dress', 'active', 1]]); // ideas aren't "in hand"
   expect(s.things).toEqual({ total: 1, low: [{ id: dish.id, name: '8x8 baking dish', amount: '1', kind: 'Baking dishes' }] });
-  expect(s.collection).toEqual({ total: 1, wanted: 1, lent: [{ id: alien.id, title: 'Alien', to: 'Sam' }], lately: [{ id: alien.id, title: 'Alien', type: 'film', day: TODAY }] });
+  expect(s.collection).toEqual({ total: 1, wanted: 1, lent: [{ id: alien.id, title: 'Alien', to: 'Sam' }], lately: [{ id: alien.id, title: 'Alien', type: 'film', day: TODAY }],
+    added: [{ id: alien.id, title: 'Alien', type: 'film', cover: null }], added_count: 1 }); // a wanted title is not new to the shelf
+  // Added more than two weeks ago, it is no longer new.
+  await db.run('UPDATE media SET created_at = ? WHERE id = ?', ['2046-02-15T09:00:00Z', alien.id]);
+  expect([(await front.summary()).collection.added, (await front.summary()).collection.added_count]).toEqual([[], 0]);
 });
 
 it('a person chooses what shows, and a section they do not use brings no cards', async () => {
