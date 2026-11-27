@@ -72,8 +72,8 @@ for (const chore of ['Take out the trash', 'Clean the bathroom']) {
   await common().getByRole('listitem').filter({ hasText: chore }).getByRole('button', { name: 'Add' }).click(); await page.waitForTimeout(900);
 }
 for (const chore of ['Take out the trash', 'Clean the bathroom']) {
-  await page.getByRole('button', { name: `${chore} done` }).click(); await page.waitForTimeout(500);
-  await page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true }).click(); await page.waitForTimeout(1000);
+  // Done is one tap: it records today, by me, with no form.
+  await page.getByRole('button', { name: `${chore} done` }).click(); await page.waitForTimeout(1000);
 }
 const board = (await page.getByRole('region', { name: 'Chores this week' }).innerText()).replace(/\s+/g, ' ');
 check('the week’s points are counted for whoever did them', board.includes('ana') && board.includes('2 done') && board.includes('7 points'), board);
