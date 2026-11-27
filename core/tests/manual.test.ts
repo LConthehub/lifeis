@@ -78,6 +78,12 @@ it('the shared link shows everything but what is private, with the pets, until i
   expect(quiet).not.toContain('Made with Life Is');
   expect(quiet).toContain('Nothing on this page can be changed from here.');
   expect((await book.setCredit(true)).credit).toBe(true);
+  // The last day shows unless turned off; the link still stops working on it either way.
+  expect((await book.get()).show_until).toBe(true);
+  expect((await book.setShowUntil(false)).show_until).toBe(false);
+  expect((await manualFor(db, shared.token!, clock))!.expires_on).toBeNull();
+  expect(manualHtml((await manualFor(db, shared.token!, clock))!)).not.toContain('Available until');
+  expect((await book.setShowUntil(true)).show_until).toBe(true);
 
   // A new link replaces the old; without pets when asked; and its day ends it.
   const again = (await book.shareFor(1, false)).share;

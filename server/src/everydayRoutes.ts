@@ -215,6 +215,7 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ['PUT', /^\/api\/manual\/entries\/(\d{1,15})$/, async (c) => ({ json: await book(c).updateEntry(c.id, entryFrom(c.body)) })],
     ['DELETE', /^\/api\/manual\/entries\/(\d{1,15})$/, async (c) => ({ json: await book(c).removeEntry(c.id) })],
     ['PUT', /^\/api\/manual\/share$/, async (c) => ({ json: await book(c).shareFor(read.maybeWhole(c.body, 'days'), Object.hasOwn(c.body, 'pets') ? read.yesNo(c.body, 'pets') : true) })],
+    ['PUT', /^\/api\/manual\/until$/, async (c) => ({ json: await book(c).setShowUntil(read.yesNo(c.body, 'on')) })],
     ['PUT', /^\/api\/manual\/credit$/, async (c) => ({ json: await book(c).setCredit(read.yesNo(c.body, 'on')) })],
     ['DELETE', /^\/api\/manual\/share$/, async (c) => ({ json: await book(c).stopSharing() })],
     // Home services: links to programs at home. The person in charge keeps them; each person pins the ones they want on their Home page. See core/'s homeServices.ts.

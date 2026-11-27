@@ -178,7 +178,10 @@ function Sharing({ manual, onChanged }) {
           </div>
         </>
       )}
-      <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-life-100">
+      <label className="flex min-h-[44px] items-center gap-2 text-sm text-gray-700 dark:text-life-100">
+        <input type="checkbox" checked={manual.show_until} onChange={async (e) => { setError(''); try { onChanged((await axios.put('/api/manual/until', { on: e.target.checked })).data); } catch (err) { setError(errorMessage(err, "Couldn't save that")); } }} className="accent-life-600" /> Show 'Available until' on the shared page
+      </label>
+      <label className="flex min-h-[44px] items-center gap-2 text-sm text-gray-700 dark:text-life-100">
         <input type="checkbox" checked={manual.credit} onChange={async (e) => { setError(''); try { onChanged((await axios.put('/api/manual/credit', { on: e.target.checked })).data); } catch (err) { setError(errorMessage(err, "Couldn't save that")); } }} className="accent-life-600" /> Show 'Made with Life Is' on the shared page
       </label>
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}

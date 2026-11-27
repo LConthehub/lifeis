@@ -119,6 +119,12 @@ check('it has the quiet credit with a plain link to lifeis.living', seen.include
 check('it still says nothing can be changed, and loads fonts and the mark from here', seen.includes('Nothing on this page can be changed from here.') && await guest.evaluate(() => document.fonts.check('16px "Fraunces Variable"') && document.querySelector('img').naturalWidth > 0));
 check('the page does not scroll sideways at phone width', await guest.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
 check('the setting to show the credit is on in Sharing', await sharing.getByLabel("Show 'Made with Life Is' on the shared page").isChecked());
+const untilBox = sharing.getByLabel("Show 'Available until' on the shared page");
+check('the setting to show the last day is on too', await untilBox.isChecked());
+await untilBox.click(); await page.waitForTimeout(800);
+await guest.goto(link); await guest.waitForTimeout(400);
+check('turned off, guests do not see the last day', !(await guest.locator('body').innerText()).includes('Available until'));
+await untilBox.click(); await page.waitForTimeout(800);
 await sharing.getByLabel("Show 'Made with Life Is' on the shared page").click(); await page.waitForTimeout(800);
 await guest.goto(link); await guest.waitForTimeout(400);
 const quiet = (await guest.locator('body').innerText()).replace(/\s+/g, ' ');

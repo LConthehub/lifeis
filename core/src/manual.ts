@@ -38,6 +38,8 @@ export type Manual = {
   share: { on: boolean; token: string | null; expires_on: string | null; pets: boolean };
   /** Whether the shared page says it was made with Life Is (on unless the person turned it off). */
   credit: boolean;
+  /** Whether the shared page says until when the link works (on unless the person turned it off). */
+  show_until: boolean;
 };
 /** What the shared link shows: no private entries, nothing that can be changed. */
 export type SharedManual = { sections: { title: string; entries: Omit<ManualEntry, 'private' | 'place_id' | 'id' | 'section'>[] }[]; pets: Omit<ManualPet, 'id'>[]; services: SharedService[]; expires_on: string | null; credit: boolean };
@@ -73,6 +75,11 @@ const CREDIT = 'manual_credit';
 async function creditOf(db: Db, owner: number): Promise<boolean> {
   return (await db.get<{ value: string | null }>('SELECT value FROM user_settings WHERE user_id = ? AND key = ?', [owner, CREDIT]))?.value !== '0';
 }
+const SHOW_UNTIL = 'manual_show_until';
+/** Whether guests see "Available until" with the link's last day: on unless the person turned it off. */
+async function showUntilOf(db: Db, owner: number): Promise<boolean> {
+  return (await db.get<{ value: string | null }>('SELECT value FROM user_settings WHERE user_id = ? AND key = ?', [owner, SHOW_UNTIL]))?.value !== '0';
+}
 
 export function manual(db: Db, owner: number, clock: Clock = () => new Date()) {
   const now = () => stamp(clock());
@@ -97,6 +104,7 @@ export function manual(db: Db, owner: number, clock: Clock = () => new Date()) {
       pets: await petsOf(db, owner, clock),
       share: await share(),
       credit: await creditOf(db, owner),
+      show_until: await showUntilOf(db, owner),
     };
   }
 
@@ -136,6 +144,11 @@ export function manual(db: Db, owner: number, clock: Clock = () => new Date()) {
       return get();
     },
 
+    async setShowUntil(on: boolean): Promise<Manual> {
+      await db.run('INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value', [owner, SHOW_UNTIL, on ? '1' : '0']);
+      return get();
+    },
+
     async setCredit(on: boolean): Promise<Manual> {
       await db.run('INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value', [owner, CREDIT, on ? '1' : '0']);
       return get();
@@ -160,7 +173,8 @@ export async function manualFor(db: Db, token: string, clock: Clock = () => new 
     pets: row.pets === 1 ? (await petsOf(db, row.owner_id, clock)).map(({ id: _id, ...p }) => p) : [],
     // Links marked for guests that the person sharing may see: only the address that works away from home.
     services: await guestServices(db, row.owner_id),
-    expires_on: row.expires_on,
+    // The last day shows only if the person wants guests to see it; the link still stops working then.
+    expires_on: (await showUntilOf(db, row.owner_id)) ? row.expires_on : null,
     credit: await creditOf(db, row.owner_id),
   };
 }
