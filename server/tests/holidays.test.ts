@@ -93,7 +93,7 @@ it('adds Thanksgiving, plans a countdown with a frozen turkey, and plans next ye
 
   // Both years are plans, so they are found like any other.
   expect((await admin.get('/api/search?q=Thanksgiving')).json.some((r: { title: string }) => r.title === 'Thanksgiving 2027')).toBe(true);
-  expect((await admin.get('/api/home')).json.cards).toContain('holidays');
+  expect((await admin.get('/api/home')).json.cards).toContain('coming');
   expect((await admin.delete(`/api/plans/holidays/${made.json.id}`)).status).toBe(204);
   expect((await admin.get('/api/plans')).json.map((p: { name: string }) => p.name)).toEqual(['Thanksgiving 2027', 'Thanksgiving 2026']);
 });

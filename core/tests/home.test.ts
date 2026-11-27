@@ -30,7 +30,7 @@ beforeEach(async () => {
 
 it('an empty home shows every card, with nothing on them', async () => {
   const s = await front.summary();
-  expect([s.day, s.cards]).toEqual([TODAY, ['days', 'dates', 'kitchen', 'pantry', 'projects', 'upkeep', 'things', 'collection', 'week']]);
+  expect([s.day, s.cards]).toEqual([TODAY, ['days', 'coming', 'kitchen', 'pantry', 'projects', 'upkeep', 'things', 'collection', 'week']]);
   expect(s.days.map((d) => [d.day, d.entries])).toEqual([[TODAY, []], ['2046-03-06', []], ['2046-03-07', []]]);
   expect([s.kitchen, s.pantry, s.projects, s.things, s.collection]).toEqual([
     { meals: [], to_buy: 0, short: [], use_up: null }, { low: [], expiring: [] }, [], { low: [], total: 0 }, { total: 0, wanted: 0, lent: [], lately: [], added: [], added_count: 0 }]);
@@ -98,9 +98,9 @@ it('it gathers today from every section', async () => {
 
 it('a person chooses what shows, and a section they do not use brings no cards', async () => {
   let s = await front.hideCards(['pantry', 'collection']);
-  expect(s.cards).toEqual(['days', 'dates', 'kitchen', 'projects', 'upkeep', 'things', 'week']);
+  expect(s.cards).toEqual(['days', 'coming', 'kitchen', 'projects', 'upkeep', 'things', 'week']);
   expect(s.choices.filter((c) => !c.shown).map((c) => c.key)).toEqual(['pantry', 'collection']);
-  expect((await front.summary()).cards).toEqual(['days', 'dates', 'kitchen', 'projects', 'upkeep', 'things', 'week']); // remembered
+  expect((await front.summary()).cards).toEqual(['days', 'coming', 'kitchen', 'projects', 'upkeep', 'things', 'week']); // remembered
   s = await front.hideCards([]);
   expect(s.cards).toHaveLength(9);
   await expect(front.hideCards(['horoscope'])).rejects.toMatchObject({ name: 'Problem', status: 400 });
@@ -115,11 +115,11 @@ it('a person chooses what shows, and a section they do not use brings no cards',
   expect([theirs.cards.length, theirs.pantry.low]).toEqual([9, []]);
 });
 
-it('plans coming up and coupons about to run out get a card once there is one', async () => {
+it('plans come up on the Coming up card, and coupons about to run out get a card once there is one', async () => {
   const { plans } = await import('../src/plans.ts');
   const { shopping } = await import('../src/shopping.ts');
   const { addDays } = await import('../src/small.ts');
-  expect((await front.summary()).choices.map((c) => c.key)).not.toEqual(expect.arrayContaining(['plans', 'coupons']));
+  expect((await front.summary()).choices.map((c) => c.key)).not.toContain('coupons');
 
   const mine = plans(db, owner, clock);
   const easter = await mine.create({ name: 'Easter', start_day: addDays(TODAY, 12), end_day: addDays(TODAY, 14), note: null, story: null });
@@ -133,9 +133,16 @@ it('plans coming up and coupons about to run out get a card once there is one', 
   await shop.addCoupon({ label: 'Ran out', cents_off: 100, expires_on: addDays(TODAY, -1) });
 
   const s = await front.summary();
-  expect([s.cards.includes('plans'), s.cards.includes('coupons')]).toEqual([true, true]);
-  expect(s.plans.map((p) => [p.name, p.days_until])).toEqual([['House guests', 0], ['Easter', 12]]);
-  expect(s.plans[1]!.id).toBe(easter.id);
+  expect([s.cards.includes('coming'), s.cards.includes('coupons')]).toEqual([true, true]);
+  expect(s.coming.lines.map((p) => [p.name, p.days_until])).toEqual([['House guests', 0], ['Easter', 12]]);
+  expect(s.coming.lines[1]!.link).toBe(`/plans/${easter.id}`);
   expect(s.coupons.soon.map((c) => [c.label, c.days_left, c.store])).toEqual([['Whole shop', 0, null], ['Coffee', 2, 'Aldi']]);
   expect(s.coupons.currency).toBe('$');
+});
+
+it('Coming up stays hidden for someone who had hidden all three cards it replaced, and shows for someone who hid one', async () => {
+  await db.run("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'home_hidden_cards', ?)", [owner, JSON.stringify(['dates', 'plans', 'holidays'])]);
+  expect((await front.summary()).cards).not.toContain('coming');
+  await db.run("UPDATE user_settings SET value = ? WHERE user_id = ? AND key = 'home_hidden_cards'", [JSON.stringify(['dates']), owner]);
+  expect((await front.summary()).cards).toContain('coming');
 });

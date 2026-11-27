@@ -990,7 +990,7 @@ it('the front page gathers today, and each person chooses what it shows', async 
   const admin = await owner();
   const day = { 'X-Local-Day': new Date().toISOString().slice(0, 10) };
   const empty = (await admin.get('/api/home', day)).json;
-  expect([empty.day, empty.cards]).toEqual([day['X-Local-Day'], ['days', 'dates', 'kitchen', 'pantry', 'projects', 'upkeep', 'things', 'collection', 'week']]);
+  expect([empty.day, empty.cards]).toEqual([day['X-Local-Day'], ['days', 'coming', 'kitchen', 'pantry', 'projects', 'upkeep', 'things', 'collection', 'week']]);
   await admin.post('/api/calendar/events', { title: 'Dentist', day: empty.day, time: '14:30' });
   await admin.post('/api/kitchen/plan', { day: empty.day, title: 'Leftovers' });
   await admin.post('/api/projects', { name: 'Shirt dress', status: 'active' });
@@ -999,7 +999,7 @@ it('the front page gathers today, and each person chooses what it shows', async 
   expect([full.kitchen.meals.length, full.projects.map((p: { name: string }) => p.name)]).toEqual([1, ['Shirt dress']]);
 
   const fewer = (await admin.put('/api/home/cards', { hidden: ['pantry', 'things'] })).json;
-  expect(fewer.cards).toEqual(['days', 'dates', 'kitchen', 'projects', 'upkeep', 'collection', 'week']);
+  expect(fewer.cards).toEqual(['days', 'coming', 'kitchen', 'projects', 'upkeep', 'collection', 'week']);
   expect((await admin.put('/api/home/cards', { hidden: ['horoscope'] })).status).toBe(400);
   expect((await admin.put('/api/home/cards', {})).status).toBe(422);
   const other = await member(admin, 'partner');

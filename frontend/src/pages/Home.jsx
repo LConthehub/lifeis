@@ -7,7 +7,7 @@ import AskBack from '../components/AskBack';
 import { Badge, Open } from '../components/ServiceLinks';
 import { StartCard, WeeklyCard, START_CHANGED } from '../components/Start';
 import { RoutinesCard } from '../components/Routines';
-import HolidayCard from '../components/HolidayCard';
+import { HolidayRow } from '../components/HolidayCard';
 import DontForget from '../components/DontForget';
 import Icon, { hasIcon } from '../components/Icon';
 import { whoText, whenText } from './Mail';
@@ -31,7 +31,7 @@ const dayName = (day, today) => {
 /** `lead`: the card the person said matters most to them, shown first. */
 function Card({ title, to, link = 'Open', lead = false, children }) {
   return (
-    <section className={cardClass} style={lead ? { order: -1 } : undefined} data-lead={lead ? 'true' : undefined}>
+    <section className={cardClass} aria-label={title} style={lead ? { order: -1 } : undefined} data-lead={lead ? 'true' : undefined}>
       <div className="mb-2 flex items-baseline gap-2">
         <h2 className="flex-1 font-semibold text-life-800 dark:text-life-50">{title}</h2>
         {to && <Link to={to} className="text-xs text-life-600 hover:underline dark:text-life-200">{link} →</Link>}
@@ -56,6 +56,38 @@ const inDays = (day, today) => {
 
 const Quiet = ({ children }) => <p className="text-sm text-gray-500 dark:text-life-300">{children}</p>;
 const Flag = ({ children }) => <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">{children}</span>;
+
+const COMING_ICONS = { trip: 'trip', gathering: 'plan', birthday: 'birthday' };
+
+/**
+ * Coming up: plans, holidays, trips and birthdays under way or in the next two months, each once, with its next
+ * step. A holiday with something to do now (start planning, take down, notes for next year) shows its own line
+ * with that step. Not shown at all when there is nothing.
+ */
+function ComingUp({ coming, today, onChange }) {
+  const actions = new Map(coming.holidays.map((h) => [`holiday-${h.holiday_id}`, h]));
+  const onList = new Set(coming.lines.map((l) => l.key));
+  const loose = coming.holidays.filter((h) => !onList.has(`holiday-${h.holiday_id}`));
+  return (
+    <Card title="Coming up" to="/plans" link="All plans">
+      <ul className="space-y-3 text-sm">
+        {loose.map((h) => <HolidayRow key={`h-${h.holiday_id}`} card={h} onChange={onChange} />)}
+        {coming.lines.map((l) => actions.has(l.key) ? <HolidayRow key={l.key} card={actions.get(l.key)} onChange={onChange} /> : (
+          <li key={l.key}>
+            <Link to={l.link} className="flex items-baseline gap-2 hover:underline">
+              <span className="self-start"><Icon of={COMING_ICONS[l.kind]} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-gray-800 dark:text-life-50">{l.name}{l.years && <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{l.years} {l.years === 1 ? 'year' : 'years'}</span>}</span>
+                {(l.next || l.not_started) && <span className="block text-xs text-gray-600 dark:text-life-200">{l.not_started ? 'Not started yet' : l.next}</span>}
+              </span>
+              <span className="text-xs text-gray-500 dark:text-life-300">{l.days_until === 0 ? (l.end_day === today ? 'today' : 'now') : inDays(l.start_day, today)}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
 
 /** The front page: what today holds and what wants attention, from every section you use. */
 export default function Home({ user }) {
@@ -199,21 +231,7 @@ export default function Home({ user }) {
           </Card>
         )}
 
-        {shows('dates') && (
-          <Card title="Coming round" to="/calendar" link="Calendar">
-            {s.dates.length === 0 ? <Quiet>No birthdays or yearly dates in the next two months. Add one on the calendar and check "Every year".</Quiet> : (
-              <ul className="space-y-1 text-sm">
-                {s.dates.map((d) => (
-                  <li key={`${d.id}-${d.day}`} className="flex items-baseline gap-2">
-                    <span className="self-start"><Icon of="birthday" /></span>
-                    <span className="flex-1 text-gray-800 dark:text-life-50">{d.title}{d.years > 0 && <span className="ml-2 text-xs text-gray-500 dark:text-life-300">{d.years} {d.years === 1 ? 'year' : 'years'}</span>}</span>
-                    <span className="text-xs text-gray-500 dark:text-life-300">{inDays(d.day, today)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        )}
+        {shows('coming') && (s.coming.lines.length > 0 || s.coming.holidays.length > 0) && <ComingUp coming={s.coming} today={today} onChange={load} />}
 
         {shows('kitchen') && (
           <Card title="Cooking" to="/week" link="The week" lead={s.first === 'kitchen'}>
@@ -246,26 +264,6 @@ export default function Home({ user }) {
             <p className="mt-3 text-sm">
               <Link to="/groceries" className="text-life-700 hover:underline dark:text-life-100">{s.kitchen.to_buy === 0 ? 'Nothing on the grocery list' : `${s.kitchen.to_buy} to buy on the grocery list`} →</Link>
             </p>
-          </Card>
-        )}
-
-        {shows('holidays') && <HolidayCard cards={s.holidays} onChange={load} />}
-
-        {shows('plans') && (
-          <Card title="Plans coming up" to="/plans" link="All plans">
-            {s.plans.length === 0 ? <Quiet>Nothing planned in the next two months.</Quiet> : (
-              <ul className="space-y-1 text-sm">
-                {s.plans.map((p) => (
-                  <li key={p.id}>
-                    <Link to={`/plans/${p.id}`} className="flex items-baseline gap-2 hover:underline">
-                      <span className="self-start"><Icon of="plan" /></span>
-                      <span className="flex-1 text-gray-800 dark:text-life-50">{p.name}</span>
-                      <span className="text-xs text-gray-500 dark:text-life-300">{p.days_until === 0 ? (p.end_day === today ? 'today' : 'now') : inDays(p.start_day, today)}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
           </Card>
         )}
 

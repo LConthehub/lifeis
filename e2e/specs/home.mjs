@@ -32,7 +32,7 @@ if (await dialog.isVisible().catch(() => false)) {
 await page.goto(base + '/'); await wait(1200);
 let t = await text();
 console.log('cards: ' + await heads());
-say('the front page has the yearly dates and the week in numbers, and no weather yet', /Coming round/.test(t) && /This week in numbers/.test(t) && !/Open-Meteo/.test(t));
+say('the front page has the week in numbers, no Coming up card while nothing is coming, and no weather yet', !/Coming up/.test(t) && /This week in numbers/.test(t) && !/Open-Meteo/.test(t));
 
 // A birthday, every year.
 await page.goto(base + '/calendar'); await wait(900);
@@ -47,7 +47,7 @@ await page.getByRole('button', { name: 'Save' }).click(); await wait(900);
 await page.goto(base + '/'); await wait(1200);
 t = await text();
 const years = soon.getFullYear() - 1958;
-say(`the birthday shows as coming round, counting ${years} years: ` + flat(t).match(/Mom's birthday[^|]{0,60}/)?.[0], new RegExp(`Mom's birthday\\s*${years} years`).test(flat(t)) && /in 2 days/.test(t));
+say(`the birthday shows on Coming up, counting ${years} years: ` + flat(t).match(/Mom's birthday[^|]{0,60}/)?.[0], new RegExp(`Mom's birthday\\s*${years} years`).test(flat(t)) && /in 2 days/.test(t));
 
 // Something going off in the pantry, and a recipe that uses it: the kitchen card says so, and the line opens the pantry.
 await send('POST', '/api/kitchen/recipes', { title: 'Yogurt flatbread', servings: 4, ingredients_text: '2 cups flour\n1 cup yogurt', steps_text: 'Bake.' });

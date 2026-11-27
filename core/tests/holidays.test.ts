@@ -50,7 +50,7 @@ it('adds Thanksgiving as the fourth Thursday of November and makes this year as 
 
 it('suggests nothing: a new Life Is has no holidays', async () => {
   expect(await mine().list()).toEqual([]);
-  expect((await home(db, owner, clock).summary()).cards).not.toContain('holidays');
+  expect((await home(db, owner, clock).summary()).coming.holidays).toEqual([]);
 });
 
 it('keeps each person own holidays to themselves', async () => {
@@ -295,11 +295,11 @@ it('shows on Home six weeks ahead, what is next until take-down, asks for notes,
   const planId = made.years[0]!.plan_id;
   await mine().setYear(planId, { dinner_time: '17:00', turkey_pounds: 12 });
   await mine().addDecor(planId, { spot: 'Porch', label: 'Wreath' });
-  const card = async () => (await home(db, owner, clock).summary()).holidays[0];
+  const card = async () => (await home(db, owner, clock).summary()).coming.holidays[0];
 
   day = '2026-10-14'; // 43 days ahead: more than six weeks
   expect(await card()).toBeUndefined();
-  expect((await home(db, owner, clock).summary()).cards).toContain('holidays');
+  expect((await home(db, owner, clock).summary()).cards).toContain('coming');
   day = '2026-10-15'; // 42 days: six weeks to the day
   expect(await card()).toMatchObject({ stage: 'planning', days_until: 42, name: 'Thanksgiving' });
   expect((await card())!.next).toContain('Put the 12 lb turkey in the refrigerator to thaw');

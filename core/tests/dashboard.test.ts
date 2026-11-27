@@ -89,7 +89,7 @@ it('the front page shows the yearly dates coming, and the week in numbers', asyn
 
   time = new Date(2046, 2, 7, 10, 0, 0); // Wednesday: the week is still Monday to Sunday
   const s = await home(db, owner, clock).summary();
-  expect(s.dates.map((d) => [d.day, d.title, d.years])).toEqual([['2046-03-07', "Mum's birthday", 88]]);
+  expect(s.coming.lines.filter((l) => l.kind === 'birthday').map((l) => [l.start_day, l.name, l.years])).toEqual([['2046-03-07', "Mum's birthday", 88]]);
   expect(s.week).toEqual({ start: MONDAY, end: '2046-03-11', events: 2, meals_planned: 2, meals_cooked: 1, sessions: 2, minutes: 135, enjoyed: 1 });
 
   // Numbers only for the sections a person uses.

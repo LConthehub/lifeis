@@ -112,14 +112,14 @@ await gifts.getByLabel('What A scarf cost').fill('25'); await gifts.getByLabel('
 say('a gift marked bought with its cost is counted in the budget', /\$25\.00/.test(await region('Budget').innerText()));
 say('guests and cards are listed, and a guest is marked as come', /1 of 1 came/.test(await region('Who came').innerText()) && /Grandma/.test(await region('Cards').innerText()));
 await page.goto(base + '/'); await wait(1500);
-const homeCard = page.getByRole('region', { name: 'Holidays', exact: true });
+const homeCard = page.getByRole('region', { name: 'Coming up', exact: true });
 if (Date.parse(day1 + 'T12:00') - Date.now() <= 42 * 86400000) {
   t = await homeCard.innerText();
-  say('Home has a Holidays card saying what is next', /Thanksgiving/.test(t) && /Next:/.test(t));
+  say('Home\'s Coming up card says what is next for the holiday', /Thanksgiving/.test(t) && /Next:/.test(t));
   await homeCard.scrollIntoViewIfNeeded();
   await homeCard.screenshot({ path: `${shots}/holidays-home-card-375.png` });
   if (extra) await homeCard.screenshot({ path: `${extra}/holidays-home-card-375.png` });
-} else say('Home has no Holidays card more than six weeks ahead', (await homeCard.count()) === 0);
+} else say('more than six weeks ahead, Coming up shows no step for the holiday yet', !/Next:/.test(await homeCard.innerText().catch(() => '')));
 await page.goto(base + `/plans/holidays/${holiday.id}/${planId}`); await wait(1200);
 await shot('holidays-year-375', { fullPage: true });
 const small = await tooSmall([page.locator('main button'), page.locator('main select'), page.locator('main input:not([type=checkbox]):not([type=file])'), page.locator('main summary')]);

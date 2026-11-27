@@ -20,12 +20,13 @@ export default function HolidayCard({ cards, onChange }) {
       </div>
       {cards.length === 0
         ? <p className="text-sm text-gray-500 dark:text-life-300">Nothing to do for a holiday right now.</p>
-        : <ul className="space-y-3">{cards.map((c) => <Row key={c.holiday_id} card={c} onChange={onChange} />)}</ul>}
+        : <ul className="space-y-3">{cards.map((c) => <HolidayRow key={c.holiday_id} card={c} onChange={onChange} />)}</ul>}
     </section>
   );
 }
 
-function Row({ card, onChange }) {
+/** One holiday's line with what to do now; Home's Coming up card shows it in place of that holiday's plain line. */
+export function HolidayRow({ card, onChange }) {
   const navigate = useNavigate();
   const [notes, setNotes] = useState('');
   const [day, setDay] = useState(toDateInput(new Date()));

@@ -6,7 +6,8 @@
  * the only thing this saves.
  */
 import { upkeep, type DueState } from './upkeep.ts';
-import { calendar, type Entry, type YearlyDate } from './calendar.ts';
+import { calendar, type Entry } from './calendar.ts';
+import { planList, type PlanLine } from './planList.ts';
 import type { Fetcher } from './connections.ts';
 import type { Db } from './db.ts';
 import { homeServices, type ServiceView } from './homeServices.ts';
@@ -33,9 +34,7 @@ export const CARDS = [
   { key: 'routines', label: 'Routines: today’s checklists to check off', section: null },
   { key: 'weather', label: 'The weather', section: null },
   { key: 'mail', label: 'Email: what’s unread', section: null },
-  { key: 'dates', label: 'Birthdays and other yearly dates coming up', section: 'planning' },
-  { key: 'plans', label: 'Plans coming up', section: 'planning' },
-  { key: 'holidays', label: 'Holidays: what is next', section: 'planning' },
+  { key: 'coming', label: 'Coming up: plans, holidays, trips and birthdays', section: 'planning' },
   { key: 'kitchen', label: 'Cooking: today’s meals, the grocery list, pans you’re short of', section: 'eating' },
   { key: 'pantry', label: 'Pantry: running low and use soon', section: 'eating' },
   { key: 'coupons', label: 'Coupons about to run out', section: 'eating' },
@@ -78,12 +77,12 @@ export type HomeSummary = {
     added: { id: number; title: string; type: string; cover: string | null }[];
     added_count: number;
   };
-  /** Yearly dates in the next sixty days, soonest first. */
-  dates: YearlyDate[];
-  /** Plans under way or starting in the next sixty days, soonest first. */
-  plans: { id: number; name: string; start_day: string; end_day: string; /** 0 once it has begun. */ days_until: number }[];
-  /** Holidays with something to say today: time to start planning, what is next, take-down, notes for next year. */
-  holidays: HolidayCard[];
+  /**
+   * Plans, holiday and trip years, and birthdays under way or in the next sixty days, soonest first, each once;
+   * and the holidays with something to say today (start planning, take-down, notes for next year), which the card
+   * shows in place of that holiday's line.
+   */
+  coming: { lines: PlanLine[]; holidays: HolidayCard[] };
   /** Unused coupons with a week or less left, soonest first. */
   coupons: { currency: string; soon: { id: number; label: string; store: string | null; cents_off: number | null; percent_off: number | null; days_left: number }[] };
   weather: { place: WeatherPlace; forecast: Forecast | null } | null;
@@ -102,7 +101,10 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
     const row = await db.get<{ value: string | null }>('SELECT value FROM user_settings WHERE user_id = ? AND key = ?', [owner, SETTING]);
     try {
       const list: unknown = row?.value ? JSON.parse(row.value) : [];
-      return Array.isArray(list) ? CARDS.map((card) => card.key).filter((key) => list.includes(key)) : [];
+      if (!Array.isArray(list)) return [];
+      // Coming up took the place of three cards; it stays hidden for someone who had hidden all three.
+      if (['dates', 'plans', 'holidays'].every((old) => list.includes(old))) list.push('coming');
+      return CARDS.map((card) => card.key).filter((key) => list.includes(key));
     } catch {
       return [];
     }
@@ -118,14 +120,12 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
       const place = await skies.place();
       const hasMail = (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM mail_accounts WHERE owner_id = ?', [owner]))!.n > 0;
       const any = async (sql: string) => Boolean(await db.get(sql, [owner]));
-      const hasPlans = await any('SELECT 1 AS n FROM plans WHERE owner_id = ? LIMIT 1');
-      const hasHolidays = await any('SELECT 1 AS n FROM holidays WHERE owner_id = ? LIMIT 1');
       const hasServices = (await homeServices(db, owner, clock).pinned()).length > 0;
       const hasCoupons = await any('SELECT 1 AS n FROM coupons WHERE owner_id = ? AND used_on IS NULL LIMIT 1');
       // Routines for this person (or for everyone); a household member's show on the chore chart instead.
       const hasRoutines = Boolean(await db.get('SELECT 1 AS n FROM routines WHERE for_member IS NULL AND (for_user = ? OR for_user IS NULL) AND (owner_id = ? OR for_user = ? OR for_user IS NULL) LIMIT 1', [owner, owner, owner]));
       const offered = CARDS.filter((card) => (card.key === 'weather' ? place !== null : card.key === 'mail' ? hasMail : card.key === 'routines' ? hasRoutines
-        : (card.section === null || sections.includes(card.section)) && (card.key !== 'plans' || hasPlans) && (card.key !== 'holidays' || hasHolidays) && (card.key !== 'coupons' || hasCoupons) && (card.key !== 'services' || hasServices)));
+        : (card.section === null || sections.includes(card.section)) && (card.key !== 'coupons' || hasCoupons) && (card.key !== 'services' || hasServices)));
       const cards = offered.map((card) => card.key).filter((key) => !out.includes(key));
       const shows = (key: CardKey) => cards.includes(key);
       const asked = await problemCard(db, owner);
@@ -135,7 +135,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
         choices: offered.map((card) => ({ key: card.key, label: card.label, shown: !out.includes(card.key) })),
         days: [], kitchen: { meals: [], to_buy: 0, short: [], use_up: null }, pantry: { low: [], expiring: [] }, projects: [],
         services: [], things: { low: [], total: 0 }, ammo: [], upkeep: [], collection: { total: 0, wanted: 0, lent: [], lately: [], added: [], added_count: 0 },
-        dates: [], plans: [], holidays: [], coupons: { currency: '$', soon: [] }, weather: null,
+        coming: { lines: [], holidays: [] }, coupons: { currency: '$', soon: [] }, weather: null,
         week: { start: day, end: day, events: null, meals_planned: null, meals_cooked: null, sessions: null, minutes: null, enjoyed: null },
       };
       // Only what will be shown is read, so a section put out of sight costs nothing.
@@ -197,12 +197,10 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
         summary.collection.added = fresh.slice(0, 8).map((t) => ({ id: t.id, title: t.title, type: t.type, cover: t.cover ?? null }));
         summary.collection.added_count = fresh.length;
       }
-      if (shows('plans')) {
-        summary.plans = (await db.all<{ id: number; name: string; start_day: string; end_day: string }>(
-          'SELECT id, name, start_day, end_day FROM plans WHERE owner_id = ? AND end_day >= ? AND start_day <= ? ORDER BY start_day, id LIMIT 6', [owner, day, addDays(day, 60)]))
-          .map((p) => ({ ...p, days_until: Math.max(0, dayNumber(p.start_day) - dayNumber(day)) }));
+      if (shows('coming')) {
+        const lines = (await planList(db, owner, clock).list()).filter((l) => l.band === 'soon').slice(0, 8);
+        summary.coming = { lines, holidays: await holidays(db, owner, clock).cards() };
       }
-      if (shows('holidays')) summary.holidays = await holidays(db, owner, clock).cards();
       if (shows('coupons')) {
         const sign = await db.get<{ value: string | null }>("SELECT value FROM user_settings WHERE user_id = ? AND key = 'shopping_currency'", [owner]);
         summary.coupons = {
@@ -213,7 +211,6 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
             .map(({ expires_on, ...c }) => ({ ...c, days_left: dayNumber(expires_on) - dayNumber(day) })),
         };
       }
-      if (shows('dates')) summary.dates = (await calendar(db, owner, clock).yearly(day, 60)).slice(0, 8);
       if (shows('weather') && place) summary.weather = { place, forecast: (await skies.status()).forecast };
       if (shows('week')) {
         // 1970-01-01 was a Thursday, so this counts back to Monday.

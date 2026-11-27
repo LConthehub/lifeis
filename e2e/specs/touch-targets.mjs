@@ -29,7 +29,7 @@ if (await dialog.isVisible().catch(() => false)) {
   for (const area of ['Cooking and groceries', 'The calendar']) await dialog.getByText(area, { exact: true }).first().click();
   await dialog.getByRole('button', { name: 'Set up Life Is' }).click(); await wait(2500);
 }
-say('with no plans or coupons, the front page has no card for them', !/Plans coming up|Coupons about to run out/.test(await text()));
+say('with no plans or coupons, the front page has no card for them', !/Coming up|Coupons about to run out/.test(await text()));
 
 // The list: three shops' worth, then just the one you're in.
 await page.goto(base + '/groceries'); await wait(1000);
@@ -57,11 +57,11 @@ await page.locator('[data-plan-cost]').screenshot({ path: shots + '/plan-cost.pn
 
 await page.goto(base + '/'); await wait(1500);
 t = await text();
-say('the front page shows the plan coming up: ' + flat(t).match(/Sunday lunch.{0,40}/)?.[0], /Plans coming up[\s\S]*Sunday lunch[\s\S]*in 9 days/.test(t));
+say('the front page shows the plan coming up: ' + flat(t).match(/Sunday lunch.{0,40}/)?.[0], /Coming up[\s\S]*Sunday lunch[\s\S]*in 9 days/.test(t));
 say('and the coupon about to run out: ' + flat(t).match(/Coffee.{0,40}/)?.[0], /Coupons about to run out[\s\S]*Coffee[\s\S]*\$1\.50 off · Costco[\s\S]*tomorrow/.test(t));
 await page.screenshot({ path: shots + '/front-cards.png', fullPage: true });
 await page.getByRole('button', { name: 'Customize' }).click(); await wait(400);
-say('both can be put out of sight like any card', /Plans coming up/.test(await dialog.innerText()) && /Coupons about to run out/.test(await dialog.innerText()));
+say('both can be put out of sight like any card', /Coming up: plans/.test(await dialog.innerText()) && /Coupons about to run out/.test(await dialog.innerText()));
 // Sharing the list as text: the sheet, its choices, Copy, and Share where the browser has one.
 await page.addInitScript(() => {
   window.__copied = []; window.__shared = [];
