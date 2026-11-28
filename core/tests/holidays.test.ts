@@ -436,3 +436,38 @@ it('guests, cards, gifts and decorations work on any plan, not only a holiday', 
   await expect(holidays(db, other, clock).addGift(lunch.id, { who: 'Hank', idea: 'A frame' })).rejects.toEqual(problem(404));
   await expect(holidays(db, other, clock).gathering(lunch.id)).rejects.toEqual(problem(404));
 });
+
+it('makes a plan come back every year: the next year starts from it, with its parts and lists', async () => {
+  const p = plans(db, owner, clock);
+  const party = await p.create({ name: 'Block party 2026', start_day: '2026-10-10', parts: ['food', 'guests', 'tasks'] });
+  expect(party.yearly).toBeNull();
+  await p.addItem(party.id, { kind: 'task', label: 'Borrow the tables' });
+  await mine().addPerson(party.id, 'guest', { name: 'The Hills' });
+  const yearly = await mine().makeYearly(party.id, { rule: { kind: 'weekday', month: 10, weekday: 6, nth: 2 } });
+  // Named without its year; this plan is its first year.
+  expect(yearly.yearly).toEqual(expect.objectContaining({ name: 'Block party', rule_words: 'Second Saturday of October', year: 2026, next_due: false }));
+  expect(yearly.yearly!.years).toEqual([{ plan_id: party.id, year: 2026, day: '2026-10-10' }]);
+  await expect(mine().makeYearly(party.id, { rule: { kind: 'manual' } })).rejects.toEqual(problem(409));
+  // Once its day has gone, the next year can be started, from this one.
+  day = '2026-10-20';
+  expect((await p.get(party.id)).yearly!.next_due).toBe(true);
+  const next = await mine().startYear(yearly.yearly!.holiday_id);
+  expect([next.plan.name, next.day, next.plan.parts]).toEqual(['Block party 2027', '2027-10-09', ['food', 'guests', 'tasks']]);
+  expect(next.guests.map((g) => g.name)).toEqual(['The Hills']);
+  expect(next.plan.items_list.map((i) => [i.label, i.done])).toEqual([['Borrow the tables', false]]);
+  expect((await p.get(party.id)).yearly!.years.map((y) => y.year)).toEqual([2027, 2026]);
+  // Stopping leaves each year as a plan.
+  await mine().remove(yearly.yearly!.holiday_id);
+  expect((await p.get(party.id)).yearly).toBeNull();
+  expect((await p.list()).map((x) => x.name).sort()).toEqual(['Block party 2026', 'Block party 2027']);
+  // Someone else's plan is not theirs to make yearly.
+  const other = await person('other');
+  await expect(holidays(db, other, clock).makeYearly(party.id, { rule: { kind: 'manual' } })).rejects.toEqual(problem(404));
+});
+
+it("a holiday's first year starts with the parts a holiday uses", async () => {
+  const made = await mine().create(THANKSGIVING);
+  const plan = await plans(db, owner, clock).get(made.years[0]!.plan_id);
+  expect(plan.parts).toEqual(['food', 'guests', 'cards', 'gifts', 'decorations', 'budget', 'tasks']);
+  expect(plan.yearly!.name).toBe('Thanksgiving');
+});

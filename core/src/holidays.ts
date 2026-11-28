@@ -30,6 +30,8 @@ export type GiftState = (typeof GIFT_STATES)[number];
 export type Fix = 'broke' | 'out';
 export type Stage = 'quiet' | 'start' | 'planning' | 'take_down' | 'notes' | 'next_date';
 
+/** The parts a holiday's first year starts with. Any can be taken off, and later years keep what the last one had. */
+export const HOLIDAY_PARTS = ['food', 'guests', 'cards', 'gifts', 'decorations', 'budget', 'tasks'];
 const THAW_AT = '09:00';
 const MAX_ROWS = 300;
 /** Spending counts toward a year if it was made this long before the day, or this long after. */
@@ -208,7 +210,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
     const last = (await db.get<YearRow>(`SELECT ${YEAR_COLUMNS} FROM holiday_years WHERE holiday_id = ? AND year < ? ORDER BY year DESC LIMIT 1`, [h.id, year]));
     const planId = last
       ? (await plans().copy(last.plan_id, { name, start_day: day })).id
-      : (await plans().create({ name, start_day: day })).id;
+      : (await plans().create({ name, start_day: day, parts: HOLIDAY_PARTS })).id;
     await atomic(db, async (tx) => {
       if (last) await copyOwn(tx, last, (await planRow(tx, last.plan_id)).start_day, planId, day);
       else await tx.run('INSERT INTO holiday_years (plan_id, holiday_id, year, put_up_on, take_down_on) VALUES (?, ?, ?, ?, ?)', [planId, h.id, year, addDays(day, -7), addDays(day, 3)]);
@@ -526,6 +528,31 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       if (e.yearly !== 1) throw new Problem(400, 'Only a date that comes every year can become a holiday');
       if (await db.get('SELECT 1 AS x FROM holidays WHERE owner_id = ? AND event_id = ?', [owner, eventId])) throw new Problem(409, 'That date is already a holiday');
       return this.create({ name: e.title, rule: { kind: 'fixed', month: Number(e.day.slice(5, 7)), day: Number(e.day.slice(8, 10)) }, event_id: eventId, first_year: Number(e.day.slice(0, 4)) });
+    },
+
+    /**
+     * Make a plan come back every year. It becomes the first year of a yearly plan named after it, and each later
+     * year starts from the one before: the same parts and lists, nothing checked off. Stopping (`remove`) leaves
+     * every year as a plan.
+     */
+    async makeYearly(planId: number, input: { rule: DateRule; lead_weeks?: number | null }): Promise<Plan> {
+      const plan = await ownPlan(db, planId);
+      if (await isYear(db, planId)) throw new Problem(409, 'That plan already comes back every year');
+      if (await db.get('SELECT 1 AS x FROM outdoor_trip_years WHERE plan_id = ?', [planId])) throw new Problem(409, 'That is a year of a trip, which already comes back with its trip');
+      const rule = checkedRule(input.rule);
+      const lead = input.lead_weeks ?? 6;
+      if (!Number.isInteger(lead) || lead < 1 || lead > 26) throw new Problem(400, 'Start planning 1 to 26 weeks ahead');
+      const year = Number(plan.start_day.slice(0, 4));
+      // "Thanksgiving 2026" comes back as Thanksgiving: each year's plan carries its own year.
+      const name = clean(plan.name.replace(new RegExp(`\\s+${year}$`), ''), 100) ?? plan.name.slice(0, 100);
+      await atomic(db, async (tx) => {
+        const made = await tx.run(
+          `INSERT INTO holidays (owner_id, name, rule, month, day_of_month, weekday, nth, lead_weeks, event_id, first_year, tag_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)`,
+          [owner, name, rule.kind, rule.kind === 'manual' ? null : rule.month, rule.kind === 'fixed' ? rule.day : null, rule.kind === 'weekday' ? rule.weekday : null,
+            rule.kind === 'weekday' ? rule.nth : null, lead, await tagFor(tx, name), now(), now()]);
+        await tx.run('INSERT INTO holiday_years (plan_id, holiday_id, year) VALUES (?, ?, ?)', [planId, made.lastId, year]);
+      });
+      return plans().get(planId);
     },
 
     async update(id: number, input: { name?: string | null; rule?: DateRule; lead_weeks?: number | null }): Promise<HolidaySummary> {

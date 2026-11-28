@@ -54,7 +54,7 @@ export { planList, PLAN_SOON_DAYS } from './planList.ts';
 export type { PlanLine, PlanKind, PlanBand, PlanList } from './planList.ts';
 export type { OnWeek } from './plans.ts';
 export type { PlanPart } from './plans.ts';
-export type { Plan, PlanInput, PlanItem, PlanItemInput, PlanItemKind, PlanPhoto, Plans, PlanSummary, PlanWhen } from './plans.ts';
+export type { Plan, PlanInput, PlanItem, PlanItemInput, PlanItemKind, PlanPhoto, Plans, PlanSummary, PlanWhen, PlanYearly } from './plans.ts';
 export { photoLibrary, PHOTO_SERVICE } from './photos.ts';
 export type { LibraryPhoto, PhotoLibrary, Photos } from './photos.ts';
 export { shopping, sizeOf } from './shopping.ts';

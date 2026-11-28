@@ -1917,6 +1917,16 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE plan_items ADD COLUMN job_id INTEGER REFERENCES upkeep_jobs(id) ON DELETE SET NULL`,
     ],
   },
+  {
+    number: 64,
+    name: "A holiday's year shows its parts",
+    // A holiday's year opens as a plan, which shows only the parts it has checked. Years made before this have guests,
+    // cards, gifts and decorations that no part was checked for, so check them (and Food and Budget, which every year had).
+    // No table changes. A part listed twice does no harm: parts are read as a set.
+    statements: [
+      `UPDATE plans SET parts = COALESCE(parts || ',', 'tasks,bring,') || 'food,guests,cards,gifts,decorations,budget' WHERE id IN (SELECT plan_id FROM holiday_years)`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

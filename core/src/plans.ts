@@ -20,6 +20,7 @@
  */
 import { calendar, type Entry } from './calendar.ts';
 import { atomic, type Db, type Queries, type Value } from './db.ts';
+import { ruleFromColumns, ruleWords, type DateRule, type RuleColumns } from './holidayDates.ts';
 import { inventory } from './inventory.ts';
 import { Problem } from './problem.ts';
 import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
@@ -139,7 +140,18 @@ export type PlanSummary = {
   /** The parts it shows, in order. */
   parts: PlanPart[];
 };
-export type Plan = PlanSummary & { story: string | null; items_list: PlanItem[]; photos_list: PlanPhoto[]; /** What the calendar holds for its days, once they've come. */ happened: Entry[] };
+/** For a plan that comes back every year: what it is a year of, how it finds its day, and its other years, newest first. */
+export type PlanYearly = {
+  holiday_id: number; name: string; rule: DateRule; rule_words: string; lead_weeks: number; year: number;
+  years: { plan_id: number; year: number; day: string }[];
+  /** No year of it is today or still ahead, so the next one can be started from the latest. */
+  next_due: boolean;
+};
+export type Plan = PlanSummary & {
+  story: string | null; items_list: PlanItem[]; photos_list: PlanPhoto[]; /** What the calendar holds for its days, once they've come. */ happened: Entry[];
+  /** Set when it comes back every year (see holidays.ts); null for a one-time plan. */
+  yearly: PlanYearly | null;
+};
 
 const MAX_DAYS = 62;
 const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -276,7 +288,19 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
     const happened = found.start_day <= today
       ? (await calendar(db, owner, clock).between(found.start_day, dayNumber(lastSeen) - dayNumber(found.start_day) + 1)).filter((e) => ['meal', 'session', 'media'].includes(e.kind))
       : [];
-    return { ...summary!, story: found.story, items_list: await itemsOf(db, id), photos_list: await photosOf(db, id), happened };
+    return { ...summary!, story: found.story, items_list: await itemsOf(db, id), photos_list: await photosOf(db, id), happened, yearly: await yearlyOf(id) };
+  }
+
+  /** What a plan is a year of, when it comes back every year. */
+  async function yearlyOf(id: number): Promise<PlanYearly | null> {
+    const h = await db.get<RuleColumns & { holiday_id: number; name: string; lead_weeks: number; year: number }>(
+      `SELECT h.id AS holiday_id, h.name, h.rule, h.month, h.day_of_month, h.weekday, h.nth, h.lead_weeks, y.year
+       FROM holiday_years y JOIN holidays h ON h.id = y.holiday_id WHERE y.plan_id = ? AND h.owner_id = ?`, [id, owner]);
+    if (!h) return null;
+    const years = await db.all<{ plan_id: number; year: number; day: string }>(
+      'SELECT y.plan_id, y.year, p.start_day AS day FROM holiday_years y JOIN plans p ON p.id = y.plan_id WHERE y.holiday_id = ? AND p.owner_id = ? ORDER BY y.year DESC', [h.holiday_id, owner]);
+    const rule = ruleFromColumns(h);
+    return { holiday_id: h.holiday_id, name: h.name, rule, rule_words: ruleWords(rule), lead_weeks: h.lead_weeks, year: h.year, years, next_due: !years.some((y) => y.day >= todayOf(clock)) };
   }
 
   const planOfItem = async (q: Queries, itemId: number): Promise<number> => {

@@ -44,6 +44,11 @@ export function checkedRule(rule: DateRule): DateRule {
   return { kind: 'weekday', month: rule.month, weekday: rule.weekday, nth: rule.nth };
 }
 
+/** A rule as the database keeps it, one column for each piece. */
+export type RuleColumns = { rule: 'fixed' | 'weekday' | 'manual'; month: number | null; day_of_month: number | null; weekday: number | null; nth: number | null };
+export const ruleFromColumns = (h: RuleColumns): DateRule =>
+  h.rule === 'fixed' ? { kind: 'fixed', month: h.month!, day: h.day_of_month! } : h.rule === 'weekday' ? { kind: 'weekday', month: h.month!, weekday: h.weekday!, nth: h.nth! } : { kind: 'manual' };
+
 /** The holiday's day in one year; null for a rule the person sets each year. */
 export function dateInYear(rule: DateRule, year: number): string | null {
   if (rule.kind === 'manual') return null;

@@ -39,6 +39,10 @@ export function holidayRoutes(db: Db): Route[] {
     // Guests, cards, gifts and decorations of any plan (a birthday's gifts, a lunch's guests), changed through the addresses below.
     ['GET', at('/gathering/:id'), async (c) => ({ json: await mine(c).gathering(c.id) })],
     ['POST', at('/from-event'), async (c) => ({ status: 201, json: await mine(c).fromEvent(needed(read.maybeWhole(c.body, 'event_id'), 'event_id')) })],
+    // Make a plan come back every year. Answers with the plan, now the first year of a yearly one.
+    ['POST', at('/from-plan'), async (c) => ({
+      status: 201, json: await mine(c).makeYearly(needed(read.maybeWhole(c.body, 'plan_id'), 'plan_id'), { rule: ruleFrom(c.body), lead_weeks: read.maybeWhole(c.body, 'lead_weeks') }),
+    })],
     ['GET', at('/:id'), async (c) => ({ json: await mine(c).get(c.id) })],
     ['PUT', at('/:id'), async (c) => ({
       json: await mine(c).update(c.id, {
