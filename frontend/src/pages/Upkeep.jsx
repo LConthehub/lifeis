@@ -4,6 +4,7 @@ import Icon from '../components/Icon';
 import axios from 'axios';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import { lastDoneText, todayHere } from '../ago';
+import FirstStep from '../components/FirstStep';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
 const UNITS = [['day', 'days'], ['week', 'weeks'], ['month', 'months'], ['year', 'years']];
@@ -333,6 +334,7 @@ export function JobPage() {
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => setModal('done')} className={buttonClass}><Icon of="done" /> {doneWord(job)}</button>
           {job.every_reading && <button type="button" onClick={() => setModal('reading')} className={quietButtonClass}>Note the {job.reading_unit || 'reading'}</button>}
+          <FirstStep kind="chore" id={id} onChanged={load} />
           {job.mine && <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Change</button>}
         </div>
         {said && <p className="text-sm text-life-700 dark:text-life-100" role="status">{said}</p>}

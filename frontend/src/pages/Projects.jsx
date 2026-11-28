@@ -6,6 +6,7 @@ import { hintsFor, kindChoices } from '../projectKinds';
 import Budget from '../components/Budget';
 import { PlanGoal } from '../components/Goals';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
+import FirstStep from '../components/FirstStep';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
 
 const STATUSES = [['idea', 'An idea'], ['planned', 'Planned'], ['active', 'Working on it'], ['paused', 'Paused'], ['done', 'Finished'], ['dropped', 'Dropped']];
@@ -164,6 +165,7 @@ export function ProjectPage() {
           <select value={project.status} onChange={(e) => setStatus(e.target.value)} aria-label="Where it's at" className={inputClass.replace('w-full', 'w-auto')}>
             {STATUSES.map(([sid, label]) => <option key={sid} value={sid}>{label}</option>)}
           </select>
+          {open && <FirstStep kind="project" id={project.id} onChanged={load} />}
           <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Edit</button>
         </div>
         <p className="text-sm text-gray-500 dark:text-life-300">

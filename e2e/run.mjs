@@ -85,6 +85,7 @@ const SUITE = [
   { specs: ['workouts'], account: TRIAL },
   { specs: ['measures'], account: TRIAL },
   { specs: ['printouts'], account: TRIAL },
+  { specs: ['first-step'], account: TRIAL },
   { specs: ['holidays'], account: TRIAL },
   { specs: ['trips'], account: TRIAL },
   { specs: ['plan-parts'], account: TRIAL },

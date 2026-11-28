@@ -4,6 +4,7 @@ import SubChips, { ROUTINE_CHIPS } from '../components/SubChips';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import { lastDoneText, todayHere } from '../ago';
 import { Checklists, sentNumbers, typed, waitText } from '../components/Routines';
+import FirstStep from '../components/FirstStep';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 
 /**
@@ -318,6 +319,7 @@ export default function RoutinesPage() {
                 <p className="text-xs text-gray-500 dark:text-life-300">{r.kind === 'workout' ? 'Workout · ' : ''}{r.who_kind === 'me' ? 'For you' : r.who_kind === 'everyone' ? 'For everyone' : r.who_kind === 'member' ? `For ${r.who}, on the chore chart` : r.who_kind === 'pet' ? `For ${r.who}, on every front page` : `For ${r.who}`}{r.cycle_length ? ` · ${r.cycle_length}-night cycle` : ''}{r.points ? ` · ${r.points} points a time` : ''}</p>
               </div>
               {r.kind === 'workout' && <button type="button" onClick={() => setLooking(r)} className={`${quietButtonClass} min-h-[44px]`} aria-label={`Look back at ${r.name}`}>Look back</button>}
+              {r.kind !== 'workout' && <FirstStep kind="routine" id={r.id} onChanged={load} />}
               {r.mine && <button type="button" onClick={() => setModal({ routine: r })} className={`${quietButtonClass} min-h-[44px]`} aria-label={`Change ${r.name}`}>Change</button>}
             </div>
             <ul className="mt-1 space-y-0.5 text-sm text-gray-700 dark:text-life-100">
