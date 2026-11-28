@@ -6,6 +6,7 @@ import {
   CONNECTOR_SERVICE, RESULT_LIMIT, UNUSED_DAYS, callTool, checkConnection, connectionTools, connector, householdOn, stillLive,
   type Live, type SectionId,
 } from '../src/connector.ts';
+import { goals } from '../src/goals.ts';
 import { holidays } from '../src/holidays.ts';
 import { inventory } from '../src/inventory.ts';
 import { kitchen } from '../src/kitchen.ts';
@@ -13,6 +14,7 @@ import { LATEST, migrate } from '../src/migrations.ts';
 import { measures } from '../src/measures.ts';
 import { mediaLists } from '../src/mediaLists.ts';
 import { money } from '../src/money.ts';
+import { plans } from '../src/plans.ts';
 import { projects } from '../src/projects.ts';
 import { memoryDb } from './memoryDb.ts';
 
@@ -156,6 +158,28 @@ it('leaves the gift out of spending and out of its totals', async () => {
   expect(out.total_spent).toBe(450);
   expect(out.categories).toEqual([{ name: 'Food', planned: 50_000, spent: 450, left: 49_550 }]);
   await expect(call(await connection(ana, ['money']), 'get_spending', { month: 'March' })).rejects.toEqual(problem(400));
+});
+
+it('leaves a gift out of spending and its totals on a plain plan and on a holiday year, with and without a goal', async () => {
+  await fill();
+  const mine = holidays(db, ana, clock);
+  const plain = await plans(db, ana, clock).create({ name: 'Maya birthday', start_day: '2046-03-20' });
+  await mine.addGift(plain.id, { who: 'Maya', idea: 'Quillkite' });
+  const gift = (await db.get<{ id: number }>('SELECT id FROM holiday_gifts WHERE plan_id = ?', [plain.id]))!.id;
+  await mine.updateGift(gift, { status: 'bought', cents: 1800 });
+  const year = (await db.get<{ plan_id: number }>('SELECT plan_id FROM holiday_years LIMIT 1'))!.plan_id;
+  const check = async () => {
+    const out = JSON.parse(await call(await connection(ana, ['money']), 'get_spending'));
+    expect(JSON.stringify(out)).not.toMatch(/Quillkite|gift/i);
+    expect(out.spent_on.map((e: { what: string }) => e.what)).toEqual(['Milk run']);
+    expect(out.in_no_category).toBe(0);
+    expect(out.total_spent).toBe(450);
+    expect(out.categories).toEqual([{ name: 'Food', planned: 50_000, spent: 450, left: 49_550 }]);
+  };
+  await check(); // no goal on either plan
+  await goals(db, ana, clock).start({ plan_id: plain.id, target_cents: 5000 });
+  await goals(db, ana, clock).start({ plan_id: year, target_cents: 5000 });
+  await check(); // a goal on each
 });
 
 it('keeps an answer within the limit by shortening the longest list, and says so', async () => {
