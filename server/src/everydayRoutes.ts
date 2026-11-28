@@ -398,7 +398,7 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
       ({ json: await c.kitchen.tickGrocery(c.id, { done: read.yesNo(c.body, 'done'), put_away: read.yesNo(c.body, 'put_away', true) }) })],
     ['DELETE', /^\/api\/kitchen\/grocery\/(\d{1,15})$/, async (c) => (await c.kitchen.deleteGrocery(c.id), { status: 204 })],
 
-    ...makingRoutes(db),
+    ...makingRoutes(db, options.photos),
     ...moneyRoutes(db, options.bank),
     ...splitRoutes(db),
     ...assistantRoutes(db, options.assistant),

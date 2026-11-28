@@ -4,6 +4,8 @@ import Icon, { Dots } from '../components/Icon';
 import axios from 'axios';
 import { hintsFor, kindChoices } from '../projectKinds';
 import Budget from '../components/Budget';
+import Picture from '../components/Picture';
+import ProjectPictures, { pictureAddress } from '../components/ProjectPictures';
 import { PlanGoal } from '../components/Goals';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, minutesText } from '../components/ui';
@@ -55,6 +57,7 @@ export default function Projects() {
                 <PickBox sel={sel} id={p.id} name={p.name} />
                 <Link to={`/projects/${p.id}`} className="block min-w-0 flex-1">
                   <div className="flex items-start gap-2">
+                    {p.cover_picture && <Picture src={pictureAddress(p.cover_picture)} alt="" loading="lazy" data-testid="project-cover" className="h-12 w-12 flex-none rounded-lg object-cover" />}
                     <span className="flex-1 font-medium text-life-800 dark:text-life-50">{p.name}</span>
                     {p.status === 'paused' && <span className="rounded bg-gray-100 px-1.5 text-[11px] text-gray-600">paused</span>}
                     {p.short_count > 0 && <span className="rounded bg-honey-100 px-1.5 text-[11px] text-honey-700">short of {p.short_count}</span>}
@@ -171,6 +174,8 @@ export function ProjectPage() {
             project.minutes > 0 && `${minutesText(project.minutes)} so far`].filter(Boolean).join(' · ') || statusName(project.status)}
         </p>
       </div>
+      {project.cover_picture && <Picture src={pictureAddress(project.cover_picture)} alt={`The finished ${project.name}`} data-testid="project-cover" className="max-h-64 w-full rounded-2xl object-cover" />}
+      <ProjectPictures project={project} onChanged={setProject} />
       {message && <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">{message}</p>}
 
       <div className="grid gap-3 md:grid-cols-2">

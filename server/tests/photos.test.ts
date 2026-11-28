@@ -165,3 +165,46 @@ it('without a way to reach outside, no library can be connected', async () => {
   expect((await admin.put('/api/photos', { url: immichUrl, key: KEY })).status).toBe(400);
   expect(asked).toEqual([]);
 });
+
+it('a project keeps pictures kept here and linked from the library, and shows them to its person only', async () => {
+  const admin = visitor();
+  expect((await admin.post('/api/auth/setup', { username: 'owner', password: PASSWORD })).status).toBe(201);
+  const project = (await admin.post('/api/projects', { name: 'Bookshelf', status: 'active' })).json;
+  expect(project.pictures).toEqual([]);
+
+  const kept = await admin.post(`/api/projects/${project.id}/pictures`, { data: JPEG.toString('base64'), kind: 'idea', caption: 'Oak' });
+  expect([kept.status, kept.json.pictures.map((p: { kind: string; caption: string; source: string }) => [p.kind, p.caption, p.source])]).toEqual([201, [['idea', 'Oak', 'kept']]]);
+  expect((await admin.post(`/api/projects/${project.id}/pictures`, { data: JPEG.toString('base64'), kind: 'both' })).status).toBe(400);
+  expect((await admin.post(`/api/projects/${project.id}/pictures`, { data: 'AAAA', kind: 'idea' })).status).toBe(400);
+  const shown = await admin.get(`/api/projects/pictures/${kept.json.pictures[0].id}`);
+  expect([shown.status, shown.headers.get('content-type'), shown.headers.get('cache-control')]).toEqual([200, 'image/jpeg', 'private, max-age=604800']);
+
+  // Nothing is asked of the library until it is connected.
+  expect((await admin.get(`/api/projects/${project.id}/library?start=2046-03-03&end=2046-03-03`)).status).toBe(400);
+  expect((await admin.put('/api/photos', { url: immichUrl, key: KEY })).json.connected).toBe(true);
+  expect((await admin.get(`/api/projects/${project.id}/library?start=2046-03-03&end=2046-03-03`)).json.map((p: { id: string; linked: boolean }) => [p.id, p.linked])).toEqual([[A, false], [B, false]]);
+  const linked = await admin.post(`/api/projects/${project.id}/pictures/linked`, { ids: [A, A, B], kind: 'mine' });
+  expect([linked.status, linked.json.pictures.map((p: { kind: string; source: string }) => `${p.kind}:${p.source}`)]).toEqual([201, ['idea:kept', 'mine:immich', 'mine:immich']]);
+  expect((await admin.get(`/api/projects/${project.id}/library?start=2046-03-03&end=2046-03-03`)).json.map((p: { linked: boolean }) => p.linked)).toEqual([true, true]);
+  const far = await admin.get(`/api/projects/pictures/${linked.json.pictures[1].id}`);
+  expect([far.status, far.headers.get('content-type'), far.bytes.toString('latin1').endsWith('preview')]).toEqual([200, 'image/jpeg', true]);
+  expect(await database.db.all('SELECT source, kind, asset_id, bytes FROM project_pictures WHERE source = ? ORDER BY id', ['immich'])).toEqual([{ source: 'immich', kind: 'mine', asset_id: A, bytes: null }, { source: 'immich', kind: 'mine', asset_id: B, bytes: null }]);
+
+  const changed1 = await admin.put(`/api/projects/pictures/${kept.json.pictures[0].id}`, { caption: null, kind: 'mine' });
+  expect(changed1.json.pictures[0]).toMatchObject({ caption: null, kind: 'mine' });
+  expect((await admin.put(`/api/projects/pictures/${kept.json.pictures[0].id}`, { caption: 'Again' })).json.pictures[0]).toMatchObject({ caption: 'Again', kind: 'mine' });
+
+  // Someone else in the house can't see or change them.
+  expect((await admin.post('/api/users', { username: 'other', password: PASSWORD })).status).toBe(201);
+  const other = visitor();
+  await other.post('/api/auth/login', { username: 'other', password: PASSWORD });
+  const id = kept.json.pictures[0].id;
+  expect([(await other.get(`/api/projects/pictures/${id}`)).status, (await other.put(`/api/projects/pictures/${id}`, { caption: 'x' })).status, (await other.delete(`/api/projects/pictures/${id}`)).status,
+    (await other.post(`/api/projects/${project.id}/pictures`, { data: JPEG.toString('base64'), kind: 'idea' })).status]).toEqual([404, 404, 404, 404]);
+  expect((await visitor().get(`/api/projects/pictures/${id}`)).status).toBe(401);
+
+  // Taking one off; the linked ones stay in the library.
+  expect((await admin.delete(`/api/projects/pictures/${id}`)).json.pictures).toHaveLength(2);
+  expect((await admin.get(`/api/projects/pictures/${id}`)).status).toBe(404);
+  expect(changed).toEqual([]);
+});

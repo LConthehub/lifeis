@@ -19,9 +19,10 @@
  */
 import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { placePaths, setAsideByItem } from './inventory.ts';
+import { MAX_PHOTO_BYTES } from './plans.ts';
 import { Problem } from './problem.ts';
 import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
-import { clean, dayNumber, dayOrNull, rounded, stamp, todayOf, type Clock } from './small.ts';
+import { clean, dayNumber, dayOrNull, pictureType, rounded, stamp, todayOf, type Clock } from './small.ts';
 import * as units from './units.ts';
 
 export const STATUSES = ['idea', 'planned', 'active', 'paused', 'done', 'dropped'] as const;
@@ -98,7 +99,16 @@ export type ProjectSummary = {
   tag_list: TagRef[];
   /** Its money, so a list of projects can say which are over their plan. */
   budget: Budget;
+  /** How many pictures it keeps. */
+  pictures_count: number;
+  /** A finished project's first "mine" picture (its id), or null. */
+  cover_picture: number | null;
 };
+/** A picture on a project: an idea to aim for, or the person's own work. The picture itself is fetched by its id. */
+export type ProjectPicture = { id: number; source: 'kept' | 'immich'; kind: 'idea' | 'mine'; caption: string | null };
+export const PICTURE_KINDS = ['idea', 'mine'] as const;
+export const MAX_PROJECT_PICTURES = 80;
+const PICTURE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 /** One thing a project costs: what was planned, and once paid, what it came to. */
 export type Cost = {
   id: number;
@@ -124,9 +134,9 @@ export type Budget = {
   /** What has been saved up for it, in the goals made for it; null when there are none. */
   saved: { cents: number; target: number; goals: { id: number; name: string; saved: number; target: number }[] } | null;
 };
-export type Project = ProjectSummary & { lines: Line[]; sessions: Session[]; costs: Cost[]; budget: Budget };
+export type Project = ProjectSummary & { lines: Line[]; sessions: Session[]; costs: Cost[]; budget: Budget; pictures: ProjectPicture[] };
 
-type ProjectRow = Omit<ProjectSummary, 'minutes' | 'sessions_count' | 'short_count' | 'tag_list' | 'budget'>;
+type ProjectRow = Omit<ProjectSummary, 'minutes' | 'sessions_count' | 'short_count' | 'tag_list' | 'budget' | 'pictures_count' | 'cover_picture'>;
 type LineRow = Omit<Line, 'amount' | 'have' | 'place' | 'short' | 'short_text'> & {
   item_quantity: number | null; item_unit: string | null; item_place: number | null; item_there: number | null;
 };
@@ -201,8 +211,11 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
     const planned = costs.reduce((sum, c) => sum + (c.planned_cents ?? 0), 0);
     const spent = costs.reduce((sum, c) => sum + (c.paid_on ? c.actual_cents ?? 0 : 0), 0);
     const expected = costs.reduce((sum, c) => sum + (c.paid_on ? c.actual_cents ?? 0 : c.planned_cents ?? 0), 0);
+    const pictures = await q.all<ProjectPicture>('SELECT id, source, kind, caption FROM project_pictures WHERE project_id = ? ORDER BY sort_order, id', [id]);
     return {
-      ...row, lines, sessions, costs,
+      ...row, lines, sessions, costs, pictures,
+      pictures_count: pictures.length,
+      cover_picture: row.status === 'done' ? (pictures.find((x) => x.kind === 'mine')?.id ?? null) : null,
       budget: {
         currency: sign?.value ?? '$', planned, spent, expected, left: planned - expected, unpaid: costs.filter((c) => !c.paid_on).length,
         over: planned > 0 ? Math.max(0, expected - planned) : 0,
@@ -221,6 +234,22 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
     const status = (input.status ?? 'idea') as Status;
     if (!STATUSES.includes(status)) throw new Problem(400, 'A project is an idea, planned, active, paused, done or dropped');
     return { name, activity: clean(input.activity, 60), status, notes: clean(input.notes, 20_000), due: dayOrNull(input.due_on) };
+  }
+
+  const pictureOf = async (q: Queries, id: number) => {
+    const found = await q.get<{ project_id: number }>('SELECT x.project_id FROM project_pictures x JOIN projects p ON p.id = x.project_id WHERE x.id = ? AND p.owner_id = ?', [id, owner]);
+    if (!found) throw new Problem(404, "That picture isn't here anymore. It may have been removed.");
+    return found.project_id;
+  };
+  const kindChecked = (kind: string | null | undefined): 'idea' | 'mine' => {
+    if (kind !== 'idea' && kind !== 'mine') throw new Problem(400, 'A picture is an idea or your own work');
+    return kind;
+  };
+  async function roomForPicture(q: Queries, projectId: number): Promise<number> {
+    await projectRow(q, projectId);
+    const count = (await q.get<{ n: number; last: number | null }>('SELECT COUNT(*) AS n, MAX(sort_order) AS last FROM project_pictures WHERE project_id = ?', [projectId]))!;
+    if (count.n >= MAX_PROJECT_PICTURES) throw new Problem(400, `A project holds ${MAX_PROJECT_PICTURES} pictures at most`);
+    return (count.last ?? 0) + 1;
   }
 
   /** The activity as the person first spelled it, so "sewing" and "Sewing" stay one activity. */
@@ -343,7 +372,7 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
                COALESCE(due_on, '9999'), name COLLATE NOCASE`;
       const out: ProjectSummary[] = [];
       for (const row of await onlyTagged(db, owner, 'project', await db.all<ProjectRow>(sql, args), find.tag)) {
-        const { lines: _lines, sessions: _sessions, ...summary } = await project(db, row.id);
+        const { lines: _lines, sessions: _sessions, pictures: _pictures, ...summary } = await project(db, row.id);
         out.push(summary);
       }
       return out;
@@ -394,6 +423,53 @@ export function projects(db: Db, owner: number, clock: Clock = () => new Date())
         await tx.run('DELETE FROM projects WHERE id = ? AND owner_id = ?', [id, owner]);
         await unlink(tx, 'project', id);
       });
+    },
+
+    // ---------- pictures ----------
+
+    /** Keep a picture with the project: one picked from a phone or computer. */
+    async keepPicture(projectId: number, bytes: Uint8Array, kind: string | null | undefined, caption?: string | null): Promise<Project> {
+      const type = pictureType(bytes);
+      if (!type || !PICTURE_TYPES.includes(type)) throw new Problem(400, "That isn't a picture Life Is can keep (JPEG, PNG or WebP)");
+      if (bytes.length > MAX_PHOTO_BYTES) throw new Problem(400, 'That picture is too large to keep');
+      const k = kindChecked(kind);
+      const order = await roomForPicture(db, projectId);
+      await db.run('INSERT INTO project_pictures (project_id, source, kind, type, bytes, caption, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [projectId, 'kept', k, type, bytes, clean(caption, 300), order, now()]);
+      return project(db, projectId);
+    },
+
+    /** Link a picture that lives in a photo library. Only which one is kept; the picture stays there. */
+    async linkPicture(projectId: number, assetId: string, kind: string | null | undefined, caption?: string | null): Promise<Project> {
+      if (!/^[0-9a-fA-F-]{8,64}$/.test(assetId)) throw new Problem(400, "That isn't a photo from the library");
+      const k = kindChecked(kind);
+      const order = await roomForPicture(db, projectId);
+      if (await db.get("SELECT id FROM project_pictures WHERE project_id = ? AND source = 'immich' AND asset_id = ?", [projectId, assetId])) return project(db, projectId);
+      await db.run("INSERT INTO project_pictures (project_id, source, kind, asset_id, caption, sort_order, created_at) VALUES (?, 'immich', ?, ?, ?, ?, ?)", [projectId, k, assetId, clean(caption, 300), order, now()]);
+      return project(db, projectId);
+    },
+
+    /** A picture, for showing: its bytes when it's kept here, or which library photo it is when it's linked. */
+    async picture(id: number): Promise<{ source: 'kept'; type: string; bytes: Uint8Array } | { source: 'immich'; asset_id: string }> {
+      await pictureOf(db, id);
+      const found = (await db.get<{ source: 'kept' | 'immich'; type: string | null; bytes: Uint8Array | null; asset_id: string | null }>(
+        'SELECT source, type, bytes, asset_id FROM project_pictures WHERE id = ?', [id]))!;
+      return found.source === 'kept' ? { source: 'kept', type: found.type!, bytes: found.bytes! } : { source: 'immich', asset_id: found.asset_id! };
+    },
+
+    /** Change a picture's caption, and whether it is an idea or the person's own work. A field left out stays as it is. */
+    async updatePicture(id: number, input: { caption?: string | null; kind?: string | null }): Promise<Project> {
+      const projectId = await pictureOf(db, id);
+      if (input.kind !== undefined) await db.run('UPDATE project_pictures SET kind = ? WHERE id = ?', [kindChecked(input.kind), id]);
+      if (input.caption !== undefined) await db.run('UPDATE project_pictures SET caption = ? WHERE id = ?', [clean(input.caption, 300), id]);
+      return project(db, projectId);
+    },
+
+    /** Take a picture off the project. A kept one is deleted; a linked one stays in its library. */
+    async removePicture(id: number): Promise<Project> {
+      const projectId = await pictureOf(db, id);
+      await db.run('DELETE FROM project_pictures WHERE id = ?', [id]);
+      return project(db, projectId);
     },
 
     // ---------- what it uses ----------
