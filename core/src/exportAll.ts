@@ -446,6 +446,16 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     ownRows.push([str(thing.name), where(thing.place_id), str(f.name), str(f.value)]);
   }
   out.csv('thing-own-fields.csv', ['Thing', 'Place', 'Field', 'Value'], ownRows);
+  const piecesChecked = new Map<number, { on: Value | undefined; missing: Value | undefined }>();
+  for (const c of await all('SELECT id, pieces_checked_on, pieces_checked_missing FROM items WHERE owner_id = ? AND pieces_checked_on IS NOT NULL')) {
+    piecesChecked.set(c.id as number, { on: c.pieces_checked_on, missing: c.pieces_checked_missing });
+  }
+  out.csv('thing-pieces.csv', ['Thing', 'Place', 'Piece', 'How many', 'Where it is kept', 'State', 'Replace every', 'Replace every (unit)', 'Last checked', 'Missing at last check'],
+    (await all('SELECT p.item_id, p.name, p.quantity, p.place, p.state, p.every_n, p.every_unit FROM item_pieces p JOIN items i ON i.id = p.item_id WHERE i.owner_id = ? ORDER BY p.item_id, p.sort_order, p.id'))
+      .map((p) => {
+        const t = itemName.get(p.item_id as number)!;
+        return [str(t.name), where(t.place_id), str(p.name), str(p.quantity), str(p.place), str(p.state), str(p.every_n), str(p.every_unit), str(piecesChecked.get(p.item_id as number)?.on), str(piecesChecked.get(p.item_id as number)?.missing)];
+      }));
   out.csv('thing-history.csv', ['Thing', 'Place now', 'What happened', 'Day', 'From', 'To', 'For project', 'For job', 'For activity', 'Notes'],
     (await all("SELECT h.item_id, h.what, h.day, h.from_place, h.to_place, h.project, h.job, h.activity, h.note FROM item_history h JOIN items i ON i.id = h.item_id WHERE h.owner_id = ? AND i.owner_id = ? ORDER BY h.item_id, h.day, h.id", [owner, owner]))
       .map((h) => { const t = itemName.get(h.item_id as number)!; return [str(t.name), where(t.place_id), str(h.what), str(h.day), str(h.from_place), str(h.to_place), str(h.project), str(h.job), str(h.activity), str(h.note)]; }));
@@ -795,6 +805,7 @@ const FILE_ABOUT: [string, string][] = [
   ['kinds.csv', 'The kinds of thing you made (Fabric, Seeds) and the fields each has.'],
   ['things.csv', 'Everything you keep: where it is, how many, what it cost and is worth, model and serial number, warranty, asset number, whether it is insured, whether it has gone (sold, given away, thrown out or stolen), and a column for each field of its kind.'],
   ['thing-own-fields.csv', 'The fields you added to one thing yourself: a name and a value for each.'],
+  ['thing-pieces.csv', 'The pieces some things list (a lid, a piercing pin): how many, where kept, whether each is here, missing or broken, how often it is replaced, and when the pieces were last checked.'],
   ['thing-papers.csv', 'The receipts, manuals and warranty cards kept with things, and the file each is in.'],
   ['thing-history.csv', 'Where each thing has been and what it was used for.'],
   ['upkeep.csv', 'Jobs that come round again, bills, renewals and chores: how often, when last done and next due.'],
@@ -1218,6 +1229,29 @@ const importers: Record<string, Importer> = {
       have.add(labelKey(name));
       ownSeen.set(id, have);
       await c.tx.run('INSERT INTO item_fields (item_id, name, value, sort_order) VALUES (?, ?, ?, ?)', [id, name, value, have.size]);
+    }
+    // The pieces of the things that came in now (a download from before pieces has no such file), and the Upkeep job a piece's
+    // replacing made when that job is already kept under its usual name.
+    const pieceCount = new Map<number, number>();
+    for (const row of tableOf(c.files, 'thing-pieces.csv')?.rows ?? []) {
+      const id = fresh.get(`${labelKey(cellOf(row, 'Thing'))}\n${labelKey(book.normal(cellOf(row, 'Place')))}`);
+      const name = clean(cellOf(row, 'Piece'), 120);
+      if (id === undefined || !name) continue;
+      const count = pieceCount.get(id) ?? 0;
+      if (count >= 60) continue;
+      pieceCount.set(id, count + 1);
+      const quantity = numberOf(cellOf(row, 'How many'));
+      const state = labelKey(cellOf(row, 'State'));
+      const n = numberOf(cellOf(row, 'Replace every'));
+      const unit = labelKey(cellOf(row, 'Replace every (unit)'));
+      const repeats = n !== null && Number.isInteger(n) && n > 0 && n <= 1000 && ['day', 'week', 'month', 'year'].includes(unit);
+      const thingName = clean(cellOf(row, 'Thing'), 200) ?? '';
+      const job = repeats ? await c.tx.get<{ id: number }>('SELECT id FROM upkeep_jobs WHERE owner_id = ? AND name = ? ORDER BY id LIMIT 1', [c.owner, `${thingName}: new ${name}`.slice(0, 200)]) : undefined;
+      await c.tx.run('INSERT INTO item_pieces (item_id, name, quantity, place, state, every_n, every_unit, job_id, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [id, name, quantity !== null && Number.isInteger(quantity) && quantity >= 1 && quantity <= 1000 ? quantity : 1, clean(cellOf(row, 'Where it is kept'), 120),
+          ['here', 'missing', 'broken'].includes(state) ? state : 'here', repeats ? n : null, repeats ? unit : null, job?.id ?? null, count + 1, c.at]);
+      const on = dayOf(cellOf(row, 'Last checked'));
+      if (on) await c.tx.run('UPDATE items SET pieces_checked_on = ?, pieces_checked_missing = ? WHERE id = ?', [on, Math.max(0, Math.floor(numberOf(cellOf(row, 'Missing at last check')) ?? 0)), id]);
     }
     // The papers of the things that came in now.
     for (const row of tableOf(c.files, 'thing-papers.csv')?.rows ?? []) {

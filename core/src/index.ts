@@ -13,6 +13,8 @@ export { serialDb } from './serialDb.ts';
 export type { Connection } from './serialDb.ts';
 export { inventory, sharedWithMe, sharedPhoto, stickerCode, thingStickerCode, plainBarcode, FIELD_TYPES, MAX_THING_PHOTO, GONE_HOW, assetLabel, assetNumber } from './inventory.ts';
 export type { GunLine, Guard, SharedThing, PlaceSticker, ThingSticker, ActivitySummary, Gone, GoneInput, GoneHow, OwnField } from './inventory.ts';
+export { pieces, PIECE_STATES } from './pieces.ts';
+export type { Piece, PieceInput, PieceState, Pieces, PiecesOf } from './pieces.ts';
 export type { HistoryEntry, HistoryWhat } from './history.ts';
 export { whatIsThis } from './whereabouts.ts';
 export type { ScanWhat, FoundCopy } from './whereabouts.ts';
