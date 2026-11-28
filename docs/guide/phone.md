@@ -8,10 +8,11 @@ The Life Is app is on its way to the app stores. This page says how it will work
 
 ## Two ways to use the app
 
-When the app first opens it asks where your household should live:
+When the app first opens it offers three things:
 
-- **On this phone.** Everything is kept on the phone, encrypted. No server, no account.
-- **On a Life Is you run.** The app is a window onto the Life Is on your own computer.
+- **Start on this phone.** Everything is kept on the phone, encrypted. No server, no account. This is what most people want.
+- **I have a backup.** Choose the backup file from your other phone and type its passphrase. Everything comes back as it was.
+- **I host my own Life Is.** The app is a window onto the Life Is on your own computer.
 
 You can change your mind later. Nothing held in either place is touched.
 

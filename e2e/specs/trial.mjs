@@ -28,7 +28,7 @@ const firstRun = async (patience = 6000) => {
 };
 
 await page.goto(base + '/'); await wait(1500);
-await page.getByRole('button', { name: /On this phone/ }).click(); await wait(2500);
+await page.getByRole('button', { name: /Start on this phone/ }).click(); await wait(2500);
 await firstRun();
 
 // ---------- before anything is written ----------

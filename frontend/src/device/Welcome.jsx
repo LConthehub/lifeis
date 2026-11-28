@@ -3,17 +3,27 @@ import { Field, inputClass, buttonClass, quietButtonClass } from '../components/
 import Icon from '../components/Icon';
 import { findLifeIs, tidyAddress, unlocked } from './remote.js';
 
+const quietLink = 'min-h-[44px] text-sm text-life-700 underline dark:text-life-200';
+
 /**
- * The first thing the app asks, once: where this phone keeps Life Is. On the phone itself, or on a Life Is
- * the person hosts. It can be changed later in Settings; neither choice touches what the other holds.
+ * The first thing the app shows, once. Most people press Start and keep Life Is on the phone. Someone with a
+ * backup from another phone brings it back here, and someone who hosts their own Life Is links to it from the
+ * small line underneath. It can be changed later in Settings; neither choice touches what the other holds.
+ *
+ * `onBringBack(file, passphrase, sure)` puts a backup on this phone. It answers `{ holds: true }`, changing
+ * nothing, when the phone already holds a Life Is and `sure` was not given.
  */
-export default function Welcome({ onChosen }) {
-  const [linking, setLinking] = useState(false);
+export default function Welcome({ onChosen, onBringBack }) {
+  const [view, setView] = useState('start'); // 'start' | 'backup' | 'server'
   const [address, setAddress] = useState('');
+  const [file, setFile] = useState(null);
+  const [pass, setPass] = useState('');
+  const [holds, setHolds] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   let plain = false;
   try { plain = unlocked(tidyAddress(address)); } catch { /* not an address yet */ }
+  const show = (next) => { setView(next); setError(''); setHolds(false); setPass(''); setFile(null); };
 
   const link = async (e) => {
     e.preventDefault();
@@ -25,6 +35,15 @@ export default function Welcome({ onChosen }) {
     } catch (problem) { setError(problem.message); setBusy(false); }
   };
 
+  const bringBack = async (e) => {
+    e.preventDefault();
+    setBusy(true); setError('');
+    try {
+      const done = await onBringBack(file, pass, holds);
+      if (done?.holds) { setHolds(true); setBusy(false); }
+    } catch (problem) { setError(problem?.response?.data?.detail ?? problem.message ?? "Couldn't bring that backup back"); setBusy(false); }
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-4 rounded-2xl bg-card/95 p-6 shadow-xl ring-1 ring-white/40 backdrop-blur dark:bg-life-900/90 dark:ring-life-700">
@@ -32,24 +51,36 @@ export default function Welcome({ onChosen }) {
           <img src="/mark-tan-192.png" alt="" className="h-12 w-12 dark:hidden" /><img src="/mark-192.png" alt="" className="hidden h-12 w-12 dark:block" />
           <div>
             <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">Life Is</h1>
-            <p className="text-xs text-gray-500 dark:text-life-200">Where should this phone keep it?</p>
+            <p className="text-xs text-gray-500 dark:text-life-200">{view === 'backup' ? 'Bring a backup back' : view === 'server' ? 'A Life Is you host' : 'Your home, kept on your phone'}</p>
           </div>
         </div>
 
-        {!linking ? (
+        {view === 'start' && (
           <div className="space-y-3">
-            <button type="button" onClick={() => onChosen({ kind: 'device' })} className="block w-full rounded-xl p-4 text-left ring-1 ring-life-100 hover:bg-life-50 dark:ring-life-700 dark:hover:bg-life-800">
-              <span className="block font-medium text-life-800 dark:text-life-50"><Icon of="phone" /> On this phone</span>
-              <span className="mt-1 block text-sm text-gray-600 dark:text-life-100">Everything stays here, locked with a key only this phone holds. No account, no password, and nothing sent anywhere.</span>
-            </button>
-            <button type="button" onClick={() => setLinking(true)} className="block w-full rounded-xl p-4 text-left ring-1 ring-life-100 hover:bg-life-50 dark:ring-life-700 dark:hover:bg-life-800">
-              <span className="block font-medium text-life-800 dark:text-life-50"><Icon of="home" /> On a Life Is I host</span>
-              <span className="mt-1 block text-sm text-gray-600 dark:text-life-100">You run Life Is on a computer of your own. This phone signs in to it and shows what it holds, the same as its web page does.</span>
-            </button>
-            <p className="text-xs text-gray-500 dark:text-life-300">You can change this later in Settings. Changing it moves nothing: what is on the phone stays on the phone, and what is on your server stays there.</p>
+            <p className="text-sm text-gray-600 dark:text-life-100">Everything stays on this phone, locked with a key only this phone holds. No account, no password, and nothing sent anywhere.</p>
+            <button type="button" onClick={() => onChosen({ kind: 'device' })} className={`${buttonClass} min-h-[48px] w-full justify-center text-base`}><Icon of="phone" /> Start on this phone</button>
+            <button type="button" onClick={() => show('backup')} className={`${quietButtonClass} min-h-[48px] w-full justify-center`}>I have a backup</button>
+            <div className="text-center"><button type="button" onClick={() => show('server')} className={quietLink}>I host my own Life Is</button></div>
           </div>
-        ) : (
+        )}
+
+        {view === 'backup' && (
+          <form onSubmit={bringBack} className="space-y-3">
+            <p className="text-sm text-gray-600 dark:text-life-100">Choose the backup file you saved from your other phone (its name ends in .lifeis) and type its passphrase. It is opened here and sent nowhere.</p>
+            <Field label="The backup file"><input type="file" required onChange={(e) => { setFile(e.target.files[0] ?? null); setHolds(false); }} className="block min-h-[44px] w-full text-sm file:mr-3 file:min-h-[44px] file:rounded-lg file:border file:border-life-200 file:bg-card file:px-3 file:text-sm file:text-life-700" /></Field>
+            <Field label="Its passphrase"><input type="password" required autoComplete="off" value={pass} onChange={(e) => setPass(e.target.value)} className={inputClass} /></Field>
+            {holds && <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700" role="alert">This phone already holds a Life Is. Bringing the backup back replaces it: what is here now, and isn't in the backup, will be gone.</p>}
+            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+            <div className="flex justify-between gap-2">
+              <button type="button" onClick={() => show('start')} className={`${quietButtonClass} min-h-[44px]`}>Back</button>
+              <button type="submit" disabled={busy || !file} className={`${buttonClass} min-h-[44px]`}>{busy ? 'Bringing it back…' : holds ? 'Replace what is here' : 'Bring it back'}</button>
+            </div>
+          </form>
+        )}
+
+        {view === 'server' && (
           <form onSubmit={link} className="space-y-3">
+            <p className="text-sm text-gray-600 dark:text-life-100">You run Life Is on a computer of your own. This phone signs in to it and shows what it holds, the same as its web page does.</p>
             <Field label="The address of your Life Is">
               <input required autoFocus inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="lifeis.example.org  or  http://192.168.1.20:8020" className={inputClass} />
             </Field>
@@ -57,11 +88,13 @@ export default function Welcome({ onChosen }) {
             {plain && <p className="rounded-lg bg-honey-100 px-3 py-2 text-sm text-honey-700">That address starts with http, not https, so what travels between this phone and it isn't locked. That's fine on your own home network. Don't use it over the internet or on someone else's Wi-Fi.</p>}
             {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
             <div className="flex justify-between gap-2">
-              <button type="button" onClick={() => { setLinking(false); setError(''); }} className={quietButtonClass}>Back</button>
-              <button type="submit" disabled={busy} className={buttonClass}>{busy ? 'Looking for it…' : 'Connect'}</button>
+              <button type="button" onClick={() => show('start')} className={`${quietButtonClass} min-h-[44px]`}>Back</button>
+              <button type="submit" disabled={busy} className={`${buttonClass} min-h-[44px]`}>{busy ? 'Looking for it…' : 'Connect'}</button>
             </div>
           </form>
         )}
+
+        {view !== 'backup' && <p className="text-xs text-gray-500 dark:text-life-300">You can change this later in Settings. Changing it moves nothing: what is on the phone stays on the phone, and what is on your server stays there.</p>}
       </div>
     </div>
   );

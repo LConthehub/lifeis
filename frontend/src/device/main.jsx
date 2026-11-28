@@ -59,7 +59,22 @@ async function start() {
   const place = await kept.get('place');
   if (!place) {
     const chosen = async (next) => { await kept.set('place', next); window.location.replace('/'); };
-    root.render(<React.StrictMode><Welcome onChosen={chosen} /></React.StrictMode>);
+    // A backup from another phone, brought back before anything else. The phone's own Life Is is opened (once)
+    // to put it in. If the phone already holds one, nothing is changed until the person says to replace it.
+    let opened = null;
+    const bringBack = async (file, passphrase, sure) => {
+      opened ??= onThisPhone();
+      try { await opened; } catch (problem) { opened = null; throw problem; }
+      if (!sure && (await axios.get('/api/start')).data.status !== 'new') return { holds: true };
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let text = '';
+      for (let at = 0; at < bytes.length; at += 0x8000) text += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+      await axios.post('/api/device/restore', { passphrase, file: btoa(text) });
+      await window.lifeisDevice?.saved?.();
+      await chosen({ kind: 'device' });
+      return {};
+    };
+    root.render(<React.StrictMode><Welcome onChosen={chosen} onBringBack={bringBack} /></React.StrictMode>);
     return;
   }
   if (place.kind === 'server') await onTheirServer(place.address); else await onThisPhone();

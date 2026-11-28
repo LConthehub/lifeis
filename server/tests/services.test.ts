@@ -165,6 +165,17 @@ it('reminders are off until turned on, say what each way sends, and can be tried
   expect((await admin.post('/api/reminders/try', { channel: 'push' })).json.problems[0]).toMatch(/can't send browser notifications/);
   expect((await admin.post('/api/reminders/try', { channel: 'pigeon' })).status).toBe(422);
   expect((await admin.get('/api/reminders/digest')).json).toMatchObject({ lines: [], title: 'Nothing needs you today' });
+  // A later morning's digest, up to a week on, for a phone to keep waiting. A birthday six days from now is
+  // "tomorrow" five mornings on.
+  const later = new Date(Date.now() + 6 * 86400000);
+  const sixth = `2000-${String(later.getMonth() + 1).padStart(2, '0')}-${String(later.getDate()).padStart(2, '0')}`;
+  await admin.post('/api/calendar/events', { title: 'A birthday next week', day: sixth, yearly: true });
+  const titles = async (ahead: string) => ((await admin.get(`/api/reminders/digest${ahead}`)).json.lines as { title: string }[]).map((l) => l.title);
+  expect(await titles('?ahead=5')).toContain('A birthday next week');
+  expect(await titles('?ahead=1')).not.toContain('A birthday next week');
+  // Further than a week, or not a whole number of days, is answered with today's.
+  expect(await titles('?ahead=8')).not.toContain('A birthday next week');
+  expect(await titles('?ahead=soon')).not.toContain('A birthday next week');
   expect((await visitor().get('/api/reminders')).status).toBe(401);
 });
 
