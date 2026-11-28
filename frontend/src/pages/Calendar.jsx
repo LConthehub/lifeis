@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import Icon from '../components/Icon';
 import axios from 'axios';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
+import { WeekSheet } from '../print/FilledSheets';
+import { PrintMenu } from '../print/PrintFrame';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput } from '../components/ui';
 
 
@@ -53,6 +55,9 @@ export default function Calendar() {
         <button type="button" onClick={() => move(7)} className={quietButtonClass} aria-label="Week after">→</button>
         <button type="button" onClick={() => setEditing({ day: today })} className={buttonClass}>+ Add</button>
       </div>
+      <PrintMenu ways={[['week', 'Print the week']]} onPrint={() => setTimeout(() => window.print(), 60)}>
+        <p className="text-sm text-gray-600 dark:text-life-100">One letter page, Monday to Sunday: each day's calendar, dinner and what is due. A day with too much shows "and 3 more". Empty parts are blank lines to write on.</p>
+      </PrintMenu>
       <div className="flex flex-wrap items-center gap-2">
         <TagFilter value={tag} onChange={setTag} />
         <SelectButton sel={sel} />
@@ -106,6 +111,7 @@ export default function Calendar() {
           <EventForm event={editing} onDone={() => { setEditing(null); load(); }} />
         </Modal>
       )}
+      {entries && <WeekSheet start={start} entries={entries} />}
     </div>
   );
 }

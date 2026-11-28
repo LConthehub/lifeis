@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { cardClass } from './ui';
+import { ForgetSheet } from '../print/FilledSheets';
+import { PrintMenu } from '../print/PrintFrame';
 
 const small = 'inline-flex min-h-[44px] items-center text-sm text-life-600 underline disabled:opacity-50 dark:text-life-200';
 
@@ -46,6 +48,10 @@ export default function DontForget({ cards = [] }) {
           </li>
         ))}
       </ul>
+      <PrintMenu ways={[['forget', "Print today's Don't forget"]]} onPrint={() => setTimeout(() => window.print(), 60)}>
+        <p className="text-sm text-gray-600 dark:text-life-100">One letter page with these lines, a box beside each, and blank lines to write more.</p>
+      </PrintMenu>
+      <ForgetSheet lines={lines} />
     </section>
   );
 }

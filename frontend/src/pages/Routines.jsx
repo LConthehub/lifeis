@@ -5,6 +5,8 @@ import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTag
 import { lastDoneText, todayHere } from '../ago';
 import { Checklists, sentNumbers, typed, waitText } from '../components/Routines';
 import FirstStep from '../components/FirstStep';
+import { RoutineSheet } from '../print/FilledSheets';
+import { PrintMenu } from '../print/PrintFrame';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 
 /**
@@ -274,10 +276,13 @@ export default function RoutinesPage() {
   const [modal, setModal] = useState(null);
   const [error, setError] = useState('');
   const [startersOpen, setStartersOpen] = useState(null);
+  // Today's routine times, for the printed morning and evening sheet.
+  const [today, setToday] = useState([]);
   const sel = useSelecting();
   const load = useCallback(() => {
     axios.get('/api/routines', { params: { tag: tag || undefined } }).then(({ data }) => setList(data)).catch(() => setList([]));
     axios.get('/api/routines/starters').then(({ data }) => setStarters(data)).catch(() => {});
+    axios.get('/api/routine-day').then(({ data }) => setToday(data)).catch(() => setToday([]));
   }, [tag]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -301,6 +306,9 @@ export default function RoutinesPage() {
         <button type="button" onClick={() => setModal({ routine: null, kind: 'workout' })} className={`${quietButtonClass} min-h-[44px]`}>+ New workout</button>
       </div>
       <p className="text-sm text-gray-600 dark:text-life-100">Checklists for parts of the day. They show on the front page, where you check them off or go through one a step at a time. A workout is a routine whose steps can carry numbers.</p>
+      <PrintMenu ways={[['routines', 'Print morning and evening']]} onPrint={() => setTimeout(() => window.print(), 60)}>
+        <p className="text-sm text-gray-600 dark:text-life-100">One letter page: your morning and evening steps for today, each with a box to check by hand. Empty parts are blank lines to write on.</p>
+      </PrintMenu>
       <div className="flex flex-wrap items-center gap-2">
         <TagFilter value={tag} onChange={setTag} />
         {(list.length > 0 || tag) && <SelectButton sel={sel} />}
@@ -346,6 +354,7 @@ export default function RoutinesPage() {
           </ul>
         </details>
       )}
+      <RoutineSheet times={today} />
       {modal && (
         <Modal title={modal.routine ? `Change ${modal.routine.name}` : modal.kind === 'workout' ? 'New workout' : 'New routine'} wide onClose={() => setModal(null)}>
           <RoutineForm routine={modal.routine} me={people.me} people={people} items={items} startKind={modal.kind} onDone={done} onGone={done} />

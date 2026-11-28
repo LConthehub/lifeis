@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { CopyWeek, Templates, copiedMessage, mondayOf } from '../components/WeekTools';
 import { MealPrep } from '../components/PrepSteps';
+import { MealWeekSheet } from '../print/FilledSheets';
+import { PrintMenu } from '../print/PrintFrame';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, fromDateInput } from '../components/ui';
 
 const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -21,6 +23,8 @@ export default function Week() {
   const [adding, setAdding] = useState(null);
   const [tool, setTool] = useState(null);                  // 'copy' or 'templates'
   const [message, setMessage] = useState('');
+  // The grocery list as it stands, for the printed sheet that has it beside the meals.
+  const [groceries, setGroceries] = useState([]);
   // Meals whose recipes need more of a pan or dish than there is.
   const [short, setShort] = useState([]);
   // Prep still to come for these meals ("Thaw the chicken: tonight 8 pm"), and the meal whose prep is being changed.
@@ -31,6 +35,7 @@ export default function Week() {
   const load = useCallback(() => {
     axios.get('/api/kitchen/plan', { params: { start: startText, days: 7 } }).then(({ data }) => setMeals(data)).catch(() => setMeals([]));
     axios.get('/api/kitchen/equipment', { params: { start: startText, days: 7 } }).then(({ data }) => setShort(data)).catch(() => setShort([]));
+    axios.get('/api/kitchen/grocery').then(({ data }) => setGroceries(data.filter((g) => !g.done))).catch(() => setGroceries([]));
     axios.get('/api/prep/coming', { params: { meals_from: startText, days: 7 } }).then(({ data }) => setPrepList(data)).catch(() => setPrepList([]));
   }, [startText]);
   useEffect(() => { load(); }, [load]);
@@ -75,6 +80,9 @@ export default function Week() {
         <button type="button" onClick={() => setTool('copy')} className={`${quietButtonClass} min-h-[44px]`}>Copy this week to…</button>
         <button type="button" onClick={() => setTool('templates')} className={`${quietButtonClass} min-h-[44px]`}>Templates</button>
       </div>
+      <PrintMenu ways={[['meals', 'Print meals and groceries']]} onPrint={() => setTimeout(() => window.print(), 60)}>
+        <p className="text-sm text-gray-600 dark:text-life-100">One letter page: the week's meals with the grocery list beside them, a box to check on each grocery line. Too many lines show "and 4 more". Empty parts are blank lines to write on.</p>
+      </PrintMenu>
       <p className="text-xs text-gray-500 dark:text-life-300">The grocery list is what these meals need, for the servings you planned, minus what's in your pantry.</p>
       {message && <p className="rounded-lg bg-life-50 px-3 py-2 text-sm text-life-800 dark:bg-life-800 dark:text-life-100">{message}</p>}
       {short.length > 0 && (
@@ -128,6 +136,7 @@ export default function Week() {
           );
         })}
       </div>
+      {meals && <MealWeekSheet start={start} meals={meals} groceries={groceries} />}
       {tool === 'copy' && <Modal title="Copy this week to…" onClose={() => setTool(null)}><CopyWeek start={start} onDone={copied} /></Modal>}
       {tool === 'templates' && <Modal title="Week templates" onClose={() => setTool(null)}><Templates start={start} onDone={copied} /></Modal>}
       {prepFor && (
