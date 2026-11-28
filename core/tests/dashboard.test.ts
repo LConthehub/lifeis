@@ -123,7 +123,7 @@ function pretend(): { fetcher: Fetcher; asked: string[]; down: boolean } {
 it('the weather is off until a place is chosen, and asks nothing until then', async () => {
   const world = pretend();
   const skies = weather(db, owner, clock, world.fetcher);
-  expect(await skies.status()).toEqual({ available: true, place: null, forecast: null });
+  expect(await skies.status()).toEqual({ available: true, place: null, saved: null, forecast: null });
   let s = await home(db, owner, clock, world.fetcher).summary();
   expect([s.cards.includes('weather'), s.choices.some((c) => c.key === 'weather'), s.weather]).toEqual([false, false, null]);
   expect(world.asked).toEqual([]);
@@ -160,7 +160,7 @@ it('the weather is off until a place is chosen, and asks nothing until then', as
   expect((await weather(db, await person('other'), clock, world.fetcher).status()).place).toBeNull();
 
   // Off forgets the place and the forecast, and nothing more is asked.
-  expect(await skies.turnOff()).toEqual({ available: true, place: null, forecast: null });
+  expect(await skies.turnOff()).toEqual({ available: true, place: null, saved: null, forecast: null });
   expect((await db.all('SELECT key FROM user_settings WHERE user_id = ?', [owner])).map((r) => r.key).filter((key) => String(key).startsWith('weather'))).toEqual([]);
   expect((await home(db, owner, clock, world.fetcher).summary()).weather).toBeNull();
   expect(world.asked).toHaveLength(3);
