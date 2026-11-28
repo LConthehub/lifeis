@@ -50,7 +50,7 @@ check('the ntfy server got only how many, not what', got.length === 1 && got[0].
 await ntfy.getByLabel(/Say what each thing is/).check(); await page.waitForTimeout(800);
 await ntfy.getByRole('button', { name: 'Send one now' }).click(); await page.waitForTimeout(1500);
 const again = await (await fetch(`${NTFY}/_seen`)).json();
-check('asked to, it says what each thing is', again[1]?.body?.startsWith('! Test the smoke alarms — due today'), again[1]?.body?.split('\n')[0]);
+check('asked to, it says what each thing is', again[1]?.body?.startsWith('! Test the smoke alarms: due today'), again[1]?.body?.split('\n')[0]);
 
 const worker = await page.evaluate(() => fetch('/sw.js').then(async (r) => [r.status, r.headers.get('content-type'), (await r.text()).includes("addEventListener('push'")]));
 check('the browser’s reminder helper is served', worker[0] === 200 && /javascript/.test(worker[1] ?? '') && worker[2], JSON.stringify(worker));

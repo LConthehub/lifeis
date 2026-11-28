@@ -74,7 +74,7 @@ it('the digest gathers what needs the person, the pressing first, and leaves out
     ['Coupon: Coffee', 'Costco · 1 day left', false],
   ]);
   expect(d.title).toBe('5 things for today, 2 pressing');
-  expect(d.text.split('\n')[0]).toBe('! Change the furnace filter — late by 13 days');
+  expect(d.text.split('\n')[0]).toBe('! Change the furnace filter: late by 13 days');
 
   await mine.save({ covers: { upkeep: false, low: false, dates: true, coupons: false } });
   d = await mine.digest();
@@ -103,10 +103,10 @@ it('each way carries it: email to yourself, ntfy saying only how many, and every
 
   const d = await mine.digest();
   expect(await mine.send(d)).toEqual({ sent: ['email', 'ntfy', 'push'], problems: [] });
-  expect([mailed[0]!.to[0]!.address, mailed[0]!.subject, mailed[0]!.text]).toEqual(['me@example.org', 'Life Is: 1 thing for today, 1 pressing', '! Test the alarms — due today\n\nSee it all: https://life.example/']);
+  expect([mailed[0]!.to[0]!.address, mailed[0]!.subject, mailed[0]!.text]).toEqual(['me@example.org', 'Life Is: 1 thing for today, 1 pressing', '! Test the alarms: due today\n\nSee it all: https://life.example/']);
   expect(posted[0]).toEqual({ url: 'https://ntfy.sh/lifeis-test-topic', body: '1 thing needs you today. Open Life Is to see what.',
     headers: { Title: 'Life Is: 1 thing today', Tags: 'house', 'Content-Type': 'text/plain; charset=utf-8', Click: 'https://life.example/', Priority: 'high' } });
-  expect(pushed).toEqual([{ endpoint: 'https://push.example/abcdefghijk', title: 'Life Is: 1 thing for today, 1 pressing', body: 'Test the alarms — due today' }]);
+  expect(pushed).toEqual([{ endpoint: 'https://push.example/abcdefghijk', title: 'Life Is: 1 thing for today, 1 pressing', body: 'Test the alarms: due today' }]);
   expect((await mine.browsers()).map((b) => b.label)).toEqual(['Laptop']); // the one that stopped listening is forgotten
 
   // Without what each needs, it says so plainly.
@@ -129,7 +129,7 @@ it('the morning round sends once a day, at each person’s time in their own zon
   expect(await remindersDue(db, new Date(Date.UTC(2046, 2, 5, 12, 31)), tools)).toEqual([{ user: owner, sent: ['ntfy'], problems: [] }]);
   expect(await remindersDue(db, new Date(Date.UTC(2046, 2, 5, 13, 0)), tools)).toEqual([]);
   expect(posted.map((p) => p.url)).toEqual(['https://ntfy.sh/lifeis-round-test']);
-  expect(posted[0]!.body).toMatch(/^! Water the plants — due today/);
+  expect(posted[0]!.body).toMatch(/^! Water the plants: due today/);
   // The next morning, again.
   expect((await remindersDue(db, new Date(Date.UTC(2046, 2, 6, 12, 45)), tools)).find((r) => r.user === owner)?.sent).toEqual(['ntfy']);
 });

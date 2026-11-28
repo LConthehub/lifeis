@@ -120,7 +120,7 @@ export function newTopic(): string {
 /** The digest as plain text, for an email or a push: a line each, the urgent first, and where to see it all. */
 export function digestText(digest: Digest, origin: string | null): string {
   if (!digest.lines.length) return 'Nothing needs you today.';
-  const lines = digest.lines.map((l) => `${l.urgent ? '!' : '•'} ${l.title}${l.detail ? ` — ${l.detail}` : ''}`);
+  const lines = digest.lines.map((l) => `${l.urgent ? '!' : '•'} ${l.title}${l.detail ? `: ${l.detail}` : ''}`);
   return [...lines, '', origin ? `See it all: ${origin}/` : 'Open Life Is to see it all.'].join('\n');
 }
 
@@ -282,7 +282,7 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
         if (!tools.push) throw new Problem(400, "This copy of Life Is can't send browser notifications (it needs to be opened over https)");
         const browsers = await db.all<PushSubscription & { id: number }>('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?', [owner]);
         if (!browsers.length) throw new Problem(400, 'No browser has said yes yet: turn them on from the browser that should get them');
-        const body = d.lines.length ? d.lines.slice(0, 6).map((l) => `${l.title}${l.detail ? ` — ${l.detail}` : ''}`).join('\n') + (d.lines.length > 6 ? `\n…and ${d.lines.length - 6} more` : '') : 'Nothing needs you today.';
+        const body = d.lines.length ? d.lines.slice(0, 6).map((l) => `${l.title}${l.detail ? `: ${l.detail}` : ''}`).join('\n') + (d.lines.length > 6 ? `\n…and ${d.lines.length - 6} more` : '') : 'Nothing needs you today.';
         let reached = 0;
         for (const b of browsers) {
           if ((await tools.push(b, d.single ? { title: d.single.title, body: d.single.body, url: d.single.link } : { title: `Life Is: ${d.title}`, body, url: d.lines.length === 1 ? d.lines[0]!.link : '/' })) === 'gone') {

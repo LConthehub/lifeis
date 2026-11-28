@@ -62,6 +62,7 @@ check('the key looks like a Life Is key', /^lik_[\w-]{43}$/.test(key));
 check('it says this is the only time', /only time Life Is shows it/.test(await shown.innerText()));
 check('the list shows the new key, on, never used, with its last four letters and what it may do',
   /Siri on my iPhone/.test(await section.innerText()) && /Never used/.test(await section.innerText()) && (await section.innerText()).includes(`Ends in ${key.slice(-4)}`) && /Read your grocery list/.test(await section.innerText()));
+check('it says the day the key would stop if unused', /Stops by itself on .*\d{4}/.test(await section.innerText()));
 check('no sideways scroll', (await sideways()) <= 0, String(await sideways()));
 await section.scrollIntoViewIfNeeded();
 await aside();

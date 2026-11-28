@@ -56,6 +56,8 @@
 <p>See <a href="upkeep.html#how-you-are-told">Upkeep</a>.</p>
 <h2 id="it-was-signed-out">It was signed out</h2>
 <p>Life Is signs out after a while unused. Change how long under <strong>Settings › Account &amp; sign-in</strong>.</p>
+<h2 id="everyone-is-told-to-wait-after-wrong-passwords">Everyone is told to wait after wrong passwords</h2>
+<p>Life Is slows down anyone who guesses wrong again and again. If a web server such as Caddy sits in front of Life Is, every visitor looks the same unless you name that server. Set <code>TRUSTED_PROXY</code> to its address in the setup file next to your <code>docker-compose.yml</code>, for example <code>TRUSTED_PROXY=172.18.0.2</code>, then start Life Is again. To find the address, run <code class="cmd" data-what="command">docker network inspect</code> on the network both share and look for the web server's address. Several addresses go in one line, separated by commas. Leave it empty if nothing sits in front of Life Is.</p>
 <h2 id="something-else">Something else</h2>
 <p>Write to <a href="mailto:hello@lifeis.living">hello@lifeis.living</a>.</p>
 <script src="copy.js"></script>

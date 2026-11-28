@@ -40,6 +40,10 @@ See [Upkeep](upkeep.html#how-you-are-told).
 
 Life Is signs out after a while unused. Change how long under **Settings › Account & sign-in**.
 
+## Everyone is told to wait after wrong passwords
+
+Life Is slows down anyone who guesses wrong again and again. If a web server such as Caddy sits in front of Life Is, every visitor looks the same unless you name that server. Set `TRUSTED_PROXY` to its address in the setup file next to your `docker-compose.yml`, for example `TRUSTED_PROXY=172.18.0.2`, then start Life Is again. To find the address, run `docker network inspect` on the network both share and look for the web server's address. Several addresses go in one line, separated by commas. Leave it empty if nothing sits in front of Life Is.
+
 ## Something else
 
 Write to hello@lifeis.living.

@@ -41,6 +41,8 @@ export type Options = {
   staticDir?: string;
   /** Sign a session out after this many unused minutes, unless the person chose their own. */
   idleMinutes?: number;
+  /** Addresses of proxies in front of Life Is, comma separated. Left out: the TRUSTED_PROXY setting, else none. */
+  trustedProxy?: string;
   clock?: auth.Clock;
   /** How Life Is reaches a media server and locks its key. Left out: media servers can't be connected. */
   reach?: Reach;
@@ -94,9 +96,40 @@ NEARBY.addAddress('::1', 'ipv6');
 NEARBY.addSubnet('fc00::', 7, 'ipv6');
 NEARBY.addSubnet('fe80::', 10, 'ipv6');
 
-function clientIp(req: IncomingMessage): string {
-  const address = req.socket.remoteAddress ?? '?';
+function plainAddress(address: string): string {
   return address.startsWith('::ffff:') && isIP(address.slice(7)) === 4 ? address.slice(7) : address;
+}
+
+function clientIp(req: IncomingMessage): string {
+  return plainAddress(req.socket.remoteAddress ?? '?');
+}
+
+/** The addresses in a TRUSTED_PROXY setting: comma separated, anything that is not an address left out. */
+export function parseProxies(setting: string | undefined): Set<string> {
+  const found = new Set<string>();
+  for (const part of (setting ?? '').split(',')) {
+    const address = plainAddress(part.trim());
+    if (isIP(address) !== 0) found.add(address);
+  }
+  return found;
+}
+
+/**
+ * Who is asking, for counting wrong guesses. The connecting address, unless it is a proxy the person in charge
+ * named (TRUSTED_PROXY). Then it is the right-most address in X-Forwarded-For that is not itself a trusted proxy.
+ * From any other address the header is ignored, so a visitor can't pick their own.
+ */
+export function visitorIp(req: IncomingMessage, proxies: Set<string>): string {
+  const connecting = clientIp(req);
+  if (proxies.size === 0 || !proxies.has(connecting)) return connecting;
+  const header = req.headers['x-forwarded-for'];
+  const hops = (Array.isArray(header) ? header.join(',') : header ?? '').split(',').map((hop) => plainAddress(hop.trim()));
+  for (let i = hops.length - 1; i >= 0; i--) {
+    const hop = hops[i]!;
+    if (isIP(hop) === 0) return connecting;
+    if (!proxies.has(hop)) return hop;
+  }
+  return connecting;
 }
 
 /**
@@ -131,6 +164,7 @@ export function createApp(options: Options) {
   const { db } = options;
   const clock = options.clock ?? (() => new Date());
   const idleDefault = options.idleMinutes ?? 15;
+  const proxies = parseProxies(options.trustedProxy ?? process.env.TRUSTED_PROXY);
   const page = options.staticDir ? pages(options.staticDir) : null;
   const now = () => clock().toISOString().slice(0, 19) + '+00:00';
 
@@ -307,7 +341,7 @@ export function createApp(options: Options) {
       if (options.demo) throw new Refusal(403, "Voice keys don't work in the demo");
       // Only for an address that is real, so a typo is not counted as a wrong key.
       if (!routes.some(([m, pattern]) => m === method && pattern.test(path))) throw new Refusal(404, 'Not found');
-      key = await useKey(db, bearer(req.headers.authorization), clientIp(req), clock);
+      key = await useKey(db, bearer(req.headers.authorization), visitorIp(req, proxies), clock);
       const owner = await db.get<{ id: number; username: string; name: string; is_admin: number }>(
         `SELECT u.id, u.username, ${shownName('u')} AS name, u.is_admin FROM users u WHERE u.id = ?`, [key.owner]);
       if (!owner) throw new Refusal(401, REFUSED);
@@ -324,7 +358,7 @@ export function createApp(options: Options) {
     const theirClock = clockFor(req);
     return route[2]({
       path, userAgent: String(req.headers['user-agent'] ?? '') || undefined, query: url.searchParams, id: Number(route[1].exec(path)![1] ?? 0), body: SAFE_METHODS.has(method) ? {} : await readBody(req, /^\/api\/things\/items\/\d+\/documents$/.test(path) ? MAX_PAPER_BODY_BYTES : undefined),
-      user: signedIn, key, kitchen: kitchen(db, signedIn.id, theirClock), clock: theirClock, token, ip: clientIp(req), https: isHttps(req), local: isLocal(req),
+      user: signedIn, key, kitchen: kitchen(db, signedIn.id, theirClock), clock: theirClock, token, ip: visitorIp(req, proxies), https: isHttps(req), local: isLocal(req),
       origin: req.headers.host ? `${isHttps(req) ? 'https' : 'http'}://${String(req.headers.host).slice(0, 200)}` : undefined,
     });
   }
@@ -353,7 +387,7 @@ export function createApp(options: Options) {
       } else if (connectorAddresses.owns(path)) {
         // An AI app's own addresses: no cookie is read, and the cross-site check of /api doesn't apply (a token is the only key).
         const host = req.headers.host ? String(req.headers.host).slice(0, 200) : undefined;
-        reply = await connectorAddresses.answer(req, path, { ip: clientIp(req), origin: host && /^[\w.\-:[\]]+$/.test(host) ? `${isHttps(req) ? 'https' : 'http'}://${host}` : undefined });
+        reply = await connectorAddresses.answer(req, path, { ip: visitorIp(req, proxies), origin: host && /^[\w.\-:[\]]+$/.test(host) ? `${isHttps(req) ? 'https' : 'http'}://${host}` : undefined });
       } else if (feed && (req.method === 'GET' || req.method === 'HEAD')) {
         const host = String(req.headers.host ?? '');
         const text = await feedFor(db, feed[1]!, clock, /^[\w.\-:[\]]+$/.test(host) ? `${isHttps(req) ? 'https' : 'http'}://${host}` : '');

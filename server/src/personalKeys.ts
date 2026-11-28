@@ -11,7 +11,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { isKeyAction, KEY_ACTIONS, type Db, type KeyAction } from '../../core/src/index.ts';
-import { todayOf } from '../../core/src/small.ts';
+import { addDays, dayNumber, todayOf } from '../../core/src/small.ts';
 import { LoginThrottle, type Clock } from './auth.ts';
 import { Refusal } from './http.ts';
 
@@ -28,15 +28,21 @@ export const keyThrottle = new LoginThrottle('key', 20);
 
 const hashOf = (key: string) => createHash('sha256').update(key, 'utf8').digest('hex');
 
+/** A key nobody has used for this many days stops working: counted from its last use, or from when it was made. */
+export const UNUSED_DAYS = 365;
+const stopsOn = (row: { created_at: string; last_used_on: string | null }) => addDays(row.last_used_on ?? row.created_at.slice(0, 10), UNUSED_DAYS);
+
 export type KeyInfo = {
   id: number; name: string; hint: string; can: KeyAction[]; says: string[]; on: boolean; created_at: string; last_used_on: string | null;
+  /** The day the key stops working if it is not used again. */
+  stops_on: string;
 };
 type Row = { id: number; name: string; hint: string; can: string; is_on: number; created_at: string; last_used_on: string | null };
 
 const actionsOf = (can: string): KeyAction[] => can.split(',').filter(isKeyAction);
 const describe = (row: Row): KeyInfo => {
   const can = actionsOf(row.can);
-  return { id: row.id, name: row.name, hint: row.hint, can, says: can.map((id) => KEY_ACTIONS.find((a) => a.id === id)!.says), on: row.is_on === 1, created_at: row.created_at, last_used_on: row.last_used_on };
+  return { id: row.id, name: row.name, hint: row.hint, can, says: can.map((id) => KEY_ACTIONS.find((a) => a.id === id)!.says), on: row.is_on === 1, created_at: row.created_at, last_used_on: row.last_used_on, stops_on: stopsOn(row) };
 };
 const COLUMNS = 'id, name, hint, can, is_on, created_at, last_used_on';
 
@@ -94,13 +100,15 @@ export async function useKey(db: Db, key: string | undefined, ip: string, clock:
   if (wait) throw new Refusal(429, `Too many wrong keys. Try again in ${wait} seconds.`);
   const hash = key && FORMAT.test(key) ? hashOf(key) : '';
   const row = hash
-    ? await db.get<{ id: number; owner_id: number; can: string; is_on: number; last_used_on: string | null }>(
-      'SELECT id, owner_id, can, is_on, last_used_on FROM personal_keys WHERE key_hash = ?', [hash])
+    ? await db.get<{ id: number; owner_id: number; can: string; is_on: number; created_at: string; last_used_on: string | null }>(
+      'SELECT id, owner_id, can, is_on, created_at, last_used_on FROM personal_keys WHERE key_hash = ?', [hash])
     : undefined;
   if (!row || row.is_on !== 1) {
     await keyThrottle.failure(db, ip, clock);
     throw new Refusal(401, REFUSED);
   }
+  // Unused for a year: it has stopped (the same answer as any key that isn't working). It is not a wrong guess, so not counted.
+  if (dayNumber(todayOf(clock)) >= dayNumber(stopsOn(row))) throw new Refusal(401, REFUSED);
   const now = clock().getTime();
   const times = (recent.get(hash) ?? []).filter((t) => now - t < 60_000);
   if (times.length >= PER_MINUTE) throw new Refusal(429, 'That key is being used too fast. Wait a minute.');

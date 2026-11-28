@@ -746,3 +746,63 @@ it('a goal keeps its plan, its settled day and its own cost lines (with who they
   await bringIn(bob, zip, importable);
   expect(await there()).toEqual(kept);
 });
+
+it('a holiday year keeps its checked-off thawing, cooking and recipe steps through a download, and an older download still comes in', async () => {
+  const k = kitchen(db, ana, clock);
+  const roast = (await k.createRecipe({ title: 'Roast', ingredients_text: '1 roast', cook_minutes: 240 })).id;
+  await prep(db, ana, clock).setRecipeSteps(roast, [{ words: 'Salt the roast', rule: 'night_before', at: '20:00' }]);
+  const mine = holidays(db, ana, clock);
+  const year = (await mine.create({ name: 'Midwinter', rule: { kind: 'fixed', month: 12, day: 20 } })).years[0]!.plan_id;
+  await plans(db, ana, clock).setFood(year, { served_at: '17:00', food_kind: 'meal' });
+  await plans(db, ana, clock).addFood(year, { label: 'Ham', thaw_pounds: 8 });
+  await plans(db, ana, clock).addItem(year, { kind: 'recipe', ref_id: roast });
+  const steps = (await mine.year(year)).countdown.steps;
+  const wanted = steps.filter((s) => s.source === 'thaw' || s.source === 'cook' || s.source === 'recipe');
+  expect(wanted.map((s) => s.source).sort()).toEqual(['cook', 'recipe', 'thaw']);
+  for (const s of wanted) await mine.tick(year, s.key, true);
+  const here = (await mine.year(year)).countdown.steps;
+  expect(here.filter((s) => s.done)).toHaveLength(3);
+  const zip = (await exportEverything(db, ana, clock)).bytes;
+  const { files } = await splitDownload(zip);
+  expect(files['plan-checks.csv']).toContain('thaw food,Ham');
+  await bringIn(bob, zip, ['recipes', 'plans', 'holidays']);
+  const theirs = (await holidays(db, bob, clock).list())[0]!.years[0]!.plan_id;
+  const there = (await holidays(db, bob, clock).year(theirs)).countdown.steps;
+  expect(there.map((s) => [s.source, s.words, s.done]).sort()).toEqual(here.map((s) => [s.source, s.words, s.done]).sort());
+  expect(there.filter((s) => s.done)).toHaveLength(3);
+  // A download from before the check marks were kept still comes in, with nothing checked.
+  const cy = await person('cy');
+  delete files['plan-checks.csv'];
+  const old = await bringInDownload(db, cy, files, ['recipes', 'plans', 'holidays'], clock);
+  for (const kind of old.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  const bare = (await holidays(db, cy, clock).year((await holidays(db, cy, clock).list())[0]!.years[0]!.plan_id)).countdown.steps;
+  expect(bare.filter((s) => s.done)).toHaveLength(0);
+});
+
+it('who may see a private thing and a spending category comes back, for the people who are here', async () => {
+  const things = inventory(db, ana, clock);
+  await things.addStarter('hunting');
+  const kinds = await things.listKinds();
+  const rifle = (await things.createItem({ kind_id: kinds.find((x) => x.name === 'Firearms')!.id, name: 'Old rifle' })).id;
+  await things.shareWith(rifle, [bob]);
+  await things.createItem({ kind_id: kinds.find((x) => x.name === 'Firearms')!.id, name: 'Other rifle' });
+  const spend = money(db, ana, clock);
+  await spend.addCategory({ name: 'Food', monthly_cents: 50_000, shared_with: [bob] });
+  await spend.addCategory({ name: 'Mine alone', monthly_cents: 1000 });
+  const zip = (await exportEverything(db, ana, clock)).bytes;
+  const { files } = await splitDownload(zip);
+  expect(files['things.csv']).toContain('Shared with');
+  const cy = await person('cy');
+  const done = await bringIn(cy, zip, ['things', 'money']);
+  for (const kind of done.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  const sharedItems = await db.all<{ name: string; who: string }>('SELECT i.name, u.username AS who FROM item_shares s JOIN items i ON i.id = s.item_id JOIN users u ON u.id = s.user_id WHERE i.owner_id = ?', [cy]);
+  expect(sharedItems).toEqual([{ name: 'Old rifle', who: 'bob' }]);
+  const sharedCategories = await db.all<{ name: string; who: string }>('SELECT c.name, u.username AS who FROM money_shares s JOIN money_categories c ON c.id = s.category_id JOIN users u ON u.id = s.user_id WHERE c.owner_id = ?', [cy]);
+  expect(sharedCategories).toEqual([{ name: 'Food', who: 'bob' }]);
+  // A name this Life Is does not know is left out, never turned into everyone.
+  const lone = await person('dee');
+  const away = await bringInDownload(db, lone, { ...files, 'things.csv': files['things.csv']!.replace(/bob/g, 'zed'), 'money-categories.csv': files['money-categories.csv']!.replace(/bob/g, 'zed') }, ['things', 'money'], clock);
+  for (const kind of away.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  expect(await db.all('SELECT 1 FROM item_shares s JOIN items i ON i.id = s.item_id WHERE i.owner_id = ?', [lone])).toEqual([]);
+  expect(await db.all('SELECT 1 FROM money_shares s JOIN money_categories c ON c.id = s.category_id WHERE c.owner_id = ?', [lone])).toEqual([]);
+});

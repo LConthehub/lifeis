@@ -23,6 +23,7 @@ services:
     environment:
       - DEMO_MODE=1               # empties and refills this database: never point it at real data
       - SESSION_IDLE_MINUTES=60
+      - TRUSTED_PROXY=${TRUSTED_PROXY:-}     # the address of a proxy in front of the demo; left empty, none is trusted
     restart: unless-stopped
     # A public demo gets a small, fixed share of the computer.
     mem_limit: 384m

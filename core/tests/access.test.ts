@@ -18,7 +18,7 @@ it('counts fourteen days from when the trial began, and not before it begins', (
 });
 
 it('keeps the kitchen and backups free, whatever the trial says', () => {
-  for (const free of ['/api/kitchen/recipes', '/api/shopping/prices', '/api/device/backup', '/api/device/restore', '/api/home', '/api/life', '/api/health']) expect(isPaidPath(free)).toBe(false);
+  for (const free of ['/api/kitchen/recipes', '/api/device/backup', '/api/device/restore', '/api/home', '/api/life', '/api/health']) expect(isPaidPath(free)).toBe(false);
   for (const paid of ['/api/things/items', '/api/projects/3/costs', '/api/plans', '/api/calendar/events', '/api/media', '/api/mail/accounts', '/api/money/entries', '/api/assistant/ask']) expect(isPaidPath(paid)).toBe(true);
   const ended = accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-06-01T00:00:00Z'));
   expect(decide(ended, 'POST', '/api/kitchen/recipes')).toBe('go');
@@ -59,4 +59,21 @@ it('covers making and changing routines, and keeps ticking them free after the t
   // Ticking never begins the trial; making a routine does.
   const fresh = accessNow({ trial_started: null, unlocked: false }, at(BEGAN));
   expect([decide(fresh, 'PUT', '/api/routine-day/steps/7'), decide(fresh, 'POST', '/api/routines')]).toEqual(['go', 'start']);
+});
+
+it('covers changing the house manual, home lab, shopping, cooking, keys and recalls once the trial has ended, and keeps reading and the download free', () => {
+  const six = ['/api/manual/entries', '/api/manual/entries/4', '/api/manual/share', '/api/home-services', '/api/home-services/2/pin', '/api/shopping/prices', '/api/shopping/trips/3',
+    '/api/cooking/timers', '/api/keys', '/api/keys/5', '/api/recalls/check', '/api/recalls/vehicles/2'];
+  for (const path of six) expect(isPaidPath(path)).toBe(true);
+  const ended = accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-06-01T00:00:00Z'));
+  for (const path of six) {
+    expect(decide(ended, 'GET', path)).toBe('go');
+    for (const method of ['POST', 'PUT', 'DELETE']) expect(decide(ended, method, path)).toBe('read_only');
+  }
+  // The download of everything is always free, and so are the kitchen and backups.
+  expect(decide(ended, 'GET', '/api/export/everything.zip')).toBe('go');
+  expect(decide(ended, 'POST', '/api/kitchen/recipes')).toBe('go');
+  // Before the trial begins, adding to one of them begins it; after unlocking, nothing is refused.
+  expect(decide(accessNow({ trial_started: null, unlocked: false }, at(BEGAN)), 'POST', '/api/manual/entries')).toBe('start');
+  expect(decide(accessNow({ trial_started: BEGAN, unlocked: true }, at('2046-06-01T00:00:00Z')), 'POST', '/api/manual/entries')).toBe('go');
 });

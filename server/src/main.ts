@@ -6,6 +6,8 @@
  *   STATIC_DIR             the built pages to serve; left out, only /api is answered
  *   PORT, HOST             where to listen                                    (8008, every address)
  *   SESSION_IDLE_MINUTES   sign out after this long unused                    (15)
+ *   TRUSTED_PROXY          addresses of proxies in front of Life Is, comma separated; only from these is
+ *                          X-Forwarded-For read, to count wrong sign-in guesses per visitor   (none)
  */
 import { createServer } from 'node:http';
 import path from 'node:path';

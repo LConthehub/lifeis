@@ -189,6 +189,39 @@ it('the day a key was last used is kept, and nothing more about it', async () =>
   expect((await database.db.get<{ last_used_on: string }>('SELECT last_used_on FROM personal_keys'))!.last_used_on).toBe('2046-03-09');
 });
 
+it('a key nobody has used for a year stops working, counted from its last use or, if never used, from when it was made', async () => {
+  const admin = await owner();
+  const { key, id } = await makeKey(admin);
+  const daysAgo = (n: number) => new Date(2046, 2, 5 - n, 12).toISOString().slice(0, 10);
+  const setUsed = (last: string | null, made = '2040-01-01') =>
+    database.db.run('UPDATE personal_keys SET last_used_on = ?, created_at = ? WHERE id = ?', [last, `${made}T09:00:00+00:00`, id]);
+  const asked = () => visitor().get('/api/voice/groceries', asKey(key)).then((answer) => answer.status);
+
+  await setUsed(daysAgo(364));
+  expect(await asked()).toBe(200);
+  await setUsed(daysAgo(366));
+  expect(await asked()).toBe(401);
+  await setUsed(daysAgo(365));
+  expect(await asked()).toBe(401);
+  await setUsed(daysAgo(1));
+  expect(await asked()).toBe(200);
+  // Never used: from the day it was made.
+  await setUsed(null, daysAgo(364));
+  expect(await asked()).toBe(200);
+  await setUsed(null, daysAgo(366));
+  expect(await asked()).toBe(401);
+  // A stopped key is not a wrong guess: it is not counted against the address.
+  expect((await database.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM login_throttle'))!.n).toBe(0);
+});
+
+it('each key shows the day it would stop', async () => {
+  const admin = await owner();
+  const { id } = await makeKey(admin);
+  expect((await admin.get('/api/keys')).json.keys[0].stops_on).toBe('2047-03-05');
+  await database.db.run('UPDATE personal_keys SET last_used_on = ? WHERE id = ?', ['2046-03-01', id]);
+  expect((await admin.get('/api/keys')).json.keys[0].stops_on).toBe('2047-03-01');
+});
+
 it('adding a reminder, today and the week speak plainly', async () => {
   const admin = await owner();
   const { key } = await makeKey(admin);

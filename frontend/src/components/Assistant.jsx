@@ -92,11 +92,11 @@ export function AssistantService() {
               <legend className="text-sm font-medium text-gray-700 dark:text-life-100">Where answers come from</legend>
               <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-life-50">
                 <input type="radio" name="source" checked={onPhone} onChange={() => setForm({ ...form, source: 'phone' })} className="mt-1" />
-                <span>This device's own {a.phone.name} <span className="text-xs text-gray-500 dark:text-life-300">— built in, and nothing leaves the device. It is small, so it is given less to look at and keeps its answers simple.</span></span>
+                <span>This device's own {a.phone.name} <span className="text-xs text-gray-500 dark:text-life-300">- built in, and nothing leaves the device. It is small, so it is given less to look at and keeps its answers simple.</span></span>
               </label>
               <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-life-50">
                 <input type="radio" name="source" checked={!onPhone} onChange={() => setForm({ ...form, source: 'address' })} className="mt-1" />
-                <span>A model at an address <span className="text-xs text-gray-500 dark:text-life-300">— one you run yourself at home, or a cloud AI with the warning below.</span></span>
+                <span>A model at an address <span className="text-xs text-gray-500 dark:text-life-300">- one you run yourself at home, or a cloud AI with the warning below.</span></span>
               </label>
             </fieldset>
           )}
@@ -126,7 +126,7 @@ export function AssistantService() {
             {AREAS.map(([key, label, what]) => (
               <label key={key} className="flex items-start gap-2 py-1 text-sm text-gray-800 dark:text-life-50">
                 <input type="checkbox" checked={form.areas.includes(key)} onChange={() => tick(key)} className="mt-1" />
-                <span>{label} <span className="text-xs text-gray-500 dark:text-life-300">— {what}</span></span>
+                <span>{label} <span className="text-xs text-gray-500 dark:text-life-300">- {what}</span></span>
               </label>
             ))}
           </fieldset>

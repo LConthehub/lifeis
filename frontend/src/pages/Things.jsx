@@ -245,7 +245,7 @@ function ValueInput({ field, value, onChange }) {
   if (field.type === 'choice') {
     return (
       <select value={value ?? ''} onChange={(e) => onChange(e.target.value)} className={inputClass}>
-        <option value="">—</option>
+        <option value="">-</option>
         {field.choices.map((c) => <option key={c} value={c}>{c}</option>)}
         {value && !field.choices.includes(value) && <option value={value}>{value}</option>}
       </select>
@@ -254,7 +254,7 @@ function ValueInput({ field, value, onChange }) {
   if (field.type === 'yesno') {
     return (
       <select value={value === true ? 'yes' : value === false ? 'no' : ''} onChange={(e) => onChange(e.target.value === '' ? '' : e.target.value === 'yes')} className={inputClass}>
-        <option value="">—</option><option value="yes">Yes</option><option value="no">No</option>
+        <option value="">-</option><option value="yes">Yes</option><option value="no">No</option>
       </select>
     );
   }
