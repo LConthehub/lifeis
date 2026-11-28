@@ -2,7 +2,7 @@
  * The addresses for the things you keep (/api/things) and the projects that use them (/api/projects).
  * What they do is core/'s inventory.ts and projects.ts; this only reads what was sent and passes it on.
  */
-import { importHomebox, inventory, sharedPhoto, sharedWithMe, lookOverHomebox, readHomebox, packing, pets, projects, upkeep, whatIsThis, MAX_PET_PHOTO, MAX_DOCUMENT, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
+import { importHomebox, inventory, pieces as piecesOf, sharedPhoto, sharedWithMe, lookOverHomebox, readHomebox, packing, pets, projects, upkeep, whatIsThis, MAX_PET_PHOTO, MAX_DOCUMENT, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
 import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -11,6 +11,16 @@ const at = (path: string) => new RegExp(`^/api/${path.replaceAll(':id', ID)}$`);
 const fieldFrom = (body: Body): FieldInput => ({
   name: read.text(body, 'name'), type: read.text(body, 'type') as FieldType, unit: read.maybeText(body, 'unit'), choices: read.texts(body, 'choices'),
 });
+
+/** A piece as sent: its name, how many, where it is kept, and (when sent) its state and how often it is replaced. */
+const pieceFrom = (body: Body) => {
+  const n = sent(body, 'every_n') ? read.maybeWhole(body, 'every_n') : undefined;
+  return {
+    name: read.text(body, 'name'), quantity: read.maybeWhole(body, 'quantity'), place: read.maybeText(body, 'place'),
+    ...(sent(body, 'state') ? { state: read.text(body, 'state') } : {}),
+    ...(n === undefined ? {} : { every: n === null ? null : { n, unit: read.text(body, 'every_unit') } }),
+  };
+};
 
 const itemFrom = (body: Body) => ({
   name: read.text(body, 'name'), quantity: read.maybeNumber(body, 'quantity'), unit: read.maybeText(body, 'unit'),
@@ -105,6 +115,7 @@ export function makingRoutes(db: Db): Route[] {
   const things = (c: Context) => inventory(db, c.user.id, c.clock);
   const making = (c: Context) => projects(db, c.user.id, c.clock);
   const jobs = (c: Context) => upkeep(db, c.user.id, c.clock);
+  const parts = (c: Context) => piecesOf(db, c.user.id, c.clock);
   const animals = (c: Context) => pets(db, c.user.id, c.clock);
   const boxes = (c: Context) => packing(db, c.user.id, c.clock);
   const petFrom = (body: Body) => ({
@@ -249,6 +260,13 @@ export function makingRoutes(db: Db): Route[] {
       // The person's own picture: their browser may keep it for a while, nothing in between may.
       return { body: photo.bytes, headers: { 'Content-Type': photo.type, 'Cache-Control': 'private, max-age=60', 'X-Content-Type-Options': 'nosniff' } };
     }],
+    // A thing's pieces: the small parts that go missing. Listed, checked, put on the shopping list. See core/'s pieces.ts.
+    ['GET', at('things/items/:id/pieces'), async (c) => ({ json: await parts(c).list(c.id) })],
+    ['POST', at('things/items/:id/pieces'), async (c) => ({ status: 201, json: await parts(c).add(c.id, pieceFrom(c.body)) })],
+    ['POST', at('things/items/:id/pieces/check'), async (c) => ({ json: await parts(c).check(c.id, read.wholes(c.body, 'here')) })],
+    ['PUT', at('things/pieces/:id'), async (c) => ({ json: await parts(c).update(c.id, pieceFrom(c.body)) })],
+    ['DELETE', at('things/pieces/:id'), async (c) => ({ json: await parts(c).remove(c.id) })],
+    ['POST', at('things/pieces/:id/shop'), async (c) => ({ json: await parts(c).shop(c.id) })],
     ['GET', at('things/items/:id'), async (c) => ({ json: await things(c).getItem(c.id) })],
     ['PUT', at('things/items/:id'), async (c) => ({ json: await things(c).updateItem(c.id, itemFrom(c.body)) })],
     ['DELETE', at('things/items/:id'), async (c) => (await things(c).deleteItem(c.id), { status: 204 })],

@@ -1084,6 +1084,35 @@ it('a gun and its ammunition over the web: private to the person, serial only wi
   expect(printed.map((g: { name: string; serial: string; gone: { how: string } }) => [g.name, g.serial, g.gone.how])).toEqual([['Deer rifle', 'ZX-90417-Q', 'sold']]);
 });
 
+it("a thing's pieces answer over the web: listed, checked, on the shopping list, replaced every so often, and one person's only", async () => {
+  const admin = await owner();
+  const kind = (await admin.post('/api/things/kinds', { name: 'Kitchen' })).json[0].id;
+  const cooker = (await admin.post('/api/things/items', { kind_id: kind, name: 'Egg cooker' })).json.id;
+  const made = await admin.post(`/api/things/items/${cooker}/pieces`, { name: 'Piercing pin', quantity: 1, every_n: 6, every_unit: 'month' });
+  expect([made.status, made.json.pieces[0].every, made.json.pieces[0].job_id === null]).toEqual([201, { n: 6, unit: 'month' }, false]);
+  const lid = (await admin.post(`/api/things/items/${cooker}/pieces`, { name: 'Lid', quantity: 2, place: 'Cupboard' })).json.pieces[1];
+  expect((await admin.post(`/api/things/items/${cooker}/pieces`, { name: '' })).status).toBe(400);
+  expect((await admin.get('/api/things/upkeep')).json.map((j: { name: string }) => j.name)).toEqual(['Egg cooker: new Piercing pin']);
+
+  const checked = await admin.post(`/api/things/items/${cooker}/pieces/check`, { here: [lid.id] });
+  expect([checked.json.missing, checked.json.checked_missing, checked.json.pieces.map((p: { state: string }) => p.state)]).toEqual([1, 1, ['missing', 'here']]);
+  const pinId = checked.json.pieces[0].id;
+  const shop = await admin.post(`/api/things/pieces/${pinId}/shop`, {});
+  expect([shop.status, shop.json.added]).toEqual([200, true]);
+  expect((await admin.post(`/api/things/pieces/${pinId}/shop`, {})).json.added).toBe(false);
+  expect((await admin.get('/api/kitchen/grocery')).json.map((g: { label: string }) => g.label)).toEqual(['Piercing pin']);
+  expect((await admin.get('/api/things/items')).json.map((t: { name: string }) => t.name)).toEqual(['Egg cooker']);
+
+  const cleared = await admin.put(`/api/things/pieces/${pinId}`, { name: 'Piercing pin', every_n: null });
+  expect([cleared.json.pieces[0].every, (await admin.get('/api/things/upkeep')).json]).toEqual([null, []]);
+  expect((await admin.delete(`/api/things/pieces/${lid.id}`)).json.pieces).toHaveLength(1);
+
+  // Someone else cannot see or change them.
+  const other = await member(admin, 'partner');
+  expect((await other.get(`/api/things/items/${cooker}/pieces`)).status).toBe(404);
+  expect((await other.put(`/api/things/pieces/${pinId}`, { name: 'Mine' })).status).toBe(404);
+});
+
 it('a database from before things and projects is upgraded, with a copy saved first', async () => {
   const admin = await owner();
   await admin.post('/api/kitchen/recipes', { title: 'Toast', ingredients_text: '2 slices bread' });
@@ -1097,7 +1126,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   for (const column of ['returned', 'after_trip', 'after_done', 'job_id', 'thaw_pounds']) await database.db.run(`ALTER TABLE plan_items DROP COLUMN ${column}`);
   for (const column of ['served_at', 'food_kind', 'parts']) await database.db.run(`ALTER TABLE plans DROP COLUMN ${column}`);
   for (const column of ['every_days', 'every_from']) await database.db.run(`ALTER TABLE routine_steps DROP COLUMN ${column}`);
-  for (const table of ['routine_closed', 'dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients', 'measure_entries', 'measures', 'home_service_pins', 'home_service_people', 'home_services', 'media_list_items', 'media_lists', 'item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['item_pieces', 'routine_closed','dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients', 'measure_entries', 'measures', 'home_service_pins', 'home_service_people', 'home_services', 'media_list_items', 'media_lists', 'item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.

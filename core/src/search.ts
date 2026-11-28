@@ -70,10 +70,14 @@ export async function search(db: Db, owner: number, query: string, only?: Search
     const w = every(['i.name', 'i.note', 'i.barcode', 'i.serial', 'i.model', 'i.bought_at', 'k.name', "printf('%03d-%03d', i.asset_no / 1000, i.asset_no % 1000)",
       "(SELECT GROUP_CONCAT(f.name || ' ' || f.value, ' ') FROM item_fields f WHERE f.item_id = i.id)",
       "(SELECT GROUP_CONCAT(v.value, ' ') FROM item_values v WHERE v.item_id = i.id)",
-      "(SELECT GROUP_CONCAT(a.activity, ' ') FROM item_activities a WHERE a.item_id = i.id)"]);
+      "(SELECT GROUP_CONCAT(a.activity, ' ') FROM item_activities a WHERE a.item_id = i.id)",
+      "(SELECT GROUP_CONCAT(pc.name || ' ' || COALESCE(pc.place, ''), ' ') FROM item_pieces pc WHERE pc.item_id = i.id)"]);
     for (const t of await db.all<{ id: number; name: string; kind: string; icon: string | null; place_id: number | null }>(
       `SELECT i.id, i.name, k.name AS kind, k.icon, i.place_id FROM items i JOIN kinds k ON k.id = i.kind_id WHERE i.owner_id = ? AND i.gone_on IS NULL AND k.guard IS NULL AND (${w.sql}${await tagged('thing', 'i.id')}) ORDER BY i.name COLLATE NOCASE LIMIT ${PER_KIND}`, [owner, ...w.args])) {
-      out.push({ kind: 'thing', id: t.id, icon: t.icon || '📦', title: t.name, detail: join(t.kind, where(t.place_id) && `📍 ${where(t.place_id)}`), link: `/things/${t.id}` });
+      // A piece that matched is named, so the answer says why the thing was found. The piece itself never gets a line of its own.
+      const piece = (await db.all<{ name: string }>('SELECT name FROM item_pieces WHERE item_id = ? ORDER BY sort_order, id', [t.id]))
+        .find((p) => words.some((word) => p.name.toLowerCase().includes(word)));
+      out.push({ kind: 'thing', id: t.id, icon: t.icon || '📦', title: t.name, detail: join(t.kind, piece && `piece: ${piece.name}`, where(t.place_id) && `📍 ${where(t.place_id)}`), link: `/things/${t.id}` });
     }
   }
   if (wants('place')) {

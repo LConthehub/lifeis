@@ -361,7 +361,7 @@ function Unlock() {
         <p className="text-sm text-gray-600 dark:text-life-100">Every part of Life Is is yours on this device, for good. Thank you.</p>
       ) : (
         <>
-          <p className="text-sm text-gray-600 dark:text-life-100">The kitchen (recipes, the week, groceries, the pantry, prices) and backups are free for good. Everything else is one payment of {access.price}: no subscription, nothing to renew.</p>
+          <p className="text-sm text-gray-600 dark:text-life-100">The kitchen (recipes, the week, groceries, the pantry) and backups are free for good. Everything else is one payment of {access.price}: no subscription, nothing to renew.</p>
           <p className="mt-2 text-sm text-gray-600 dark:text-life-100">
             {access.state === 'unstarted' && `You can try all of it free for ${access.trial_days} days. The days start counting when you first add something outside the kitchen.`}
             {access.state === 'trial' && `Your free trial has ${days} ${days === 1 ? 'day' : 'days'} left.`}

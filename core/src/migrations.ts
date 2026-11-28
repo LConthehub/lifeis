@@ -1971,6 +1971,30 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE holidays ADD COLUMN every_from INTEGER`,
     ],
   },
+  {
+    number: 68,
+    name: 'Things with pieces',
+    // A thing lists its pieces as light lines (pieces.ts). `state` is here, missing or broken. A piece that is replaced every so often
+    // becomes its own Upkeep job (job_id). The thing remembers when its pieces were last checked and how many were missing then.
+    statements: [
+      `CREATE TABLE item_pieces (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        place TEXT,
+        state TEXT NOT NULL DEFAULT 'here' CHECK(state IN ('here', 'missing', 'broken')),
+        every_n INTEGER,
+        every_unit TEXT,
+        job_id INTEGER REFERENCES upkeep_jobs(id) ON DELETE SET NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_item_pieces ON item_pieces(item_id)`,
+      `ALTER TABLE items ADD COLUMN pieces_checked_on TEXT`,
+      `ALTER TABLE items ADD COLUMN pieces_checked_missing INTEGER`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

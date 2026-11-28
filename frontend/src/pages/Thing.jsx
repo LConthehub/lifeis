@@ -10,9 +10,17 @@ import { ItemForm, goneText } from './Things';
 import { DueBadge } from './Upkeep';
 import Records from '../components/Records';
 import { ThingRecalls } from '../components/Recalls';
+import ThingPieces from '../components/ThingPieces';
 import { lastUsedText, todayHere } from '../ago';
 
 const dayText = (day) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** Who has a thing that is lent out: the value of a field called "Lent to" on its kind, when it has one filled in. */
+function lentOut(item, kinds) {
+  const field = kinds.find((k) => k.id === item.kind_id)?.fields?.find((f) => /^lent to$/i.test(f.name.trim()));
+  const who = field ? item.values?.[field.id] : null;
+  return field && who ? { field, who: String(who) } : null;
+}
 
 /** One line of a thing's (or a copy's) history, in words. */
 export function historyLine(h) {
@@ -62,19 +70,23 @@ export default function Thing() {
   const [routines, setRoutines] = useState([]);
   const [error, setError] = useState('');
   const [quick, setQuick] = useState(null);       // { rec, details }: the use the last tap recorded, while it can still be taken back
+  const [offer, setOffer] = useState(0);          // goes up when the check of its pieces should be offered (a lent thing came back)
   const picker = useRef(null);
 
   const load = useCallback(() => {
     axios.get(`/api/things/items/${id}`).then(({ data }) => setItem(data)).catch(() => setItem(null));
     axios.get(`/api/things/items/${id}/history`).then(({ data }) => setHistory(data)).catch(() => setHistory([]));
   }, [id]);
+  const loadJobs = useCallback(() => {
+    axios.get('/api/things/upkeep').then(({ data }) => setJobs(data.filter((j) => j.item?.id === id || j.tools.some((x) => x.id === id) || j.supplies.some((x) => x.item_id === id)))).catch(() => {});
+  }, [id]);
   useEffect(() => {
     load();
     axios.get('/api/things/kinds').then(({ data }) => setKinds(data)).catch(() => {});
     axios.get('/api/things/places').then(({ data }) => setPlaces(data)).catch(() => {});
     axios.get(`/api/routines/for-thing/${id}`).then(({ data }) => setRoutines(data)).catch(() => setRoutines([]));
-    axios.get('/api/things/upkeep').then(({ data }) => setJobs(data.filter((j) => j.item?.id === id || j.tools.some((x) => x.id === id) || j.supplies.some((x) => x.item_id === id)))).catch(() => {});
-  }, [load, id]);
+    loadJobs();
+  }, [load, loadJobs, id]);
 
   if (item === undefined) return null;
   if (item === null) return <p className="text-sm text-gray-600 dark:text-life-200">That thing isn't here anymore. It may have been deleted. <Link to="/things" className="underline">All things</Link></p>;
@@ -102,6 +114,17 @@ export default function Thing() {
   };
   const lastUsed = history.filter((h) => h.what === 'used').map((h) => h.day).sort().pop() ?? null;
   const removePhoto = async () => { setItem((await axios.delete(`/api/things/items/${id}/photo`)).data); };
+  const lent = lentOut(item, kinds);
+  // It came back: the "Lent to" field is emptied, and the check of its pieces is offered.
+  const cameBack = async () => {
+    setError('');
+    const values = { ...item.values };
+    delete values[lent.field.id];
+    try {
+      setItem((await axios.put(`/api/things/items/${id}`, { name: item.name, quantity: item.quantity, unit: item.unit, place_id: item.place_id, low_at: item.low_at, note: item.note, values })).data);
+      setOffer((n) => n + 1);
+    } catch (err) { setError(errorMessage(err, "Couldn't change that")); }
+  };
 
   return (
     <div className="space-y-4">
@@ -183,6 +206,8 @@ export default function Thing() {
 
       <Records item={item} onChanged={(saved) => (saved ? setItem(saved) : load())} />
 
+      {!item.guard && <ThingPieces item={item} lent={lent?.who ?? null} onBack={cameBack} offer={offer} onChanged={loadJobs} />}
+
       {item.guard && <Sharing item={item} />}
 
       {jobs.length > 0 && (
@@ -218,7 +243,7 @@ export default function Thing() {
 
       {modal === 'edit' && (
         <Modal title={`Change ${item.name}`} onClose={() => setModal(null)}>
-          <ItemForm item={item} kinds={kinds} places={places} onPlaces={setPlaces} onDone={() => { setModal(null); axios.get(`/api/things/items/${id}`).then(({ data }) => { setItem(data); load(); }).catch(() => navigate('/things')); }} />
+          <ItemForm item={item} kinds={kinds} places={places} onPlaces={setPlaces} onDone={() => { setModal(null); axios.get(`/api/things/items/${id}`).then(({ data }) => { if (lent && !lentOut(data, kinds)) setOffer((n) => n + 1); setItem(data); load(); }).catch(() => navigate('/things')); }} />
         </Modal>
       )}
       {modal === 'gone' && (
