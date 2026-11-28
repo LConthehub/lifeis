@@ -397,3 +397,16 @@ it('an upkeep job on a plan is a line that links to the job, done together both 
   const left = (await mine.get(p.id)).items_list.find((i) => i.id === again.items_list.find((x) => x.label === 'Check the smoke alarms')!.id)!;
   expect([left.label, left.job_id, left.link]).toEqual(['Check the smoke alarms', null, null]);
 });
+
+it('a plan from before parts with nothing in it shows the parts a new plan starts with', async () => {
+  const empty = await mine.create({ name: 'Quiet afternoon', start_day: '2046-03-05' });
+  const longer = await mine.create({ name: 'Painting week', start_day: '2046-03-05', end_day: '2046-03-09' });
+  await db.run('UPDATE plans SET parts = NULL WHERE id IN (?, ?)', [empty.id, longer.id]);
+  expect((await mine.get(empty.id)).parts).toEqual(['food', 'budget', 'tasks', 'bring']);
+  expect((await mine.get(longer.id)).parts).toEqual(['food', 'budget', 'more_days', 'tasks', 'bring']);
+  expect((await mine.list()).find((x) => x.id === empty.id)!.parts).toEqual(['food', 'budget', 'tasks', 'bring']);
+  // With something in it, it shows only the part that holds it, and Budget.
+  await mine.addItem(empty.id, { kind: 'task', label: 'Sweep' });
+  await db.run('UPDATE plans SET parts = NULL WHERE id = ?', [empty.id]);
+  expect((await mine.get(empty.id)).parts).toEqual(['budget', 'tasks']);
+});

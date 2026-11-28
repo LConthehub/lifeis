@@ -82,10 +82,12 @@ export function partsChecked(parts: readonly string[]): PlanPart[] {
 /** A plan's parts: those it saved, or for a plan from before parts, the ones it has something in. */
 function partsOf(saved: string | null, kinds: string[], days: number): PlanPart[] {
   if (saved !== null) return PLAN_PARTS.map((p) => p.key).filter((key) => saved.split(',').includes(key));
-  // Budget too: every plan had its goal box before parts.
-  const used = new Set<string>(['budget', ...kinds.map((k) => PART_OF_ITEM[k as PlanItemKind]).filter(Boolean)]);
-  if (days > 1) used.add('more_days');
+  const used = new Set<string>(kinds.map((k) => PART_OF_ITEM[k as PlanItemKind]).filter(Boolean));
+  // A plan with nothing in it shows what a new plan does; one with things in it shows the parts they are in.
   if (used.size === 0) for (const p of FIRST_PARTS) used.add(p);
+  // Budget too: every plan had its goal box before parts.
+  used.add('budget');
+  if (days > 1) used.add('more_days');
   return PLAN_PARTS.map((p) => p.key).filter((key) => used.has(key));
 }
 export type PlanItemKind = (typeof PLAN_ITEM_KINDS)[number];
