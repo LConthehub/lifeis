@@ -1995,6 +1995,58 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE items ADD COLUMN pieces_checked_missing INTEGER`,
     ],
   },
+  {
+    number: 76,
+    name: "a person's own private records: checkups, a daily check-in, and an incident log",
+    // All three belong to one person (owner_id) and are only ever read with that person's id: no sharing, not even for the person in charge.
+    // checkups: a name, how often (every_n weeks, months or years), the day of the last one, an optional note and cost in cents.
+    // checkins: one a day (unique per person and day): sleep hours, glasses of water, energy 1 to 5, one line; each may be empty.
+    // incidents: dated entries. written_at is when it was first written (a UTC stamp): for 24 hours after that it can be changed or taken
+    // away, then it can only be added to (incident_additions, which are never changed). A restore keeps written_at, so the record still holds up.
+    statements: [
+      `CREATE TABLE checkups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        every_n INTEGER NOT NULL CHECK(every_n >= 1 AND every_n <= 999),
+        every_unit TEXT NOT NULL CHECK(every_unit IN ('week', 'month', 'year')),
+        last_on TEXT,
+        note TEXT,
+        cost_cents INTEGER,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_checkups_owner ON checkups(owner_id)`,
+      `CREATE TABLE checkins (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        sleep_hours REAL,
+        water INTEGER,
+        energy INTEGER CHECK(energy IS NULL OR (energy >= 1 AND energy <= 5)),
+        line TEXT,
+        created_at TEXT NOT NULL,
+        UNIQUE(owner_id, day)
+      )`,
+      `CREATE TABLE incidents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        happened_on TEXT NOT NULL,
+        happened_time TEXT,
+        what TEXT NOT NULL,
+        who TEXT,
+        kept TEXT,
+        written_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_incidents_owner ON incidents(owner_id, happened_on)`,
+      `CREATE TABLE incident_additions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        incident_id INTEGER NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+        words TEXT NOT NULL,
+        written_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_incident_additions ON incident_additions(incident_id)`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

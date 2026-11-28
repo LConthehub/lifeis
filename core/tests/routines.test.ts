@@ -496,6 +496,7 @@ it('upgrades from the version before pet routines: routines and ticks kept, tick
   const r = await mine().create({ name: 'Morning', times: [{ name: 'Morning', steps: [{ words: 'One' }, { words: 'Two' }] }] });
   await mine().tick(r.times[0]!.steps[0]!.id, true);
   for (const table of ['routine_closed', 'dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
+  for (const table of ['incident_additions', 'incidents', 'checkins', 'checkups']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE measure_entries');
   await db.run('DROP TABLE measures');
   await db.run('DROP TABLE item_pieces');
@@ -637,6 +638,7 @@ it('upgrades from the version before workouts: routines and ticks stay, as plain
   const r = await mine().create({ name: 'Morning', times: [{ name: 'Morning', steps: [{ words: 'One' }] }] });
   await mine().tick(r.times[0]!.steps[0]!.id, true);
   for (const table of ['routine_closed', 'dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
+  for (const table of ['incident_additions', 'incidents', 'checkins', 'checkups']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE measure_entries');
   await db.run('DROP TABLE measures');
   await db.run('DROP TABLE item_pieces');

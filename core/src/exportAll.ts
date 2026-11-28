@@ -35,7 +35,7 @@ import { cut, linesAsText, splitLines } from './recipeText.ts';
 import { clean, dayNumber, labelKey, pictureType, stamp, todayOf, type Clock } from './small.ts';
 import { ensurePath, exportRows, setByPaths, tagKindOfLabel, tagsOnto, targetsByTitle, type TagKind } from './tags.ts';
 import * as units from './units.ts';
-import { dueOf } from './upkeep.ts';
+import { addInterval, dueOf, type EveryUnit } from './upkeep.ts';
 import { PLAN_PARTS } from './plans.ts';
 
 // ==================== limits ====================
@@ -77,6 +77,9 @@ export const KINDS: KindInfo[] = [
   { key: 'upkeep', label: 'Upkeep jobs, bills, renewals and chores, with when each was done', file: 'upkeep.csv', importable: true, matched: 'by name (and pet)' },
   { key: 'routines', label: 'Routines, with their times and steps, and the days each time was finished', file: 'routines.csv', importable: true, matched: 'by name' },
   { key: 'measures', label: 'Your own measures, with their entries (private to you: only your own download holds them)', file: 'measures.csv', importable: true, matched: 'a measure by name; an entry by day and value' },
+  { key: 'checkups', label: 'Your own checkups (private to you: only your own download holds them)', file: 'checkups.csv', importable: true, matched: 'by name' },
+  { key: 'checkins', label: 'Your own daily check-ins (private to you: only your own download holds them)', file: 'check-ins.csv', importable: true, matched: 'by day' },
+  { key: 'incidents', label: 'Your own incident log, with what was added to each entry (private to you: only your own download holds it)', file: 'incident-log.csv', importable: true, matched: 'an entry by when it was written and what it says; an addition by when and words' },
   { key: 'manual', label: 'The house manual', file: 'house-manual.csv', importable: true, matched: 'by part and title' },
   { key: 'services', label: 'Home lab: your links, and who sees each', file: 'home-services.csv', importable: true, matched: 'by name and address' },
   { key: 'licenses', label: 'Licenses and permits', file: 'licenses.csv', importable: true, matched: 'by name and holder' },
@@ -538,6 +541,20 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
       return es.length ? es.map((e) => [str(m.name), str(m.unit), str(m.target), str(e.day), str(e.value)]) : [[str(m.name), str(m.unit), str(m.target), '', '']];
     }));
 
+  // ---------- checkups, check-ins and the incident log: the person's own, never anyone else's ----------
+  out.csv('checkups.csv', ['Checkup', 'Every', 'Unit', 'Last done', 'Next due', 'Note', 'Cost (cents)'],
+    (await all('SELECT name, every_n, every_unit, last_on, note, cost_cents FROM checkups WHERE owner_id = ? ORDER BY id')).map((c) => [str(c.name), str(c.every_n), str(c.every_unit), str(c.last_on),
+      c.last_on ? addInterval(c.last_on as string, c.every_n as number, c.every_unit as EveryUnit) : '', str(c.note), str(c.cost_cents)]));
+  out.csv('check-ins.csv', ['Day', 'Sleep (hours)', 'Water (glasses)', 'Energy (1 to 5)', 'Line'],
+    (await all('SELECT day, sleep_hours, water, energy, line FROM checkins WHERE owner_id = ? ORDER BY day')).map((k) => [str(k.day), str(k.sleep_hours), str(k.water), str(k.energy), str(k.line)]));
+  const incidentRows = await all('SELECT id, happened_on, happened_time, what, who, kept, written_at FROM incidents WHERE owner_id = ? ORDER BY happened_on, happened_time, id');
+  const additionRows = await all('SELECT a.incident_id, a.words, a.written_at FROM incident_additions a JOIN incidents i ON i.id = a.incident_id WHERE i.owner_id = ? ORDER BY a.written_at, a.id');
+  out.csv('incident-log.csv', ['Written at', 'Day', 'Time', 'What happened', 'Who was there', 'What was kept', 'Added at', 'Added words'],
+    incidentRows.flatMap((i) => {
+      const base = [str(i.written_at), str(i.happened_on), str(i.happened_time), str(i.what), str(i.who), str(i.kept)];
+      return [[...base, '', ''], ...additionRows.filter((a) => a.incident_id === i.id).map((a) => [...base, str(a.written_at), str(a.words)])];
+    }));
+
   // ---------- pets ----------
   const pets = await all('SELECT id, name, species, breed, born_on, microchip, vet_name, vet_phone, food, note, photo_type, photo FROM pets WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id');
   const petPhoto = new Map<number, string>();
@@ -838,6 +855,9 @@ const FILE_ABOUT: [string, string][] = [
   ['household.csv', 'People in the household, and the chore points each has earned.'],
   ['routines.csv', 'Routines: one row for each step, with its time of day, which days it falls on and the thing it uses. routine-history.csv has the days each time was finished, and routine-ticks.csv each step checked off, when, by whom and with what numbers. A workout is marked in the Kind column, and its steps carry their numbers.'],
   ['measures.csv', 'Your own measures: one row for each entry, with its unit and target. They are private to you, so only your own download holds them.'],
+  ['checkups.csv', 'Your own checkups: how often, when each was last done and when it is next due, with a note and a cost in cents. They are private to you, so only your own download holds them.'],
+  ['check-ins.csv', 'Your own daily check-ins: sleep, water, energy and a line, one row for each day. They are private to you, so only your own download holds them.'],
+  ['incident-log.csv', 'Your own incident log: one row for each entry, and one more for each thing added to it later, with when each was written. It is private to you, so only your own download holds it. Keep it as carefully as the papers it describes.'],
   ['pets.csv', 'Your pets.'],
   ['pet-weights.csv', 'Your pets’ weights over time. Their care is in upkeep.csv, with the pet’s name.'],
   ['home-services.csv', 'Your Home lab: links to programs at home, with their addresses (no passwords), and who sees each. Only the links you may see are in it.'],
@@ -1716,6 +1736,82 @@ const importers: Record<string, Importer> = {
     return d;
   },
 
+  /** The person's own checkups. Brought into the person doing the bringing-in, and no one else. */
+  async checkups(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'checkups.csv');
+    if (!t) return d;
+    const have = new Set((await c.tx.all<{ name: string }>('SELECT name FROM checkups WHERE owner_id = ?', [c.owner])).map((m) => labelKey(m.name)));
+    for (const [at, row] of t.rows.entries()) {
+      const name = clean(cellOf(row, 'Checkup'), 80);
+      if (!name) { skip(d, at, 'it has no name'); continue; }
+      d.found += 1;
+      if (have.has(labelKey(name))) { d.already += 1; continue; }
+      const n = wholeOf(cellOf(row, 'Every'));
+      const unit = cellOf(row, 'Unit').toLowerCase().replace(/s$/, '');
+      if (n === null || n < 1 || n > 999 || !['week', 'month', 'year'].includes(unit)) { skip(d, at, 'it has no how often'); continue; }
+      if (have.size >= 100) { skip(d, at, 'Life Is keeps 100 checkups at most'); continue; }
+      const cost = wholeOf(cellOf(row, 'Cost (cents)'));
+      await c.tx.run('INSERT INTO checkups (owner_id, name, every_n, every_unit, last_on, note, cost_cents, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, name, n, unit, dayOf(cellOf(row, 'Last done')), clean(cellOf(row, 'Note'), 1000), cost !== null && cost >= 0 ? cost : null, c.at]);
+      have.add(labelKey(name));
+      d.fresh += 1;
+    }
+    return d;
+  },
+
+  /** The person's own daily check-ins: one for each day, so a day already kept is left as it is. */
+  async checkins(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'check-ins.csv');
+    if (!t) return d;
+    for (const [at, row] of t.rows.entries()) {
+      const day = dayOf(cellOf(row, 'Day'));
+      if (!day) { skip(d, at, 'it has no day'); continue; }
+      const sleep = numberOf(cellOf(row, 'Sleep (hours)'));
+      const water = wholeOf(cellOf(row, 'Water (glasses)'));
+      const energy = wholeOf(cellOf(row, 'Energy (1 to 5)'));
+      const line = clean(cellOf(row, 'Line'), 300);
+      const mine = { sleep: sleep !== null && sleep >= 0 && sleep <= 24 ? sleep : null, water: water !== null && water >= 0 && water <= 99 ? water : null, energy: energy !== null && energy >= 1 && energy <= 5 ? energy : null };
+      if (mine.sleep === null && mine.water === null && mine.energy === null && !line) { skip(d, at, 'it holds nothing'); continue; }
+      d.found += 1;
+      if ((await c.tx.run('INSERT OR IGNORE INTO checkins (owner_id, day, sleep_hours, water, energy, line, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [c.owner, day, mine.sleep, mine.water, mine.energy, line, c.at])).changes > 0) d.fresh += 1;
+      else d.already += 1;
+    }
+    return d;
+  },
+
+  /** The person's own incident log. An entry keeps when it was first written, so it stays as sound as it was. */
+  async incidents(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'incident-log.csv');
+    if (!t) return d;
+    const key = (written: string, what: string) => `${written}\n${labelKey(what)}`;
+    const have = new Map((await c.tx.all<{ id: number; written_at: string; what: string }>('SELECT id, written_at, what FROM incidents WHERE owner_id = ?', [c.owner])).map((i) => [key(i.written_at, i.what), i.id]));
+    const counted = new Set<string>();
+    for (const [at, row] of t.rows.entries()) {
+      const what = clean(cellOf(row, 'What happened'), 8000);
+      const day = dayOf(cellOf(row, 'Day'));
+      if (!what || !day) { skip(d, at, 'it has no day or no words about what happened'); continue; }
+      const written = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(cellOf(row, 'Written at')) && !Number.isNaN(Date.parse(cellOf(row, 'Written at'))) ? cellOf(row, 'Written at') : c.at;
+      const k = key(written, what);
+      let id = have.get(k);
+      if (!counted.has(k)) { counted.add(k); d.found += 1; if (id === undefined) d.fresh += 1; else d.already += 1; }
+      if (id === undefined) {
+        if (have.size >= 500) { skip(d, at, 'Life Is keeps 500 entries at most'); continue; }
+        id = (await c.tx.run('INSERT INTO incidents (owner_id, happened_on, happened_time, what, who, kept, written_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [c.owner, day, clean(cellOf(row, 'Time'), 40), what, clean(cellOf(row, 'Who was there'), 1000), clean(cellOf(row, 'What was kept'), 2000), written])).lastId;
+        have.set(k, id);
+      }
+      const words = clean(cellOf(row, 'Added words'), 8000);
+      if (!words) continue;
+      const addedAt = !Number.isNaN(Date.parse(cellOf(row, 'Added at'))) && cellOf(row, 'Added at') ? cellOf(row, 'Added at') : c.at;
+      if (await c.tx.get('SELECT 1 AS one FROM incident_additions WHERE incident_id = ? AND written_at = ? AND words = ?', [id, addedAt, words])) continue;
+      await c.tx.run('INSERT INTO incident_additions (incident_id, words, written_at) VALUES (?, ?, ?)', [id, words, addedAt]);
+    }
+    return d;
+  },
+
   async manual(c) {
     const d = blank();
     const t = tableOf(c.files, 'house-manual.csv');
@@ -2506,7 +2602,7 @@ ${mediaId}`);
     return d;
   },
 };
-const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'measures', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
+const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'measures', 'checkups', 'checkins', 'incidents', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
 
 function rowsIn(files: Files, info: KindInfo): number {
   return tableOf(files, info.file)?.rows.length ?? 0;

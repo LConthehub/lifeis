@@ -15,6 +15,7 @@
  */
 import type { Fetcher, Sealer } from './connections.ts';
 import { calendar } from './calendar.ts';
+import { checkups } from './checkups.ts';
 import type { Db } from './db.ts';
 import { holidays } from './holidays.ts';
 import { outdoorTrips } from './outdoorTrips.ts';
@@ -182,6 +183,10 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
         const when = t.warranty_days === 0 ? 'ends today' : t.warranty_days === 1 ? 'ends tomorrow' : `ends in ${t.warranty_days} days`;
         lines.push({ kind: 'upkeep', icon: '🛡', title: `Warranty: ${t.name}`, detail: `${when} · anything wrong with it?`, link: `/things/${t.id}`, urgent: t.warranty_days <= 1 });
       }
+    }
+    if (s.covers.upkeep) {
+      // A checkup of the person's own coming due: a plain line, said a month ahead, a week, the day before and the day, then once a week while late.
+      for (const h of await checkups(db, owner, clock).digestLines()) lines.push({ kind: 'upkeep', icon: '🔧', title: h.title, detail: h.detail, link: h.link, urgent: h.urgent });
     }
     if (s.covers.low) {
       for (const t of await inventory(db, owner, clock).listItems({ low: true })) {

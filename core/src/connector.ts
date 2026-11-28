@@ -50,7 +50,7 @@ export const CONNECTOR_SECTIONS: readonly { id: SectionId; title: string; says: 
 const SECTION_IDS = CONNECTOR_SECTIONS.map((s) => s.id) as readonly SectionId[];
 const titleOf = (id: SectionId) => CONNECTOR_SECTIONS.find((s) => s.id === id)!.title;
 
-export const CONNECTOR_NEVER = 'Never included, whatever you check: guns and ammunition, measures, gift ideas and spending made for gifts, passwords and keys, the house manual, mail, and notes on the calendar.';
+export const CONNECTOR_NEVER = 'Never included, whatever you check: guns and ammunition, measures, checkups, daily check-ins, the incident log, gift ideas and spending made for gifts, passwords and keys, the house manual, mail, and notes on the calendar.';
 export const CONNECTOR_ADDS = 'With "It may add things" checked, it can add only a grocery line, a calendar event, a reminder, or a title on one of your own lists. It never changes or deletes anything, and you can undo what it added.';
 
 /** A connection that has not been used for this many days ends by itself. */

@@ -67,6 +67,7 @@ it('carries the old recipe tags over: one top-level tag for each word, each owne
   for (const column of ['served_at', 'food_kind', 'parts']) await db.run(`ALTER TABLE plans DROP COLUMN ${column}`);
   for (const column of ['every_days', 'every_from']) await db.run(`ALTER TABLE routine_steps DROP COLUMN ${column}`);
   for (const table of ['routine_closed', 'dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
+  for (const table of ['incident_additions', 'incidents', 'checkins', 'checkups']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE measure_entries');
   await db.run('DROP TABLE measures');
   await db.run('ALTER TABLE routines DROP COLUMN kind');
