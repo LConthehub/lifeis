@@ -24,9 +24,9 @@ You can change your mind later. Nothing held in either place is touched.
 | **Free to try for 7 days** | Everything else kept on the phone |
 | **One payment of $14.99** | Unlocks everything else, for good. No subscription |
 
-The 7 days start when you first add something outside the kitchen.
+The 7 days start when you first add something outside the kitchen. That includes the house manual, home lab, shopping, cooking, keys and recalls.
 
-**When the trial ends, nothing is hidden or deleted.** Those parts become read-only: you can still see everything and make a backup.
+**When the trial ends, nothing is hidden or deleted.** Everything outside the kitchen, those six included, becomes read-only until you unlock: you can still see everything, make a backup and download all of your data.
 
 ## Reaching a Life Is at home
 
