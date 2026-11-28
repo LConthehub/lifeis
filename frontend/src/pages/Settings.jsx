@@ -3,6 +3,7 @@ import CopyButton from '../components/Copy';
 import Icon from '../components/Icon';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import { OnOffBox, ForgetIt } from '../components/OnOff';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { LifeAreasPicker } from '../components/LifeAreas';
 import AutoBackup from '../components/AutoBackup';
@@ -635,7 +636,8 @@ function WeatherService() {
   const [found, setFound] = useState(null);
   const [units, setUnits] = useState('f');
   const [message, setMessage] = useState('');
-  useEffect(() => { axios.get('/api/weather').then(({ data }) => { setW(data); if (data.place) setUnits(data.place.units); }).catch(() => {}); }, []);
+  const [opening, setOpening] = useState(false);   // the box is checked but no place is saved yet
+  useEffect(() => { axios.get('/api/weather').then(({ data }) => { setW(data); if (data.saved) setUnits(data.saved.units); }).catch(() => {}); }, []);
   if (!w) return null;
   const search = async (e) => {
     e.preventDefault();
@@ -649,43 +651,54 @@ function WeatherService() {
   const turnOn = async (place, withUnits = units) => {
     try {
       const { data } = await axios.put('/api/weather', { name: place.region !== undefined ? placeLabel(place) : place.name, latitude: place.latitude, longitude: place.longitude, units: withUnits });
-      setW(data); setFound(null); setQ(''); setMessage('');
+      setW(data); setFound(null); setQ(''); setMessage(''); setOpening(false);
     } catch (err) { setMessage(errorMessage(err, "Couldn't turn it on")); }
   };
-  const turnOff = async () => { const { data } = await axios.delete('/api/weather'); setW(data); setMessage(''); };
+  const call = async (send) => { setMessage(''); try { setW((await send()).data); } catch (err) { setMessage(errorMessage(err, "Couldn't change that")); } };
+  const check = (on) => {
+    if (on) { if (w.saved) call(() => axios.post('/api/weather/resume')); else setOpening(true); return; }
+    setOpening(false); setFound(null);
+    if (w.place) call(() => axios.post('/api/weather/pause'));
+  };
+  const forget = async () => { await call(() => axios.delete('/api/weather')); setOpening(false); };
   const changeUnits = (e) => { setUnits(e.target.value); if (w.place) turnOn(w.place, e.target.value); };
+  const on = Boolean(w.place);
   return (
     <div className="py-3">
       <div className="flex items-baseline gap-2">
         <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="weather" /> Weather on the front page</h3>
-        <span className={`rounded px-1.5 text-[11px] ${w.place ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{w.place ? 'On' : 'Off'}</span>
+        <span className={`rounded px-1.5 text-[11px] ${on ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{on ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
         From <a href={w.service.site} target="_blank" rel="noreferrer" className="underline">{w.service.name}</a>, a free weather service. <span className="font-medium">What it's sent:</span> {w.service.sends}
       </p>
       {!w.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so the weather can't be turned on.</p> : (
         <div className="mt-2 space-y-2">
-          {w.place && (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-800 dark:text-life-50">
-              <span className="mr-auto">Showing <span className="font-medium">{w.place.name}</span></span>
-              <button type="button" onClick={turnOff} className={quietButtonClass}>Turn off and forget the place</button>
-            </div>
+          <OnOffBox name="weather-on" label="Turn on weather" checked={on || opening} onChange={check} />
+          {!on && !opening && w.saved && (
+            <p className="text-sm text-gray-700 dark:text-life-100">Kept for later: <span className="font-medium">{w.saved.name}</span>. <ForgetIt ask={`Forget ${w.saved.name}? The place and the last forecast are removed.`} onForget={forget} /></p>
           )}
-          <form onSubmit={search} className="flex flex-wrap items-end gap-2">
-            <Field label={w.place ? 'Change the place' : 'Your town, to turn it on'}><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. Springfield" minLength={2} required className={inputClass} /></Field>
-            <Field label="Degrees">
-              <select value={units} onChange={changeUnits} className={`${inputClass} !w-auto`}><option value="f">Fahrenheit</option><option value="c">Celsius</option></select>
-            </Field>
-            <button type="submit" className={quietButtonClass}>Look it up</button>
-          </form>
-          {found && found.length > 0 && (
-            <ul className="space-y-1">
-              {found.map((p) => (
-                <li key={`${p.latitude},${p.longitude}`}>
-                  <button type="button" onClick={() => turnOn(p)} className="w-full rounded-lg px-2 py-1 text-left text-sm text-gray-800 hover:bg-life-50 dark:text-life-50 dark:hover:bg-life-700">{placeLabel(p)}</button>
-                </li>
-              ))}
-            </ul>
+          {(on || opening) && (
+            <>
+              {w.place && <p className="text-sm text-gray-800 dark:text-life-50">Showing <span className="font-medium">{w.place.name}</span></p>}
+              <form onSubmit={search} className="flex flex-wrap items-end gap-2">
+                <Field label={w.place ? 'Change the place' : 'Your town, to turn it on'}><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. Springfield" minLength={2} required className={inputClass} /></Field>
+                <Field label="Degrees">
+                  <select value={units} onChange={changeUnits} className={`${inputClass} !w-auto`}><option value="f">Fahrenheit</option><option value="c">Celsius</option></select>
+                </Field>
+                <button type="submit" className={quietButtonClass}>Look it up</button>
+              </form>
+              {found && found.length > 0 && (
+                <ul className="space-y-1">
+                  {found.map((p) => (
+                    <li key={`${p.latitude},${p.longitude}`}>
+                      <button type="button" onClick={() => turnOn(p)} className="min-h-[44px] w-full rounded-lg px-2 py-1 text-left text-sm text-gray-800 hover:bg-life-50 dark:text-life-50 dark:hover:bg-life-700">{placeLabel(p)}</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {opening && !on && <p className="text-xs text-gray-500 dark:text-life-300">It turns on once you choose a place. Nothing is sent before that, except the words you look up.</p>}
+            </>
           )}
           {message && <p className="text-sm text-gray-700 dark:text-life-100">{message}</p>}
         </div>

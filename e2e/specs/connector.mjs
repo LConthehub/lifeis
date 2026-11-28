@@ -42,7 +42,7 @@ check('behind More there is a card, off, that says what it sends and what is nev
 check('it says nothing is connected only once it is on', !/No AI app is connected/.test(await card.innerText()));
 const words = flat(await card.innerText());
 check('it never says OAuth, MCP, token or client', !/\b(OAuth|MCP|token|client)\b/i.test(words), words.slice(0, 80));
-await card.getByLabel('Let people in this household connect an AI app').click(); await wait(1000);
+await card.getByLabel('Turn on use from an AI app').click(); await wait(1000);
 check('turned on, it says no AI app is connected and shows how to connect', /No AI app is connected\./.test(await card.innerText()) && /Paste the address in your AI app/.test(await card.innerText()));
 check('the address is shown, or the plain reason it cannot be reached', (await card.locator('[data-reach]').count()) === 1);
 

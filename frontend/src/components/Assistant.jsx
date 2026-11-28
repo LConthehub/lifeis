@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Icon from './Icon';
+import { OnOffBox, ForgetIt } from './OnOff';
 import { Field, inputClass, buttonClass, quietButtonClass, errorMessage } from './ui';
 
 const AREAS = [
@@ -51,6 +52,14 @@ export function AssistantService() {
     } catch (err) { setMessage(errorMessage(err, "Couldn't reach it")); }
   };
   const off = async () => setA(changed((await axios.put('/api/assistant', { enabled: false })).data));
+  const forget = async () => setA(changed((await axios.delete('/api/assistant')).data));
+  // Checking it brings back a kept setup at once; with none kept, the setup opens and it counts as on after Save.
+  const check = async (on) => {
+    setMessage('');
+    if (!on) { if (form) setForm(null); else await off(); return; }
+    if (a.saved) { try { setA(changed((await axios.put('/api/assistant', { enabled: true })).data)); } catch (err) { setMessage(errorMessage(err, "Couldn't turn it on")); } return; }
+    start();
+  };
   const place = async (show) => {
     setMessage('');
     try { setA(changed((await axios.put('/api/assistant', { show })).data)); } catch (err) { setMessage(errorMessage(err, "Couldn't save that")); }
@@ -65,13 +74,16 @@ export function AssistantService() {
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
         Ask questions about your household in your own words. {a.phone ? `It can use this device's own ${a.phone.name}, or a model you run yourself.` : 'It uses a model you run yourself, such as Ollama or LM Studio.'} <span className="font-medium">What it does:</span> {a.service.sends}
       </p>
-      {!a.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : !form ? (
+      {!a.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : <>
+      <OnOffBox name="assistant-on" label="Turn on the AI assistant" checked={a.enabled || Boolean(form)} onChange={check} />
+      {!a.enabled && !form && a.saved && <p className="text-sm text-gray-700 dark:text-life-100">Its setup is kept for later. <ForgetIt ask="Forget the assistant's saved setup (address, model, key and what it may look at)?" onForget={forget} /></p>}
+      {message && !form && !a.enabled && <p className="text-sm text-red-600" role="alert">{message}</p>}
+      {!a.enabled && !form ? null : !form ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-800 dark:text-life-50">
           {a.enabled && (a.source === 'phone'
             ? <span className="mr-auto">Using this device's own <span className="font-medium">{a.phone?.name}</span>. Nothing leaves the device.</span>
             : <span className="mr-auto break-all">Using <span className="font-medium">{a.model || 'the default model'}</span> at {a.url}</span>)}
-          <button type="button" onClick={start} className={quietButtonClass}>{a.enabled ? 'Change' : 'Set it up'}</button>
-          {a.enabled && <button type="button" onClick={off} className={quietButtonClass}>Turn off</button>}
+          <button type="button" onClick={start} className={quietButtonClass}>Change</button>
           {a.enabled && (
             <fieldset className="w-full pt-2" data-ask-place>
               <legend className="text-sm font-medium text-gray-700 dark:text-life-100">Where the Ask box shows</legend>
@@ -152,6 +164,7 @@ export function AssistantService() {
           </div>
         </form>
       )}
+      </>}
     </div>
   );
 }

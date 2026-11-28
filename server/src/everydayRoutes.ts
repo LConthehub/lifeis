@@ -207,6 +207,7 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ['GET', /^\/api\/lookups\/product$/, async (c) => ({ json: { product: await finder(c).product(c.query.get('code') ?? '') } })],
     ['GET', /^\/api\/lookups\/book$/, async (c) => ({ json: { book: await finder(c).book(c.query.get('code') ?? '') } })],
     ['GET', /^\/api\/lookups\/title$/, async (c) => ({ json: { title: await finder(c).title(c.query.get('code') ?? '') } })],
+    ['POST', /^\/api\/weather\/(pause|resume)$/, async (c) => ({ json: { ...await (c.path.endsWith('resume') ? skies(c).resume() : skies(c).pause()), service: WEATHER_SERVICE } })],
     ['DELETE', /^\/api\/weather$/, async (c) => ({ json: { ...await skies(c).turnOff(), service: WEATHER_SERVICE } })],
 
     // The house manual, and the link it's shared by. See core/'s manual.ts.

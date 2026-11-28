@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { CopyLine } from './Copy';
+import { OnOffBox } from './OnOff';
 import { Field, inputClass, buttonClass, quietButtonClass, errorMessage } from './ui';
 
 // Settings → Connections, behind More: letting an AI app read (and, if allowed, add to) this Life Is.
@@ -78,13 +79,13 @@ export function ConnectorService() {
 
       {!c.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This can't be tried in the demo.</p> : (
         <div className="mt-3 space-y-4">
-          {c.is_admin ? (
-            <label className="flex min-h-[44px] items-center gap-3 text-sm text-gray-800 dark:text-life-50">
-              <input type="checkbox" role="switch" checked={c.household_on} disabled={busy} className="h-5 w-5"
-                onChange={(e) => run(() => axios.put('/api/connector/household', { on: e.target.checked }))} />
-              Let people in this household connect an AI app
-            </label>
-          ) : !c.household_on && <p className="text-sm text-gray-700 dark:text-life-100">The person in charge of this Life Is hasn't turned this on.</p>}
+          <OnOffBox
+            name="connector-on" label="Turn on use from an AI app" checked={c.household_on} disabled={!c.is_admin || busy}
+            why={c.is_admin ? '' : "Only the person in charge of this Life Is can change this."}
+            onChange={(on) => {
+              if (!on && !window.confirm('Turn this off for everyone? Every connected AI app is cut off at once.')) return;
+              run(() => axios.put('/api/connector/household', { on }));
+            }} />
 
           {c.household_on && (
             <>

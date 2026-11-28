@@ -54,6 +54,18 @@ it('is off until turned on, starts with the kitchen only, and refuses a cloud AI
   expect(assistant(db, ana, clock).status()).resolves.toMatchObject({ available: false });
 });
 
+it('turns off and keeps its setup, then forgets it only when asked', async () => {
+  const me = helper(ana);
+  expect((await me.status()).saved).toBe(false);
+  await me.save({ enabled: true, url: 'http://127.0.0.1:1234/v1', model: 'small' });
+  const off = await me.save({ enabled: false });
+  expect([off.enabled, off.saved, off.url, off.model]).toEqual([false, true, 'http://127.0.0.1:1234/v1', 'small']);
+  expect((await me.save({ enabled: true })).model).toBe('small');
+  const gone = await me.forget();
+  expect([gone.enabled, gone.saved, gone.model]).toEqual([false, false, '']);
+  expect((await me.status()).saved).toBe(false);
+});
+
 it('keeps where the Ask box shows: Home at first, then every page or nowhere, and nothing else', async () => {
   const me = helper(ana);
   expect((await me.status()).show).toBe('home');

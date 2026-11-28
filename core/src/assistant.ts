@@ -69,6 +69,8 @@ export type AssistantStatus = {
   /** Whether a cloud AI (an address that isn't this computer or your own network) has been allowed. */
   cloud_ok: boolean;
   key_saved: boolean;
+  /** Whether any setup is kept (so that, switched off, it can be forgotten). */
+  saved: boolean;
   /** Whether nothing leaves home: the phone's own model, or an address on this computer or your own network. */
   local: boolean;
   areas: Area[];
@@ -127,7 +129,7 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
     'INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value', [owner, SETTING, JSON.stringify(k)]);
   const shown = (k: Kept): AssistantStatus => ({
     available: Boolean(tools?.fetcher || tools?.phone), enabled: k.enabled, source: k.source, phone: tools?.phone ? { name: tools.phone.name } : null,
-    url: k.url, model: k.model, cloud_ok: k.cloud_ok, key_saved: k.key !== null, local: k.source === 'phone' || isLocal(k.url), areas: k.areas, show: k.show, service: ASSISTANT_SERVICE,
+    url: k.url, model: k.model, cloud_ok: k.cloud_ok, key_saved: k.key !== null, saved: true, local: k.source === 'phone' || isLocal(k.url), areas: k.areas, show: k.show, service: ASSISTANT_SERVICE,
   });
   const need = () => {
     if (!tools?.fetcher) throw new Problem(400, "This copy of Life Is isn't set up to reach outside services");
@@ -222,7 +224,16 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
   }
 
   return {
-    async status(): Promise<AssistantStatus> { return shown(await kept()); },
+    async status(): Promise<AssistantStatus> {
+      const row = await db.get<{ value: string | null }>('SELECT value FROM user_settings WHERE user_id = ? AND key = ?', [owner, SETTING]);
+      return { ...shown(await kept()), saved: Boolean(row) };
+    },
+
+    /** Removes the kept setup (address, model, key, what it may look at) and leaves the assistant off. */
+    async forget(): Promise<AssistantStatus> {
+      await db.run('DELETE FROM user_settings WHERE user_id = ? AND key = ?', [owner, SETTING]);
+      return { ...shown(await kept()), saved: false };
+    },
 
     async save(input: AssistantInput): Promise<AssistantStatus> {
       const before = await kept();

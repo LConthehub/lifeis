@@ -24,6 +24,7 @@ export function assistantRoutes(db: Db, tools?: AssistantTools): Route[] {
         ...(sent(c.body, 'show') ? { show: read.maybeText(c.body, 'show') ?? undefined } : {}),
       }),
     })],
+    ['DELETE', /^\/api\/assistant$/, async (c) => ({ json: await helper(c).forget() })],
     ['POST', /^\/api\/assistant\/models$/, async (c) => ({ json: { models: await helper(c).models() } })],
     ['POST', /^\/api\/assistant\/phone$/, async (c) => ({ json: await helper(c).phoneCheck() })],
     // A photo of a handwritten recipe, copied out by the model. The photo goes to the model and is not kept.

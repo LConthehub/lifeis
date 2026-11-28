@@ -124,7 +124,17 @@ it('the weather is off until turned on, says what it sends, and is forgotten whe
   expect([front.cards.includes('weather'), front.weather.forecast.days[0]]).toEqual([true, { day: '2046-03-05', words: 'Rain', icon: '🌧', high: 9, low: 3, wet: 90 }]);
   expect(asked).toHaveLength(2); // one search, one forecast: the front page used the kept one
 
-  expect((await admin.delete('/api/weather')).json.place).toBeNull();
+  // Unchecking keeps the place but turns the weather off at once; checking brings it back without a new search.
+  const before = asked.length;
+  const paused = (await admin.post('/api/weather/pause')).json;
+  expect([paused.place, paused.saved.name, paused.forecast]).toEqual([null, 'Springfield, Missouri', null]);
+  expect((await admin.get('/api/home')).json.weather).toBeNull();
+  expect(asked).toHaveLength(before);
+  const again = (await admin.post('/api/weather/resume')).json;
+  expect([again.place.name, again.saved.name]).toEqual(['Springfield, Missouri', 'Springfield, Missouri']);
+  await admin.post('/api/weather/pause');
+  expect((await admin.delete('/api/weather')).json).toMatchObject({ place: null, saved: null });
+  expect((await admin.post('/api/weather/resume')).status).toBe(400);
   expect((await admin.get('/api/home')).json.weather).toBeNull();
   expect((await visitor().get('/api/weather')).status).toBe(401);
 });

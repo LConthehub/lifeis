@@ -4,7 +4,7 @@
  * It asks Open-Meteo (open-meteo.com), which needs no account and no key. Two things are ever sent there:
  * the words typed when looking for a place, and, once a place is chosen, that place's position rounded to
  * about a kilometre, to ask for its forecast. Nothing else about the person or what they keep here goes
- * anywhere. Turning it off forgets the place and the last forecast.
+ * anywhere. Unchecking it keeps the place but asks nothing more; forgetting it removes the place and the last forecast.
  *
  * `fetcher` asks a web address for its answer; it is handed in because that differs by where Life Is runs.
  */
@@ -28,12 +28,15 @@ export type Weather = {
   /** Whether this copy of Life Is can reach outside at all. */
   available: boolean;
   place: WeatherPlace | null;
+  /** The place kept while the weather is switched off (a check box unchecked), so checking it again needs no search. */
+  saved: WeatherPlace | null;
   /** Null when no place is chosen, or the forecast couldn't be fetched and none is kept. */
   forecast: Forecast | null;
 };
 
 const PLACE = 'weather_place';
 const KEPT = 'weather_forecast';
+const PAUSED = 'weather_paused';
 const FRESH_MINUTES = 30;
 
 /** What the service's weather numbers (WMO codes) mean, in words. */
@@ -96,9 +99,15 @@ export function weather(db: Db, owner: number, clock: Clock = () => new Date(), 
     return fetcher;
   };
 
-  async function place(): Promise<WeatherPlace | null> {
+  /** The place kept, whether or not the weather is switched on. */
+  async function saved(): Promise<WeatherPlace | null> {
     const p = await setting(PLACE) as WeatherPlace | null;
     return p && typeof p.name === 'string' && typeof p.latitude === 'number' && typeof p.longitude === 'number' ? { ...p, units: p.units === 'c' ? 'c' : 'f' } : null;
+  }
+
+  /** The place the weather is on for: none while it is switched off. */
+  async function place(): Promise<WeatherPlace | null> {
+    return await setting(PAUSED) === true ? null : saved();
   }
 
   async function forecast(at: WeatherPlace): Promise<Forecast | null> {
@@ -123,7 +132,7 @@ export function weather(db: Db, owner: number, clock: Clock = () => new Date(), 
 
   const status = async (): Promise<Weather> => {
     const at = await place();
-    return { available: Boolean(fetcher), place: at, forecast: at ? await forecast(at) : null };
+    return { available: Boolean(fetcher), place: at, saved: await saved(), forecast: at ? await forecast(at) : null };
   };
 
   return {
@@ -152,13 +161,27 @@ export function weather(db: Db, owner: number, clock: Clock = () => new Date(), 
       if (input.units != null && input.units !== 'c' && input.units !== 'f') throw new Problem(400, 'Degrees are c or f');
       // Rounded to two places: near enough for a forecast, and not the house.
       await keep(PLACE, { name, latitude: rounded(input.latitude, 2), longitude: rounded(input.longitude, 2), units: input.units ?? 'f' } satisfies WeatherPlace);
-      await db.run('DELETE FROM user_settings WHERE user_id = ? AND key = ?', [owner, KEPT]);
+      await db.run('DELETE FROM user_settings WHERE user_id = ? AND key IN (?, ?)', [owner, KEPT, PAUSED]);
       return status();
     },
 
-    /** Turn the weather off: the place and the last forecast are forgotten, and nothing more is asked. */
+    /** Switch the weather off but keep the place, so switching it on again asks for nothing. Nothing more is asked of the service. */
+    async pause(): Promise<Weather> {
+      if (await saved()) await keep(PAUSED, true);
+      return status();
+    },
+
+    /** Switch it back on for the place that was kept. */
+    async resume(): Promise<Weather> {
+      needFetcher();
+      if (!await saved()) throw new Problem(400, 'Choose a place');
+      await db.run('DELETE FROM user_settings WHERE user_id = ? AND key = ?', [owner, PAUSED]);
+      return status();
+    },
+
+    /** Forget the weather: the place and the last forecast are forgotten, and nothing more is asked. */
     async turnOff(): Promise<Weather> {
-      await db.run('DELETE FROM user_settings WHERE user_id = ? AND key IN (?, ?)', [owner, PLACE, KEPT]);
+      await db.run('DELETE FROM user_settings WHERE user_id = ? AND key IN (?, ?, ?)', [owner, PLACE, KEPT, PAUSED]);
       return status();
     },
   };

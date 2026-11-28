@@ -59,7 +59,8 @@ say('Connections keeps the assistant out of sight behind More', (await page.loca
 await page.locator('[data-settings-more]').click(); await wait(800);
 const card = page.locator('[data-assistant-settings]');
 say('Settings lists the assistant as off, and says what it sends', /Off/.test(await card.innerText()) && /Only when you ask a question/.test(await card.innerText()));
-await card.getByRole('button', { name: 'Set it up' }).click(); await wait(400);
+await card.getByLabel('Turn on the AI assistant').click(); await wait(400);
+say('unchecked, the card shows what it sends and no setup, then checked it opens the setup', /Only when you ask a question/.test(await card.innerText()) && await card.getByLabel("The model's address *").isVisible());
 
 // A cloud address is refused without the tick.
 await card.getByLabel("The model's address *").fill('https://api.example-ai.com/v1');
