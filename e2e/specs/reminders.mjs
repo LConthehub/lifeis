@@ -34,7 +34,7 @@ check('email asks for an account first', await page.getByRole('link', { name: 'C
 await page.locator('[data-preview] summary').click();
 check('the preview shows this morning’s digest', (await page.locator('[data-preview]').innerText()).includes('Test the smoke alarms'), (await page.locator('[data-preview]').innerText()).replace(/\s+/g, ' ').slice(0, 120));
 
-check('the preview says when to leave for an event with minutes to get there', (await page.locator('[data-preview]').innerText()).includes('Dentist at 3:00. Leave by 2:35.'), (await page.locator('[data-preview]').innerText()).replace(/\s+/g, ' ').slice(0, 200));
+check('the preview says when to leave for an event with minutes to get there', (await page.locator('[data-preview]').innerText()).includes('Dentist at 3:00 pm. Leave by 2:35 pm.'), (await page.locator('[data-preview]').innerText()).replace(/\s+/g, ' ').slice(0, 200));
 
 await page.getByLabel('When').fill('06:15'); await page.waitForTimeout(800);
 const saved = await page.evaluate(() => fetch('/api/reminders').then((r) => r.json()));

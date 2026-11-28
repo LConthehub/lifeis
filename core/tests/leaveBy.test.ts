@@ -35,7 +35,7 @@ it('the morning round says when to leave for an event that has a time and minute
   await cal.createEvent({ title: 'Market', day: '2046-03-06', travel_minutes: null });
   await cal.createEvent({ title: 'Pickup', day: '2046-03-07', time: '15:00', travel_minutes: 20 });
   const lines = (await reminders(db, ana, clock).digest()).lines.filter((l) => l.kind === 'dates');
-  expect(lines.map((l) => l.title)).toContain('Dentist at 3:00. Leave by 2:35.');
+  expect(lines.map((l) => l.title)).toContain('Dentist at 3:00 pm. Leave by 2:35 pm.');
   expect(lines.find((l) => l.title === 'Haircut')).toMatchObject({ detail: 'today at 09:30' });
   expect(lines.find((l) => l.title === 'Market')).toMatchObject({ detail: 'today' });
   expect(lines.map((l) => l.title).join('|')).not.toContain('Pickup');
@@ -54,7 +54,7 @@ it('the minutes to get there are a whole number, need a time, and are kept when 
   expect((await cal.updateEvent(made.id, { title: 'Dentist', day: '2046-03-06', time: '16:00' })).travel_minutes).toBeNull();
   // Just after midnight, the time to leave is the evening before.
   const night = await cal.createEvent({ title: 'Early flight', day: '2046-03-06', time: '00:20', travel_minutes: 35 });
-  expect((await reminders(db, ana, clock).digest()).lines.map((l) => l.title)).toContain('Early flight at 12:20. Leave by 11:45.');
+  expect((await reminders(db, ana, clock).digest()).lines.map((l) => l.title)).toContain('Early flight at 12:20 am. Leave by 11:45 pm.');
   expect(night.id).toBeGreaterThan(0);
 });
 

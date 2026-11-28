@@ -98,10 +98,10 @@ const KEPT_IN = ['recipes', 'items', 'media', 'events', 'pets', 'upkeep_jobs', '
 const pad = (n: number) => String(n).padStart(2, '0');
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** 15:00 as "3:00", for a line that says when to leave. */
+/** 15:00 as "3:00 pm", for a line that says when to leave. */
 const clockWords12 = (time: string): string => {
   const [h, m] = time.split(':').map(Number) as [number, number];
-  return `${h % 12 === 0 ? 12 : h % 12}:${pad(m)}`;
+  return `${h % 12 === 0 ? 12 : h % 12}:${pad(m)} ${h < 12 ? 'am' : 'pm'}`;
 };
 /** The time to leave for something at `time` that takes `minutes` to get to (the day before, when it is just after midnight). */
 export const leaveBy = (time: string, minutes: number): string => {
