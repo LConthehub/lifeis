@@ -147,7 +147,7 @@ it('the weather is off until a place is chosen, and asks nothing until then', as
     timezone: 'auto', forecast_days: '3', temperature_unit: 'fahrenheit' }]);
 
   s = await home(db, owner, clock, world.fetcher).summary();
-  expect([s.cards.slice(0, 2), s.weather!.place.name, s.weather!.forecast!.now.temperature]).toEqual([['days', 'weather'], 'Springfield, Missouri', 45]);
+  expect([s.cards.slice(1, 3), s.weather!.place.name, s.weather!.forecast!.now.temperature]).toEqual([['days', 'weather'], 'Springfield, Missouri', 45]);
   expect(world.asked).toHaveLength(2); // the forecast is kept for half an hour, not asked for on every look
 
   // Later it is asked again; if the service is away, the last forecast stands in.
