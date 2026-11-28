@@ -9,6 +9,11 @@ import { pictureFrom, type PhotoTools } from './planRoutes.ts';
 const ID = '(\\d{1,15})';
 const at = (path: string) => new RegExp(`^/api/garden${path.replaceAll(':id', ID)}$`);
 const sent = (body: Body, name: string) => Object.hasOwn(body, name);
+/** Where the weather is asked. A walk-through can point these at a stand-in with OPEN_METEO_API and OPEN_METEO_ARCHIVE_API; nothing else changes them. */
+const weatherAddress = (name: 'OPEN_METEO_API' | 'OPEN_METEO_ARCHIVE_API'): string | undefined => {
+  const set = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.[name];
+  return set && /^https?:\/\//.test(set) ? set.replace(/\/+$/, '') : undefined;
+};
 const picture = (found: { type: string; bytes: Uint8Array }, keepFor: number) =>
   ({ body: found.bytes, headers: { 'Content-Type': found.type, 'Cache-Control': `private, max-age=${keepFor}`, 'X-Content-Type-Options': 'nosniff' } });
 
@@ -28,7 +33,7 @@ function plantFrom(body: Body): PlantInput {
 }
 
 export function gardenRoutes(db: Db, options: { fetcher?: Fetcher; photos?: PhotoTools } = {}): Route[] {
-  const mine = (c: Context) => garden(db, c.user.id, c.clock, { fetcher: options.fetcher });
+  const mine = (c: Context) => garden(db, c.user.id, c.clock, { fetcher: options.fetcher, addresses: { forecast: weatherAddress('OPEN_METEO_API'), archive: weatherAddress('OPEN_METEO_ARCHIVE_API') } });
   const library = (c: Context) => photoLibrary(db, c.user.id, c.clock, options.photos);
   return [
     // Everything the garden page needs in one answer.

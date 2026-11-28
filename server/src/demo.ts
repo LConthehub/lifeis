@@ -15,7 +15,7 @@
 import { randomBytes } from 'node:crypto';
 import { statSync } from 'node:fs';
 import {
-  budget, calendar, displayName, goals, holidays, homeServices, inventory, kitchen, life, manual, media, mediaLists, money, outdoorTrips, packing, pets, projects, routines, upkeep, type Db,
+  budget, calendar, displayName, garden, goals, holidays, homeServices, inventory, kitchen, life, manual, media, mediaLists, money, outdoorTrips, packing, pets, projects, routines, upkeep, type Db,
 } from '../../core/src/index.ts';
 import { AREAS } from '../../core/src/life.ts';
 import { addDays } from '../../core/src/small.ts';
@@ -285,6 +285,25 @@ async function fill(db: Db, me: number): Promise<void> {
     await out.setYear(weekendPlan, { campground: 'Salty Pines Campground', site: '14', confirmation: 'SP-20418', check_in: day(18), check_out: day(25), notes_next: 'Bring a second tarp.' });
   }
   await out.addMeal(weekendPlan, { recipe_id: muffins.id, day: day(19), meal: 'breakfast' });
+  // ---- the garden: a back bed, a fig tree, blueberries, hydrangeas by the porch and a pothos ----
+  const yard = garden(db, me);
+  await yard.setFrost({ last_spring: '04-15', first_fall: '10-31' });
+  const backBed = await place('Back bed');
+  const porch = await place('Porch');
+  const sideYard = await place('Side yard');
+  const tomatoes = await yard.addPlant({ name: 'Tomatoes', place_id: backBed, planted_on: day(-24), water_every: 3, assigned_member: hank, points: 1 });
+  const basil = await yard.addPlant({ name: 'Basil', place_id: backBed, planted_on: day(-24), water_every: 2 });
+  const collards = await yard.addPlant({ name: 'Collards', place_id: backBed, planted_on: day(-60), water_every: 4 });
+  await yard.addPlant({ name: 'Okra', place_id: backBed, planted_on: day(-10), water_every: 3 });
+  await yard.addPlant({ name: 'Fig tree', place_id: sideYard, planted_on: day(-700), water_every: 7, note: 'Wrap it in burlap for hard freezes.' });
+  await yard.addPlant({ name: 'Blueberries', place_id: sideYard, planted_on: day(-500), water_every: 4 });
+  await yard.addPlant({ name: 'Hydrangeas', place_id: porch, planted_on: day(-900), water_every: 4 });
+  const pothos = await yard.addPlant({ name: 'Pothos', place_id: living, kind: 'house', water_every: 7 });
+  // Everything has been watered lately except the tomatoes, which are due today.
+  for (const plant of [basil, collards, pothos]) await yard.water(plant.id, { day: day(-1) });
+  await yard.howItDid(tomatoes.id, 'Too crowded last year. Give each plant more room.');
+  await yard.harvest(collards.id, { day: day(-2), amount: 1.5, unit: 'lb', note: 'First big pick', pantry: true });
+  await yard.addSeeds({ name: 'Okra seeds', place_id: garage, quantity: 1 });
   void tent;
   void jigs;
   void tv;

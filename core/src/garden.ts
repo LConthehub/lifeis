@@ -274,7 +274,10 @@ export type GardenCard = {
 const PLANT_PHOTO_MAX = 40;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-export function garden(db: Db, owner: number, clock: Clock = () => new Date(), tools: { fetcher?: Fetcher } = {}) {
+/** Where the weather service is asked. A walk-through can point these at a stand-in; nothing else changes them. */
+export type WeatherAddresses = { forecast?: string; archive?: string };
+
+export function garden(db: Db, owner: number, clock: Clock = () => new Date(), tools: { fetcher?: Fetcher; addresses?: WeatherAddresses } = {}) {
   const today = () => todayOf(clock);
   const now = () => stamp(clock());
   const things = () => inventory(db, owner, clock);
@@ -314,7 +317,7 @@ export function garden(db: Db, owner: number, clock: Clock = () => new Date(), t
     if (kept && clock().getTime() - kept.at >= 0 && clock().getTime() - kept.at < RAIN_FRESH_MINUTES * 60_000) return kept.days;
     try {
       const query = new URLSearchParams({ latitude: String(place.latitude), longitude: String(place.longitude), daily: 'precipitation_sum', past_days: '7', forecast_days: '1', precipitation_unit: 'inch', timezone: 'auto' });
-      const got = await askNumbers(tools.fetcher, `https://api.open-meteo.com/v1/forecast?${query}`);
+      const got = await askNumbers(tools.fetcher, `${tools.addresses?.forecast ?? 'https://api.open-meteo.com'}/v1/forecast?${query}`);
       const days = got.time.flatMap((day, i): RainDay[] => (typeof got.values[i] === 'number' ? [{ day, inches: got.values[i] as number }] : []));
       rainKept.set(key, { at: clock().getTime(), days });
       return days;
@@ -463,7 +466,7 @@ export function garden(db: Db, owner: number, clock: Clock = () => new Date(), t
         latitude: String(place.latitude), longitude: String(place.longitude), start_date: `${year - 10}-01-01`, end_date: `${year - 1}-12-31`,
         daily: 'temperature_2m_min', temperature_unit: 'celsius', timezone: 'auto',
       });
-      const got = await askNumbers(tools.fetcher, `https://archive-api.open-meteo.com/v1/archive?${query}`);
+      const got = await askNumbers(tools.fetcher, `${tools.addresses?.archive ?? 'https://archive-api.open-meteo.com'}/v1/archive?${query}`);
       const found = frostFromYears(got.time.flatMap((day, i) => (typeof got.values[i] === 'number' ? [{ day, low: got.values[i] as number }] : [])));
       if (!found.last_spring && !found.first_fall) throw new Problem(400, "Your town's past years show no frost, so there are no dates to work out. You can type them by hand.");
       return saveFrost(found.last_spring, found.first_fall, 'weather');

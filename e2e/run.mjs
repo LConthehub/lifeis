@@ -89,6 +89,7 @@ const SUITE = [
   { specs: ['trips'], account: TRIAL },
   { specs: ['plan-parts'], account: TRIAL },
   { specs: ['tags'], account: TRIAL },
+  { specs: ['garden'], account: TRIAL, fixtures: [['openmeteo', 8103]], env: { OPEN_METEO_API: 'http://127.0.0.1:8103', OPEN_METEO_ARCHIVE_API: 'http://127.0.0.1:8103' } },
   { specs: ['touch-targets'], account: TRIAL },
   { specs: ['trial'], phone: true },
   { specs: ['barcode-lookups'], online: true },
