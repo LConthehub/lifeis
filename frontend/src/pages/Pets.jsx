@@ -166,6 +166,8 @@ export function PetPage() {
         )}
       </section>
 
+      <Link to={`/medicines?pet=${pet.id}`} className="inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200" data-medicines-link>Medicines for {pet.name}</Link>
+
       <PetRoutines pet={pet} />
 
       <Weights pet={pet} onChanged={setPet} onRemoved={load} />

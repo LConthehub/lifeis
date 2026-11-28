@@ -135,6 +135,7 @@ export function TimeChecklist({ time, onChange, onGo, onClose }) {
                 {s.tracks && !s.ticked && <LastTime step={s} />}
               </span>
               {s.wait_seconds && <span className="shrink-0 text-xs text-gray-500 dark:text-life-300">wait {waitText(s.wait_seconds)}</span>}
+              {s.medicine_id && <span data-taken className={`shrink-0 text-sm ${s.ticked ? 'font-semibold text-life-700 dark:text-life-100' : 'text-life-600 dark:text-life-200'}`}>{s.ticked ? 'Taken' : 'Taken?'}</span>}
             </button>
             {s.tracks && !s.ticked && <div className="pb-2 pl-10"><StepNumbers step={s} value={valueOf(s)} onChange={(v) => setNums((n) => ({ ...n, [s.id]: v }))} /></div>}
             <RunningLow step={s} />
@@ -245,7 +246,7 @@ export function GoThrough({ time: start, onChange, onClose }) {
               {step.ticked
                 ? <button type="button" disabled={busy} onClick={untick} className={`${big} border-2 border-life-300 text-life-700 dark:text-life-100`}>Not done</button>
                 : <button type="button" disabled={busy} onClick={() => done(false)} className={`${big} border-2 border-life-300 text-life-700 dark:text-life-100`}>Skip</button>}
-              <button type="button" disabled={busy} onClick={() => done(true)} className={`${big} flex-1 bg-gradient-to-br from-life-500 to-life-700 text-white shadow-md`}>{step.ticked ? 'Next' : 'Done'}</button>
+              <button type="button" disabled={busy} onClick={() => done(true)} className={`${big} flex-1 bg-gradient-to-br from-life-500 to-life-700 text-white shadow-md`}>{step.ticked ? 'Next' : step.medicine_id ? 'Taken' : 'Done'}</button>
             </div>
           </>
         )}

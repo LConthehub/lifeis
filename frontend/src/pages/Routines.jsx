@@ -26,7 +26,7 @@ function formOf(r, me, startWho = 'me', startKind = 'plain') {
     who: r.for_pet != null ? `p${r.for_pet}` : r.for_member !== null ? `m${r.for_member}` : r.for_user === me ? 'me' : r.for_user !== null ? `u${r.for_user}` : 'everyone',
     times: r.times.map((t) => ({
       id: t.id, name: t.name, at: t.at ?? '',
-      steps: t.steps.map((s) => ({ id: s.id, words: s.words, rule: s.rule, weekdays: s.weekdays, night: s.night ?? '', every: s.every ?? 2, start: s.start ?? todayHere(), item_id: s.item_id ?? '', wait_seconds: s.wait_seconds ?? '', nums: typed(s.nums ?? {}) })),
+      steps: t.steps.map((s) => ({ id: s.id, words: s.words, rule: s.rule, weekdays: s.weekdays, night: s.night ?? '', every: s.every ?? 2, start: s.start ?? todayHere(), item_id: s.item_id ?? '', wait_seconds: s.wait_seconds ?? '', nums: typed(s.nums ?? {}), medicine: s.medicine_id != null })),
     })),
   };
 }
@@ -80,6 +80,15 @@ function NumbersEditor({ nums, onChange }) {
 
 function StepEditor({ step, cycle, items, onChange, onRemove, canRemove, workout }) {
   const set = (patch) => onChange({ ...step, ...patch });
+  // A medicine is changed on the Medicines page; here it can only be moved or taken out of this time.
+  if (step.medicine) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-lg bg-life-50/70 p-2 dark:bg-life-700/60" data-routine-step data-medicine-step>
+        <p className="mr-auto min-w-0 break-words text-sm text-gray-800 dark:text-life-50">{step.words}<span className="block text-xs text-gray-600 dark:text-life-200">A medicine. Change it on the Medicines page.</span></p>
+        {canRemove && <button type="button" onClick={onRemove} className="min-h-[44px] px-3 text-sm text-red-700 hover:underline dark:text-red-300">Take it out of this routine</button>}
+      </div>
+    );
+  }
   return (
     <div className="space-y-2 rounded-lg bg-life-50/70 p-2 dark:bg-life-700/60" data-routine-step>
       <input value={step.words} onChange={(e) => set({ words: e.target.value })} placeholder={workout ? 'Goblet squat' : 'Wash your face'} aria-label="Step" className={control} />

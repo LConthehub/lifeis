@@ -32,6 +32,7 @@
 import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { shown } from './displayName.ts';
 import { kitchen } from './kitchen.ts';
+import { countDose, showsNames } from './medicines.ts';
 import { clockWords, GRACE_MINUTES } from './prep.ts';
 import { Problem } from './problem.ts';
 import { reminders, zoneNow, type Channel, type Digest, type ReminderTools } from './reminders.ts';
@@ -159,6 +160,8 @@ export type Step = {
   /** For `every`: days apart, and the day it counts from. */
   every: number | null; start: string | null;
   item_id: number | null; item: string | null; wait_seconds: number | null;
+  /** The medicine this step is, when it is one (see medicines.ts): checking it is taking the dose. Its words are the medicine's own. */
+  medicine_id: number | null;
   /** The numbers it carries (what it usually is), and whether it carries any. */
   nums: Numbers; tracks: boolean;
   /** When it falls, in words: "every day", "Mon and Thu", "night 2 of 4". */
@@ -335,7 +338,7 @@ type RoutineRow = {
   id: number; owner_id: number; name: string; kind: RoutineKind; for_user: number | null; for_member: number | null; for_pet: number | null; cycle_length: number | null;
   points: number | null; note: string | null; user_name: string | null; member_name: string | null; pet_name: string | null;
 };
-type StepRow = { id: number; words: string; rule: StepRule; weekdays: string | null; night: number | null; every_days: number | null; every_from: string | null; item_id: number | null; item: string | null; wait_seconds: number | null } & Numbers;
+type StepRow = { id: number; words: string; rule: StepRule; weekdays: string | null; night: number | null; every_days: number | null; every_from: string | null; item_id: number | null; item: string | null; wait_seconds: number | null; medicine_id: number | null } & Numbers;
 
 const BASE = `SELECT r.id, r.owner_id, r.name, r.kind, r.for_user, r.for_member, r.for_pet, r.cycle_length, r.points, r.note, ${shown('fu')} AS user_name, hm.name AS member_name, pt.name AS pet_name
   FROM routines r LEFT JOIN users fu ON fu.id = r.for_user LEFT JOIN household_members hm ON hm.id = r.for_member LEFT JOIN pets pt ON pt.id = r.for_pet`;
@@ -348,7 +351,7 @@ const asStep = (r: StepRow, cycle: number | null): Step => {
   const every = r.every_days && r.every_from ? r.every_days : null;
   const rule: StepRule = every ? 'every' : r.rule;
   const start = every ? r.every_from : null;
-  return { id: r.id, words: r.words, rule, weekdays, night: r.night, every, start, item_id: r.item_id, item: r.item, wait_seconds: r.wait_seconds, nums: numbersOf(r), tracks: hasNumbers(r), days: daysWords({ rule, weekdays, night: r.night, every, start }, cycle) };
+  return { id: r.id, words: r.words, rule, weekdays, night: r.night, every, start, item_id: r.item_id, item: r.item, wait_seconds: r.wait_seconds, medicine_id: r.medicine_id, nums: numbersOf(r), tracks: hasNumbers(r), days: daysWords({ rule, weekdays, night: r.night, every, start }, cycle) };
 };
 
 const minutesOf = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
@@ -374,8 +377,11 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
     const times: Time[] = [];
     for (const t of await q.all<{ id: number; name: string; at_time: string | null }>('SELECT id, name, at_time FROM routine_times WHERE routine_id = ? ORDER BY sort_order, id', [row.id])) {
       const steps = await q.all<StepRow>(
-        `SELECT s.id, s.words, s.rule, s.weekdays, s.night, s.every_days, s.every_from, s.item_id, i.name AS item, s.wait_seconds, s.sets, s.reps, s.weight, s.weight_unit, s.minutes, s.distance, s.distance_unit FROM routine_steps s LEFT JOIN items i ON i.id = s.item_id
-         WHERE s.time_id = ? ORDER BY s.sort_order, s.id`, [t.id]);
+        // A medicine step reads its words from the medicine, and only for someone who may see that medicine (medicines.ts): for anyone
+        // else the step is not there at all.
+        `SELECT s.id, CASE WHEN s.medicine_id IS NULL THEN s.words ELSE m.name || COALESCE(', ' || m.dose, '') END AS words, s.rule, s.weekdays, s.night, s.every_days, s.every_from, s.item_id, i.name AS item, s.wait_seconds, s.medicine_id, s.sets, s.reps, s.weight, s.weight_unit, s.minutes, s.distance, s.distance_unit
+         FROM routine_steps s LEFT JOIN items i ON i.id = s.item_id LEFT JOIN medicines m ON m.id = s.medicine_id
+         WHERE s.time_id = ? AND (s.medicine_id IS NULL OR m.owner_id = ? OR EXISTS (SELECT 1 FROM medicine_shares x WHERE x.medicine_id = m.id AND x.user_id = ?)) ORDER BY s.sort_order, s.id`, [t.id, viewer, viewer]);
       times.push({ id: t.id, name: t.name, at: t.at_time, at_words: t.at_time ? clockWords(t.at_time) : null, steps: steps.map((s) => asStep(s, row.cycle_length)), last7: await last7Of(q, t.id, day, row.kind === 'workout'), last_done: await lastDoneOf(q, t.id, row.kind === 'workout') });
     }
     const kind = row.for_pet !== null ? 'pet' : row.for_member !== null ? 'member' : row.for_user === viewer ? 'me' : row.for_user !== null ? 'person' : 'everyone';
@@ -475,6 +481,18 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
     if (made.changes === 0 && s.tracks && given !== undefined) {
       await q.run('UPDATE routine_ticks SET sets = ?, reps = ?, weight = ?, weight_unit = ?, minutes = ?, distance = ?, distance_unit = ? WHERE step_id = ? AND day = ?', [...numberValues(nums), s.id, day]);
     }
+    // A medicine taken: the number left comes down, once for each time it is checked (checking it again changes nothing).
+    if (made.changes > 0 && s.medicine_id !== null) await countDose(q, s.id, 1);
+  }
+
+  /** Takes the ticks of steps off a day, and counts back up the doses of any that were medicines and were checked. */
+  async function dropTicks(q: Queries, stepIds: number[], day: string): Promise<void> {
+    if (!stepIds.length) return;
+    const marks = stepIds.map(() => '?').join(',');
+    for (const k of await q.all<{ step_id: number }>(`SELECT k.step_id FROM routine_ticks k JOIN routine_steps s ON s.id = k.step_id WHERE k.day = ? AND s.medicine_id IS NOT NULL AND k.step_id IN (${marks})`, [day, ...stepIds])) {
+      await countDose(q, k.step_id, -1);
+    }
+    await q.run(`DELETE FROM routine_ticks WHERE day = ? AND step_id IN (${marks})`, [day, ...stepIds]);
   }
 
   /** The day for ticking: today, or up to a week back. */
@@ -571,11 +589,17 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
         timeId = (await q.run('INSERT INTO routine_times (routine_id, name, at_time, sort_order) VALUES (?, ?, ?, ?)', [routineId, t.name, t.at, i])).lastId;
       }
       keepTimes.add(timeId);
-      const haveSteps = new Set((await q.all<{ id: number }>('SELECT id FROM routine_steps WHERE time_id = ?', [timeId])).map((s) => s.id));
+      const haveRows = await q.all<{ id: number; medicine_id: number | null }>('SELECT id, medicine_id FROM routine_steps WHERE time_id = ?', [timeId]);
+      const haveSteps = new Set(haveRows.map((s) => s.id));
+      const medicineSteps = new Set(haveRows.filter((s) => s.medicine_id !== null).map((s) => s.id));
       const keepSteps = new Set<number>();
       for (const [n, s] of t.steps.entries()) {
         const values: Value[] = [s.words, s.rule === 'every' ? 'daily' : s.rule, s.weekdays ? s.weekdays.join(',') : null, s.night, s.every, s.start, s.item_id, s.wait_seconds, n, ...numberValues(s.nums)];
-        if (s.id !== null && haveSteps.has(s.id)) {
+        if (s.id !== null && medicineSteps.has(s.id)) {
+          // A medicine's words are its own (see medicines.ts): only where it stands in the list changes here.
+          await q.run('UPDATE routine_steps SET sort_order = ? WHERE id = ?', [n, s.id]);
+          keepSteps.add(s.id);
+        } else if (s.id !== null && haveSteps.has(s.id)) {
           await q.run('UPDATE routine_steps SET words = ?, rule = ?, weekdays = ?, night = ?, every_days = ?, every_from = ?, item_id = ?, wait_seconds = ?, sort_order = ?, sets = ?, reps = ?, weight = ?, weight_unit = ?, minutes = ?, distance = ?, distance_unit = ? WHERE id = ?', [...values, s.id]);
           keepSteps.add(s.id);
         } else {
@@ -743,7 +767,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
         const step = view.steps.find((s) => s.id === stepId);
         if (!step) throw new Problem(400, "That step isn't for that day");
         if (done) await keepTick(tx, step, day, nums);
-        else await tx.run('DELETE FROM routine_ticks WHERE step_id = ? AND day = ?', [stepId, day]);
+        else await dropTicks(tx, [stepId], day);
         return refinish(tx, r, t, day);
       });
     },
@@ -760,7 +784,7 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
         if (done) {
           for (const s of view.steps) await keepTick(tx, s, day, undefined);
         } else if (t.steps.length) {
-          await tx.run(`DELETE FROM routine_ticks WHERE day = ? AND step_id IN (${t.steps.map(() => '?').join(',')})`, [day, ...t.steps.map((s) => s.id)]);
+          await dropTicks(tx, t.steps.map((s) => s.id), day);
         }
         return refinish(tx, r, t, day);
       });
@@ -828,11 +852,14 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
      */
     async coming(from: string, to: string): Promise<{ key: string; routine_id: number; time_id: number; title: string; day: string; at: string; steps: number }[]> {
       dayNumber(from); dayNumber(to);
+      const names = await showsNames(db, viewer);
       const out = [];
       for (let day = from, guard = 0; day <= to && guard < 4; day = addDays(day, 1), guard += 1) {
         for (const v of await this.today(day)) {
           if (!v.at || v.finished) continue;
-          out.push({ key: `${v.id}|${day}`, routine_id: v.routine_id, time_id: v.id, title: v.title, day, at: v.at, steps: v.total - v.done });
+          // A time with a medicine in it says only "Morning routine", never a name or whose it is, unless the person switched names on.
+          const hidden = !names && v.steps.some((s) => s.medicine_id !== null);
+          out.push({ key: `${v.id}|${day}`, routine_id: v.routine_id, time_id: v.id, title: hidden ? `${v.name} routine` : v.title, day, at: v.at, steps: v.total - v.done });
         }
       }
       return out.sort((a, b) => (a.day + a.at).localeCompare(b.day + b.at));

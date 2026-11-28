@@ -250,6 +250,10 @@ it('upgrading from before lists: what was marked wanted is on its owner’s Want
   await db.run('DROP TABLE plan_traditions');
   await db.run('DROP TABLE jottings');
   await db.run('ALTER TABLE events DROP COLUMN travel_minutes');
+  await db.run('DROP TABLE medicine_shares');
+  await db.run('DROP INDEX idx_routine_steps_medicine');
+  await db.run('ALTER TABLE routine_steps DROP COLUMN medicine_id');
+  await db.run('DROP TABLE medicines');
   await db.run('DROP TABLE plan_food');
 
   for (const column of ['returned', 'after_trip', 'after_done', 'job_id', 'job_seen', 'thaw_pounds']) await db.run(`ALTER TABLE plan_items DROP COLUMN ${column}`);

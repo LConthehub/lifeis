@@ -48,6 +48,7 @@ const PackingPage = lazyPage(() => import('./pages/Packing'));
 const UpkeepPage = lazyPage(() => import('./pages/Upkeep'));
 const JobPage = lazyPage(() => import('./pages/Upkeep').then((m) => ({ default: m.JobPage })));
 const RoutinesPage = lazyPage(() => import('./pages/Routines'));
+const MedicinesPage = lazyPage(() => import('./pages/Medicines'));
 const MeasuresPage = lazyPage(() => import('./pages/Measures'));
 const JottingsPage = lazyPage(() => import('./pages/Jottings'));
 const ChoreChart = lazyPage(() => import('./pages/ChoreChart'));
@@ -87,8 +88,8 @@ axios.interceptors.request.use((config) => {
 // The third place in a tab is the older addresses that still open it (a part that now lives inside another page).
 const SECTIONS = [
   // Everything with a date or a time to it. Measures sit inside Routines, Holidays and Trips inside Plans.
-  { word: 'making', shown: 'on track', icon: 'date', home: '/calendar', owns: (path) => ['/calendar', '/routines', '/measures', '/projects', '/plans', '/things/activities'].some((p) => path.startsWith(p)),
-    tabs: [['/calendar', 'Calendar'], ['/routines', 'Routines', ['/measures']], ['/plans', 'Plans', ['/plans/holidays', '/plans/trips']], ['/projects', 'Projects'], ['/things/activities', 'Activities']] },
+  { word: 'making', shown: 'on track', icon: 'date', home: '/calendar', owns: (path) => ['/calendar', '/routines', '/measures', '/medicines', '/projects', '/plans', '/things/activities'].some((p) => path.startsWith(p)),
+    tabs: [['/calendar', 'Calendar'], ['/routines', 'Routines', ['/measures', '/medicines']], ['/plans', 'Plans', ['/plans/holidays', '/plans/trips']], ['/projects', 'Projects'], ['/things/activities', 'Activities']] },
   { word: 'eating', shown: 'cooking', icon: 'recipe', home: '/week', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
     tabs: [['/week', 'Week'], ['/groceries', 'Groceries'], ['/recipes', 'Recipes'], ['/pantry', 'Pantry'], ['/prices', 'Prices']] },
   // Home services sit inside the House Manual, and Licenses inside Things.
@@ -203,6 +204,7 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/routines" element={<RoutinesPage />} />
           <Route path="/measures" element={<MeasuresPage />} />
           <Route path="/jottings" element={<JottingsPage />} />
+          <Route path="/medicines" element={<MedicinesPage />} />
           <Route path="/things/upkeep" element={<UpkeepPage />} />
           <Route path="/things/upkeep/chart" element={<ChoreChart />} />
           <Route path="/things/upkeep/:id" element={<JobPage />} />

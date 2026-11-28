@@ -95,6 +95,8 @@ export { jottings, MAX_JOTTINGS } from './jottings.ts';
 export type { Jottings, Jotting } from './jottings.ts';
 export { routines, routinesDue, ROUTINE_STARTERS, ROUTINE_KINDS, ROUTINE_WEIGHT_UNITS, ROUTINE_DISTANCE_UNITS, numbersWords, STEP_RULES, DAY_NAMES, daysWords, everyWords, daysAsText, daysFromText, weekdaysWords, fallsOn } from './routines.ts';
 export type { Numbers as RoutineNumbers, RoutineKind, RoutineHistory, Routines, Routine, DayTime, DayStep, Time as RoutineTime, Step as RoutineStep, StepInput as RoutineStepInput, TimeInput as RoutineTimeInput, RoutineInput, Starter as RoutineStarter, StepRule as RoutineStepRule } from './routines.ts';
+export { medicines, MAX_MEDICINE_PHOTO, QUICK_TIMES as MEDICINE_QUICK_TIMES } from './medicines.ts';
+export type { Medicine, MedicineInput, MedicineList, Medicines, Subject as MedicineSubject } from './medicines.ts';
 export { tags, TAG_KINDS, isTagKind, MAX_TAG_NAME } from './tags.ts';
 export type { TagKind, TagRef, TagNode, Tagged, TagPage, Tags } from './tags.ts';
 export { search, SEARCH_KINDS } from './search.ts';

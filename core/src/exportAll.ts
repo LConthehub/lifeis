@@ -30,6 +30,7 @@ import { BUILT_IN_NAMES, LIST_TYPES, TO_WATCH } from './mediaLists.ts';
 import { Problem } from './problem.ts';
 import { prepAsText, prepFromText, type PrepRule } from './prep.ts';
 import { recipeKey } from './recipeFiles.ts';
+import { restoreMedicine } from './medicines.ts';
 import { daysAsText, daysFromText, MAX_STEPS, MAX_TIMES, NO_NUMBERS, tidyNumbers, type StepRule } from './routines.ts';
 import { cut, linesAsText, splitLines } from './recipeText.ts';
 import { clean, dayNumber, labelKey, pictureType, stamp, todayOf, type Clock } from './small.ts';
@@ -76,6 +77,7 @@ export const KINDS: KindInfo[] = [
   { key: 'pets', label: 'Pets, with their weights and photos', file: 'pets.csv', importable: true, matched: 'by name' },
   { key: 'upkeep', label: 'Upkeep jobs, bills, renewals and chores, with when each was done', file: 'upkeep.csv', importable: true, matched: 'by name (and pet)' },
   { key: 'routines', label: 'Routines, with their times and steps, and the days each time was finished', file: 'routines.csv', importable: true, matched: 'by name' },
+  { key: 'medicines', label: 'Medicines (private to you: only your own download holds them), with who each is for, where it shows in a routine, who it is shared with and the doses taken', file: 'medicines.csv', importable: true, matched: 'by name and who it is for' },
   { key: 'measures', label: 'Your own measures, with their entries (private to you: only your own download holds them)', file: 'measures.csv', importable: true, matched: 'a measure by name; an entry by day and value' },
   { key: 'jottings', label: 'Your jottings (private to you: only your own download holds them)', file: 'jottings.csv', importable: true, matched: 'by the words and the day' },
   { key: 'manual', label: 'The house manual', file: 'house-manual.csv', importable: true, matched: 'by part and title' },
@@ -111,6 +113,7 @@ export const LEFT_OUT: { what: string; why: string }[] = [
   { what: 'Browsers set up for reminders, and the reminder settings (the topic, the addresses reminders are sent to)', why: 'They name where reminders are sent, and belong to this Life Is.' },
   { what: 'Stickers’ codes', why: 'Each printed sticker’s code can belong to one place or thing in one Life Is only. The things themselves are all here.' },
   { what: 'What was last read from outside (the forecast, recall look-ups, followed calendars’ events)', why: 'It is copied from elsewhere, not yours, and is read again when needed.' },
+  { what: 'Medicines that another person shared with you', why: 'They belong to the person who keeps them. Your own are here, with the sign-in names of the people each is shared with.' },
   { what: 'Categories of spending that another person shared with you, and their entries', why: 'They belong to the person who made them. Your own entries in them are here, with the category’s name.' },
 ];
 
@@ -303,6 +306,7 @@ const PLAIN_SETTINGS: Record<string, string> = {
   display_name: 'The name Life Is calls you',
   idle_minutes: 'Sign out after being idle, in minutes',
   weather_place: 'Town for the weather',
+  medicines_show_names: 'Show medicine names in reminders (1 is yes)',
 };
 
 /** The preferences that are left out, in words (a name not listed here is shown as it is). */
@@ -507,7 +511,7 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   const routineRows = await all('SELECT r.id, r.name, r.kind, r.cycle_length, r.points, r.note, u.username AS signin, m.name AS member, p.name AS pet FROM routines r LEFT JOIN users u ON u.id = r.for_user LEFT JOIN household_members m ON m.id = r.for_member LEFT JOIN pets p ON p.id = r.for_pet WHERE r.owner_id = ? ORDER BY r.sort_order, r.id');
   const routineSteps = await all(`SELECT t.routine_id, t.name AS time_name, t.at_time, s.words, s.rule, s.weekdays, s.night, s.every_days, s.every_from, i.name AS thing, s.wait_seconds, s.sets, s.reps, s.weight, s.weight_unit, s.minutes, s.distance, s.distance_unit
     FROM routine_steps s JOIN routine_times t ON t.id = s.time_id JOIN routines r ON r.id = t.routine_id LEFT JOIN items i ON i.id = s.item_id
-    WHERE r.owner_id = ? ORDER BY r.sort_order, r.id, t.sort_order, t.id, s.sort_order, s.id`);
+    WHERE r.owner_id = ? AND s.medicine_id IS NULL ORDER BY r.sort_order, r.id, t.sort_order, t.id, s.sort_order, s.id`);
   const routineById = new Map(routineRows.map((r) => [r.id as number, r]));
   out.csv('routines.csv', ['Routine', 'For (sign-in)', 'For (household)', 'For (pet)', 'Cycle nights', 'Points', 'Notes', 'Time', 'At', 'Step', 'Days', 'Thing', 'Wait (seconds)', 'Kind', 'Sets', 'Reps', 'Weight', 'Weight unit', 'Minutes', 'Distance', 'Distance unit'],
     routineSteps.map((s) => {
@@ -525,7 +529,7 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('routine-ticks.csv', ['Routine', 'Time', 'Step', 'Day', 'Ticked at', 'By (sign-in)', 'Sets', 'Reps', 'Weight', 'Weight unit', 'Minutes', 'Distance', 'Distance unit'],
     (await all(`SELECT r.name, t.name AS time_name, s.words, k.day, k.ticked_at, u.username AS by_name, k.sets, k.reps, k.weight, k.weight_unit, k.minutes, k.distance, k.distance_unit
       FROM routine_ticks k JOIN routine_steps s ON s.id = k.step_id JOIN routine_times t ON t.id = s.time_id JOIN routines r ON r.id = t.routine_id LEFT JOIN users u ON u.id = k.by_user
-      WHERE r.owner_id = ? ORDER BY r.id, t.id, s.id, k.day`)).map((k) => [str(k.name), str(k.time_name), str(k.words), str(k.day), str(k.ticked_at), str(k.by_name), str(k.sets), str(k.reps), str(k.weight),
+      WHERE r.owner_id = ? AND s.medicine_id IS NULL ORDER BY r.id, t.id, s.id, k.day`)).map((k) => [str(k.name), str(k.time_name), str(k.words), str(k.day), str(k.ticked_at), str(k.by_name), str(k.sets), str(k.reps), str(k.weight),
       str(k.weight_unit), str(k.minutes), str(k.distance), str(k.distance_unit)]));
 
   // ---------- jottings: the person's own, never anyone else's ----------
@@ -554,6 +558,27 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     pets.map((p) => [str(p.name), str(p.species), str(p.breed), str(p.born_on), str(p.microchip), str(p.vet_name), str(p.vet_phone), str(p.food), str(p.note), petPhoto.get(p.id as number) ?? '']));
   out.csv('pet-weights.csv', ['Pet', 'Day', 'Weight', 'Unit'],
     (await all('SELECT p.name, w.day, w.value, w.unit FROM pet_weights w JOIN pets p ON p.id = w.pet_id WHERE p.owner_id = ? ORDER BY p.id, w.day, w.id')).map((w) => [str(w.name), str(w.day), str(w.value), str(w.unit)]));
+
+  // ---------- medicines: the person's own, never anyone else's ----------
+  const medRows = await all(`SELECT m.id, m.name, m.dose, m.when_taken, m.left_count, m.per_dose, m.fill_size, m.prescriber_name, m.prescriber_phone, m.pharmacy_name, m.pharmacy_phone, m.reason, m.note, m.photo_type, m.photo, pt.name AS pet, hm.name AS member
+    FROM medicines m LEFT JOIN pets pt ON pt.id = m.for_pet LEFT JOIN household_members hm ON hm.id = m.for_member WHERE m.owner_id = ? ORDER BY m.sort_order, m.id`);
+  const medPlaces = await all(`SELECT s.medicine_id, r.name AS routine, t.name AS time FROM routine_steps s JOIN routine_times t ON t.id = s.time_id JOIN routines r ON r.id = t.routine_id JOIN medicines m ON m.id = s.medicine_id
+    WHERE m.owner_id = ? ORDER BY s.medicine_id, r.sort_order, r.id, t.sort_order, t.id`);
+  const medShared = await all(`SELECT x.medicine_id, u.username FROM medicine_shares x JOIN users u ON u.id = x.user_id JOIN medicines m ON m.id = x.medicine_id WHERE m.owner_id = ? ORDER BY u.username`);
+  const medPhoto = new Map<number, string>();
+  for (const m of medRows) {
+    const bytes = bytesOf(m.photo);
+    if (bytes && m.photo_type) medPhoto.set(m.id as number, out.binary('pictures/medicines', slug(str(m.name), m.id as number), str(m.photo_type), bytes));
+  }
+  out.csv('medicines.csv', ['Medicine', 'For (pet)', 'For (household)', 'Dose', 'When taken', 'Left', 'Used each dose', 'A refill adds', 'Prescriber', 'Prescriber phone', 'Pharmacy', 'Pharmacy phone', 'What it is for', 'Notes', 'Shown in (routine > time)', 'Shared with (sign-in)', 'Photo file'],
+    medRows.map((m) => [str(m.name), str(m.pet), str(m.member), str(m.dose), str(m.when_taken), str(m.left_count), str(m.per_dose), str(m.fill_size), str(m.prescriber_name), str(m.prescriber_phone), str(m.pharmacy_name), str(m.pharmacy_phone),
+      str(m.reason), str(m.note), medPlaces.filter((p) => p.medicine_id === m.id).map((p) => `${str(p.routine)} > ${str(p.time)}`).join('; '),
+      medShared.filter((p) => p.medicine_id === m.id).map((p) => str(p.username)).join('; '), medPhoto.get(m.id as number) ?? '']));
+  out.csv('medicine-doses.csv', ['Medicine', 'For (pet)', 'For (household)', 'Routine', 'Time', 'Day', 'Taken at', 'By (sign-in)'],
+    (await all(`SELECT m.name, pt.name AS pet, hm.name AS member, r.name AS routine, t.name AS time, k.day, k.ticked_at, u.username AS by_name
+      FROM routine_ticks k JOIN routine_steps s ON s.id = k.step_id JOIN medicines m ON m.id = s.medicine_id JOIN routine_times t ON t.id = s.time_id JOIN routines r ON r.id = t.routine_id
+      LEFT JOIN pets pt ON pt.id = m.for_pet LEFT JOIN household_members hm ON hm.id = m.for_member LEFT JOIN users u ON u.id = k.by_user
+      WHERE m.owner_id = ? ORDER BY m.id, k.day, k.step_id`)).map((k) => [str(k.name), str(k.pet), str(k.member), str(k.routine), str(k.time), str(k.day), str(k.ticked_at), str(k.by_name)]));
 
   // ---------- the house manual, licenses ----------
   const sections: Record<string, string> = { emergency: 'In an emergency', contacts: 'Who to call', house: 'How the house works', routines: 'Day to day' };
@@ -803,6 +828,7 @@ export async function exportEverything(db: Db, owner: number, clock: Clock = () 
       'SELECT COALESCE(SUM(LENGTH(p.bytes)), 0) AS n FROM item_photos p JOIN items i ON i.id = p.item_id WHERE i.owner_id = ?',
       'SELECT COALESCE(SUM(LENGTH(d.bytes)), 0) AS n FROM item_documents d JOIN items i ON i.id = d.item_id WHERE i.owner_id = ?',
       'SELECT COALESCE(SUM(LENGTH(photo)), 0) AS n FROM pets WHERE owner_id = ?',
+      'SELECT COALESCE(SUM(LENGTH(photo)), 0) AS n FROM medicines WHERE owner_id = ?',
       'SELECT COALESCE(SUM(LENGTH(p.bytes)), 0) AS n FROM plan_photos p JOIN plans l ON l.id = p.plan_id WHERE l.owner_id = ?',
       'SELECT COALESCE(SUM(LENGTH(c.bytes)), 0) AS n FROM media_covers c JOIN media m ON m.id = c.media_id WHERE m.owner_id = ?',
     ]) weight += (await tx.get<{ n: number }>(sql, [owner]))?.n ?? 0;
@@ -847,6 +873,7 @@ const FILE_ABOUT: [string, string][] = [
   ['upkeep-history.csv', 'Each time each job was done.'],
   ['household.csv', 'People in the household, and the chore points each has earned.'],
   ['routines.csv', 'Routines: one row for each step, with its time of day, which days it falls on and the thing it uses. routine-history.csv has the days each time was finished, and routine-ticks.csv each step checked off, when, by whom and with what numbers. A workout is marked in the Kind column, and its steps carry their numbers.'],
+  ['medicines.csv', 'Your own medicines: the name, the dose and when it is taken in your own words, how many are left, who prescribed it and which pharmacy, what it is for, notes, who it is for (a pet or a household member; blank is you), where it shows in a routine, and the sign-in names of the people it is shared with. They are private to you, so only your own download holds them. medicine-doses.csv has each dose taken, and the photos of labels are in pictures/medicines.'],
   ['measures.csv', 'Your own measures: one row for each entry, with its unit and target. They are private to you, so only your own download holds them.'],
   ['pets.csv', 'Your pets.'],
   ['pet-weights.csv', 'Your pets’ weights over time. Their care is in upkeep.csv, with the pet’s name.'],
@@ -970,7 +997,7 @@ export type KindReport = {
   /** Anything else worth saying in a sentence. */
   note?: string;
 };
-export type Pending = { file: string; as: 'thing-photo' | 'thing-paper' | 'pet-photo' | 'cover' | 'plan-photo'; id: number; kind?: string; name?: string; spot?: string };
+export type Pending = { file: string; as: 'thing-photo' | 'thing-paper' | 'pet-photo' | 'medicine-photo' | 'cover' | 'plan-photo'; id: number; kind?: string; name?: string; spot?: string };
 export type Brought = { kinds: KindReport[]; pending: Pending[] };
 
 type Ctx = { tx: Queries; owner: number; today: string; at: string; files: Files };
@@ -1482,6 +1509,69 @@ const importers: Record<string, Importer> = {
       const photo = cellOf(row, 'Photo file');
       if (photo) d.pending.push({ file: photo, as: 'pet-photo', id: made.lastId });
     }
+    return d;
+  },
+
+  async medicines(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'medicines.csv');
+    if (!t) return d;
+    const people = new Map((await c.tx.all<{ id: number; username: string }>('SELECT id, username FROM users')).map((u) => [u.username.toLowerCase(), u.id]));
+    const members = new Map((await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM household_members WHERE owner_id = ?', [c.owner])).map((m) => [labelKey(m.name), m.id]));
+    const pets = new Map((await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM pets WHERE owner_id = ? ORDER BY id DESC', [c.owner])).map((p) => [labelKey(p.name), p.id]));
+    const keyOf = (name: string, pet: string, member: string) => `${labelKey(name)}|${labelKey(pet)}|${labelKey(member)}`;
+    const seen = new Seen((await c.tx.all<{ name: string; pet: string | null; member: string | null }>(
+      'SELECT m.name, pt.name AS pet, hm.name AS member FROM medicines m LEFT JOIN pets pt ON pt.id = m.for_pet LEFT JOIN household_members hm ON hm.id = m.for_member WHERE m.owner_id = ?', [c.owner]))
+      .map((m) => keyOf(m.name, m.pet ?? '', m.member ?? '')));
+    const doses = tableOf(c.files, 'medicine-doses.csv')?.rows ?? [];
+    let unknown = 0;
+    for (const [at, row] of t.rows.entries()) {
+      const name = clean(cellOf(row, 'Medicine'), 120);
+      if (!name) { skip(d, at, 'it has no name'); continue; }
+      d.found += 1;
+      const petName = clean(cellOf(row, 'For (pet)'), 80) ?? '';
+      const memberName = clean(cellOf(row, 'For (household)'), 80) ?? '';
+      if (seen.take(keyOf(name, petName, memberName))) { d.already += 1; continue; }
+      // A medicine is never moved to someone else: for a pet that isn't here it is left out, and said.
+      const forPet = petName ? pets.get(labelKey(petName)) ?? null : null;
+      if (petName && forPet === null) { skip(d, at, `the pet ${petName} is not here`); d.found -= 1; continue; }
+      let forMember: number | null = null;
+      if (memberName && !petName) {
+        forMember = members.get(labelKey(memberName)) ?? null;
+        if (forMember === null) {
+          forMember = (await c.tx.run('INSERT INTO household_members (owner_id, name, created_at) VALUES (?, ?, ?)', [c.owner, memberName, c.at])).lastId;
+          members.set(labelKey(memberName), forMember);
+        }
+      }
+      const whole = (text: string, least: number, most: number) => { const n = numberOf(text); return n !== null && Number.isInteger(n) && n >= least && n <= most ? n : null; };
+      const names = cellOf(row, 'Shared with (sign-in)').split(';').map((n) => n.trim().toLowerCase()).filter(Boolean);
+      const shared = names.map((n) => people.get(n)).filter((id): id is number => id !== undefined && id !== c.owner);
+      unknown += names.length - shared.length;
+      const places = cellOf(row, 'Shown in (routine > time)').split(';').map((p) => p.trim()).filter(Boolean).map((p) => {
+        const cut = p.lastIndexOf(' > ');
+        return cut > 0 ? { routine: clean(p.slice(0, cut), 80) ?? '', time: clean(p.slice(cut + 3), 40) ?? '' } : { routine: '', time: '' };
+      }).filter((p) => p.routine && p.time);
+      const kept = await restoreMedicine(c.tx, c.owner, {
+        name, dose: clean(cellOf(row, 'Dose'), 200), when_taken: clean(cellOf(row, 'When taken'), 200), left: whole(cellOf(row, 'Left'), 0, 99999), per_dose: whole(cellOf(row, 'Used each dose'), 1, 99) ?? 1,
+        fill_size: whole(cellOf(row, 'A refill adds'), 1, 99999), prescriber_name: clean(cellOf(row, 'Prescriber'), 120), prescriber_phone: clean(cellOf(row, 'Prescriber phone'), 40),
+        pharmacy_name: clean(cellOf(row, 'Pharmacy'), 120), pharmacy_phone: clean(cellOf(row, 'Pharmacy phone'), 40), reason: clean(cellOf(row, 'What it is for'), 300), note: clean(cellOf(row, 'Notes'), 3000),
+        for_pet: forPet, for_member: forMember, places, people: shared,
+      }, c.at);
+      // The doses taken, put back as they were (the number left already counts them).
+      for (const k of doses) {
+        if (keyOf(cellOf(k, 'Medicine'), cellOf(k, 'For (pet)'), cellOf(k, 'For (household)')) !== keyOf(name, petName, memberName)) continue;
+        const step = kept.steps.get(`${labelKey(cellOf(k, 'Routine'))}|${labelKey(cellOf(k, 'Time'))}`);
+        const day = dayOf(cellOf(k, 'Day'));
+        if (step === undefined || !day) continue;
+        const by = cellOf(k, 'By (sign-in)');
+        await c.tx.run('INSERT OR IGNORE INTO routine_ticks (step_id, day, by_user, ticked_at) VALUES (?, ?, ?, ?)', [step, day, by ? people.get(by.toLowerCase()) ?? null : null, clean(cellOf(k, 'Taken at'), 40)]);
+      }
+      d.fresh += 1;
+      const photo = cellOf(row, 'Photo file');
+      if (photo) d.pending.push({ file: photo, as: 'medicine-photo', id: kept.id });
+    }
+    d.unlinked += unknown;
+    if (unknown) d.note = `${unknown} sign-in name${unknown === 1 ? '' : 's'} a medicine was shared with ${unknown === 1 ? 'is' : 'are'} not here, so ${unknown === 1 ? 'it was' : 'they were'} left out`;
     return d;
   },
 
@@ -2556,7 +2646,7 @@ ${mediaId}`);
     return d;
   },
 };
-const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'measures', 'jottings', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
+const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'medicines', 'measures', 'jottings', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
 
 function rowsIn(files: Files, info: KindInfo): number {
   return tableOf(files, info.file)?.rows.length ?? 0;
@@ -2656,6 +2746,10 @@ export async function bringInPictures(db: Db, owner: number, pictures: PictureIn
         const ok = await tx.get('SELECT id FROM pets WHERE id = ? AND owner_id = ? AND photo IS NULL', [p.id, owner]);
         if (!ok || type === 'application/pdf' || p.bytes.length > 8_000_000) { left += 1; continue; }
         await tx.run('UPDATE pets SET photo_type = ?, photo = ? WHERE id = ?', [type, p.bytes, p.id]);
+      } else if (p.as === 'medicine-photo') {
+        const ok = await tx.get('SELECT id FROM medicines WHERE id = ? AND owner_id = ? AND photo IS NULL', [p.id, owner]);
+        if (!ok || type === 'application/pdf' || p.bytes.length > 8_000_000) { left += 1; continue; }
+        await tx.run('UPDATE medicines SET photo_type = ?, photo = ? WHERE id = ?', [type, p.bytes, p.id]);
       } else if (p.as === 'plan-photo') {
         const ok = await tx.get<{ last: number | null }>(
           'SELECT (SELECT MAX(x.sort_order) FROM plan_photos x WHERE x.plan_id = l.id) AS last FROM plans l WHERE l.id = ? AND l.owner_id = ? AND (SELECT COUNT(*) FROM plan_photos x WHERE x.plan_id = l.id) < 80 AND NOT EXISTS (SELECT 1 FROM plan_photos x WHERE x.plan_id = l.id AND x.bytes = ?)',
