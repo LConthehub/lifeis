@@ -9,6 +9,7 @@
 import { calendar, type Entry } from './calendar.ts';
 import { kitchen } from './kitchen.ts';
 import type { Db } from './db.ts';
+import { jottings } from './jottings.ts';
 import { Problem } from './problem.ts';
 import { shopping } from './shopping.ts';
 import { addDays, clean, dayNumber, todayOf, type Clock } from './small.ts';
@@ -22,6 +23,7 @@ export const KEY_ACTIONS = [
   { id: 'today_read', says: 'Read what is on today: events and chores due' },
   { id: 'meals_read', says: "Read the week's meals (and what is for dinner)" },
   { id: 'reminder_add', says: 'Add a reminder to your calendar' },
+  { id: 'jotting_add', says: 'Add a jotting to your private list' },
 ] as const;
 export type KeyAction = (typeof KEY_ACTIONS)[number]['id'];
 export const isKeyAction = (value: unknown): value is KeyAction => KEY_ACTIONS.some((a) => a.id === value);
@@ -205,6 +207,14 @@ export function voice(db: Db, owner: number, clock: Clock = () => new Date()) {
       const dinners = meals.filter((m) => m.meal === 'dinner');
       const shown = (dinners.length ? dinners : meals).slice(0, 7);
       return `${upper(dinners.length ? 'dinners' : 'meals')} this week: ${shown.map((m) => `${spokenDay(m.day, today)}, ${m.recipe_title ?? m.title ?? 'a meal'}`).join('. ')}.`;
+    },
+
+    /** One stray thought, kept in the person's own private jottings. */
+    async addJotting(text: string): Promise<string> {
+      const said = clean(text, 500);
+      if (!said) return 'No jotting was heard.';
+      await jottings(db, owner, clock).add(said);
+      return 'Jotted down.';
     },
 
     /** A reminder: a dated line on the calendar, with a time when one was said. It shows in the morning reminders too. */

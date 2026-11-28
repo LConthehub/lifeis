@@ -77,6 +77,7 @@ export const KINDS: KindInfo[] = [
   { key: 'upkeep', label: 'Upkeep jobs, bills, renewals and chores, with when each was done', file: 'upkeep.csv', importable: true, matched: 'by name (and pet)' },
   { key: 'routines', label: 'Routines, with their times and steps, and the days each time was finished', file: 'routines.csv', importable: true, matched: 'by name' },
   { key: 'measures', label: 'Your own measures, with their entries (private to you: only your own download holds them)', file: 'measures.csv', importable: true, matched: 'a measure by name; an entry by day and value' },
+  { key: 'jottings', label: 'Your jottings (private to you: only your own download holds them)', file: 'jottings.csv', importable: true, matched: 'by the words and the day' },
   { key: 'manual', label: 'The house manual', file: 'house-manual.csv', importable: true, matched: 'by part and title' },
   { key: 'services', label: 'Home lab: your links, and who sees each', file: 'home-services.csv', importable: true, matched: 'by name and address' },
   { key: 'licenses', label: 'Licenses and permits', file: 'licenses.csv', importable: true, matched: 'by name and holder' },
@@ -512,6 +513,10 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
       WHERE r.owner_id = ? ORDER BY r.id, t.id, s.id, k.day`)).map((k) => [str(k.name), str(k.time_name), str(k.words), str(k.day), str(k.ticked_at), str(k.by_name), str(k.sets), str(k.reps), str(k.weight),
       str(k.weight_unit), str(k.minutes), str(k.distance), str(k.distance_unit)]));
 
+  // ---------- jottings: the person's own, never anyone else's ----------
+  out.csv('jottings.csv', ['Jotting', 'Day', 'Checked off'],
+    (await all('SELECT text, created_at, done FROM jottings WHERE owner_id = ? ORDER BY id')).map((j) => [str(j.text), str(String(j.created_at).slice(0, 10)), yes(j.done)]));
+
   // ---------- measures: the person's own, never anyone else's ----------
   const measureRows = await all('SELECT id, name, unit, target FROM measures WHERE owner_id = ? ORDER BY sort_order, id');
   const measureEntries = await all('SELECT e.measure_id, e.day, e.value FROM measure_entries e JOIN measures m ON m.id = e.measure_id WHERE m.owner_id = ? ORDER BY m.id, e.day, e.id');
@@ -815,6 +820,7 @@ const FILE_ABOUT: [string, string][] = [
   ['collection-log.csv', 'When you watched, read, listened to or played something.'],
   ['lists.csv', 'Your lists of titles (To watch, read or hear, and the ones you made): each title on each list, in order, and whether the list is shared. Titles you do not own yet are in collection.csv, marked Not owned yet.'],
   ['events.csv', 'Calendar events you wrote.'],
+  ['jottings.csv', 'Your jottings, with the day of each and whether it is checked off. They are private to you, so only your own download holds them.'],
   ['projects.csv', 'Projects, and project-lines.csv, project-time.csv and project-costs.csv for what they use, the time spent and what they cost.'],
   ['plans.csv', 'Plans (with when the food is served), and plan-items.csv and plan-photos.csv for what belongs to each. In plan-items.csv, rows of kind food are food that is bought or brought; a frozen weight makes a step to thaw it.'],
   ['holidays.csv', 'Holidays: how each finds its day. holiday-years.csv has each year (its plan, days to put up and take down, notes for next year) and holiday-lists.csv has what each year keeps: guests, cards, gifts, decorations and countdown steps.'],
@@ -1653,6 +1659,29 @@ const importers: Record<string, Importer> = {
     return d;
   },
 
+  /** The person's own jottings. Brought into the person doing the bringing-in, and no one else. */
+  async jottings(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'jottings.csv');
+    if (!t) return d;
+    const seen = new Seen((await c.tx.all<{ text: string; created_at: string }>('SELECT text, created_at FROM jottings WHERE owner_id = ?', [c.owner])).map((j) => `${labelKey(j.text)}
+${j.created_at.slice(0, 10)}`));
+    let have = (await c.tx.get<{ n: number }>('SELECT COUNT(*) AS n FROM jottings WHERE owner_id = ?', [c.owner]))?.n ?? 0;
+    for (const [at, row] of t.rows.entries()) {
+      const text = clean(cellOf(row, 'Jotting'), 500);
+      if (!text) { skip(d, at, 'it has nothing written'); continue; }
+      const day = dayOf(cellOf(row, 'Day')) ?? c.at.slice(0, 10);
+      d.found += 1;
+      if (seen.take(`${labelKey(text)}
+${day}`)) { d.already += 1; continue; }
+      if (have >= 1000) { skip(d, at, 'Life Is keeps 1000 jottings at most'); continue; }
+      have += 1;
+      await c.tx.run('INSERT INTO jottings (owner_id, text, done, created_at) VALUES (?, ?, ?, ?)', [c.owner, text, yesOf(cellOf(row, 'Checked off')) ? 1 : 0, `${day}${c.at.slice(10)}`]);
+      d.fresh += 1;
+    }
+    return d;
+  },
+
   async manual(c) {
     const d = blank();
     const t = tableOf(c.files, 'house-manual.csv');
@@ -2418,7 +2447,7 @@ ${mediaId}`);
     return d;
   },
 };
-const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'measures', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
+const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'measures', 'jottings', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
 
 function rowsIn(files: Files, info: KindInfo): number {
   return tableOf(files, info.file)?.rows.length ?? 0;

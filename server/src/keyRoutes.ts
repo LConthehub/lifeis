@@ -59,6 +59,7 @@ export function voiceRoutes(db: Db): Route[] {
     ['GET', /^\/api\/voice\/dinner$/, only('meals_read', (_c, say) => say.dinner())],
     ['GET', /^\/api\/voice\/week$/, only('meals_read', (_c, say) => say.week())],
     ['GET', /^\/api\/voice\/today$/, only('today_read', (c, say) => say.today(Boolean(c.key?.can.includes('meals_read'))))],
+    ['POST', /^\/api\/voice\/jottings$/, only('jotting_add', (c, say) => say.addJotting(read.text(c.body, 'text')))],
     ['POST', /^\/api\/voice\/reminders$/, only('reminder_add', (c, say) => say.addReminder(read.text(c.body, 'text'), read.maybeText(c.body, 'when') ?? read.maybeText(c.body, 'time')))],
   ];
 }

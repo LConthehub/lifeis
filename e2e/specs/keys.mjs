@@ -47,8 +47,10 @@ check('it says what a key never reaches', /never reaches guns or ammunition, mea
 // ---- making one ----
 await section.getByRole('button', { name: 'Make a key' }).click(); await wait(300);
 const boxes = await section.getByRole('checkbox').count();
-check('the form lists the five things a key may do, each with a box', boxes === 5, `${boxes} boxes`);
+check('the form lists the six things a key may do, each with a box', boxes === 6, `${boxes} boxes`);
 check('the list is plain words', /Read your grocery list/.test(await section.innerText()) && /Add a reminder to your calendar/.test(await section.innerText()));
+const offered = flat(await section.innerText());
+check('it offers a jotting', ['Add a jotting to your private list'].every((w) => offered.includes(w)));
 await section.getByLabel('What is it for? (a name)').fill('Siri on my iPhone');
 await section.getByLabel('Your password, to make it').fill('the wrong password entirely');
 await section.getByRole('button', { name: 'Make the key' }).click(); await wait(900);
@@ -75,6 +77,12 @@ const listed = await voice('GET', '/api/voice/groceries', key);
 check('what do I need from the store speaks the list', /^3 things\. /.test(listed.text), listed.text);
 const reminder = await voice('POST', '/api/voice/reminders', key, { text: 'Call the dentist', when: 'tomorrow at 3pm' });
 check('a reminder is added', reminder.text === 'Reminder added for tomorrow at 3 PM: Call the dentist.', reminder.text);
+// ---- the newer ones: a jotting, putting a thing away, asking where it is ----
+const jot = await voice('POST', '/api/voice/jottings', key, { text: 'the blue pen is in the car' });
+check('a jotting is added by voice', jot.status === 200 && jot.text === 'Jotted down.', jot.text);
+const asAna = (method, path, body) => page.request.fetch(base + path, { method, headers: { 'Content-Type': 'application/json' }, data: body ? JSON.stringify(body) : undefined });
+const mine = await (await asAna('GET', '/api/jottings')).json();
+check('it is in the person own jottings', mine.length === 1 && mine[0].text === 'the blue pen is in the car');
 check('the key cannot open anything else', (await voice('GET', '/api/kitchen/grocery', key)).status === 401 && (await voice('GET', '/api/things/guns', key)).status === 401 && (await voice('GET', '/api/keys', key)).status === 401);
 check('a wrong key is refused', (await voice('GET', '/api/voice/groceries', 'lik_' + 'A'.repeat(43))).text === "That key isn't working.");
 

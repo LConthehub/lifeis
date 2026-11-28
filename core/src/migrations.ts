@@ -1971,6 +1971,23 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE holidays ADD COLUMN every_from INTEGER`,
     ],
   },
+  {
+    number: 69,
+    name: "a private scratch list of jottings for each person, and the minutes it takes to get to a calendar event",
+    // A jotting is one stray thought, seen only by the person who wrote it. travel_minutes is typed by the person (nothing is
+    // looked up): the morning reminder says when to leave. Events made before read as they always did: it is NULL.
+    statements: [
+      `CREATE TABLE jottings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        text TEXT NOT NULL,
+        done INTEGER NOT NULL DEFAULT 0 CHECK(done IN (0, 1)),
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_jottings_owner ON jottings(owner_id, done, id)`,
+      `ALTER TABLE events ADD COLUMN travel_minutes INTEGER CHECK(travel_minutes IS NULL OR (travel_minutes >= 1 AND travel_minutes <= 720))`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

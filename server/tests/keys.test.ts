@@ -82,7 +82,7 @@ afterEach(async () => {
 it('a key is made with the password, shown once, and kept only as a hash', async () => {
   const admin = await owner();
   expect((await admin.get('/api/keys')).json).toMatchObject({ keys: [], most: 10 });
-  expect((await admin.get('/api/keys')).json.actions.map((a: { id: string }) => a.id)).toEqual(ALL);
+  expect((await admin.get('/api/keys')).json.actions.map((a: { id: string }) => a.id)).toEqual([...ALL, 'jotting_add']);
   // The password again, or nothing is made.
   expect((await admin.post('/api/keys', { name: 'Siri', can: ALL })).status).toBe(422);
   expect((await admin.post('/api/keys', { name: 'Siri', can: ALL, password: 'not-the-password' })).status).toBe(400);

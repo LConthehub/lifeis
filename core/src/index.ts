@@ -89,6 +89,8 @@ export { minutesInStep, timerName, MOST_TIMER_MINUTES } from './cookTimer.ts';
 export type { Reminders, ReminderSettings, ReminderTools, Digest, DigestLine, Single, Channel, PushSender, PushSubscription } from './reminders.ts';
 export { measures, MAX_MEASURES } from './measures.ts';
 export type { Measures, Measure, MeasureEntry, MeasureInput } from './measures.ts';
+export { jottings, MAX_JOTTINGS } from './jottings.ts';
+export type { Jottings, Jotting } from './jottings.ts';
 export { routines, routinesDue, ROUTINE_STARTERS, ROUTINE_KINDS, ROUTINE_WEIGHT_UNITS, ROUTINE_DISTANCE_UNITS, numbersWords, STEP_RULES, DAY_NAMES, daysWords, everyWords, daysAsText, daysFromText, weekdaysWords, fallsOn } from './routines.ts';
 export type { Numbers as RoutineNumbers, RoutineKind, RoutineHistory, Routines, Routine, DayTime, DayStep, Time as RoutineTime, Step as RoutineStep, StepInput as RoutineStepInput, TimeInput as RoutineTimeInput, RoutineInput, Starter as RoutineStarter, StepRule as RoutineStepRule } from './routines.ts';
 export { tags, TAG_KINDS, isTagKind, MAX_TAG_NAME } from './tags.ts';
