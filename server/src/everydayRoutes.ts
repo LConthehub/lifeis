@@ -29,6 +29,7 @@ import { outdoorTripRoutes } from './outdoorTripRoutes.ts';
 import { planRoutes } from './planRoutes.ts';
 import { measureRoutes } from './measureRoutes.ts';
 import { routineRoutes } from './routineRoutes.ts';
+import { medicineRoutes } from './medicineRoutes.ts';
 import { shoppingRoutes } from './shoppingRoutes.ts';
 import { recallRoutes } from './recallRoutes.ts';
 import { startRoutes } from './startRoutes.ts';
@@ -412,6 +413,7 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ...exportRoutes(db),
     ...tagRoutes(db),
     ...routineRoutes(db),
+    ...medicineRoutes(db),
     ...measureRoutes(db),
   ];
 }

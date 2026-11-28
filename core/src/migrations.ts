@@ -1971,6 +1971,49 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE holidays ADD COLUMN every_from INTEGER`,
     ],
   },
+  {
+    number: 70,
+    name: 'medicines: a private list for a person, a child or a pet, kept as steps in a routine',
+    // Life Is only keeps what the person types and reminds them. The keeper (owner_id) sees the list, and the people they choose
+    // (medicine_shares). `left_count` is how many doses are left, counted down as the routine step is checked and back up when it
+    // is unchecked. A medicine shows in a routine as a step (routine_steps.medicine_id): the step's own words stay a plain
+    // placeholder, and the name is read from here only for people who may see the medicine.
+    statements: [
+      `CREATE TABLE medicines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        for_member INTEGER REFERENCES household_members(id) ON DELETE CASCADE,
+        for_pet INTEGER REFERENCES pets(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        dose TEXT,
+        when_taken TEXT,
+        left_count INTEGER CHECK(left_count IS NULL OR left_count >= 0),
+        per_dose INTEGER NOT NULL DEFAULT 1 CHECK(per_dose >= 1 AND per_dose <= 99),
+        fill_size INTEGER CHECK(fill_size IS NULL OR fill_size >= 1),
+        prescriber_name TEXT,
+        prescriber_phone TEXT,
+        pharmacy_name TEXT,
+        pharmacy_phone TEXT,
+        reason TEXT,
+        note TEXT,
+        photo_type TEXT,
+        photo BLOB,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        CHECK(for_member IS NULL OR for_pet IS NULL)
+      )`,
+      `CREATE INDEX idx_medicines_owner ON medicines(owner_id)`,
+      `CREATE TABLE medicine_shares (
+        medicine_id INTEGER NOT NULL REFERENCES medicines(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (medicine_id, user_id)
+      )`,
+      `ALTER TABLE routine_steps ADD COLUMN medicine_id INTEGER REFERENCES medicines(id) ON DELETE CASCADE`,
+      `CREATE INDEX idx_routine_steps_medicine ON routine_steps(medicine_id)`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

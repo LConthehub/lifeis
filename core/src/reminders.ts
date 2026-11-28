@@ -21,6 +21,7 @@ import { outdoorTrips } from './outdoorTrips.ts';
 import { inventory } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
 import { mail, type Postbox } from './mail.ts';
+import { medicines } from './medicines.ts';
 import { Problem } from './problem.ts';
 import { start } from './start.ts';
 import { addDays, clean, dayNumber, todayOf, type Clock } from './small.ts';
@@ -182,6 +183,10 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
         const when = t.warranty_days === 0 ? 'ends today' : t.warranty_days === 1 ? 'ends tomorrow' : `ends in ${t.warranty_days} days`;
         lines.push({ kind: 'upkeep', icon: '🛡', title: `Warranty: ${t.name}`, detail: `${when} · anything wrong with it?`, link: `/things/${t.id}`, urgent: t.warranty_days <= 1 });
       }
+    }
+    if (s.covers.upkeep) {
+      // A refill coming up, from a week before the doses would run out. Without the switch for names it says only that one is coming.
+      for (const r of await medicines(db, owner, clock).refillLines()) lines.push({ kind: 'upkeep', icon: '🔧', title: r.title, detail: r.detail, link: r.link, urgent: r.urgent });
     }
     if (s.covers.low) {
       for (const t of await inventory(db, owner, clock).listItems({ low: true })) {

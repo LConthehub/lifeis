@@ -44,6 +44,7 @@ const SUITE = [
   { specs: ['manual'] },
   { specs: ['home-services'] },
   { specs: ['guns'] },
+  { specs: ['medicines'] },
   { specs: ['letterboxd'] },
   { specs: ['packing'] },
   { specs: ['search'] },
