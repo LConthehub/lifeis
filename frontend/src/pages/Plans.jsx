@@ -6,7 +6,7 @@ import { shrink } from '../components/shrink';
 import Picture from '../components/Picture';
 import { PlanGoal } from '../components/Goals';
 import DatePlan from '../components/DatePlan';
-import { Traditions, WhenWhere, timesText } from '../components/PlanCards';
+import { JobPicker, Traditions, WhenWhere, timesText } from '../components/PlanCards';
 import { Basics, Budget, Countdown, Decor, Ending, Gifts, GivenToYou, Heading, Hint, LastNote, NextYear, People, Remove, RuleFields, Shopping, ruleBody, ruleStart } from './Holidays';
 import { After, Harvest, Licenses, Seasons } from './Trips';
 import { BulkBar, PickBox, SelectButton, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
@@ -434,13 +434,14 @@ function SavedPlanPage() {
               <li key={t.id} className="flex items-start gap-2 text-sm">
                 <label className="flex flex-1 cursor-pointer items-start gap-2 text-gray-800 dark:text-life-50">
                   <input type="checkbox" checked={t.done} onChange={() => act(() => axios.put(`/api/plans/items/${t.id}`, { done: !t.done }))} className="mt-0.5 accent-life-600" />
-                  <span className={t.done ? 'text-gray-400 line-through' : ''}>{t.label}</span>
+                  {t.link ? <Link to={t.link} onClick={(e) => e.stopPropagation()} className={`hover:underline ${t.done ? 'text-gray-400 line-through' : ''}`}>{t.label}</Link> : <span className={t.done ? 'text-gray-400 line-through' : ''}>{t.label}</span>}
                 </label>
                 <button type="button" onClick={() => act(() => axios.delete(`/api/plans/items/${t.id}`))} aria-label={`Remove ${t.label}`} className="text-gray-400 hover:text-red-600">×</button>
               </li>
             ))}
           </ul>
           <AddTask onAdd={(label) => act(() => axios.post(`/api/plans/${plan.id}/items`, { kind: 'task', label }))} />
+          <button type="button" onClick={() => setModal('job')} className="mt-1 min-h-[44px] text-sm text-life-600 hover:underline dark:text-life-200">+ Add an upkeep job</button>
         </section>}
 
         {uses('food') && (
@@ -512,6 +513,7 @@ function SavedPlanPage() {
       {modal === 'parts' && <Modal title="Parts of this plan" onClose={() => setModal(null)}><PartsForm plan={plan} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
       {modal === 'yearly' && <Modal title={`${plan.name}, every year`} onClose={() => setModal(null)}><YearlyForm plan={plan} onDone={(p) => { if (p) setPlan(p); else load(); setModal(null); }} /></Modal>}
       {modal === 'again' && <Modal title={`${plan.name}, again`} onClose={() => setModal(null)}><AgainForm plan={plan} onDone={(p) => { setModal(null); navigate(`/plans/${p.id}`); }} /></Modal>}
+      {modal === 'job' && <Modal title="Add an upkeep job" onClose={() => setModal(null)}><JobPicker plan={plan} onPick={async (jobId) => { if (await act(() => axios.post(`/api/plans/${plan.id}/items`, { kind: 'task', job_id: jobId }))) { setModal(null); return true; } return false; }} /></Modal>}
       {modal?.add && <Modal title={`Add ${HOLDS[modal.add].add}`} onClose={() => setModal(null)}><Picker kind={modal.add} plan={plan} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
       {modal?.eaten && <Modal title={modal.eaten.label} onClose={() => setModal(null)}><EatenForm plan={plan} item={modal.eaten} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
       {modal?.photo && <Modal title="Photo" wide onClose={() => setModal(null)}><PhotoView photo={modal.photo} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}

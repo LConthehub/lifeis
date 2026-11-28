@@ -66,7 +66,7 @@ export function planRoutes(db: Db, tools?: PhotoTools): Route[] {
 
     ['POST', at('/:id/items'), async (c) => ({
       status: 201,
-      json: await mine(c).addItem(c.id, { kind: read.text(c.body, 'kind'), ref_id: read.maybeWhole(c.body, 'ref_id'), label: read.maybeText(c.body, 'label'),
+      json: await mine(c).addItem(c.id, { kind: read.text(c.body, 'kind'), ref_id: read.maybeWhole(c.body, 'ref_id'), job_id: read.maybeWhole(c.body, 'job_id'), label: read.maybeText(c.body, 'label'),
         quantity: read.maybeNumber(c.body, 'quantity'), note: read.maybeText(c.body, 'note'), day: read.maybeText(c.body, 'day'), meal: read.maybeText(c.body, 'meal'), servings: read.maybeNumber(c.body, 'servings'),
         thaw_pounds: read.maybeNumber(c.body, 'thaw_pounds') }),
     })],

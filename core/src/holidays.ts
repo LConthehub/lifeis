@@ -370,7 +370,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       const y = await yearRow(db, ahead.plan_id);
       const steps = (await countdownOf(ahead.plan_id, ahead.day)).steps.filter((s) => !s.done);
       const undone = (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM holiday_decor WHERE plan_id = ? AND put_up = 0', [ahead.plan_id]))!.n;
-      const tasks = (await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM plan_items WHERE plan_id = ? AND kind = 'task' AND done = 0", [ahead.plan_id]))!.n;
+      const tasks = (await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM plan_items i WHERE i.plan_id = ? AND i.kind = 'task' AND CASE WHEN i.job_id IS NULL THEN i.done = 0 ELSE NOT EXISTS (SELECT 1 FROM upkeep_done d WHERE d.job_id = i.job_id AND d.id > i.job_seen) END", [ahead.plan_id]))!.n;
       const next = steps[0] ? `${steps[0].words}: ${steps[0].label}`
         : undone > 0 && y.put_up_on ? `${undone} ${undone === 1 ? 'decoration' : 'decorations'} to put up${y.put_up_on >= day ? ` by ${y.put_up_on}` : ''}`
         : tasks > 0 ? `${tasks} ${tasks === 1 ? 'thing' : 'things'} left on the checklist` : 'Everything is ready';

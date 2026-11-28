@@ -283,5 +283,28 @@ const dayOfBare = (await send('GET', `/api/plans/${bare.id}`)).start_day;
 await page.goto(base + `/calendar?day=${dayOfBare}`); await wait(1200);
 say('the calendar line for the plan shows its time and place', /15:30\s*Lake picnic\s*until 18:00 · Aunt Ruth's back yard/.test(await text()));
 
+// ---------- an upkeep job on a plan ----------
+const gutters = await send('POST', '/api/things/upkeep', { name: 'Clean the gutters', every_n: 1, every_unit: 'year' });
+const tidy = await send('POST', '/api/plans', { name: 'Spring tidy-up', start_day: later(14), parts: ['tasks'] });
+await page.goto(base + `/plans/${tidy.id}`); await wait(1200);
+await page.getByRole('button', { name: '+ Add an upkeep job' }).click(); await wait(800);
+say('the picker lists the upkeep jobs', await dialog.getByRole('button', { name: /Clean the gutters/ }).isVisible());
+await dialog.getByRole('button', { name: /Clean the gutters/ }).click(); await wait(1200);
+say('the job is a line on the plan that links to the job', await page.getByRole('link', { name: 'Clean the gutters' }).first().getAttribute('href') === `/things/upkeep/${gutters.id}`);
+await page.getByRole('checkbox', { name: 'Clean the gutters' }).click(); await wait(1200);
+say('checking the line marks the job done in Upkeep', (await send('GET', `/api/things/upkeep/${gutters.id}`)).done.length === 1);
+await page.reload(); await wait(1300);
+say('the line stays checked after a reload', await page.getByRole('checkbox', { name: 'Clean the gutters' }).isChecked());
+await send('POST', `/api/things/upkeep/${gutters.id}/done`, {});
+const plan2 = await send('POST', '/api/plans', { name: 'Autumn tidy-up', start_day: later(200), parts: ['tasks'] });
+await send('POST', `/api/plans/${plan2.id}/items`, { kind: 'task', job_id: gutters.id });
+await page.goto(base + `/plans/${plan2.id}`); await wait(1200);
+say('a job marked done in Upkeep after the line was added shows the line done', await page.getByRole('checkbox', { name: 'Clean the gutters' }).isChecked() === false);
+await send('POST', `/api/things/upkeep/${gutters.id}/done`, {});
+await page.reload(); await wait(1300);
+say('and done once it is marked done', await page.getByRole('checkbox', { name: 'Clean the gutters' }).isChecked());
+await page.getByRole('button', { name: 'Remove Clean the gutters' }).click(); await wait(1000);
+say('taking the line off leaves the job', (await send('GET', `/api/things/upkeep/${gutters.id}`)).name === 'Clean the gutters');
+
 say('no request failed' + (bad.length ? `: ${bad.join(' | ')}` : ''), bad.length === 0);
 await browser.close();

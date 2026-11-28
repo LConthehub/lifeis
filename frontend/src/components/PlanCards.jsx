@@ -1,9 +1,41 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Field, inputClass, quietButtonClass, cardClass } from './ui';
 
 const tall = `${inputClass} min-h-[44px]`;
 const iconButton = 'flex h-11 w-11 flex-none items-center justify-center rounded-lg text-gray-500 hover:bg-life-50 hover:text-life-800 disabled:opacity-30 dark:text-life-300 dark:hover:bg-life-800';
+
+const dueWords = (due) => (due.state === 'overdue' ? 'late' : due.state === 'unscheduled' ? '' : due.days_left === null ? '' : due.days_left === 0 ? 'due today' : due.days_left > 0 ? `due in ${due.days_left} ${due.days_left === 1 ? 'day' : 'days'}` : '');
+
+/**
+ * Choose one of your upkeep jobs to put on the plan as a line that links to it. The job stays in Upkeep: marking it done
+ * there shows the line done here, and checking the line marks the job done. Taking the line off never removes the job.
+ */
+export function JobPicker({ plan, onPick }) {
+  const [jobs, setJobs] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => { axios.get('/api/things/upkeep').then(({ data }) => setJobs(data)).catch(() => setJobs([])); }, []);
+  if (!jobs) return null;
+  const taken = new Set(plan.items_list.filter((i) => i.job_id !== null).map((i) => i.job_id));
+  const free = jobs.filter((j) => !taken.has(j.id));
+  if (free.length === 0) return <p className="text-sm text-gray-600 dark:text-life-100">{jobs.length === 0 ? "You have no upkeep jobs yet. Add one in Upkeep first." : 'Every one of your upkeep jobs is already on this plan.'}</p>;
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-gray-600 dark:text-life-100">Pick a job. It goes on the plan as a line that links to it. Checking the line marks the job done in Upkeep, and the other way round.</p>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <ul className="max-h-[55vh] divide-y divide-life-100 overflow-y-auto dark:divide-life-700">
+        {free.map((j) => (
+          <li key={j.id}>
+            <button type="button" onClick={async () => { const ok = await onPick(j.id); if (!ok) setError("Couldn't add it"); }} className="flex min-h-[44px] w-full items-center gap-2 px-1 text-left text-sm text-gray-800 hover:bg-life-50 dark:text-life-50 dark:hover:bg-life-800">
+              <span className="min-w-0 flex-1">{j.name}</span>
+              {dueWords(j.due) && <span className="flex-none text-xs text-gray-500 dark:text-life-300">{dueWords(j.due)}</span>}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /** A plan's times as words: "15:30 to 18:00", "15:30", or nothing. */
 export const timesText = (plan) => (plan.start_time ? (plan.end_time ? `${plan.start_time} to ${plan.end_time}` : plan.start_time) : '');

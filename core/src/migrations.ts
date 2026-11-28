@@ -1989,6 +1989,10 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE plans ADD COLUMN start_time TEXT`,
       `ALTER TABLE plans ADD COLUMN end_time TEXT`,
       `ALTER TABLE plans ADD COLUMN place TEXT`,
+      // An upkeep job on a plan is a task line with plan_items.job_id set (that column came with migration 63). job_seen is the
+      // last time it was marked done in Upkeep when the line was added (or last unchecked): the line is done once the job has
+      // been marked done since. The plan never changes or removes the job.
+      `ALTER TABLE plan_items ADD COLUMN job_seen INTEGER NOT NULL DEFAULT 0`,
     ],
   },
 ];

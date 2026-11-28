@@ -23,6 +23,7 @@ import { atomic, type Db, type Queries, type Value } from './db.ts';
 import { RULE_COLUMN_NAMES, ruleFromColumns, ruleWords, thawDays, type DateRule, type RuleColumns } from './holidayDates.ts';
 import { inventory } from './inventory.ts';
 import { Problem } from './problem.ts';
+import { upkeep } from './upkeep.ts';
 import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
 import { addDays, clean, dayNumber, dayOrNull, stamp, todayOf, type Clock } from './small.ts';
 import { pictureType } from './small.ts';
@@ -105,6 +106,8 @@ export type PlanInput = {
 };
 export type PlanItemInput = {
   kind: string;
+  /** For a task: an upkeep job to put on the plan as a line that links to it (the label is the job's name). */
+  job_id?: number | null;
   /** Which recipe, thing, title or project. Not for a task. */
   ref_id?: number | null;
   /** A task's words. For the rest, left out: the name of what it points at is used. */
@@ -125,6 +128,8 @@ export type PlanItemInput = {
 export type OnWeek = { day: string; meal: string; cooked: boolean; servings: number | null };
 export type PlanItem = {
   id: number; kind: PlanItemKind; ref_id: number | null; label: string; quantity: number | null; note: string | null; done: boolean;
+  /** For a task that is an upkeep job: which job. Its line is done when the job is marked done, and checking it marks the job done. */
+  job_id: number | null;
   /** The page of what it points at; null for a task, or when that has since been removed. */
   link: string | null;
   /** For a thing: what you're short of, in words, or null when there's enough. */
@@ -186,8 +191,8 @@ const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 type Slot = { day: string; meal: string; servings: number | null };
 type PlanRow = { id: number; name: string; start_day: string; end_day: string; note: string | null; story: string | null; served_at: string | null; food_kind: FoodKind | null; start_time: string | null; end_time: string | null; place: string | null };
-type ItemRow = { id: number; plan_id: number; kind: PlanItemKind; ref_id: number | null; label: string; quantity: number | null; note: string | null; done: number; meal_plan_id: number | null; thaw_pounds: number | null };
-const ITEM_COLUMNS = 'id, plan_id, kind, ref_id, label, quantity, note, done, meal_plan_id, thaw_pounds';
+type ItemRow = { id: number; plan_id: number; kind: PlanItemKind; ref_id: number | null; label: string; quantity: number | null; note: string | null; done: number; meal_plan_id: number | null; thaw_pounds: number | null; job_id: number | null; job_seen: number };
+const ITEM_COLUMNS = 'id, plan_id, kind, ref_id, label, quantity, note, done, meal_plan_id, thaw_pounds, job_id, job_seen';
 
 
 export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
@@ -221,18 +226,24 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
     return found.label;
   }
 
-  async function itemValues(q: Queries, input: PlanItemInput): Promise<{ kind: PlanItemKind; ref: number | null; label: string; quantity: number | null; note: string | null }> {
+  async function itemValues(q: Queries, input: PlanItemInput): Promise<{ kind: PlanItemKind; ref: number | null; label: string; quantity: number | null; note: string | null; job: number | null }> {
     if (!PLAN_ITEM_KINDS.includes(input.kind as PlanItemKind)) throw new Problem(400, "That isn't something a plan holds");
     const kind = input.kind as PlanItemKind;
     const quantity = input.quantity ?? null;
     if (quantity !== null && !(Number.isFinite(quantity) && quantity > 0)) throw new Problem(400, 'How many is a number above nothing');
+    if (kind === 'task' && input.job_id != null) {
+      // An upkeep job: its name is the line, and it has to be one the person can see.
+      const job = await q.get<{ id: number; name: string }>('SELECT id, name FROM upkeep_jobs WHERE id = ? AND (owner_id = ? OR assigned_to = ?)', [input.job_id, owner, owner]);
+      if (!job) throw new Problem(404, "That job isn't there to add");
+      return { kind, ref: null, label: job.name, quantity: null, note: clean(input.note, 1000), job: job.id };
+    }
     if (kind === 'task') {
       const label = clean(input.label, 300);
       if (!label) throw new Problem(400, 'Say what needs doing');
-      return { kind, ref: null, label, quantity: null, note: clean(input.note, 1000) };
+      return { kind, ref: null, label, quantity: null, note: clean(input.note, 1000), job: null };
     }
     if (input.ref_id == null) throw new Problem(400, 'Choose what to add');
-    return { kind, ref: input.ref_id, label: await pointedAt(q, kind, input.ref_id), quantity: kind === 'thing' ? quantity : null, note: clean(input.note, 1000) };
+    return { kind, ref: input.ref_id, label: await pointedAt(q, kind, input.ref_id), quantity: kind === 'thing' ? quantity : null, note: clean(input.note, 1000), job: null };
   }
 
   /** The day and meal asked for, checked against the plan's days; null when the recipe isn't to go on the week. */
@@ -259,6 +270,15 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
       'SELECT m.id, m.day, m.meal, m.cooked_on, m.servings FROM meal_plan m JOIN plan_items i ON i.meal_plan_id = m.id WHERE i.plan_id = ? AND m.owner_id = ?', [planId, owner])).map((m) => [m.id, m]));
     const names = async (table: string, column: string) =>
       new Map((await q.all<{ id: number; label: string }>(`SELECT id, ${column} AS label FROM ${table} WHERE owner_id = ?`, [owner])).map((r) => [r.id, r.label]));
+    // Upkeep jobs on the plan: their names now, and whether each has been marked done since the line was added.
+    const jobIds = [...new Set(rows.filter((r) => r.kind === 'task' && r.job_id !== null).map((r) => r.job_id!))];
+    const jobNames = new Map<number, string>();
+    const jobLast = new Map<number, number>();
+    if (jobIds.length > 0) {
+      const marks = jobIds.map(() => '?').join(', ');
+      for (const j of await q.all<{ id: number; name: string }>(`SELECT j.id, j.name FROM upkeep_jobs j WHERE j.id IN (${marks}) AND (j.owner_id = ? OR j.assigned_to = ?)`, [...jobIds, owner, owner])) jobNames.set(j.id, j.name);
+      for (const d of await q.all<{ job_id: number; last: number }>(`SELECT job_id, MAX(id) AS last FROM upkeep_done WHERE job_id IN (${marks}) GROUP BY job_id`, jobIds)) jobLast.set(d.job_id, d.last);
+    }
     const has = (kind: PlanItemKind) => rows.some((r) => r.kind === kind);
     const recipes = has('recipe') ? await names('recipes', 'title') : new Map<number, string>();
     const projectNames = has('project') ? await names('projects', 'name') : new Map<number, string>();
@@ -268,7 +288,11 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
 
     return rows.map((r): PlanItem => {
       const meal = r.meal_plan_id !== null ? meals.get(r.meal_plan_id) : undefined;
-      const base = { id: r.id, kind: r.kind, ref_id: r.ref_id, quantity: r.quantity, note: r.note, done: r.done === 1, thaw_pounds: r.thaw_pounds, short: null as string | null, detail: null as string | null,
+      if (r.kind === 'task' && r.job_id !== null && jobNames.has(r.job_id)) {
+        return { id: r.id, kind: r.kind, ref_id: null, quantity: null, note: r.note, done: (jobLast.get(r.job_id) ?? 0) > r.job_seen, thaw_pounds: null, short: null, detail: null, on_week: null,
+          job_id: r.job_id, label: jobNames.get(r.job_id)!, link: `/things/upkeep/${r.job_id}` };
+      }
+      const base = { id: r.id, kind: r.kind, ref_id: r.ref_id, quantity: r.quantity, note: r.note, done: r.done === 1, thaw_pounds: r.thaw_pounds, job_id: null as number | null, short: null as string | null, detail: null as string | null,
         on_week: meal ? { day: meal.day, meal: meal.meal, cooked: meal.cooked_on !== null, servings: meal.servings } : null };
       if (r.kind === 'task' || r.ref_id === null) return { ...base, label: r.label, link: null };
       if (r.kind === 'recipe') return { ...base, label: recipes.get(r.ref_id) ?? r.label, link: recipes.has(r.ref_id) ? `/recipes/${r.ref_id}` : null };
@@ -323,7 +347,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
       `SELECT p.id, p.name, p.start_day, p.end_day, p.note, p.story, p.parts, p.start_time, p.end_time, p.place,
          (SELECT GROUP_CONCAT(DISTINCT i.kind) FROM plan_items i WHERE i.plan_id = p.id) AS kinds,
          (SELECT COUNT(*) FROM plan_items i WHERE i.plan_id = p.id) AS items,
-         (SELECT COUNT(*) FROM plan_items i WHERE i.plan_id = p.id AND i.kind = 'task' AND i.done = 0) AS tasks_left,
+         (SELECT COUNT(*) FROM plan_items i WHERE i.plan_id = p.id AND i.kind = 'task' AND CASE WHEN i.job_id IS NULL THEN i.done = 0 ELSE NOT EXISTS (SELECT 1 FROM upkeep_done d WHERE d.job_id = i.job_id AND d.id > i.job_seen) END) AS tasks_left,
          (SELECT COUNT(*) FROM plan_photos f WHERE f.plan_id = p.id) AS photos,
          (SELECT f.id FROM plan_photos f WHERE f.plan_id = p.id ORDER BY f.sort_order, f.id LIMIT 1) AS cover_photo
        FROM plans p WHERE p.owner_id = ? ${where} ORDER BY p.start_day DESC, p.id DESC`, [owner, ...args]);
@@ -443,8 +467,11 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
           const meal = item.meal_plan_id !== null ? await tx.get<Slot>('SELECT day, meal, servings FROM meal_plan WHERE id = ? AND owner_id = ?', [item.meal_plan_id, owner]) : undefined;
           const stillThere = item.kind === 'recipe' && item.ref_id !== null && await tx.get('SELECT id FROM recipes WHERE id = ? AND owner_id = ?', [item.ref_id, owner]);
           const mealId = meal && stillThere ? await putOnWeek(tx, item.ref_id!, { day: addDays(meal.day, moved), meal: meal.meal, servings: meal.servings }) : null;
-          await tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id, thaw_pounds) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)',
-            [made.lastId, item.kind, item.ref_id, item.label, item.quantity, item.note, item.id, mealId, item.thaw_pounds]);
+          // An upkeep job goes along as a line that starts not done: it counts from the latest time the job was marked done.
+          const job = item.kind === 'task' ? item.job_id : null;
+          const seenNow = job !== null ? (await tx.get<{ last: number | null }>('SELECT MAX(id) AS last FROM upkeep_done WHERE job_id = ?', [job]))!.last ?? 0 : 0;
+          await tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id, thaw_pounds, job_id, job_seen) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)',
+            [made.lastId, item.kind, item.ref_id, item.label, item.quantity, item.note, item.id, mealId, item.thaw_pounds, job, seenNow]);
         }
         for (const f of await tx.all<{ label: string; brought_by: string | null; thaw_pounds: number | null; sort_order: number }>(
           'SELECT label, brought_by, thaw_pounds, sort_order FROM plan_food WHERE plan_id = ? ORDER BY sort_order, id', [id])) {
@@ -467,8 +494,10 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
         if (v.ref !== null && await tx.get('SELECT id FROM plan_items WHERE plan_id = ? AND kind = ? AND ref_id = ?', [planId, v.kind, v.ref])) throw new Problem(409, "That's already part of it");
         const slot = v.kind === 'recipe' ? slotFor(plan, input.day, input.meal, input.servings) : null;
         const last = (await tx.get<{ last: number | null }>('SELECT MAX(sort_order) AS last FROM plan_items WHERE plan_id = ?', [planId]))!.last ?? 0;
-        await tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id, thaw_pounds) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)',
-          [planId, v.kind, v.ref, v.label, v.quantity, v.note, last + 1, slot ? await putOnWeek(tx, v.ref!, slot) : null, v.kind === 'recipe' ? weightChecked(input.thaw_pounds) : null]);
+        if (v.job !== null && await tx.get("SELECT id FROM plan_items WHERE plan_id = ? AND kind = 'task' AND job_id = ?", [planId, v.job])) throw new Problem(409, "That job is already part of it");
+        const seenNow = v.job !== null ? (await tx.get<{ last: number | null }>('SELECT MAX(id) AS last FROM upkeep_done WHERE job_id = ?', [v.job]))!.last ?? 0 : 0;
+        await tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id, thaw_pounds, job_id, job_seen) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)',
+          [planId, v.kind, v.ref, v.label, v.quantity, v.note, last + 1, slot ? await putOnWeek(tx, v.ref!, slot) : null, v.kind === 'recipe' ? weightChecked(input.thaw_pounds) : null, v.job, seenNow]);
         // Something added to a part the plan doesn't show (from a recipe's page, say) checks that part.
         await showPart(tx, planId, PART_OF_ITEM[v.kind]);
       }).then(() => whole(planId));
@@ -570,7 +599,15 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
           }
         });
       }
-      const label = old.kind === 'task' && input.label !== undefined ? clean(input.label, 300) : old.label;
+      // A line that is an upkeep job: checking it marks the job done, the way Upkeep does; unchecking only stops the line
+      // counting what was done so far. The job and what it has done are never taken back from here.
+      if (old.kind === 'task' && old.job_id !== null && input.done !== undefined) {
+        const last = (await db.get<{ last: number | null }>('SELECT MAX(id) AS last FROM upkeep_done WHERE job_id = ?', [old.job_id]))!.last ?? 0;
+        const isDone = last > old.job_seen;
+        if (input.done && !isDone) await upkeep(db, owner, clock).done(old.job_id, {});
+        else if (!input.done && isDone) await db.run('UPDATE plan_items SET job_seen = ? WHERE id = ?', [last, itemId]);
+      }
+      const label = old.kind === 'task' && old.job_id === null && input.label !== undefined ? clean(input.label, 300) : old.label;
       if (!label) throw new Problem(400, 'Say what needs doing');
       const quantity = input.quantity === undefined ? old.quantity : input.quantity;
       if (quantity !== null && !(Number.isFinite(quantity) && quantity > 0)) throw new Problem(400, 'How many is a number above nothing');

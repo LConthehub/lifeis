@@ -9,6 +9,7 @@ import { media } from '../src/media.ts';
 import { migrate } from '../src/migrations.ts';
 import { pictureType, plans, type Plans } from '../src/plans.ts';
 import { projects } from '../src/projects.ts';
+import { upkeep } from '../src/upkeep.ts';
 import { memoryDb } from './memoryDb.ts';
 
 let db: Db;
@@ -347,4 +348,52 @@ it('when and where: a start time, an optional end time and a place, shown on the
   expect([again.start_time, again.end_time, again.place]).toEqual(['15:30', '18:00', 'The park']);
   // Taking a time off keeps the rest.
   expect((await mine.setWhenWhere(p.id, { start_time: null, end_time: null })).place).toBe('The park');
+});
+
+it('an upkeep job on a plan is a line that links to the job, done together both ways, and taking it off never removes the job', async () => {
+  const jobs = upkeep(db, owner, clock);
+  const gutters = await jobs.create({ name: 'Clean the gutters', every_n: 1, every_unit: 'year' });
+  const other = await jobs.create({ name: 'Check the smoke alarms' });
+  const p = await mine.create({ name: 'Fall tidy-up', start_day: '2046-03-12', parts: ['tasks'] });
+  await expect(mine.addItem(p.id, { kind: 'task', job_id: 9999 })).rejects.toEqual(problem(404));
+  let view = await mine.addItem(p.id, { kind: 'task', job_id: gutters.id });
+  await expect(mine.addItem(p.id, { kind: 'task', job_id: gutters.id })).rejects.toEqual(problem(409));
+  view = await mine.addItem(p.id, { kind: 'task', label: 'Buy a ladder' });
+  const line = view.items_list.find((i) => i.job_id === gutters.id)!;
+  expect([line.label, line.link, line.done]).toEqual(['Clean the gutters', `/things/upkeep/${gutters.id}`, false]);
+  expect(view.tasks_left).toBe(2);
+  // Marked done in Upkeep: the line shows done.
+  await jobs.done(gutters.id, {});
+  view = await mine.get(p.id);
+  expect(view.items_list.find((i) => i.id === line.id)!.done).toBe(true);
+  expect(view.tasks_left).toBe(1);
+  // Unchecking the line only stops it counting; what Upkeep has is kept.
+  view = await mine.updateItem(line.id, { done: false });
+  expect(view.items_list.find((i) => i.id === line.id)!.done).toBe(false);
+  expect((await jobs.get(gutters.id)).done).toHaveLength(1);
+  // Checking the line marks the job done the way Upkeep does, once.
+  view = await mine.updateItem(line.id, { done: true });
+  expect(view.items_list.find((i) => i.id === line.id)!.done).toBe(true);
+  expect((await jobs.get(gutters.id)).done).toHaveLength(2);
+  view = await mine.updateItem(line.id, { done: true });
+  expect((await jobs.get(gutters.id)).done).toHaveLength(2);
+  // Its name is the job's, and cannot be reworded here.
+  await jobs.update(gutters.id, { name: 'Clean the gutters and downspouts', every_n: 1, every_unit: 'year' });
+  view = await mine.updateItem(line.id, { label: 'Something else' });
+  expect(view.items_list.find((i) => i.id === line.id)!.label).toBe('Clean the gutters and downspouts');
+  // A copy carries the line along, not done.
+  const next = await mine.copy(p.id, { start_day: '2047-03-12' });
+  const carried = next.items_list.find((i) => i.job_id === gutters.id)!;
+  expect([carried.done, carried.label]).toEqual([false, 'Clean the gutters and downspouts']);
+  expect(next.tasks_left).toBe(2);
+  // Taking the line off, or the plan, leaves the job.
+  await mine.removeItem(line.id);
+  await mine.remove(next.id);
+  expect((await jobs.get(gutters.id)).name).toBe('Clean the gutters and downspouts');
+  expect((await jobs.get(other.id)).name).toBe('Check the smoke alarms');
+  // A job that is removed leaves its line as a plain task with the name it had.
+  const again = await mine.addItem(p.id, { kind: 'task', job_id: other.id });
+  await jobs.remove(other.id);
+  const left = (await mine.get(p.id)).items_list.find((i) => i.id === again.items_list.find((x) => x.label === 'Check the smoke alarms')!.id)!;
+  expect([left.label, left.job_id, left.link]).toEqual(['Check the smoke alarms', null, null]);
 });

@@ -608,13 +608,15 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     p.parts === null ? '' : String(p.parts).split(',').map((k) => PLAN_PARTS.find((x) => x.key === k)?.label ?? k).join('; '), str(p.served_at), str(p.food_kind), str(p.start_time), str(p.end_time), str(p.place)]));
   // Food that is bought or brought comes after the things on the plan, as rows of kind "food" (Done: it is here).
   const foodRows = await all('SELECT f.plan_id, f.label, f.brought_by, f.thaw_pounds, f.done FROM plan_food f JOIN plans p ON p.id = f.plan_id WHERE p.owner_id = ? ORDER BY f.plan_id, f.sort_order, f.id');
+  // A task that is an upkeep job names the job, so it can be put back on it.
+  const jobNames = new Map((await all('SELECT id, name FROM upkeep_jobs WHERE owner_id = ?')).map((j) => [j.id as number, j.name as string]));
   // What is always done comes last, as rows of kind "tradition" (Done: checked off this year).
   const traditionRows = await all('SELECT r.plan_id, r.words, r.done FROM plan_traditions r JOIN plans p ON p.id = r.plan_id WHERE p.owner_id = ? ORDER BY r.plan_id, r.sort_order, r.id');
-  out.csv('plan-items.csv', ['Plan', 'Kind', 'What', 'Amount', 'Done', 'Notes', 'Back home', 'After the trip', 'After the trip done', 'Brought by', 'Frozen (pounds)'], [
-    ...(await all('SELECT i.plan_id, i.kind, i.label, i.quantity, i.done, i.note, i.returned, i.after_trip, i.after_done, i.thaw_pounds FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ? ORDER BY i.plan_id, i.sort_order, i.id'))
-      .map((i) => [str(planOf.get(i.plan_id as number)?.name), str(i.kind), str(i.label), str(i.quantity), yes(i.done), str(i.note), yes(i.returned), str(i.after_trip), yes(i.after_done), '', str(i.thaw_pounds)]),
-    ...traditionRows.map((r) => [str(planOf.get(r.plan_id as number)?.name), 'tradition', str(r.words), '', yes(r.done), '', '', '', '', '', '']),
-    ...foodRows.map((f) => [str(planOf.get(f.plan_id as number)?.name), 'food', str(f.label), '', yes(f.done), '', '', '', '', str(f.brought_by), str(f.thaw_pounds)]),
+  out.csv('plan-items.csv', ['Plan', 'Kind', 'What', 'Amount', 'Done', 'Notes', 'Back home', 'After the trip', 'After the trip done', 'Brought by', 'Frozen (pounds)', 'Upkeep job'], [
+    ...(await all('SELECT i.plan_id, i.kind, i.label, i.quantity, i.done, i.note, i.returned, i.after_trip, i.after_done, i.thaw_pounds, i.job_id FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ? ORDER BY i.plan_id, i.sort_order, i.id'))
+      .map((i) => [str(planOf.get(i.plan_id as number)?.name), str(i.kind), str(i.label), str(i.quantity), yes(i.done), str(i.note), yes(i.returned), str(i.after_trip), yes(i.after_done), '', str(i.thaw_pounds), i.kind === 'task' ? str(jobNames.get(i.job_id as number)) : '']),
+    ...traditionRows.map((r) => [str(planOf.get(r.plan_id as number)?.name), 'tradition', str(r.words), '', yes(r.done), '', '', '', '', '', '', '']),
+    ...foodRows.map((f) => [str(planOf.get(f.plan_id as number)?.name), 'food', str(f.label), '', yes(f.done), '', '', '', '', str(f.brought_by), str(f.thaw_pounds), '']),
   ]);
   const planPhotos: Cell[][] = [];
   for (const p of await all('SELECT p.id, p.plan_id, p.source, p.type, p.bytes, p.caption, p.spot FROM plan_photos p JOIN plans pl ON pl.id = p.plan_id WHERE pl.owner_id = ? ORDER BY p.plan_id, p.sort_order, p.id')) {
@@ -2099,6 +2101,7 @@ ${mediaId}`);
     const seen = new Seen((await c.tx.all<{ name: string; start_day: string }>('SELECT name, start_day FROM plans WHERE owner_id = ?', [c.owner])).map((p) => `${labelKey(p.name)}\n${p.start_day}`));
     const items = tableOf(c.files, 'plan-items.csv')?.rows ?? [];
     const photos = tableOf(c.files, 'plan-photos.csv')?.rows ?? [];
+    const jobIds = new Map((await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM upkeep_jobs WHERE owner_id = ?', [c.owner])).map((j) => [labelKey(j.name), j.id]));
     const lists = tableOf(c.files, 'holiday-lists.csv')?.rows ?? [];
     const trips = tableOf(c.files, 'outdoor-trip-lists.csv')?.rows ?? [];
     const keysOf = (file: string) => new Set((tableOf(c.files, file)?.rows ?? []).map((y) => `${labelKey(cellOf(y, 'Plan'))}\n${dayOf(cellOf(y, 'Starts'))}`));
@@ -2156,13 +2159,15 @@ ${mediaId}`);
         }
         if (!label || !['task', 'recipe', 'thing', 'media', 'project'].includes(kind)) continue;
         const ref = kind === 'task' ? null : pointed[kind]!.get(labelKey(label)) ?? null;
+        const job = kind === 'task' && cellOf(i, 'Upkeep job') ? jobIds.get(labelKey(cellOf(i, 'Upkeep job'))) ?? null : null;
+        const jobSeen = job !== null ? (await c.tx.get<{ last: number | null }>('SELECT MAX(id) AS last FROM upkeep_done WHERE job_id = ?', [job]))!.last ?? 0 : 0;
         if (kind !== 'task' && ref === null) lost = true;
         const quantity = numberOf(cellOf(i, 'Amount'));
         const after = cellOf(i, 'After the trip').toLowerCase();
         const kept = kind === 'thing' && ['dry', 'clean', 'repair', 'replace'].includes(after) ? after : null;
-        await c.tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id, returned, after_trip, after_done, thaw_pounds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)',
+        await c.tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id, returned, after_trip, after_done, thaw_pounds, job_id, job_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)',
           [made.lastId, kind, ref, label, quantity !== null && quantity > 0 ? quantity : null, clean(i.notes, 1000), yesOf(cellOf(i, 'Done')) ? 1 : 0, order,
-            kind === 'thing' && yesOf(cellOf(i, 'Back home')) ? 1 : 0, kept, kept && yesOf(cellOf(i, 'After the trip done')) ? 1 : 0, kind === 'recipe' ? thaw : null]);
+            kind === 'thing' && yesOf(cellOf(i, 'Back home')) ? 1 : 0, kept, kept && yesOf(cellOf(i, 'After the trip done')) ? 1 : 0, kind === 'recipe' ? thaw : null, job, jobSeen]);
         order += 1;
       }
       for (const p of photos.filter(mine)) {
