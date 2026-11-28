@@ -6,6 +6,7 @@ import { shrink } from '../components/shrink';
 import Picture from '../components/Picture';
 import { PlanGoal } from '../components/Goals';
 import DatePlan from '../components/DatePlan';
+import { Traditions } from '../components/PlanCards';
 import { Basics, Budget, Countdown, Decor, Ending, Gifts, GivenToYou, Heading, Hint, LastNote, NextYear, People, Remove, RuleFields, Shopping, ruleBody, ruleStart } from './Holidays';
 import { After, Harvest, Licenses, Seasons } from './Trips';
 import { BulkBar, PickBox, SelectButton, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
@@ -21,7 +22,7 @@ const HOLDS = {
 };
 
 /** The parts a plan can check now, in the order they show. More come as holidays and trips join plans. */
-const PARTS = [['food', 'Food'], ['guests', 'Guests'], ['cards', 'Cards'], ['gifts', 'Gifts'], ['decorations', 'Decorations'], ['budget', 'Budget'], ['more_days', 'More than one day'], ['tasks', 'Helpers and tasks'], ['bring', 'Bring list'], ['seasons', 'Seasons and licenses'], ['harvest', 'Harvest log'], ['after_trip', 'After the trip'], ['media', 'To watch, hear or read'], ['projects', 'Projects']];
+const PARTS = [['food', 'Food'], ['guests', 'Guests'], ['cards', 'Cards'], ['gifts', 'Gifts'], ['decorations', 'Decorations'], ['budget', 'Budget'], ['more_days', 'More than one day'], ['traditions', 'Traditions'], ['tasks', 'Helpers and tasks'], ['bring', 'Bring list'], ['seasons', 'Seasons and licenses'], ['harvest', 'Harvest log'], ['after_trip', 'After the trip'], ['media', 'To watch, hear or read'], ['projects', 'Projects']];
 const partOrder = (key) => PARTS.findIndex(([k]) => k === key);
 const GATHERING = ['guests', 'cards', 'gifts', 'decorations'];
 const OUTDOOR = ['seasons', 'harvest', 'after_trip'];
@@ -423,6 +424,7 @@ function SavedPlanPage() {
       <div className="grid gap-3 md:grid-cols-2">
         <Gathering plan={plan} g={g} />
         {OUTDOOR.some(uses) && <Outdoor plan={plan} />}
+        {uses('traditions') && <div style={{ order: partOrder('traditions') }}><Traditions plan={plan} act={act} /></div>}
         {uses('tasks') && <section className={cardClass} style={{ order: partOrder('tasks') }}>
           <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">Helpers and tasks {tasks.length > 0 && <span className="text-sm font-normal text-gray-500 dark:text-life-300">{tasks.filter((t) => t.done).length} of {tasks.length}</span>}</h2>
           <ul className="space-y-1">

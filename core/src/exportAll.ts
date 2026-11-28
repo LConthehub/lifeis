@@ -608,9 +608,12 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     p.parts === null ? '' : String(p.parts).split(',').map((k) => PLAN_PARTS.find((x) => x.key === k)?.label ?? k).join('; '), str(p.served_at), str(p.food_kind)]));
   // Food that is bought or brought comes after the things on the plan, as rows of kind "food" (Done: it is here).
   const foodRows = await all('SELECT f.plan_id, f.label, f.brought_by, f.thaw_pounds, f.done FROM plan_food f JOIN plans p ON p.id = f.plan_id WHERE p.owner_id = ? ORDER BY f.plan_id, f.sort_order, f.id');
+  // What is always done comes last, as rows of kind "tradition" (Done: checked off this year).
+  const traditionRows = await all('SELECT r.plan_id, r.words, r.done FROM plan_traditions r JOIN plans p ON p.id = r.plan_id WHERE p.owner_id = ? ORDER BY r.plan_id, r.sort_order, r.id');
   out.csv('plan-items.csv', ['Plan', 'Kind', 'What', 'Amount', 'Done', 'Notes', 'Back home', 'After the trip', 'After the trip done', 'Brought by', 'Frozen (pounds)'], [
     ...(await all('SELECT i.plan_id, i.kind, i.label, i.quantity, i.done, i.note, i.returned, i.after_trip, i.after_done, i.thaw_pounds FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ? ORDER BY i.plan_id, i.sort_order, i.id'))
       .map((i) => [str(planOf.get(i.plan_id as number)?.name), str(i.kind), str(i.label), str(i.quantity), yes(i.done), str(i.note), yes(i.returned), str(i.after_trip), yes(i.after_done), '', str(i.thaw_pounds)]),
+    ...traditionRows.map((r) => [str(planOf.get(r.plan_id as number)?.name), 'tradition', str(r.words), '', yes(r.done), '', '', '', '', '', '']),
     ...foodRows.map((f) => [str(planOf.get(f.plan_id as number)?.name), 'food', str(f.label), '', yes(f.done), '', '', '', '', str(f.brought_by), str(f.thaw_pounds)]),
   ]);
   const planPhotos: Cell[][] = [];
@@ -2126,6 +2129,7 @@ ${mediaId}`);
       let lost = false;
       let order = 1;
       let foods = 0;
+      let traditions = 0;
       for (const i of items.filter(mine)) {
         const kind = cellOf(i, 'Kind').toLowerCase();
         const label = clean(cellOf(i, 'What'), 200);
@@ -2137,6 +2141,13 @@ ${mediaId}`);
             await c.tx.run('INSERT INTO plan_food (plan_id, label, brought_by, thaw_pounds, done, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
               [made.lastId, label, clean(cellOf(i, 'Brought by'), 100), thaw, yesOf(cellOf(i, 'Done')) ? 1 : 0, foods + 1]);
             foods += 1;
+          }
+          continue;
+        }
+        if (label && kind === 'tradition') {
+          if (traditions < 100) {
+            await c.tx.run('INSERT INTO plan_traditions (plan_id, words, done, sort_order) VALUES (?, ?, ?, ?)', [made.lastId, clean(label, 200), yesOf(cellOf(i, 'Done')) ? 1 : 0, traditions + 1]);
+            traditions += 1;
           }
           continue;
         }

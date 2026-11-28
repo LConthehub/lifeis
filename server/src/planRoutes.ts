@@ -87,6 +87,13 @@ export function planRoutes(db: Db, tools?: PhotoTools): Route[] {
       }),
     })],
     ['DELETE', at('/food-lines/:id'), async (c) => ({ json: await mine(c).removeFood(c.id) })],
+    // Traditions: short lines of what is always done.
+    ['POST', at('/:id/traditions'), async (c) => ({ status: 201, json: await mine(c).addTradition(c.id, read.text(c.body, 'words')) })],
+    ['PUT', at('/traditions/:id'), async (c) => ({
+      json: await mine(c).updateTradition(c.id, { ...(sent(c.body, 'words') ? { words: read.maybeText(c.body, 'words') } : {}), ...(sent(c.body, 'done') ? { done: read.yesNo(c.body, 'done') } : {}) }),
+    })],
+    ['POST', at('/traditions/:id/move'), async (c) => ({ json: await mine(c).moveTradition(c.id, read.text(c.body, 'direction')) })],
+    ['DELETE', at('/traditions/:id'), async (c) => ({ json: await mine(c).removeTradition(c.id) })],
     ['PUT', at('/items/:id'), async (c) => ({
       json: await mine(c).updateItem(c.id, {
         ...(sent(c.body, 'label') ? { label: read.maybeText(c.body, 'label') } : {}), ...(sent(c.body, 'quantity') ? { quantity: read.maybeNumber(c.body, 'quantity') } : {}),

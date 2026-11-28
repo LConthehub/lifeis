@@ -1971,6 +1971,22 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE holidays ADD COLUMN every_from INTEGER`,
     ],
   },
+  {
+    number: 67,
+    name: 'Traditions, when and where, and an upkeep job on a plan',
+    // Traditions: the short lines a plan keeps of what is always done ("Grandpa carves"), each checked off for the year.
+    // plan_traditions is read like plan_food: its own table, copied unchecked when a year starts from the last.
+    statements: [
+      `CREATE TABLE plan_traditions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        words TEXT NOT NULL,
+        done INTEGER NOT NULL DEFAULT 0 CHECK(done IN (0, 1)),
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )`,
+      `CREATE INDEX idx_plan_traditions ON plan_traditions(plan_id)`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

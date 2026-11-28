@@ -233,5 +233,35 @@ say('the date is now a yearly plan whose plan has only that part', (await send('
 await page.goto(base + '/plans/date-' + kid.id); await wait(1500);
 say('opening the date again goes to the plan', /\/plans\/\d+$/.test(page.url()));
 
+// ---------- traditions ----------
+await page.goto(base + `/plans/${bare.id}`); await wait(1200);
+say('a plan without the part has no Traditions card', (await region('Traditions').count()) === 0);
+await page.getByRole('button', { name: 'Parts', exact: true }).click(); await wait(500);
+await dialog.getByRole('checkbox', { name: 'Traditions', exact: true }).check();
+await dialog.getByRole('button', { name: 'Save' }).click(); await wait(1200);
+const trad = region('Traditions');
+say('checking the part shows a Traditions card', await trad.isVisible());
+for (const words of ['Grandpa carves', 'Kids pick the movie', 'Everyone says one thing they are glad of']) {
+  await trad.getByLabel('Something you always do').fill(words);
+  await trad.getByRole('button', { name: 'Add', exact: true }).click(); await wait(700);
+}
+await wait(800);
+say('three lines are added', (await trad.locator('[data-tradition]').count()) === 3);
+await trad.getByLabel('Reword Kids pick the movie').fill('Kids pick the film');
+await trad.getByLabel('Reword Kids pick the movie').blur(); await wait(900);
+say('a line can be reworded', await trad.getByLabel('Reword Kids pick the film').isVisible());
+await trad.getByRole('button', { name: 'Move Everyone says one thing they are glad of up' }).click(); await wait(900);
+say('a line can be moved up', (await trad.locator('[data-tradition] input:not([type=checkbox])').first().inputValue()) === 'Grandpa carves' && (await trad.locator('[data-tradition] input:not([type=checkbox])').nth(1).inputValue()) === 'Everyone says one thing they are glad of');
+await trad.getByRole('checkbox', { name: 'Grandpa carves is done' }).click(); await wait(800);
+say('a line can be checked off', await trad.getByRole('checkbox', { name: 'Grandpa carves is done' }).isChecked() && /1 of 3/.test(await trad.innerText()));
+await page.reload(); await wait(1400);
+say('after a reload the order, the words and the check are kept', (await region('Traditions').locator('[data-tradition] input:not([type=checkbox])').nth(2).inputValue()) === 'Kids pick the film' && await region('Traditions').getByRole('checkbox', { name: 'Grandpa carves is done' }).isChecked());
+const smallTrad = await tooSmall([region('Traditions').locator('button'), region('Traditions').locator('input:not([type=checkbox])')]);
+say('the Traditions card has 44px controls and fits the phone' + (smallTrad.length ? ` (too small: ${smallTrad})` : ''), smallTrad.length === 0 && await noSideways());
+await region('Traditions').getByRole('button', { name: 'Remove Kids pick the film' }).click(); await wait(800);
+say('a line can be removed', (await region('Traditions').locator('[data-tradition]').count()) === 2);
+const again = await send('POST', `/api/plans/${bare.id}/copy`, { start_day: later(400) });
+say('doing the plan again carries the lines over unchecked', again.traditions.length === 2 && again.traditions.every((l) => !l.done));
+
 say('no request failed' + (bad.length ? `: ${bad.join(' | ')}` : ''), bad.length === 0);
 await browser.close();

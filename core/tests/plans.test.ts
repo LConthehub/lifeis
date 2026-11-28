@@ -2,6 +2,7 @@
 import { beforeEach, expect, it } from 'vitest';
 import { calendar } from '../src/calendar.ts';
 import type { Db } from '../src/db.ts';
+import { holidays } from '../src/holidays.ts';
 import { inventory } from '../src/inventory.ts';
 import { kitchen } from '../src/kitchen.ts';
 import { media } from '../src/media.ts';
@@ -287,4 +288,42 @@ it('a plan from before parts shows the parts it has something in', async () => {
   await mine.addItem(p.id, { kind: 'thing', ref_id: item.id });
   expect((await mine.get(p.id)).parts).toEqual(['budget', 'more_days', 'bring']);
   expect((await mine.list()).find((x) => x.id === p.id)!.parts).toEqual(['budget', 'more_days', 'bring']);
+});
+
+it('traditions: short lines to add, reword, reorder, check off and remove; a copy carries them over unchecked', async () => {
+  const p = await mine.create({ name: 'Supper', start_day: '2046-03-05', parts: ['food'] });
+  expect(p.traditions).toEqual([]);
+  await expect(mine.addTradition(p.id, '  ')).rejects.toEqual(problem(400));
+  let view = await mine.addTradition(p.id, 'Grandpa carves');
+  view = await mine.addTradition(p.id, 'Kids pick the movie');
+  view = await mine.addTradition(p.id, 'Everyone says one thing they are glad of');
+  expect(view.parts).toEqual(['food', 'traditions']); // adding one checks the part
+  const [a, b, c] = view.traditions;
+  view = await mine.updateTradition(b!.id, { words: 'Kids pick the film', done: true });
+  expect(view.traditions.map((r) => [r.words, r.done])).toEqual([['Grandpa carves', false], ['Kids pick the film', true], ['Everyone says one thing they are glad of', false]]);
+  view = await mine.moveTradition(c!.id, 'up');
+  view = await mine.moveTradition(c!.id, 'up');
+  view = await mine.moveTradition(c!.id, 'up'); // already first: stays
+  expect(view.traditions.map((r) => r.id)).toEqual([c!.id, a!.id, b!.id]);
+  view = await mine.moveTradition(c!.id, 'down');
+  expect(view.traditions.map((r) => r.id)).toEqual([a!.id, c!.id, b!.id]);
+  await expect(mine.moveTradition(a!.id, 'sideways')).rejects.toEqual(problem(400));
+  const next = await mine.copy(p.id, { start_day: '2047-03-05' });
+  expect(next.traditions.map((r) => [r.words, r.done])).toEqual([['Grandpa carves', false], ['Everyone says one thing they are glad of', false], ['Kids pick the film', false]]);
+  view = await mine.removeTradition(c!.id);
+  expect(view.traditions.map((r) => r.id)).toEqual([a!.id, b!.id]);
+  await expect(mine.removeTradition(c!.id)).rejects.toEqual(problem(404));
+  // They go when the plan goes, and are another person's to see never.
+  await mine.remove(next.id);
+  expect(await db.get('SELECT COUNT(*) AS n FROM plan_traditions WHERE plan_id = ?', [next.id])).toEqual({ n: 0 });
+});
+
+it('traditions of a yearly plan carry over, unchecked, into next year', async () => {
+  const h = await holidays(db, owner, clock).create({ name: 'Family supper', rule: { kind: 'fixed', month: 3, day: 5 } });
+  const first = h.years[0]!.plan_id;
+  const one = await mine.addTradition(first, 'Grandpa carves');
+  await mine.updateTradition(one.traditions[0]!.id, { done: true });
+  time = new Date(2046, 2, 10, 10, 0, 0); // this year's has passed
+  const second = await holidays(db, owner, clock).startYear(h.id);
+  expect((await mine.get(second.plan_id)).traditions.map((r) => [r.words, r.done])).toEqual([['Grandpa carves', false]]);
 });

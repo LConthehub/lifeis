@@ -245,6 +245,7 @@ it('the listing of what is owned leaves a not-owned title out, and Wanted only s
 
 it('upgrading from before lists: what was marked wanted is on its owner’s Wanted list, and nothing is deleted or rebuilt', async () => {
   // Put the database back to how version 49 left it (version 51's tables go first).
+  await db.run('DROP TABLE plan_traditions');
   await db.run('DROP TABLE plan_food');
 
   for (const column of ['returned', 'after_trip', 'after_done', 'job_id', 'thaw_pounds']) await db.run(`ALTER TABLE plan_items DROP COLUMN ${column}`);

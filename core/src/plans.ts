@@ -44,7 +44,7 @@ export const PLAN_PARTS = [
   { key: 'budget', label: 'Budget', ready: true },
   { key: 'more_days', label: 'More than one day', ready: true },
   { key: 'when_where', label: 'When and where', ready: false },
-  { key: 'traditions', label: 'Traditions', ready: false },
+  { key: 'traditions', label: 'Traditions', ready: true },
   { key: 'tasks', label: 'Helpers and tasks', ready: true },
   { key: 'bring', label: 'Bring list', ready: true },
   { key: 'seasons', label: 'Seasons and licenses', ready: true },
@@ -141,6 +141,8 @@ export type FoodLine = { id: number; label: string; brought_by: string | null; t
 export type FoodKind = 'meal' | 'refreshments';
 export const FOOD_KINDS: readonly FoodKind[] = ['meal', 'refreshments'];
 export type PlanPhoto = { id: number; source: 'kept' | 'immich'; caption: string | null };
+/** A line of what is always done on a plan ("Grandpa carves"), checked off for the year. */
+export type Tradition = { id: number; words: string; done: boolean };
 export type PlanWhen = 'ahead' | 'now' | 'past';
 export type PlanSummary = {
   id: number; name: string; start_day: string; end_day: string; when: PlanWhen; note: string | null;
@@ -165,6 +167,8 @@ export type Plan = PlanSummary & {
   food_kind: FoodKind;
   /** Food that is bought or brought. */
   food_lines: FoodLine[];
+  /** What is always done, in short lines, in the order kept. */
+  traditions: Tradition[];
 };
 
 const MAX_DAYS = 62;
@@ -173,6 +177,7 @@ const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'];
 export const EARLY_DAYS = 7;
 const MAX_PHOTOS = 80;
 const MAX_FOOD_LINES = 100;
+const MAX_TRADITIONS = 100;
 const timeOk = (t: unknown): t is string => typeof t === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
 export const MAX_PHOTO_BYTES = 3_000_000;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -281,6 +286,13 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
   const foodOf = async (q: Queries, planId: number): Promise<FoodLine[]> =>
     (await q.all<{ id: number; label: string; brought_by: string | null; thaw_pounds: number | null; done: number }>(
       'SELECT id, label, brought_by, thaw_pounds, done FROM plan_food WHERE plan_id = ? ORDER BY sort_order, id', [planId])).map((f) => ({ ...f, done: f.done === 1 }));
+  const traditionsOf = async (q: Queries, planId: number): Promise<Tradition[]> =>
+    (await q.all<{ id: number; words: string; done: number }>('SELECT id, words, done FROM plan_traditions WHERE plan_id = ? ORDER BY sort_order, id', [planId])).map((r) => ({ ...r, done: r.done === 1 }));
+  const planOfTradition = async (q: Queries, id: number): Promise<number> => {
+    const found = await q.get<{ plan_id: number }>('SELECT t.plan_id FROM plan_traditions t JOIN plans p ON p.id = t.plan_id WHERE t.id = ? AND p.owner_id = ?', [id, owner]);
+    if (!found) throw new Problem(404, "That tradition isn't here anymore. It may have been deleted.");
+    return found.plan_id;
+  };
   const planOfFood = async (q: Queries, foodId: number): Promise<number> => {
     const found = await q.get<{ plan_id: number }>('SELECT f.plan_id FROM plan_food f JOIN plans p ON p.id = f.plan_id WHERE f.id = ? AND p.owner_id = ?', [foodId, owner]);
     if (!found) throw new Problem(404, "That food isn't here anymore. It may have been deleted.");
@@ -328,7 +340,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
       ? (await calendar(db, owner, clock).between(found.start_day, dayNumber(lastSeen) - dayNumber(found.start_day) + 1)).filter((e) => ['meal', 'session', 'media'].includes(e.kind))
       : [];
     return { ...summary!, story: found.story, items_list: await itemsOf(db, id), photos_list: await photosOf(db, id), happened, yearly: await yearlyOf(id),
-      served_at: found.served_at, food_kind: found.food_kind ?? 'meal', food_lines: await foodOf(db, id) };
+      served_at: found.served_at, food_kind: found.food_kind ?? 'meal', food_lines: await foodOf(db, id), traditions: await traditionsOf(db, id) };
   }
 
   /** What a plan is a year of, when it comes back every year. */
@@ -435,6 +447,10 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
         for (const f of await tx.all<{ label: string; brought_by: string | null; thaw_pounds: number | null; sort_order: number }>(
           'SELECT label, brought_by, thaw_pounds, sort_order FROM plan_food WHERE plan_id = ? ORDER BY sort_order, id', [id])) {
           await tx.run('INSERT INTO plan_food (plan_id, label, brought_by, thaw_pounds, done, sort_order) VALUES (?, ?, ?, ?, 0, ?)', [made.lastId, f.label, f.brought_by, f.thaw_pounds, f.sort_order]);
+        }
+        // What is always done carries over, not yet done.
+        for (const r of await tx.all<{ words: string; sort_order: number }>('SELECT words, sort_order FROM plan_traditions WHERE plan_id = ? ORDER BY sort_order, id', [id])) {
+          await tx.run('INSERT INTO plan_traditions (plan_id, words, done, sort_order) VALUES (?, ?, 0, ?)', [made.lastId, r.words, r.sort_order]);
         }
         return made.lastId;
       }).then(whole);
@@ -549,6 +565,53 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
         await tx.run('DELETE FROM plan_items WHERE id = ?', [itemId]);
         await tx.run('DELETE FROM holiday_ticks WHERE plan_id = ? AND key = ?', [planId, `t${itemId}`]);
       });
+      return whole(planId);
+    },
+
+    // ---------- traditions ----------
+
+    /** Add a line of what is always done. Checks the Traditions part when the plan does not show it. */
+    async addTradition(planId: number, words: string | null | undefined): Promise<Plan> {
+      await row(db, planId);
+      const text = clean(words, 200);
+      if (!text) throw new Problem(400, 'Say what is always done');
+      await atomic(db, async (tx) => {
+        const count = (await tx.get<{ n: number; last: number | null }>('SELECT COUNT(*) AS n, MAX(sort_order) AS last FROM plan_traditions WHERE plan_id = ?', [planId]))!;
+        if (count.n >= MAX_TRADITIONS) throw new Problem(400, `A plan holds ${MAX_TRADITIONS} traditions at most`);
+        await tx.run('INSERT INTO plan_traditions (plan_id, words, done, sort_order) VALUES (?, ?, 0, ?)', [planId, text, (count.last ?? 0) + 1]);
+        await showPart(tx, planId, 'traditions');
+      });
+      return whole(planId);
+    },
+
+    /** Reword a line, or check it off or not. */
+    async updateTradition(id: number, input: { words?: string | null; done?: boolean }): Promise<Plan> {
+      const planId = await planOfTradition(db, id);
+      const old = (await db.get<{ words: string; done: number }>('SELECT words, done FROM plan_traditions WHERE id = ?', [id]))!;
+      const text = input.words === undefined ? old.words : clean(input.words, 200);
+      if (!text) throw new Problem(400, 'Say what is always done');
+      await db.run('UPDATE plan_traditions SET words = ?, done = ? WHERE id = ?', [text, (input.done ?? old.done === 1) ? 1 : 0, id]);
+      return whole(planId);
+    },
+
+    /** Move a line one place up or down the list. */
+    async moveTradition(id: number, direction: string): Promise<Plan> {
+      if (direction !== 'up' && direction !== 'down') throw new Problem(400, 'Move it up or down');
+      const planId = await planOfTradition(db, id);
+      await atomic(db, async (tx) => {
+        const lines = await tx.all<{ id: number }>('SELECT id FROM plan_traditions WHERE plan_id = ? ORDER BY sort_order, id', [planId]);
+        const at = lines.findIndex((l) => l.id === id);
+        const to = direction === 'up' ? at - 1 : at + 1;
+        if (to < 0 || to >= lines.length) return;
+        [lines[at], lines[to]] = [lines[to]!, lines[at]!];
+        for (const [n, l] of lines.entries()) await tx.run('UPDATE plan_traditions SET sort_order = ? WHERE id = ?', [n + 1, l.id]);
+      });
+      return whole(planId);
+    },
+
+    async removeTradition(id: number): Promise<Plan> {
+      const planId = await planOfTradition(db, id);
+      await db.run('DELETE FROM plan_traditions WHERE id = ?', [id]);
       return whole(planId);
     },
 

@@ -1093,6 +1093,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   await database.db.run('DROP TABLE personal_keys');
   await database.db.run('DROP TABLE item_shares');
   await database.db.run('ALTER TABLE kinds DROP COLUMN guard');
+  await database.db.run('DROP TABLE plan_traditions');
   await database.db.run('DROP TABLE plan_food');
   for (const column of ['returned', 'after_trip', 'after_done', 'job_id', 'thaw_pounds']) await database.db.run(`ALTER TABLE plan_items DROP COLUMN ${column}`);
   for (const column of ['served_at', 'food_kind', 'parts']) await database.db.run(`ALTER TABLE plans DROP COLUMN ${column}`);
