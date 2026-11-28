@@ -460,7 +460,7 @@ function SavedPlanPage() {
         <Gathering plan={plan} g={g} />
         {uses('when_where') && <div style={{ order: partOrder('when_where') }}><WhenWhere plan={plan} act={act} /></div>}
         {uses('traditions') && <div style={{ order: partOrder('traditions') }}><Traditions plan={plan} act={act} /></div>}
-        {uses('tasks') && <section className={cardClass} style={{ order: partOrder('tasks') }}>
+        {uses('tasks') && <section className={cardClass} style={{ order: partOrder('tasks') }} aria-label="Helpers and tasks">
           <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">Helpers and tasks {tasks.length > 0 && <span className="text-sm font-normal text-gray-500 dark:text-life-300">{tasks.filter((t) => t.done).length} of {tasks.length}</span>}</h2>
           <ul className="space-y-1">
             {tasks.map((t) => (
@@ -469,7 +469,7 @@ function SavedPlanPage() {
                   <input type="checkbox" checked={t.done} onChange={() => act(() => axios.put(`/api/plans/items/${t.id}`, { done: !t.done }))} className="mt-0.5 accent-life-600" />
                   {t.link ? <Link to={t.link} onClick={(e) => e.stopPropagation()} className={`hover:underline ${t.done ? 'text-gray-400 line-through' : ''}`}>{t.label}</Link> : <span className={t.done ? 'text-gray-400 line-through' : ''}>{t.label}</span>}
                 </label>
-                <button type="button" onClick={() => act(() => axios.delete(`/api/plans/items/${t.id}`))} aria-label={`Remove ${t.label}`} className="text-gray-400 hover:text-red-600">×</button>
+                <button type="button" onClick={() => act(() => axios.delete(`/api/plans/items/${t.id}`))} aria-label={`Remove ${t.label}`} className="min-h-[44px] min-w-[44px] text-gray-400 hover:text-red-600">×</button>
               </li>
             ))}
           </ul>
@@ -508,7 +508,7 @@ function SavedPlanPage() {
                         )}
                         {i.short && <span className="block text-xs text-honey-700">{i.short}</span>}
                       </span>
-                      <button type="button" onClick={() => act(() => axios.delete(`/api/plans/items/${i.id}`))} aria-label={`Take ${i.label} off the plan`} className="text-gray-400 hover:text-red-600">×</button>
+                      <button type="button" onClick={() => act(() => axios.delete(`/api/plans/items/${i.id}`))} aria-label={`Take ${i.label} off the plan`} className="min-h-[44px] min-w-[44px] text-gray-400 hover:text-red-600">×</button>
                     </li>
                   ))}
                 </ul>
