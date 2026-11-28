@@ -2,7 +2,7 @@
  * The addresses for plans and their photos (/api/plans). What they do is core/'s plans.ts; this reads what
  * was sent and passes it on.
  */
-import { photoLibrary, planList, plans, shopping, MAX_PHOTO_BYTES, PHOTO_SERVICE, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
+import { photoLibrary, planList, plans, planStarts, shopping, MAX_PHOTO_BYTES, PHOTO_SERVICE, type Db, type Fetcher, type Sealer } from '../../core/src/index.ts';
 import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -54,7 +54,9 @@ export function planRoutes(db: Db, tools?: PhotoTools): Route[] {
     // Every plan in one list by date: one-time plans, holidays and trips by year, and unplanned birthdays.
     ['GET', at('/all'), async (c) => ({ json: await planList(db, c.user.id, c.clock).list() })],
     ['GET', at(''), async (c) => ({ json: await mine(c).list({ tag: queryNumber(c.query, 'tag') }) })],
-    ['POST', at(''), async (c) => ({ status: 201, json: await mine(c).create({ ...planFrom(c.body), parts: sent(c.body, 'parts') ? read.texts(c.body, 'parts') : null }) })],
+    // The starting points a new plan can pick from, with the parts each checks.
+    ['GET', at('/starts'), async () => ({ json: planStarts() })],
+    ['POST', at(''), async (c) => ({ status: 201, json: await mine(c).create({ ...planFrom(c.body), parts: sent(c.body, 'parts') ? read.texts(c.body, 'parts') : null, start: read.maybeText(c.body, 'start') }) })],
     ['PUT', at('/:id/parts'), async (c) => ({ json: await mine(c).setParts(c.id, read.texts(c.body, 'parts')) })],
     ['GET', at('/:id'), async (c) => ({ json: await mine(c).get(c.id) })],
     ['PUT', at('/:id'), async (c) => ({ json: await mine(c).update(c.id, planFrom(c.body)) })],

@@ -261,6 +261,12 @@ it('a plan uses the parts it needs: chosen when made, changed later, kept when t
   expect(trip.parts).toEqual(['more_days', 'tasks', 'bring']); // each once, in the order they show
   expect((await mine.create({ name: 'Painting', start_day: '2046-03-05', end_day: '2046-03-06' })).parts).toEqual(['food', 'budget', 'more_days', 'tasks', 'bring']);
   await expect(mine.create({ name: 'Odd', start_day: '2046-03-11', parts: ['sailing'] })).rejects.toEqual(problem(400));
+  // A starting point checks the parts for that kind of plan; More than one day goes by the days given.
+  expect((await mine.create({ name: 'Hank turns nine', start_day: '2046-04-02', start: 'birthday' })).parts).toEqual(['food', 'guests', 'gifts', 'budget', 'tasks']);
+  expect((await mine.create({ name: 'River camp', start_day: '2046-07-10', end_day: '2046-07-12', start: 'trip' })).parts).toEqual(['food', 'budget', 'more_days', 'bring', 'after_trip']);
+  expect((await mine.create({ name: 'Day hike', start_day: '2046-07-20', start: 'trip' })).parts).toEqual(['food', 'budget', 'bring', 'after_trip']);
+  expect((await mine.create({ name: 'Errands', start_day: '2046-07-21', start: 'other' })).parts).toEqual(['food', 'budget', 'tasks', 'bring']);
+  await expect(mine.create({ name: 'Odd', start_day: '2046-03-11', start: 'cruise' })).rejects.toEqual(problem(400));
 
   const withTask = (await mine.addItem(plain.id, { kind: 'task', label: 'Set the table' }));
   expect(withTask.parts).toEqual(['food', 'budget', 'tasks', 'bring']);

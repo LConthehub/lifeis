@@ -59,6 +59,19 @@ const PART_OF_ITEM: Record<PlanItemKind, PlanPart> = { task: 'tasks', recipe: 'f
 /** What a new plan shows, unless it says otherwise. */
 const FIRST_PARTS: PlanPart[] = ['food', 'budget', 'tasks', 'bring'];
 
+/**
+ * Starting points for a new plan: each checks the parts that kind of plan usually needs, so nobody starts from a
+ * blank list. Any part can be checked or taken off afterwards.
+ */
+export const PLAN_STARTS: readonly { key: string; label: string; parts: PlanPart[]; longer: boolean }[] = [
+  { key: 'trip', label: 'A trip', parts: ['food', 'budget', 'more_days', 'bring', 'after_trip'], longer: true },
+  { key: 'gathering', label: 'A gathering', parts: ['food', 'guests', 'budget', 'tasks'], longer: false },
+  { key: 'birthday', label: 'A birthday', parts: ['food', 'guests', 'gifts', 'budget', 'tasks'], longer: false },
+  { key: 'other', label: 'Something else', parts: FIRST_PARTS, longer: false },
+];
+/** The starting points with their parts in words, for the page that offers them. */
+export const planStarts = () => PLAN_STARTS.map((s) => ({ key: s.key, label: s.label, longer: s.longer, parts: s.parts.map((key) => PLAN_PARTS.find((p) => p.key === key)!.label) }));
+
 /** The parts asked for, checked: known keys only, each once, in the order they show. */
 export function partsChecked(parts: readonly string[]): PlanPart[] {
   for (const p of parts) if (!PART_KEYS.includes(p)) throw new Problem(400, `${p} isn't one of a plan's parts`);
@@ -86,6 +99,8 @@ export type PlanInput = {
   story?: string | null;
   /** The parts it uses, for a new plan. Left out: Food, Budget, Helpers and tasks and Bring list, and More than one day when it is. */
   parts?: string[] | null;
+  /** A starting point (trip, gathering, birthday, other) that checks the parts for it, when `parts` is left out. */
+  start?: string | null;
 };
 export type PlanItemInput = {
   kind: string;
@@ -289,7 +304,11 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
     async create(input: PlanInput): Promise<Plan> {
       const values = checked(input);
       const longer = values[2] !== values[1];
-      const parts = partsChecked(input.parts ?? [...FIRST_PARTS, ...(longer ? ['more_days'] : [])]).join(',');
+      const start = input.start == null ? null : PLAN_STARTS.find((s) => s.key === input.start);
+      if (start === undefined) throw new Problem(400, 'Pick one: a trip, a gathering, a birthday or something else.');
+      // A starting point's More than one day goes by the days given, like a plan with none.
+      const first = start ? start.parts.filter((p) => p !== 'more_days') : FIRST_PARTS;
+      const parts = partsChecked(input.parts ?? [...first, ...(longer ? ['more_days'] : [])]).join(',');
       const made = await db.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [owner, ...values, parts, now(), now()]);
       return whole(made.lastId);

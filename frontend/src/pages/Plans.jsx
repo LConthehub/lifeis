@@ -246,14 +246,34 @@ function PlanForm({ plan, onDone }) {
   const [longer, setLonger] = useState(Boolean(plan.parts?.includes('more_days') || (plan.end_day && plan.end_day !== plan.start_day)));
   const [tags, setTags] = useState(plan.tag_list || []);
   const [error, setError] = useState('');
+  // A new plan picks a starting point, which checks the parts that kind of plan usually needs.
+  const [starts, setStarts] = useState([]);
+  const [start, setStart] = useState('other');
+  useEffect(() => { if (!plan.id) axios.get('/api/plans/starts').then(({ data }) => setStarts(data)).catch(() => setStarts([])); }, [plan.id]);
+  const picked = starts.find((s) => s.key === start);
+  // A trip turns on More than one day; another pick turns it back off unless an end day is already typed.
+  const pick = (s) => { setStart(s.key); setLonger(s.longer || Boolean(form.end_day)); };
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const submit = async (e) => {
     e.preventDefault();
-    const body = { name: form.name, start_day: form.start_day, end_day: (longer && form.end_day) || null, note: form.note || null, story: plan.story ?? null };
+    const body = { name: form.name, start_day: form.start_day, end_day: (longer && form.end_day) || null, note: form.note || null, story: plan.story ?? null, ...(plan.id || starts.length === 0 ? {} : { start }) };
     try { const { data } = plan.id ? await axios.put(`/api/plans/${plan.id}`, body) : await axios.post('/api/plans', body); data.tag_list = await saveTags('plan', data.id, tags); onDone(data); } catch (err) { setError(errorMessage(err, "Couldn't save")); }
   };
   return (
     <form onSubmit={submit} className="space-y-3">
+      {!plan.id && starts.length > 0 && (
+        <fieldset className="space-y-1">
+          <legend className="text-sm font-medium text-gray-700 dark:text-life-100">What kind of plan</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {starts.map((s) => (
+              <label key={s.key} className={`flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm ${start === s.key ? 'border-life-600 bg-life-50 font-semibold text-life-800 dark:bg-life-700 dark:text-life-50' : 'border-life-200 text-gray-700 dark:border-life-600 dark:text-life-100'}`}>
+                <input type="radio" name="plan-start" checked={start === s.key} onChange={() => pick(s)} className="h-5 w-5 accent-life-600" /> {s.label}
+              </label>
+            ))}
+          </div>
+          {picked && <p className="text-xs text-gray-500 dark:text-life-300">Starts with: {picked.parts.join(', ')}. You can change the parts later.</p>}
+        </fieldset>
+      )}
       <Field label="What it is *"><input required autoFocus={!plan.id} value={form.name} onChange={set('name')} placeholder="e.g. Thanksgiving, Saturday sewing" className={inputClass} /></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label={longer ? 'From *' : 'Day *'}><input required type="date" value={form.start_day} onChange={set('start_day')} className={inputClass} /></Field>

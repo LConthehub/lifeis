@@ -112,5 +112,22 @@ const smallBare = await tooSmall([region('After the trip').locator('button, sele
 say('the empty plan has 44px controls' + (smallBare.length ? ` (too small: ${smallBare})` : ''), smallBare.length === 0);
 say('the empty plan does not scroll sideways', await noSideways());
 
+// ---------- starting points ----------
+await page.goto(base + '/plans'); await wait(1200);
+await page.getByRole('button', { name: '+ New' }).click(); await wait(600);
+const kinds = dialog.getByRole('group', { name: 'What kind of plan' });
+say('a new plan offers four starting points, Something else picked', (await kinds.getByRole('radio').count()) === 4 && await kinds.getByRole('radio', { name: 'Something else' }).isChecked());
+const smallKinds = await tooSmall([kinds.locator('label')]);
+say('the starting points are 44px tall' + (smallKinds.length ? ` (too small: ${smallKinds})` : ''), smallKinds.length === 0);
+await kinds.getByRole('radio', { name: 'A trip' }).check(); await wait(300);
+say('A trip turns on More than one day and says what it starts with', await dialog.getByRole('checkbox', { name: 'More than one day' }).isChecked() && /Starts with: Food, Budget, More than one day, Bring list, After the trip/.test(await dialog.innerText()));
+await kinds.getByRole('radio', { name: 'A birthday' }).check(); await wait(300);
+say('A birthday turns More than one day back off', !(await dialog.getByRole('checkbox', { name: 'More than one day' }).isChecked()));
+await dialog.getByLabel('What it is *').fill("Hank's birthday");
+await shot('plan-starts');
+say('the new plan form does not scroll sideways', await noSideways());
+await dialog.getByRole('button', { name: 'Save' }).click(); await wait(1800);
+say('a birthday starts with Guests and Gifts, and no Bring list', await region('Guests').isVisible() && await region('Gifts').isVisible() && !/Bring list/.test(await text()));
+
 say('no request failed' + (bad.length ? `: ${bad.join(' | ')}` : ''), bad.length === 0);
 await browser.close();

@@ -49,7 +49,7 @@ export type { GatheringView } from './holidays.ts';
 export type { Holidays, HolidayInput, HolidayCard, HolidaySummary, YearView, Stage as HolidayStage, CountdownStep, GiftInput, DecorInput, PersonInput, YearChange } from './holidays.ts';
 export { dateInYear, nextDate, checkedRule, thawDays, ruleWords as holidayRuleWords, WEEKDAY_NAMES, MONTHS, THAW_SOURCE } from './holidayDates.ts';
 export type { DateRule } from './holidayDates.ts';
-export { plans, pictureType, EARLY_DAYS, MAX_PHOTO_BYTES, PLAN_ITEM_KINDS, PLAN_PARTS, partsChecked } from './plans.ts';
+export { plans, pictureType, EARLY_DAYS, MAX_PHOTO_BYTES, PLAN_ITEM_KINDS, PLAN_PARTS, PLAN_STARTS, planStarts, partsChecked } from './plans.ts';
 export { planList, PLAN_SOON_DAYS } from './planList.ts';
 export type { PlanLine, PlanKind, PlanBand, PlanList } from './planList.ts';
 export type { OnWeek } from './plans.ts';
