@@ -76,6 +76,10 @@ export { budget, perMonth, billPerMonth, incomeIn, billDates, INCOME_EVERY } fro
 export type { Budget, BudgetTools, BillLine, Goal, GoalQuestion, IncomeLine, Safe, Year } from './budget.ts';
 export { goals } from './goals.ts';
 export type { CostLine, CostView, GoalPanel, GoalTools } from './goals.ts';
+export { splits, shareOut, fewestPayments } from './splits.ts';
+export type { Payment, SplitPersonInput, Preview, Settled, ShareView, SplitInput, SplitsPage, SplitTools, SplitView } from './splits.ts';
+export { pots } from './pots.ts';
+export type { Pot, PotInput, PotLine, PotTools, PotsView } from './pots.ts';
 export { fmt as goalMoney, monthlyAsk, progressOf } from './goalFigures.ts';
 export type { Progress } from './goalFigures.ts';
 export { assistant, isLocal as isLocalAddress, ASSISTANT_SERVICE, AREAS as ASSISTANT_AREAS, type AssistantTools, type PhoneModel } from './assistant.ts';

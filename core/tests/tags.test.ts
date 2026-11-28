@@ -58,6 +58,7 @@ it('carries the old recipe tags over: one top-level tag for each word, each owne
   // Put the database back to how version 38 left it, with recipes that have a comma list of tags.
   // Version 53 comes last, then 52, then 51, then 50, then 49, then 48, then 47.
   // Version 57 comes last.
+  for (const table of ['split_shares', 'splits', 'money_pot_lines', 'money_pot_shares', 'money_pots']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE plan_food');
 
   for (const column of ['returned', 'after_trip', 'after_done', 'job_id', 'thaw_pounds']) await db.run(`ALTER TABLE plan_items DROP COLUMN ${column}`);

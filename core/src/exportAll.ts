@@ -91,6 +91,8 @@ export const KINDS: KindInfo[] = [
   { key: 'projects', label: 'Projects, with their lines, time and costs', file: 'projects.csv', importable: true, matched: 'by name' },
   { key: 'plans', label: 'Plans, with their things to do and photos', file: 'plans.csv', importable: true, matched: 'by name and first day' },
   { key: 'budget', label: 'Income and goals, with the money put toward each, what each is for, and its own cost lines', file: 'money-income.csv', importable: true, matched: 'income by name, amount and how often; goals by name' },
+  { key: 'splits', label: 'Splits of bills and purchases: who paid, each share, and what was settled', file: 'splits.csv', importable: true, matched: 'by what it was for, the total and the day' },
+  { key: 'pots', label: 'Savings pots, with each line put in or taken out', file: 'money-pots.csv', importable: true, matched: 'a pot by name; a line by day, amount and note' },
   { key: 'holidays', label: 'Holidays: how each finds its day, and what each year kept (guests, cards, gifts, decorations, countdown)', file: 'holidays.csv', importable: true, matched: 'by name; a year by its plan' },
   { key: 'trips', label: 'Outdoor trips: the parts each has on, and what each year kept (bring list, seasons, catch and harvest logs, site booking)', file: 'outdoor-trips.csv', importable: true, matched: 'by name; a year by its plan' },
   { key: 'tags', label: 'Tags, and what carries them', file: 'tags.csv', importable: true, matched: 'by path; a tag on something by that thing’s name' },
@@ -110,6 +112,7 @@ export const LEFT_OUT: { what: string; why: string }[] = [
   { what: 'Browsers set up for reminders, and the reminder settings (the topic, the addresses reminders are sent to)', why: 'They name where reminders are sent, and belong to this Life Is.' },
   { what: 'Stickers’ codes', why: 'Each printed sticker’s code can belong to one place or thing in one Life Is only. The things themselves are all here.' },
   { what: 'What was last read from outside (the forecast, recall look-ups, followed calendars’ events)', why: 'It is copied from elsewhere, not yours, and is read again when needed.' },
+  { what: 'Savings pots that another person shared with you', why: 'A shared pot belongs to the person who made it. Your own pots are here, with who each is shared with.' },
   { what: 'Categories of spending that another person shared with you, and their entries', why: 'They belong to the person who made them. Your own entries in them are here, with the category’s name.' },
 ];
 
@@ -713,6 +716,26 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
         .map((s) => [str(s.name), str(s.day), signedDollars(s.cents)]));
   }
 
+  // Splits: one row for each person in each split you made or are in. People who sign in are by their sign-in name; typed names as typed.
+  const splitRows: Cell[][] = [];
+  const splitList = await all(`SELECT s.id, s.what, s.total_cents, s.day, s.note, cu.username AS made_by FROM splits s JOIN users cu ON cu.id = s.creator_id
+    WHERE s.creator_id = ? OR EXISTS (SELECT 1 FROM split_shares x WHERE x.split_id = s.id AND x.user_id = ?) ORDER BY s.day, s.id`, [owner, owner]);
+  for (const [n, s] of splitList.entries()) {
+    for (const x of await all('SELECT x.user_id, x.name, x.cents, x.paid, x.settled_on, u.username FROM split_shares x LEFT JOIN users u ON u.id = x.user_id WHERE x.split_id = ? ORDER BY x.sort_order, x.id', [s.id as number])) {
+      splitRows.push([str(n + 1), str(s.what), dollars(s.total_cents), str(s.day), str(s.note), str(s.made_by), x.user_id !== null ? str(x.username) : str(x.name), x.user_id !== null ? 'sign-in' : 'typed', dollars(x.cents), yes(x.paid), str(x.settled_on)]);
+    }
+  }
+  out.csv('splits.csv', ['Split', 'What', 'Total', 'Day', 'Note', 'Made by', 'Person', 'Kind of person', 'Share', 'Paid it', 'Settled on'], splitRows);
+  // Savings pots you made: one row for each line, or one row with no day for a pot with no lines.
+  const potRows: Cell[][] = [];
+  for (const p of await all('SELECT id, name, closed_on FROM money_pots WHERE owner_id = ? ORDER BY id')) {
+    const withWho = (await all('SELECT u.username FROM money_pot_shares s JOIN users u ON u.id = s.user_id WHERE s.pot_id = ? ORDER BY u.username', [p.id as number])).map((r) => str(r.username)).join('; ');
+    const lines = await all('SELECT l.day, l.cents, l.note, u.username FROM money_pot_lines l LEFT JOIN users u ON u.id = l.user_id WHERE l.pot_id = ? ORDER BY l.day, l.id', [p.id as number]);
+    if (!lines.length) potRows.push([str(p.name), str(p.closed_on), withWho, '', '', '', '']);
+    for (const l of lines) potRows.push([str(p.name), str(p.closed_on), withWho, str(l.day), signedDollars(l.cents), str(l.note), str(l.username)]);
+  }
+  out.csv('money-pots.csv', ['Pot', 'Closed on', 'Shared with', 'Day', 'Amount (below zero is taken out)', 'Note', 'Added by'], potRows);
+
   // ---------- servers and accounts: names and addresses only ----------
   const connections: Cell[][] = [];
   for (const s of await all('SELECT kind, name, url, every_hours, last_sync_at FROM media_sources WHERE owner_id = ? ORDER BY id')) connections.push([str(s.kind) === 'emby' ? 'Emby server' : 'Jellyfin server', str(s.name), plainAddress(str(s.url)), str(s.every_hours), str(s.last_sync_at)]);
@@ -822,6 +845,8 @@ const FILE_ABOUT: [string, string][] = [
   ['money-categories.csv', 'Your spending categories and what each is for a month.'],
   ['money-entries.csv', 'What you wrote down as spent.'],
   ['money-income.csv', 'What comes in, and how often; money-goals.csv and money-goal-saved.csv for goals (and the plan or project each is for) and what was put toward each; money-goal-lines.csv for the costs typed on a goal, with who each is hidden from. Bills are in upkeep.csv.'],
+  ['splits.csv', 'Bills and purchases split between people: a row for each person in each split, with the share, who paid and what was settled. People who sign in are by sign-in name; typed names are as typed.'],
+  ['money-pots.csv', 'Savings pots you made, with each line put in or taken out, who it is shared with, and when it was closed.'],
   ['connections.csv', 'Servers and accounts you connected: names and addresses only, never a key or a password.'],
   ['settings.csv', 'Your plain preferences.'],
   ['pictures/ and papers/', 'Every photo, cover and paper, in a folder named for what it belongs to. The spreadsheets say which file is whose.'],
@@ -2381,6 +2406,96 @@ ${mediaId}`);
     return d;
   },
 
+  async splits(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'splits.csv');
+    if (!t) return d;
+    const groups = new Map<string, Record<string, string>[]>();
+    for (const row of t.rows) {
+      const k = cellOf(row, 'Split');
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k)!.push(row);
+    }
+    const seen = new Seen((await c.tx.all<{ what: string; total_cents: number; day: string }>(
+      'SELECT s.what, s.total_cents, s.day FROM splits s WHERE s.creator_id = ? OR EXISTS (SELECT 1 FROM split_shares x WHERE x.split_id = s.id AND x.user_id = ?)', [c.owner, c.owner]))
+      .map((s) => `${labelKey(s.what)}\n${s.total_cents}\n${s.day}`));
+    let n = 0;
+    for (const rows of groups.values()) {
+      n += 1;
+      const first = rows[0]!;
+      const what = clean(cellOf(first, 'What'), 200);
+      const total = centsOf(cellOf(first, 'Total'));
+      const day = dayOf(cellOf(first, 'Day'));
+      if (!what || total === null || total <= 0 || !day) { skip(d, n - 1, !what ? 'it says nothing about what it was for' : 'its total or its day cannot be read'); continue; }
+      d.found += 1;
+      if (seen.take(`${labelKey(what)}\n${total}\n${day}`)) { d.already += 1; continue; }
+      const people: { user_id: number | null; name: string | null; cents: number; paid: boolean; settled: string | null }[] = [];
+      const used = new Set<string>();
+      let bad = '';
+      for (const r of rows) {
+        const who = clean(cellOf(r, 'Person'), 60);
+        const cents = centsOf(cellOf(r, 'Share'));
+        if (!who || cents === null) { bad = 'a share cannot be read'; break; }
+        const user = cellOf(r, 'Kind of person') === 'typed' ? undefined : await c.tx.get<{ id: number }>('SELECT id FROM users WHERE username = ? COLLATE NOCASE', [who]);
+        const key = user ? `u${user.id}` : `n${labelKey(who)}`;
+        if (used.has(key)) { bad = 'a person is in it twice'; break; }
+        used.add(key);
+        people.push({ user_id: user?.id ?? null, name: user ? null : who, cents, paid: yesOf(cellOf(r, 'Paid it')), settled: dayOf(cellOf(r, 'Settled on')) });
+      }
+      if (!bad && (people.length < 2 || people.filter((p) => p.paid).length !== 1)) bad = 'it needs two people and one who paid';
+      if (!bad && people.reduce((sum, p) => sum + p.cents, 0) !== total) bad = 'the shares do not add up to the total';
+      if (bad) { skip(d, n - 1, bad); continue; }
+      const made = await c.tx.run('INSERT INTO splits (creator_id, what, total_cents, day, note, created_at) VALUES (?, ?, ?, ?, ?, ?)', [c.owner, what, total, day, clean(cellOf(first, 'Note'), 1000), c.at]);
+      for (const [at, p] of people.entries()) {
+        await c.tx.run('INSERT INTO split_shares (split_id, user_id, name, cents, paid, settled_on, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)', [made.lastId, p.user_id, p.name, p.cents, p.paid ? 1 : 0, p.paid ? null : p.settled, at]);
+      }
+      d.fresh += 1;
+    }
+    return d;
+  },
+
+  async pots(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'money-pots.csv');
+    if (!t) return d;
+    const byName = new Map<string, { name: string; rows: Record<string, string>[] }>();
+    for (const row of t.rows) {
+      const name = clean(cellOf(row, 'Pot'), 80);
+      if (!name) continue;
+      const k = labelKey(name);
+      if (!byName.has(k)) byName.set(k, { name, rows: [] });
+      byName.get(k)!.rows.push(row);
+    }
+    for (const pot of byName.values()) {
+      d.found += 1;
+      const first = pot.rows[0]!;
+      let id = (await c.tx.get<{ id: number }>('SELECT id FROM money_pots WHERE owner_id = ? AND name = ? COLLATE NOCASE ORDER BY id LIMIT 1', [c.owner, pot.name]))?.id ?? null;
+      const old = id !== null;
+      if (id === null) {
+        id = (await c.tx.run('INSERT INTO money_pots (owner_id, name, closed_on, created_at) VALUES (?, ?, ?, ?)', [c.owner, pot.name, dayOf(cellOf(first, 'Closed on')), c.at])).lastId;
+        for (const who of listOf(cellOf(first, 'Shared with'))) {
+          const user = await c.tx.get<{ id: number }>('SELECT id FROM users WHERE username = ? COLLATE NOCASE', [who]);
+          if (user && user.id !== c.owner) await c.tx.run('INSERT OR IGNORE INTO money_pot_shares (pot_id, user_id) VALUES (?, ?)', [id, user.id]);
+          else d.unlinked += 1;
+        }
+      }
+      const have = new Seen((await c.tx.all<{ day: string; cents: number; note: string | null }>('SELECT day, cents, note FROM money_pot_lines WHERE pot_id = ?', [id])).map((l) => `${l.day}\n${l.cents}\n${l.note ?? ''}`));
+      let added = 0;
+      for (const r of pot.rows) {
+        const day = dayOf(cellOf(r, 'Day'));
+        const cents = signedCentsOf(cellOf(r, 'Amount (below zero is taken out)'));
+        if (!day || cents === null || cents === 0) continue;
+        const note = clean(cellOf(r, 'Note'), 300);
+        if (have.take(`${day}\n${cents}\n${note ?? ''}`)) continue;
+        const by = cellOf(r, 'Added by') ? await c.tx.get<{ id: number }>('SELECT id FROM users WHERE username = ? COLLATE NOCASE', [cellOf(r, 'Added by')]) : undefined;
+        await c.tx.run('INSERT INTO money_pot_lines (pot_id, user_id, day, cents, note, created_at) VALUES (?, ?, ?, ?, ?, ?)', [id, by?.id ?? c.owner, day, cents, note, c.at]);
+        added += 1;
+      }
+      if (old && added === 0) d.already += 1; else d.fresh += 1;
+    }
+    return d;
+  },
+
   async tags(c) {
     const d = blank();
     const t = tableOf(c.files, 'tags.csv');
@@ -2418,7 +2533,7 @@ ${mediaId}`);
     return d;
   },
 };
-const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'measures', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
+const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'measures', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'splits', 'pots', 'tags'];
 
 function rowsIn(files: Files, info: KindInfo): number {
   return tableOf(files, info.file)?.rows.length ?? 0;

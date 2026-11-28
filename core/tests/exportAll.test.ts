@@ -17,6 +17,8 @@ import { prep } from '../src/prep.ts';
 import { holidays } from '../src/holidays.ts';
 import { outdoorTrips } from '../src/outdoorTrips.ts';
 import { plans } from '../src/plans.ts';
+import { pots } from '../src/pots.ts';
+import { splits } from '../src/splits.ts';
 import { projects } from '../src/projects.ts';
 import { tags as tagsOf } from '../src/tags.ts';
 import { upkeep } from '../src/upkeep.ts';
@@ -745,4 +747,47 @@ it('a goal keeps its plan, its settled day and its own cost lines (with who they
   expect((await goals(db, bob, clock).forPlan(bobsPlan, bob)).cost.lines.map((l) => l.label)).toEqual(['Cabin', 'Ferry']);
   await bringIn(bob, zip, importable);
   expect(await there()).toEqual(kept);
+});
+
+it('splits and savings pots go out and come back: people by sign-in name, typed names as typed, what was settled, and pots with their lines', async () => {
+  const mine = splits(db, ana, clock);
+  const made = await mine.create({ what: 'Pizza night', total_cents: 6001, day: '2046-03-04', note: 'Friday', people: [{ user_id: ana, paid: true }, { user_id: bob }, { name: 'Hank' }] });
+  const hank = (await mine.list()).splits.find((x) => x.id === made.id)!.shares.find((x) => x.typed)!;
+  await mine.settle(hank.id, true);
+  await mine.create({ what: 'Cabin', total_cents: 30000, day: '2046-03-01', people: [{ user_id: bob, paid: true, mode: 'percent', percent: 50 }, { user_id: ana }, { name: 'Loretta', mode: 'amount', cents: 5000 }] });
+  const car = await pots(db, ana, clock).create({ name: 'The car', shared_with: [bob] });
+  await pots(db, ana, clock).addLine(car.id, { cents: 20000, note: 'Refund', day: '2046-03-01' });
+  await pots(db, ana, clock).addLine(car.id, { cents: -4550, note: 'Tires', day: '2046-03-03' });
+  const done = await pots(db, ana, clock).create({ name: 'Old gifts' });
+  await pots(db, ana, clock).update(done.id, { closed: true });
+  await pots(db, bob, clock).create({ name: 'Bob only' });
+  const zip = (await exportEverything(db, ana, clock)).bytes;
+  const { files } = await splitDownload(zip);
+  expect(Object.keys(files).some((k) => k.endsWith('splits.csv'))).toBe(true);
+  expect(files[Object.keys(files).find((k) => k.endsWith('money-pots.csv'))!]).not.toContain('Bob only');
+
+  const out = (await mine.list()).splits;
+  const dana = await person('dana');
+  const first = await bringInDownload(db, dana, files, ['splits', 'pots'], clock);
+  for (const kind of first.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  expect(first.kinds.find((k) => k.key === 'splits')).toMatchObject({ found: 2, fresh: 2, already: 0 });
+  expect(first.kinds.find((k) => k.key === 'pots')).toMatchObject({ found: 2, fresh: 2, already: 0 });
+  const back = (await splits(db, dana, clock).list()).splits;
+  const plain = (x: { what: string; total_cents: number; day: string; note: string | null; paid_by: string; shares: { who: string; cents: number; paid: boolean; typed: boolean; settled_on: string | null }[] }) =>
+    [x.what, x.total_cents, x.day, x.note, x.paid_by, x.shares.map((h) => [h.who, h.cents, h.paid, h.typed, h.settled_on])];
+  expect(back.map(plain)).toEqual(out.map(plain));
+  expect(back.find((x) => x.what === 'Pizza night')!.shares.find((h) => h.who === 'Hank')).toMatchObject({ typed: true, settled_on: '2046-03-05' });
+  const potsBack = (await pots(db, dana, clock).list()).pots;
+  expect(potsBack.map((x) => [x.name, x.balance, x.closed_on, x.shared_with.map((h) => h.name), x.lines.map((l) => [l.day, l.cents, l.note])]))
+    .toEqual([['The car', 15450, null, ['bob'], [['2046-03-03', -4550, 'Tires'], ['2046-03-01', 20000, 'Refund']]], ['Old gifts', 0, '2046-03-05', [], []]]);
+  // A second time adds nothing.
+  const again = await bringInDownload(db, dana, files, ['splits', 'pots'], clock);
+  expect(again.kinds.find((k) => k.key === 'splits')).toMatchObject({ found: 2, fresh: 0, already: 2 });
+  expect(again.kinds.find((k) => k.key === 'pots')).toMatchObject({ found: 2, fresh: 0, already: 2 });
+  // A download made before splits and pots existed still comes back, with nothing for them.
+  const older = Object.fromEntries(Object.entries(files).filter(([k]) => !/splits\.csv$|money-pots\.csv$/.test(k)));
+  const eve = await person('eve');
+  const old = await bringInDownload(db, eve, older, ['splits', 'pots', 'money'], clock);
+  for (const kind of old.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  expect((await splits(db, eve, clock).list()).splits).toEqual([]);
 });
