@@ -58,6 +58,7 @@ const ThingStickerLanding = lazyPage(() => import('./pages/ThingStickers').then(
 const Money = lazyPage(() => import('./pages/Money'));
 const GoalsPage = lazyPage(() => import('./pages/Budgeting').then((m) => ({ default: m.GoalsPage })));
 const IncomePage = lazyPage(() => import('./pages/Budgeting').then((m) => ({ default: m.IncomePage })));
+const SplitsPage = lazyPage(() => import('./pages/Splits'));
 const YearPage = lazyPage(() => import('./pages/Budgeting').then((m) => ({ default: m.YearPage })));
 const TagsPage = lazyPage(() => import('./pages/Tags'));
 const TagPage = lazyPage(() => import('./pages/Tags').then((m) => ({ default: m.TagPage })));
@@ -95,7 +96,7 @@ const SECTIONS = [
   // Home services sit inside the House Manual, and Licenses inside Things.
   { word: 'keeping', shown: 'in order', icon: 'thing', home: '/manual', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || path.startsWith('/manual'),
     tabs: [['/manual', 'House Manual', ['/manual/services']], ['/things/upkeep', 'Upkeep'], ['/things/pets', 'Pets'], ['/things/places', 'Places'], ['/things', 'Things', ['/things/licenses']]] },
-  { word: 'spending', shown: 'budgeted', icon: 'bill', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month'], ['/money/income', 'Income and bills'], ['/money/goals', 'Goals'], ['/money/year', 'Year']] },
+  { word: 'spending', shown: 'budgeted', icon: 'bill', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month'], ['/money/income', 'Income and bills'], ['/money/goals', 'Goals'], ['/money/splits', 'Splits'], ['/money/year', 'Year']] },
   { word: 'enjoying', shown: 'entertaining', icon: 'media', home: '/media', owns: (path) => path.startsWith('/media'),
     // The third place in a tab is the older addresses that still open it (the book shelves are now chips in the Collection).
     tabs: [['/media', 'Collection', ['/media/books', '/media/ebooks', '/media/audiobooks']], ['/media/lists', 'Lists'], ['/media/connections', 'Connections', ['/media/servers']]] },
@@ -249,6 +250,7 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/money/year" element={<YearPage />} />
           <Route path="/money/goals" element={<GoalsPage />} />
           <Route path="/money/income" element={<IncomePage />} />
+          <Route path="/money/splits" element={<SplitsPage />} />
           <Route path="/connect" element={<Connect />} />
           <Route path="/do/:id" element={<DoAction />} />
           <Route path="/settings" element={<Settings user={user} onLogout={onLogout} onLifeChanged={setLife} />} />

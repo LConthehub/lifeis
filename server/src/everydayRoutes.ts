@@ -22,6 +22,7 @@ import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, typ
 import { mailRoutes, type MailTools } from './mailRoutes.ts';
 import { makingRoutes } from './makingRoutes.ts';
 import { moneyRoutes } from './moneyRoutes.ts';
+import { splitRoutes } from './splitRoutes.ts';
 import { assistantRoutes } from './assistantRoutes.ts';
 import { actionRoutes } from './actionRoutes.ts';
 import { holidayRoutes } from './holidayRoutes.ts';
@@ -399,6 +400,7 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
 
     ...makingRoutes(db),
     ...moneyRoutes(db, options.bank),
+    ...splitRoutes(db),
     ...assistantRoutes(db, options.assistant),
     ...actionRoutes(db),
     ...(options.reach ? connectionRoutes(db, options.reach) : []),

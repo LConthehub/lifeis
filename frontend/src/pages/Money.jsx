@@ -126,6 +126,7 @@ export default function Money() {
               </span>
               <span className="tabular-nums text-gray-800 dark:text-life-50">{money(e.cents, sign)}</span>
               {e.receipt_trip && <button type="button" aria-label={`Receipt for ${e.label}`} onClick={() => setModal({ receipt: e })} className="flex h-11 w-11 items-center justify-center text-life-600 hover:text-life-800 dark:text-life-200" data-receipt-photo><Icon of="receipt" size={20} /></button>}
+              {e.mine && <Link to={`/money/splits?entry=${e.id}`} aria-label={`Split ${e.label}`} className="inline-flex min-h-[44px] items-center px-1 text-xs text-life-600 underline dark:text-life-200">Split</Link>}
               {e.mine && <button type="button" aria-label={`Remove ${e.label}`} onClick={() => remove(e)} className="flex h-11 w-11 items-center justify-center text-gray-400 hover:text-red-600">✕</button>}
               <TagChips tags={e.tag_list} className="basis-full pb-1 pl-14" />
             </li>

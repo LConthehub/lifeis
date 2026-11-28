@@ -2079,6 +2079,64 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX idx_routine_steps_medicine ON routine_steps(medicine_id)`,
     ],
   },
+  {
+    number: 72,
+    name: 'splitting a bill or a purchase, and savings pots',
+    // A split is kept by whoever made it. Each person in it is a row in split_shares: a person who signs in (user_id) or a
+    // typed name (name), which is only a label. `paid` marks who paid the whole; the others owe their share to that one,
+    // until settled_on says it was paid back outside Life Is. A pot is money set aside with no target: signed lines, a day
+    // each. Pots are private to the owner unless shared by name, the way spending categories are.
+    statements: [
+      `CREATE TABLE splits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        creator_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        what TEXT NOT NULL,
+        total_cents INTEGER NOT NULL CHECK(total_cents > 0),
+        day TEXT NOT NULL,
+        note TEXT,
+        entry_id INTEGER REFERENCES money_entries(id) ON DELETE SET NULL,
+        job_id INTEGER REFERENCES upkeep_jobs(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_splits_creator ON splits(creator_id, day)`,
+      `CREATE TABLE split_shares (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        split_id INTEGER NOT NULL REFERENCES splits(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT,
+        cents INTEGER NOT NULL CHECK(cents >= 0),
+        paid INTEGER NOT NULL DEFAULT 0 CHECK(paid IN (0, 1)),
+        settled_on TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        CHECK((user_id IS NOT NULL AND name IS NULL) OR (user_id IS NULL AND name IS NOT NULL))
+      )`,
+      `CREATE INDEX idx_split_shares ON split_shares(split_id, sort_order)`,
+      `CREATE INDEX idx_split_shares_user ON split_shares(user_id)`,
+      `CREATE TABLE money_pots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        closed_on TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_money_pots ON money_pots(owner_id)`,
+      `CREATE TABLE money_pot_shares (
+        pot_id INTEGER NOT NULL REFERENCES money_pots(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        PRIMARY KEY (pot_id, user_id)
+      )`,
+      `CREATE TABLE money_pot_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pot_id INTEGER NOT NULL REFERENCES money_pots(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        day TEXT NOT NULL,
+        cents INTEGER NOT NULL CHECK(cents <> 0),
+        note TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_money_pot_lines ON money_pot_lines(pot_id, day)`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;
