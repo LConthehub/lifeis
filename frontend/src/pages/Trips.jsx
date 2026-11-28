@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import SubChips, { PLAN_CHIPS } from '../components/SubChips';
 import Icon from '../components/Icon';
 import { money } from '../components/Budget';
-import { PlanGoal } from '../components/Goals';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, fromDateInput, toDateInput } from '../components/ui';
 import { Heading, Hint, Remove, Tick } from './Holidays';
 
@@ -14,15 +13,11 @@ const button = `${buttonClass} min-h-[44px]`;
 const quiet = `${quietButtonClass} min-h-[44px]`;
 const PARTS = [['camping', 'Camping'], ['fishing', 'Fishing'], ['hunting', 'Hunting']];
 const AFTER = [['', 'Nothing'], ['dry', 'Dry it'], ['clean', 'Clean it'], ['repair', 'Repair it (to Upkeep)'], ['replace', 'Replace it (to the shopping list)']];
-const MEALS = [['breakfast', 'Breakfast'], ['lunch', 'Lunch'], ['dinner', 'Dinner'], ['snack', 'Snack']];
 const dayText = (day, long = false) => fromDateInput(day).toLocaleDateString(undefined, long ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'short', year: 'numeric' });
 const dollars = (cents) => (cents === null || cents === undefined ? '' : (cents / 100).toFixed(2));
 const cents = (text) => (String(text).trim() === '' ? null : Math.round(Number(text) * 100));
 const numberOrNull = (text) => (String(text).trim() === '' ? null : Number(text));
 const partWord = (parts) => parts.map((p) => PARTS.find(([k]) => k === p)[1]).join(', ');
-/** Every day from `from` to `to`, as 2046-06-13. */
-const daysBetween = (from, to) => { const out = []; for (let d = fromDateInput(from), n = 0; toDateInput(d) <= to && n < 120; d.setDate(d.getDate() + 1), n += 1) out.push(toDateInput(d)); return out; };
-const addDays = (day, n) => { const d = fromDateInput(day); d.setDate(d.getDate() + n); return toDateInput(d); };
 
 // ==================== the list of trips ====================
 
@@ -31,6 +26,7 @@ export default function TripsPage() {
   const [list, setList] = useState(null);
   const [shared, setShared] = useState([]);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null);
   const navigate = useNavigate();
   const load = useCallback(() => {
     axios.get(API).then(({ data }) => setList(data)).catch(() => setList([]));
@@ -38,7 +34,13 @@ export default function TripsPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
   if (!list) return null;
-  const open = (t) => navigate(t.years[0] ? `/plans/trips/${t.id}/${t.years[0].plan_id}` : `/plans/trips/${t.id}`);
+  const removeTrip = async (t) => {
+    if (!window.confirm(`Stop keeping ${t.name}? Each of its years stays as a plan, to look back on.`)) return;
+    await axios.delete(`${API}/${t.id}`).catch(() => {});
+    setEditing(null);
+    load();
+  };
+  const open = (t) => navigate(t.years[0] ? `/plans/${t.years[0].plan_id}` : '/plans');
   return (
     <div className="space-y-5">
       <SubChips items={PLAN_CHIPS} label="Plans, holidays and trips" />
@@ -48,20 +50,24 @@ export default function TripsPage() {
       </div>
       {list.length === 0 && (
         <div className={`${cardClass} text-sm text-gray-600 dark:text-life-100`}>
-          An outdoor trip is a plan that comes back each year. Turn on the parts you need: camping, fishing, hunting. Each year starts from last year's:
+          An outdoor trip is a plan that comes back each year, and each year opens as a plan. Turn on the parts you need: camping, fishing, hunting. Each year starts from last year's:
           the bring list, the menu, the seasons and your notes. Places are only words. Nothing is looked up on a map or sent anywhere.
         </div>
       )}
       <ul className="grid gap-3 sm:grid-cols-2">
         {list.map((t) => (
-          <li key={t.id}>
-            <button type="button" onClick={() => open(t)} className={`${cardClass} flex h-full min-h-[44px] w-full flex-col gap-1 text-left hover:ring-life-300`}>
+          <li key={t.id} className={`${cardClass} flex h-full flex-col gap-1`}>
+            <button type="button" onClick={() => open(t)} className="flex min-h-[44px] w-full flex-col gap-1 text-left" aria-label={`Open ${t.name}`}>
               <span className="flex items-center gap-2 font-medium text-life-800 dark:text-life-50"><Icon of="trip" /> {t.name}</span>
               <span className="text-xs text-gray-500 dark:text-life-300">
                 {t.parts.length ? partWord(t.parts) : 'A plain trip'}{t.latest ? ` · ${dayText(t.latest.day)}` : ''}{t.years.length > 1 ? ` · ${t.years.length} years kept` : ''}{t.private ? ' · private' : ''}
               </span>
               {t.next && <span className="text-sm text-gray-700 dark:text-life-100">{t.next}</span>}
             </button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setEditing(t)} className={quiet} aria-label={`Change ${t.name}`}>Change</button>
+              {t.parts.includes('fishing') && t.years[0] && <Link to={`/plans/trips/${t.id}/catches/${t.years[0].plan_id}`} className={`${quiet} inline-flex items-center`}>Catch log</Link>}
+            </div>
           </li>
         ))}
       </ul>
@@ -82,6 +88,13 @@ export default function TripsPage() {
       {adding && (
         <Modal title="Add a trip" onClose={() => setAdding(false)}>
           <TripForm onDone={(t) => { setAdding(false); open(t); }} />
+        </Modal>
+      )}
+      {editing && (
+        <Modal title={`Change ${editing.name}`} onClose={() => setEditing(null)}>
+          <TripForm trip={editing} onDone={() => { setEditing(null); load(); }} />
+          <p className="pt-3 text-sm text-gray-600 dark:text-life-100">What the trip's plan shows follows the parts you turn on. Turning one off leaves what is in it.</p>
+          <p className="pt-2"><button type="button" onClick={() => removeTrip(editing)} className="min-h-[44px] text-sm text-red-700 hover:underline dark:text-red-300">Stop keeping this trip</button></p>
         </Modal>
       )}
     </div>
@@ -127,80 +140,67 @@ function TripForm({ trip, onDone }) {
   );
 }
 
-// ==================== one trip, one year ====================
+// ==================== one trip's year, now a plan ====================
 
+/** A trip's address, old or new, leads to its year's plan page. */
 export function TripPage() {
   const { id, planId } = useParams();
-  const navigate = useNavigate();
+  if (planId) return <Navigate to={`/plans/${planId}`} replace />;
+  return <TripStart key={id} id={id} />;
+}
+
+function TripStart({ id }) {
   const [trip, setTrip] = useState(undefined);
-  const [year, setYear] = useState(null);
-  const [options, setOptions] = useState({ things: [] });
-  const [error, setError] = useState('');
-  const [editing, setEditing] = useState(false);
-  const load = useCallback(async () => {
-    try {
-      const { data: t } = await axios.get(`${API}/${id}`);
-      setTrip(t);
-      const wanted = planId ? Number(planId) : t.years.find((y) => y.day >= toDateInput(new Date()))?.plan_id ?? t.latest?.plan_id;
-      setYear(wanted ? (await axios.get(`${API}/years/${wanted}`)).data : null);
-    } catch { setTrip(null); }
-  }, [id, planId]);
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => { axios.get(`${API}/options`).then(({ data }) => setOptions(data)).catch(() => {}); }, [year?.plan_id]);
+  useEffect(() => { axios.get(`${API}/${id}`).then(({ data }) => setTrip(data)).catch(() => setTrip(null)); }, [id]);
   if (trip === undefined) return null;
   if (trip === null) return <p className="text-sm text-gray-500 dark:text-life-300">That trip isn't here anymore. It may have been deleted. <Link to="/plans/trips" className="underline">All trips</Link></p>;
+  const wanted = trip.years.find((y) => y.day >= toDateInput(new Date()))?.plan_id ?? trip.latest?.plan_id;
+  if (wanted) return <Navigate to={`/plans/${wanted}`} replace />;
+  return <p className="text-sm text-gray-600 dark:text-life-100">This trip has no year yet. <Link to="/plans/trips" className="underline">All trips</Link></p>;
+}
 
-  /** Does something that answers with the year, and shows what came back. */
+/** The catch log of a fishing trip: it stays here, with a link to it from the trip's plan page. */
+export function CatchLogPage() {
+  const { id, planId } = useParams();
+  const [year, setYear] = useState(undefined);
+  const [options, setOptions] = useState({ things: [] });
+  const [error, setError] = useState('');
+  const load = useCallback(() => { axios.get(`${API}/years/${planId}`).then(({ data }) => setYear(data)).catch(() => setYear(null)); }, [planId]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { axios.get(`${API}/options`).then(({ data }) => setOptions(data)).catch(() => {}); }, [planId]);
+  if (year === undefined) return null;
+  if (year === null || String(year.trip.id) !== String(id)) return <p className="text-sm text-gray-500 dark:text-life-300">That trip isn't here anymore. It may have been deleted. <Link to="/plans/trips" className="underline">All trips</Link></p>;
   const act = async (work) => {
     setError('');
     try { const done = await work(); if (done?.data?.plan_id) { setYear(done.data); return done.data; } await load(); } catch (err) { setError(errorMessage(err, "Couldn't do that")); }
     return null;
   };
-  const start = async (body) => {
-    setError('');
-    try { const { data } = await axios.post(`${API}/${id}/years`, body); navigate(`/plans/trips/${id}/${data.plan_id}`); await load(); } catch (err) { setError(errorMessage(err, "Couldn't start it")); }
-  };
-  const removeTrip = async () => {
-    if (!window.confirm(`Stop keeping ${trip.name}? Each of its years stays as a plan, to look back on.`)) return;
-    await axios.delete(`${API}/${id}`).catch(() => {});
-    navigate('/plans/trips');
-  };
-  const upcoming = trip.years.some((y) => y.day >= toDateInput(new Date()));
+  const put = (path, body) => act(() => axios.put(`${API}/${path}`, body));
+  const post = (path, body) => act(() => axios.post(`${API}/${path}`, body));
+  const del = (path) => act(() => axios.delete(`${API}/${path}`));
   return (
     <div className="space-y-4">
-      <Link to="/plans/trips" className="text-sm text-life-600 hover:underline dark:text-life-200">← Outdoor trips</Link>
-      <div className="flex flex-wrap items-start gap-2">
-        <div className="mr-auto">
-          <h1 className="text-2xl font-semibold text-life-800 dark:text-life-50">{trip.name}{year ? ` ${year.year}` : ''}</h1>
-          <p className="text-sm text-gray-600 dark:text-life-200">
-            {trip.parts.length ? partWord(trip.parts) : 'A plain trip'}{year ? ` · ${dayText(year.day, true)}${year.end_day !== year.day ? ` to ${dayText(year.end_day)}` : ''}` : ''}{trip.private ? ' · private' : ''}
-          </p>
-        </div>
-        <button type="button" onClick={() => setEditing(true)} className={quiet}>Change</button>
-      </div>
-      {trip.years.length > 0 && (
-        <nav aria-label="Years" className="flex flex-wrap gap-1.5">
-          {trip.years.map((y) => (
-            <Link key={y.plan_id} to={`/plans/trips/${id}/${y.plan_id}`} aria-current={year && y.plan_id === year.plan_id ? 'page' : undefined}
-              className={`flex min-h-[44px] items-center rounded-full px-3 text-sm ${year && y.plan_id === year.plan_id ? 'bg-life-600 text-white' : 'bg-life-50 text-life-700 hover:bg-life-100 dark:bg-life-700 dark:text-life-50'}`}>{y.year}</Link>
-          ))}
-        </nav>
-      )}
+      <Link to={`/plans/${planId}`} className="text-sm text-life-600 hover:underline dark:text-life-200">← {year.trip.name} {year.year}</Link>
+      <h1 className="text-2xl font-semibold text-life-800 dark:text-life-50">Catch log</h1>
+      <nav aria-label="Years" className="flex flex-wrap gap-1.5">
+        {year.trip.years.map((y) => (
+          <Link key={y.plan_id} to={`/plans/trips/${id}/catches/${y.plan_id}`} aria-current={y.plan_id === year.plan_id ? 'page' : undefined}
+            className={`flex min-h-[44px] items-center rounded-full px-3 text-sm ${y.plan_id === year.plan_id ? 'bg-life-600 text-white' : 'bg-life-50 text-life-700 hover:bg-life-100 dark:bg-life-700 dark:text-life-50'}`}>{y.year}</Link>
+        ))}
+      </nav>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      {!upcoming && year && <NextYear year={year} start={start} />}
-      {year && <YearBody key={year.plan_id} year={year} options={options} act={act} reload={load} />}
-      <p className="pt-4"><button type="button" onClick={removeTrip} className="min-h-[44px] text-sm text-red-700 hover:underline dark:text-red-300">Stop keeping this trip</button></p>
-      {editing && (
-        <Modal title={`Change ${trip.name}`} onClose={() => setEditing(false)}>
-          <TripForm trip={trip} onDone={() => { setEditing(false); load(); }} />
-        </Modal>
-      )}
+      {year.trip.parts.includes('fishing') ? (
+        <>
+          <Catches year={year} options={options} post={post} put={put} del={del} />
+          {year.worked.length > 0 && <Worked year={year} />}
+        </>
+      ) : <p className="text-sm text-gray-600 dark:text-life-100">Turn on fishing for this trip to keep a catch log. <Link to="/plans/trips" className="underline">Trips</Link></p>}
     </div>
   );
 }
 
 /** When the last year is over: start the next from it, on the same days a year on unless the person changes them. */
-function NextYear({ year, start }) {
+export function TripNextYear({ year, start }) {
   const [day, setDay] = useState(`${Number(year.day.slice(0, 4)) + 1}${year.day.slice(4)}`);
   const [end, setEnd] = useState('');
   return (
@@ -216,48 +216,13 @@ function NextYear({ year, start }) {
   );
 }
 
-function YearBody({ year, options, act, reload }) {
-  const put = (path, body) => act(() => axios.put(`${API}/${path}`, body));
-  const post = (path, body) => act(() => axios.post(`${API}/${path}`, body));
-  const del = (path) => act(() => axios.delete(`${API}/${path}`));
-  const parts = year.trip.parts;
-  const has = (p) => parts.includes(p);
-  return (
-    <div className="space-y-4">
-      {year.last_notes && (
-        <section className={`${cardClass} border-l-4 border-honey-300`}>
-          <Heading icon="reminder">You left yourself a note</Heading>
-          <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-life-50">{year.last_notes}</p>
-        </section>
-      )}
-      <Basics year={year} put={put} />
-      {year.checks.licenses.length > 0 && <Licenses year={year} />}
-      {has('camping') && <Booking year={year} put={put} />}
-      <BringList year={year} options={options} post={post} put={put} del={del} />
-      {has('camping') && <Menu year={year} act={act} post={post} del={del} />}
-      {(has('fishing') || has('hunting')) && <Seasons year={year} post={post} del={del} />}
-      {has('fishing') && <Tackle year={year} post={post} />}
-      {has('fishing') && <Catches year={year} options={options} post={post} put={put} del={del} />}
-      {has('fishing') && year.worked.length > 0 && <Worked year={year} />}
-      {has('hunting') && <Ammo year={year} />}
-      {has('hunting') && <Harvest year={year} post={post} del={del} />}
-      {year.gear.length > 0 && <After year={year} put={put} />}
-      <Cost year={year} />
-      <PlanGoal kind="plan" id={year.plan_id} />
-      <Ending year={year} post={post} reload={reload} />
-    </div>
-  );
-}
-
-/** The days, the water, a budget. */
-function Basics({ year, put }) {
+/** The water, in words, and a budget for the trip. */
+export function TripBasics({ year, put }) {
   const save = (patch) => put(`years/${year.plan_id}`, patch);
   return (
     <section className={`${cardClass} space-y-3`} aria-label="The trip">
       <Heading icon="plan">The trip</Heading>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="First day"><input type="date" key={year.day} defaultValue={year.day} onBlur={(e) => e.target.value && e.target.value !== year.day && save({ day: e.target.value })} className={field} /></Field>
-        <Field label="Last day"><input type="date" key={year.end_day} defaultValue={year.end_day} onBlur={(e) => e.target.value && e.target.value !== year.end_day && save({ end_day: e.target.value })} className={field} /></Field>
         {year.trip.parts.includes('fishing') && (
           <Field label="The water, in words"><input key={year.water ?? 'none'} defaultValue={year.water ?? ''} placeholder="Lake name, river, pond" onBlur={(e) => (e.target.value || null) !== year.water && save({ water: e.target.value || null })} className={field} /></Field>
         )}
@@ -284,7 +249,7 @@ export function Licenses({ year }) {
 }
 
 /** The site booking, typed in. It shows on the calendar. */
-function Booking({ year, put }) {
+export function Booking({ year, put }) {
   const b = year.booking;
   const save = (patch) => put(`years/${year.plan_id}`, patch);
   const text = (name, label, placeholder) => (
@@ -310,7 +275,7 @@ function Booking({ year, put }) {
 }
 
 /** The bring list: pack it, then see what came back and what each piece needs. */
-function BringList({ year, options, post, put, del }) {
+export function BringList({ year, options, post, put, del }) {
   const parts = year.trip.parts;
   const [part, setPart] = useState(parts[0] ?? 'camping');
   const [pick, setPick] = useState('');
@@ -378,54 +343,18 @@ function BringList({ year, options, post, put, del }) {
   );
 }
 
-/** The camp menu: recipes on the days they are eaten, then onto the grocery list; the cooler and stove checked. */
-function Menu({ year, act, post, del }) {
-  const [recipes, setRecipes] = useState([]);
-  const [pick, setPick] = useState('');
-  const [day, setDay] = useState(year.day);
-  const [meal, setMeal] = useState('dinner');
+/** A camping trip's Food: the menu onto the grocery list, and the cooler and stove checked against what is owned. */
+export function CampChecks({ year, act }) {
   const [said, setSaid] = useState('');
-  useEffect(() => { axios.get('/api/kitchen/recipes').then(({ data }) => setRecipes(data)).catch(() => {}); }, []);
-  const have = new Set(year.menu.map((i) => i.ref_id));
-  const days = daysBetween(addDays(year.day, -7), year.end_day);
-  const add = async (e) => {
-    e.preventDefault();
-    if (!pick) return;
-    await post(`years/${year.plan_id}/meals`, { recipe_id: Number(pick), day, meal });
-    setPick('');
-  };
   const toList = async () => {
     const done = await act(() => axios.post(`${API}/years/${year.plan_id}/groceries`));
     if (done) setSaid(done.added === 0 ? 'Nothing to add: the pantry has it all, or the menu is empty.' : `Put ${done.added} ${done.added === 1 ? 'thing' : 'things'} on the grocery list, less what the pantry has.`);
   };
   const check = year.checks.kitchen;
   return (
-    <section className={`${cardClass} space-y-2`} aria-label="Camp menu">
-      <Heading icon="meal" aside={<Link to={`/plans/${year.plan_id}`} className="text-xs text-life-600 hover:underline dark:text-life-200">The full plan, checklist and photos →</Link>}>Camp menu</Heading>
-      {year.menu.length === 0 && <p className="text-sm text-gray-600 dark:text-life-100">Nothing on the menu yet. Pick from your recipes and say when it is eaten.</p>}
-      <ul className="divide-y divide-life-100 dark:divide-life-700">
-        {year.menu.map((i) => (
-          <li key={i.id} className="flex items-center gap-1">
-            <span className="min-w-0 flex-1 py-2 text-sm">
-              {i.link ? <Link to={i.link} className="text-life-700 hover:underline dark:text-life-100">{i.label}</Link> : i.label}
-              {i.on_week && <span className="text-xs text-gray-500 dark:text-life-300"> · {dayText(i.on_week.day)}, {i.on_week.meal}</span>}
-            </span>
-            <Remove label={`Take ${i.label} off the menu`} onClick={() => del(`meals/${i.id}`)} />
-          </li>
-        ))}
-      </ul>
-      <form onSubmit={add} className="space-y-2">
-        <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Recipe for the menu" className={field}>
-          <option value="">Add a recipe…</option>
-          {recipes.filter((r) => !have.has(r.id)).map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
-        </select>
-        <div className="grid grid-cols-2 gap-2">
-          <select value={day} onChange={(e) => setDay(e.target.value)} aria-label="Day it is eaten" className={field}>{days.map((d) => <option key={d} value={d}>{dayText(d)}</option>)}</select>
-          <select value={meal} onChange={(e) => setMeal(e.target.value)} aria-label="Meal" className={field}>{MEALS.map(([k, w]) => <option key={k} value={k}>{w}</option>)}</select>
-        </div>
-        <button type="submit" className={quiet} disabled={!pick}>Add to the menu</button>
-      </form>
-      <div className="space-y-2 border-t border-life-100 pt-3 dark:border-life-700">
+    <section className={`${cardClass} space-y-2`} aria-label="Camp menu checks">
+      <Heading icon="meal">Camp menu</Heading>
+      <div className="space-y-2">
         <button type="button" onClick={toList} className={button}>Put the menu on the grocery list</button>
         {said && <p className="text-sm text-gray-700 dark:text-life-100" role="status">{said}</p>}
         <Hint>Fills the grocery list from the meals on these days, less what the pantry has. <Link to="/groceries" className="underline">Grocery list</Link></Hint>
@@ -481,7 +410,7 @@ export function Seasons({ year, post, del }) {
 }
 
 /** Line, hooks, weights and lures with a "running low" count reached. */
-function Tackle({ year, post }) {
+export function Tackle({ year, post }) {
   const low = year.checks.tackle_low;
   const [said, setSaid] = useState('');
   if (low.length === 0) return null;
@@ -572,7 +501,7 @@ function Worked({ year }) {
 }
 
 /** The ammunition on hand for each caliber on the bring list. */
-function Ammo({ year }) {
+export function Ammo({ year }) {
   if (year.checks.ammo.length === 0) return null;
   return (
     <section className={`${cardClass} space-y-1`} aria-label="Ammunition check">
@@ -651,7 +580,7 @@ export function After({ year, put }) {
 }
 
 /** What the trip came to, from spending tagged to it. */
-function Cost({ year }) {
+export function Cost({ year }) {
   const { budget } = year;
   const over = budget.target_cents !== null && budget.spent_cents > budget.target_cents;
   return (
@@ -666,25 +595,15 @@ function Cost({ year }) {
   );
 }
 
-/** How it went, and what next year should remember. */
-function Ending({ year, post, reload }) {
-  const [story, setStory] = useState(year.plan.story ?? '');
+/** What next year should remember, and finishing the year. How it went is the plan's own story. */
+export function TripEnding({ year, post }) {
   const [notes, setNotes] = useState(year.notes_next ?? '');
-  const [saved, setSaved] = useState('');
-  const keepStory = async () => {
-    const p = year.plan;
-    await axios.put(`/api/plans/${p.id}`, { name: p.name, start_day: p.start_day, end_day: p.end_day, note: p.note, story: story || null });
-    setSaved('Saved');
-    reload();
-  };
   return (
-    <section className={`${cardClass} space-y-3`} aria-label="How it went">
-      <Heading icon="plan">How it went</Heading>
-      <Field label="A note on how it went"><textarea rows={3} value={story} onChange={(e) => { setStory(e.target.value); setSaved(''); }} onBlur={keepStory} className={inputClass} /></Field>
-      <Field label="What should next year remember?"><textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Bring a second tarp. The south sites flood." className={inputClass} /></Field>
+    <section className={`${cardClass} space-y-3`} aria-label="Next year">
+      <Heading icon="plan">What next year should remember</Heading>
+      <Field label="A note for next year"><textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Bring a second tarp. The south sites flood." className={inputClass} /></Field>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={() => post(`years/${year.plan_id}/finish`, { notes: notes || null })} className={year.when === 'past' && !year.notes_done ? button : quiet}>{year.notes_done ? 'Save the note' : 'Finish this year'}</button>
-        {saved && <span className="text-xs text-gray-500 dark:text-life-300">{saved}</span>}
       </div>
       <Hint>Your note comes up at the top of next year's trip. Nothing is deleted.</Hint>
     </section>

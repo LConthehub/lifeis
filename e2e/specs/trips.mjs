@@ -80,12 +80,14 @@ say('a piece can be packed, and the count shows', await bring.getByRole('checkbo
 await bring.getByLabel('Something else to bring').fill('Bug spray'); await bring.getByRole('button', { name: 'Add to the list' }).click(); await wait(800);
 say('something else can be added by words', /Bug spray/.test(await bring.innerText()));
 
-// ---------- the camp menu goes on the grocery list ----------
-const menu = region('Camp menu');
-await menu.getByLabel('Recipe for the menu').selectOption({ label: 'Campfire chili' });
-await menu.getByLabel('Day it is eaten').selectOption(first);
-await menu.getByRole('button', { name: 'Add to the menu' }).click(); await wait(1000);
-say('the recipe is on the menu with its day', /Campfire chili/.test(await menu.innerText()));
+// ---------- the camp menu is the plan's Food, and goes on the grocery list ----------
+const food = region('Food');
+await food.getByRole('button', { name: '+ Add a recipe' }).click(); await wait(600);
+await dialog.getByLabel('Which *').selectOption({ label: 'Campfire chili' });
+await dialog.getByLabel("On the week's meals").selectOption(first);
+await dialog.getByRole('button', { name: 'Add', exact: true }).click(); await wait(1200);
+say('the recipe is on the camp menu with its day', /Campfire chili/.test(await food.innerText()));
+const menu = region('Camp menu checks');
 say('the cooler and stove are found among what is owned', /Cooler: you have Big cooler/.test(await menu.innerText()) && /Stove: you have Two-burner stove/.test(await menu.innerText()));
 await menu.getByRole('button', { name: 'Put the menu on the grocery list' }).click(); await wait(1200);
 say('the menu goes on the grocery list', /on the grocery list/.test(await menu.innerText()) && (await send('GET', '/api/kitchen/grocery')).some((g) => /ground beef/i.test(g.label)));
@@ -101,8 +103,12 @@ const onCalendar = (await send('GET', `/api/calendar?start=${first}&days=3`)).fi
 const booked = onCalendar.length > 0 ? await send('GET', `/api/calendar/events/${onCalendar[0].id}`) : null;
 say('the typed-in booking shows on the calendar with its site and confirmation', booked !== null && /Site 14/.test(booked.note ?? '') && /PH-20418/.test(booked.note ?? '') && booked.day === first && booked.end_day === last);
 
-// ---------- a catch with the lure used ----------
+// ---------- a catch with the lure used: the catch log stays on the trips pages, linked from the plan ----------
 {
+  say('the plan of a fishing trip links to the catch log', await region('Catch log').getByRole('link', { name: /Open the catch log/ }).isVisible());
+  say('tackle running low is listed on the plan', /Jig heads/.test(await region('Tackle running low').innerText()));
+  await region('Catch log').getByRole('link', { name: /Open the catch log/ }).click(); await wait(1200);
+  say('the catch log opens on the trips pages', /\/plans\/trips\/\d+\/catches\/\d+/.test(page.url()));
   const log = region('Catch log');
   await log.getByLabel('Fish', { exact: true }).fill('Walleye');
   await log.getByLabel('Length (inches)').fill('17.5');
@@ -114,7 +120,10 @@ say('the typed-in booking shows on the calendar with its site and confirmation',
   await log.getByRole('button', { name: 'Put the Walleye in the freezer' }).click(); await wait(1000);
   say('a kept fish goes to the freezer', /in the freezer/.test(await log.innerText()) && (await send('GET', '/api/kitchen/pantry')).items.some((i) => /walleye/i.test(i.name) && i.location === 'freezer'));
   say('what worked comes from the log', /Jig heads \(1\)/.test(await region('What worked').innerText()));
-  say('tackle running low is listed', /Jig heads/.test(await region('Tackle running low').innerText()));
+  await regionShot('Catch log', 'trips-catch-log-375');
+  say('the catch log page does not scroll sideways', await noSideways());
+  await page.getByRole('link', { name: /Lake weekend/ }).first().click(); await wait(1200);
+  say('the catch log links back to the plan', new RegExp(`/plans/${planId}$`).test(page.url()));
 }
 
 // ---------- after the trip: the torn tent goes to Upkeep ----------
@@ -128,14 +137,14 @@ await after.getByLabel('What Bug spray needs after the trip').selectOption({ lab
 say('a piece to replace goes on the shopping list', (await send('GET', '/api/kitchen/grocery')).some((g) => /bug spray/i.test(g.label)));
 
 // ---------- how it looks on a phone ----------
-await page.goto(base + `/plans/trips/${trip.id}/${planId}`); await wait(1500);
+say('the old trip-year address leads to the plan page', await (async () => { await page.goto(base + `/plans/trips/${trip.id}/${planId}`); await wait(1500); return new RegExp(`/plans/${planId}$`).test(page.url()); })());
+say('the old trip address leads there too', await (async () => { await page.goto(base + `/plans/trips/${trip.id}`); await wait(1500); return new RegExp(`/plans/${planId}$`).test(page.url()); })());
 await shot('trips-year-375', { fullPage: true });
 await regionShot('Bring list', 'trips-bring-list-375');
-await regionShot('Catch log', 'trips-catch-log-375');
 await regionShot('After the trip', 'trips-after-375');
 const small = await tooSmall([page.locator('main button'), page.locator('main select'), page.locator('main input:not([type=checkbox]):not([type=file])'), page.locator('main summary')]);
-say('the trip page has 44px controls' + (small.length ? ` (too small: ${small})` : ''), small.length === 0);
-say('the trip page does not scroll sideways', await noSideways());
+say('the trip plan page has 44px controls' + (small.length ? ` (too small: ${small})` : ''), small.length === 0);
+say('the trip plan page does not scroll sideways', await noSideways());
 await page.goto(base + '/plans/trips'); await wait(1000);
 say('the trip is on the list, with its parts', /Lake weekend/.test(await text()) && /Camping, Fishing/.test(await text()));
 say('the list does not scroll sideways', await noSideways());

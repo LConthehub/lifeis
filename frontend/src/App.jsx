@@ -29,6 +29,7 @@ const HolidaysPage = lazyPage(() => import('./pages/Holidays'));
 const HolidayPage = lazyPage(() => import('./pages/Holidays').then((m) => ({ default: m.HolidayPage })));
 const TripsPage = lazyPage(() => import('./pages/Trips'));
 const TripPage = lazyPage(() => import('./pages/Trips').then((m) => ({ default: m.TripPage })));
+const CatchLogPage = lazyPage(() => import('./pages/Trips').then((m) => ({ default: m.CatchLogPage })));
 const PlacePage = lazyPage(() => import('./pages/Places').then((m) => ({ default: m.PlacePage })));
 const StickerLanding = lazyPage(() => import('./pages/Places').then((m) => ({ default: m.StickerLanding })));
 const StickersPage = lazyPage(() => import('./pages/Places').then((m) => ({ default: m.StickersPage })));
@@ -228,6 +229,7 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/plans/trips" element={<TripsPage />} />
           <Route path="/plans/trips/:id" element={<TripPage />} />
           <Route path="/plans/trips/:id/:planId" element={<TripPage />} />
+          <Route path="/plans/trips/:id/catches/:planId" element={<CatchLogPage />} />
           <Route path="/plans/:id" element={<PlanPage />} />
           <Route path="/media" element={<MediaPage key="all" />} />
           <Route path="/media/books" element={<MediaPage key="books" library="books" />} />
