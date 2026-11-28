@@ -12,11 +12,12 @@ const solid = `${buttonClass} ${tall}`;
 const quiet = `${quietButtonClass} ${tall}`;
 const danger = `${quiet} !border-red-300 !text-red-700 dark:!text-red-300`;
 
-const dayText = (day) => {
-  if (!day) return 'Never used';
+const wordsFor = (day) => {
   const [y, m, d] = day.split('-').map(Number);
-  return `Last used ${new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 };
+const dayText = (day) => (day ? `Last used ${wordsFor(day)}` : 'Never used');
+const stopText = (day) => (day ? `Stops by itself on ${wordsFor(day)} if it isn't used.` : '');
 
 export function PersonalKeys() {
   const [state, setState] = useState(null);
@@ -101,7 +102,7 @@ export function PersonalKeys() {
                 <span className="font-medium text-gray-900 dark:text-life-50">{key.name}</span>
                 <span className={`text-xs font-semibold ${key.on ? 'text-green-700 dark:text-green-300' : 'text-gray-600 dark:text-life-200'}`}>{key.on ? 'On' : 'Off'}</span>
               </div>
-              <p className="text-xs text-gray-600 dark:text-life-200">Ends in <span className="font-mono">{key.hint}</span> · {dayText(key.last_used_on)}</p>
+              <p className="text-xs text-gray-600 dark:text-life-200">Ends in <span className="font-mono">{key.hint}</span> · {dayText(key.last_used_on)}. {stopText(key.stops_on)}</p>
               <ul className="list-disc space-y-0.5 pl-5 text-sm text-gray-700 dark:text-life-100" aria-label={`What ${key.name} can do`}>
                 {key.says.map((says) => <li key={says}>{says}</li>)}
               </ul>

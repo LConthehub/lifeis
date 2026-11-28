@@ -27,7 +27,7 @@ Nothing goes through Apple's servers for Life Is's part of it, or through any co
 5. Type your password and choose **Make the key**.
 6. Press **Copy** next to the key and paste it into a note you can reach from your iPhone. **Life Is shows it once.** It keeps only a scrambled form, so it cannot show it again. If you lose it, make a new key and delete the old one.
 
-Keys are off until you make one. Each key shows what it may do and the last day it was used. You can **turn it off** (it stops working at once and you can turn it back on) or **delete** it.
+Keys are off until you make one. Each key shows what it may do, the last day it was used, and the day it would stop. A key that nobody has used for a year (counted from its last use, or from the day it was made if it was never used) stops working by itself, and a key in use never stops. If one stops, make a new key. You can **turn it off** (it stops working at once and you can turn it back on) or **delete** it.
 
 ## What a key can and cannot do
 
