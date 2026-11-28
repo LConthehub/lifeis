@@ -9,6 +9,7 @@ import { StartCard, WeeklyCard, START_CHANGED } from '../components/Start';
 import { RoutinesCard } from '../components/Routines';
 import { HolidayRow } from '../components/HolidayCard';
 import DontForget from '../components/DontForget';
+import JotLine from '../components/JotLine';
 import Icon, { hasIcon } from '../components/Icon';
 import { whoText, whenText } from './Mail';
 import { money as moneyText } from '../components/Budget';
@@ -138,6 +139,8 @@ export default function Home({ user }) {
       <WeeklyCard />
 
       <DontForget cards={s.cards} />
+
+      <JotLine />
 
       <AskCard />
       <AskBack />

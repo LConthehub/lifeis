@@ -20,6 +20,7 @@
 import { atomic, type Db } from './db.ts';
 import { calendar } from './calendar.ts';
 import { goalEntryIds } from './goalFigures.ts';
+import { jottings } from './jottings.ts';
 import { placePaths } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
 import { mediaLists } from './mediaLists.ts';
@@ -29,7 +30,7 @@ import { projects } from './projects.ts';
 import { addDays, clean, dayNumber, labelKey, stamp, todayOf, type Clock } from './small.ts';
 import { readWhen } from './voice.ts';
 
-export type SectionId = 'kitchen' | 'calendar' | 'things' | 'projects' | 'lists' | 'money';
+export type SectionId = 'kitchen' | 'calendar' | 'things' | 'projects' | 'lists' | 'money' | 'jottings';
 
 export const CONNECTOR_SERVICE = {
   name: 'Use Life Is from your AI app' as const,
@@ -46,6 +47,8 @@ export const CONNECTOR_SECTIONS: readonly { id: SectionId; title: string; says: 
   { id: 'lists', title: 'Lists', says: 'Your lists of films, shows, music, books and games.' },
   { id: 'money', title: 'Money', says: "This month's spending: what was bought, how much, and the budget for each category.",
     warning: 'This is your spending, with names and amounts. Check it only if you are comfortable with the company that makes the AI app seeing it.' },
+  { id: 'jottings', title: 'Jottings', says: 'Your own private jottings, to read. It cannot add, change or remove one.',
+    warning: 'Jottings are your own stray thoughts, and no one else in your household can see them. Check this only if you are comfortable with the company that makes the AI app reading them.' },
 ];
 const SECTION_IDS = CONNECTOR_SECTIONS.map((s) => s.id) as readonly SectionId[];
 const titleOf = (id: SectionId) => CONNECTOR_SECTIONS.find((s) => s.id === id)!.title;
@@ -275,6 +278,15 @@ const TOOLS: ToolDef[] = [
         out.push({ name: l.name, ...(l.mine ? {} : { belongs_to: l.owner_name }), titles: whole.entries.slice(0, 300).map((e) => ({ title: e.title, type: e.type, ...(e.creator ? { by: e.creator } : {}), ...(e.year ? { year: e.year } : {}), ...(e.note ? { note: e.note } : {}) })) });
       }
       return { text: answer(today, { lists: out }), what: 'Read your lists' };
+    },
+  },
+  {
+    name: 'get_jottings', section: 'jottings', add: false, title: 'Read jottings', annotations: READ,
+    description: "The person's own private jottings, newest first, with the day of each. Checked-off ones are marked. Read only.", inputSchema: object({}),
+    async run({ db, clock, live, today }) {
+      const out = (await jottings(db, live.owner, clock).list()).sort((a, b) => Number(a.done) - Number(b.done) || b.id - a.id).slice(0, 300)
+        .map((j) => ({ day: j.day, jotting: j.text, ...(j.done ? { checked_off: true } : {}) }));
+      return { text: answer(today, { jottings: out }), what: 'Read your jottings' };
     },
   },
   {

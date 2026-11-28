@@ -91,6 +91,8 @@ export { minutesInStep, timerName, MOST_TIMER_MINUTES } from './cookTimer.ts';
 export type { Reminders, ReminderSettings, ReminderTools, Digest, DigestLine, Single, Channel, PushSender, PushSubscription } from './reminders.ts';
 export { measures, MAX_MEASURES } from './measures.ts';
 export type { Measures, Measure, MeasureEntry, MeasureInput } from './measures.ts';
+export { jottings, MAX_JOTTINGS } from './jottings.ts';
+export type { Jottings, Jotting } from './jottings.ts';
 export { routines, routinesDue, ROUTINE_STARTERS, ROUTINE_KINDS, ROUTINE_WEIGHT_UNITS, ROUTINE_DISTANCE_UNITS, numbersWords, STEP_RULES, DAY_NAMES, daysWords, everyWords, daysAsText, daysFromText, weekdaysWords, fallsOn } from './routines.ts';
 export type { Numbers as RoutineNumbers, RoutineKind, RoutineHistory, Routines, Routine, DayTime, DayStep, Time as RoutineTime, Step as RoutineStep, StepInput as RoutineStepInput, TimeInput as RoutineTimeInput, RoutineInput, Starter as RoutineStarter, StepRule as RoutineStepRule } from './routines.ts';
 export { tags, TAG_KINDS, isTagKind, MAX_TAG_NAME } from './tags.ts';
@@ -132,5 +134,5 @@ export { outdoorTrips, PARTS as TRIP_PARTS, AFTER_TRIP, GEAR_SOURCES, ammoOnHand
 export type { OutdoorTrips, TripSummary as OutdoorTripSummary, YearView as OutdoorYearView, TripInput as OutdoorTripInput, SharedTrip as OutdoorSharedTrip, Gear as OutdoorGear, Part as OutdoorPart, OutdoorView, PlanGear as OutdoorPlanGear } from './outdoorTrips.ts';
 export { CONNECTOR_SERVICE, CONNECTOR_SECTIONS, CONNECTOR_NEVER, CONNECTOR_ADDS, UNUSED_DAYS, MOST_CONNECTIONS, RESULT_LIMIT, HOUSEHOLD_KEY, householdOn, checkConnection, stillLive, connectionTools, callTool, connector } from './connector.ts';
 export type { SectionId, ConnectionInfo, LogLine, ConnectorStatus, Live, ToolInfo } from './connector.ts';
-export { KEY_ACTIONS, isKeyAction, voice, splitGroceries, spokenList, spokenTime, spokenDay, readWhen } from './voice.ts';
+export { KEY_ACTIONS, isKeyAction, voice, splitGroceries, spokenList, spokenTime, spokenDay, readWhen, readPut } from './voice.ts';
 export type { KeyAction } from './voice.ts';

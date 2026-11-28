@@ -49,6 +49,7 @@ const UpkeepPage = lazyPage(() => import('./pages/Upkeep'));
 const JobPage = lazyPage(() => import('./pages/Upkeep').then((m) => ({ default: m.JobPage })));
 const RoutinesPage = lazyPage(() => import('./pages/Routines'));
 const MeasuresPage = lazyPage(() => import('./pages/Measures'));
+const JottingsPage = lazyPage(() => import('./pages/Jottings'));
 const ChoreChart = lazyPage(() => import('./pages/ChoreChart'));
 const CollectionPrint = lazyPage(() => import('./pages/CollectionPrint'));
 const ThingStickersPage = lazyPage(() => import('./pages/ThingStickers').then((m) => ({ default: m.ThingStickersPage })));
@@ -201,6 +202,7 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/things/activities" element={<Activities />} />
           <Route path="/routines" element={<RoutinesPage />} />
           <Route path="/measures" element={<MeasuresPage />} />
+          <Route path="/jottings" element={<JottingsPage />} />
           <Route path="/things/upkeep" element={<UpkeepPage />} />
           <Route path="/things/upkeep/chart" element={<ChoreChart />} />
           <Route path="/things/upkeep/:id" element={<JobPage />} />

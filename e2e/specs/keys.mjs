@@ -47,8 +47,10 @@ check('it says what a key never reaches', /never reaches guns or ammunition, mea
 // ---- making one ----
 await section.getByRole('button', { name: 'Make a key' }).click(); await wait(300);
 const boxes = await section.getByRole('checkbox').count();
-check('the form lists the five things a key may do, each with a box', boxes === 5, `${boxes} boxes`);
+check('the form lists the eight things a key may do, each with a box', boxes === 8, `${boxes} boxes`);
 check('the list is plain words', /Read your grocery list/.test(await section.innerText()) && /Add a reminder to your calendar/.test(await section.innerText()));
+const offered = flat(await section.innerText());
+check('it offers a jotting, putting a thing away and asking where it is', ['Add a jotting to your private list', 'Move a thing to a place', 'Say where a thing is kept'].every((w) => offered.includes(w)));
 await section.getByLabel('What is it for? (a name)').fill('Siri on my iPhone');
 await section.getByLabel('Your password, to make it').fill('the wrong password entirely');
 await section.getByRole('button', { name: 'Make the key' }).click(); await wait(900);
@@ -76,6 +78,24 @@ const listed = await voice('GET', '/api/voice/groceries', key);
 check('what do I need from the store speaks the list', /^3 things\. /.test(listed.text), listed.text);
 const reminder = await voice('POST', '/api/voice/reminders', key, { text: 'Call the dentist', when: 'tomorrow at 3pm' });
 check('a reminder is added', reminder.text === 'Reminder added for tomorrow at 3 PM: Call the dentist.', reminder.text);
+// ---- the newer ones: a jotting, putting a thing away, asking where it is ----
+const jot = await voice('POST', '/api/voice/jottings', key, { text: 'the blue pen is in the car' });
+check('a jotting is added by voice', jot.status === 200 && jot.text === 'Jotted down.', jot.text);
+const asAna = (method, path, body) => page.request.fetch(base + path, { method, headers: { 'Content-Type': 'application/json' }, data: body ? JSON.stringify(body) : undefined });
+const mine = await (await asAna('GET', '/api/jottings')).json();
+check('it is in the person own jottings', mine.length === 1 && mine[0].text === 'the blue pen is in the car');
+const kinds = await (await asAna('POST', '/api/things/kinds', { name: 'Kitchen things' })).json();
+await asAna('POST', '/api/things/places', { name: 'Kitchen cupboard' });
+const places = await (await asAna('POST', '/api/things/places', { name: 'Hall closet' })).json();
+await asAna('POST', '/api/things/items', { kind_id: kinds[0].id, name: 'Egg cooker', place_id: places.find((p) => p.name === 'Kitchen cupboard').id });
+const unsure = await voice('POST', '/api/voice/put', key, { text: 'I put the whisk in the hall closet' });
+check('a thing that is not known changes nothing and says so', unsure.text === `I don't know a thing called "the whisk". Nothing was moved.`, unsure.text);
+const moved = await voice('POST', '/api/voice/put', key, { text: 'I put the egg cooker in the hall closet' });
+check('"I put the egg cooker in the hall closet" moves it', moved.text === 'The egg cooker is in the hall closet now.', moved.text);
+const whereIs = await voice('GET', '/api/voice/where?thing=egg%20cooker', key);
+check('"Where is the egg cooker" says the place and since when', whereIs.text === 'The egg cooker is in the hall closet, since today.', whereIs.text);
+const nowhere = await voice('GET', '/api/voice/where?thing=spatula', key);
+check('a thing it does not know is said plainly', nowhere.text === `I don't know a thing called "spatula".`, nowhere.text);
 check('the key cannot open anything else', (await voice('GET', '/api/kitchen/grocery', key)).status === 401 && (await voice('GET', '/api/things/guns', key)).status === 401 && (await voice('GET', '/api/keys', key)).status === 401);
 check('a wrong key is refused', (await voice('GET', '/api/voice/groceries', 'lik_' + 'A'.repeat(43))).text === "That key isn't working.");
 

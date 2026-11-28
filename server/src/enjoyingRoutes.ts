@@ -12,6 +12,7 @@ const at = (path: string) => new RegExp(`^/api/${path.replaceAll(':id', ID)}$`);
 const eventFrom = (body: Body) => ({
   title: read.text(body, 'title'), day: read.text(body, 'day'), end_day: read.maybeText(body, 'end_day'),
   time: read.maybeText(body, 'time'), note: read.maybeText(body, 'note'), yearly: read.yesNo(body, 'yearly', false),
+  travel_minutes: read.maybeWhole(body, 'travel_minutes'),
 });
 
 /** A whole number that has to be there. */

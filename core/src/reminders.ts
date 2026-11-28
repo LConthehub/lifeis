@@ -97,6 +97,18 @@ const KEPT_IN = ['recipes', 'items', 'media', 'events', 'pets', 'upkeep_jobs', '
 const pad = (n: number) => String(n).padStart(2, '0');
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** 15:00 as "3:00", for a line that says when to leave. */
+const clockWords12 = (time: string): string => {
+  const [h, m] = time.split(':').map(Number) as [number, number];
+  return `${h % 12 === 0 ? 12 : h % 12}:${pad(m)}`;
+};
+/** The time to leave for something at `time` that takes `minutes` to get to (the day before, when it is just after midnight). */
+export const leaveBy = (time: string, minutes: number): string => {
+  const [h, m] = time.split(':').map(Number) as [number, number];
+  const at = (((h * 60 + m - minutes) % 1440) + 1440) % 1440;
+  return `${pad(Math.floor(at / 60))}:${pad(at % 60)}`;
+};
+
 /** The day and time it is now in a time zone (or here, without one). */
 export function zoneNow(now: Date, zone: string | null): { day: string; time: string } {
   if (!zone) return { day: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`, time: `${pad(now.getHours())}:${pad(now.getMinutes())}` };
@@ -200,8 +212,15 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
         const years = d.years > 0 ? ` (${d.years} years)` : '';
         lines.push({ kind: 'dates', icon: '🎂', title: d.title, detail: `${d.day === day ? 'today' : 'tomorrow'}${years}`, link: '/calendar', urgent: d.day === day });
       }
-      for (const e of (await cal.between(day, 1)).filter((x) => x.kind === 'event' || x.kind === 'outside')) {
-        lines.push({ kind: 'dates', icon: '📌', title: e.title, detail: e.time ? `today at ${e.time}` : 'today', link: e.link ?? '/calendar', urgent: false });
+      const today = (await cal.between(day, 1)).filter((x) => x.kind === 'event' || x.kind === 'outside');
+      // How long it takes to get there is typed by the person on the event: when it is, the line says when to leave.
+      const ids = today.flatMap((e) => (e.kind === 'event' && e.time && e.id !== null ? [e.id] : []));
+      const away = new Map(ids.length === 0 ? [] : (await db.all<{ id: number; travel_minutes: number | null }>(
+        `SELECT id, travel_minutes FROM events WHERE owner_id = ? AND travel_minutes IS NOT NULL AND id IN (${ids.map(() => '?').join(',')})`, [owner, ...ids])).map((r) => [r.id, r.travel_minutes!]));
+      for (const e of today) {
+        const minutes = e.id !== null && e.time ? away.get(e.id) : undefined;
+        if (minutes !== undefined && e.time) lines.push({ kind: 'dates', icon: '📌', title: `${e.title} at ${clockWords12(e.time)}. Leave by ${clockWords12(leaveBy(e.time, minutes))}.`, detail: null, link: e.link ?? '/calendar', urgent: false });
+        else lines.push({ kind: 'dates', icon: '📌', title: e.title, detail: e.time ? `today at ${e.time}` : 'today', link: e.link ?? '/calendar', urgent: false });
       }
       for (const p of await db.all<{ id: number; name: string; start_day: string }>(
         'SELECT id, name, start_day FROM plans WHERE owner_id = ? AND start_day IN (?, ?) ORDER BY start_day, id', [owner, day, addDays(day, 1)])) {

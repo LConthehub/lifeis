@@ -112,13 +112,13 @@ export default function Calendar() {
 
 function EventForm({ event, onDone }) {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ title: event.title || '', day: event.day, end_day: event.end_day || '', time: event.time || '', note: event.note || '', yearly: Boolean(event.yearly) });
+  const [form, setForm] = useState({ title: event.title || '', day: event.day, end_day: event.end_day || '', time: event.time || '', note: event.note || '', yearly: Boolean(event.yearly), travel: event.travel_minutes ? String(event.travel_minutes) : '' });
   const [tags, setTags] = useState(event.tag_list || []);
   const [error, setError] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const submit = async (e) => {
     e.preventDefault();
-    const body = { title: form.title, day: form.day, end_day: form.yearly ? null : form.end_day || null, time: form.time || null, note: form.note || null, yearly: form.yearly };
+    const body = { title: form.title, day: form.day, end_day: form.yearly ? null : form.end_day || null, time: form.time || null, note: form.note || null, yearly: form.yearly, travel_minutes: form.time && form.travel ? Number(form.travel) : null };
     try {
       const { data } = event.id ? await axios.put(`/api/calendar/events/${event.id}`, body) : await axios.post('/api/calendar/events', body);
       await saveTags('event', data.id, tags);
@@ -138,6 +138,10 @@ function EventForm({ event, onDone }) {
         <Field label="Until (if longer)"><input type="date" min={form.day} value={form.yearly ? '' : form.end_day} disabled={form.yearly} onChange={set('end_day')} className={inputClass} /></Field>
         <Field label="Time (empty: all day)"><input type="time" value={form.time} onChange={set('time')} className={inputClass} /></Field>
       </div>
+      <Field label="Minutes to get there (only with a time)">
+        <input type="number" inputMode="numeric" min="1" max="720" step="1" value={form.travel} disabled={!form.time} onChange={set('travel')} aria-label="Minutes to get there" placeholder="e.g. 25" className={inputClass} />
+        <span className="mt-1 block text-xs text-gray-500 dark:text-life-300">You type it. Nothing is looked up. The morning reminder then says when to leave.</span>
+      </Field>
       <Field label="A note"><input value={form.note} onChange={set('note')} className={inputClass} /></Field>
       <TagPicker value={tags} onChange={setTags} />
       <label className="flex cursor-pointer items-start gap-2 text-sm text-gray-800 dark:text-life-50">
