@@ -49,7 +49,7 @@ await page.getByRole('button', { name: 'Sign in' }).click(); await wait(1500);
 await page.goto(base + '/settings/connections'); await wait(1200);
 await block().scrollIntoViewIfNeeded();
 let t = flat(await block().innerText());
-check('it starts off', /Off/.test(t) && await block().getByRole('button', { name: 'Turn on' }).isVisible(), t.slice(0, 200));
+check('it starts off', /Off/.test(t) && await block().getByLabel('Turn on bank reading').isVisible() && (await block().locator('input[type=password]').count()) === 0, t.slice(0, 200));
 const sends = flat(await block().locator('[data-bank-sends]').innerText());
 check('it says exactly what is sent, and that nothing of Life Is goes to SimpleFIN', /setup token is used once/.test(sends) && /Nothing from Life Is is sent to it/.test(sends) && /cannot move money/.test(sends), sends);
 check('it links to SimpleFIN and its bridge, and quotes no price', (await block().locator('a[href="https://www.simplefin.org/"]').count()) === 1 && (await block().locator('a[href="https://bridge.simplefin.org/"]').count()) === 1 && !/\$\s?\d|per (month|year)/i.test(t), t);
@@ -57,8 +57,8 @@ check('nothing was asked of the stand-in before it was turned on', (await (await
 await shoot('turn-on');
 
 // ---- on: the token form; a wrong token keeps nothing
-await block().getByRole('button', { name: 'Turn on' }).click(); await wait(900);
-check('turned on, it asks for a setup token', await block().locator('[data-bank-connect]').isVisible() && /On/.test(await block().innerText()));
+await block().getByLabel('Turn on bank reading').click(); await wait(900);
+check('turned on, it asks for a setup token', await block().locator('[data-bank-connect]').isVisible());
 await block().locator('input[type=password]').fill('this is not a token');
 await block().getByRole('button', { name: 'Connect' }).click(); await wait(800);
 t = flat(await block().innerText());
@@ -134,7 +134,7 @@ t = flat(await block().innerText());
 check('disconnected: back to the token form, spending stays', /Disconnected\./.test(t) && (await block().locator('[data-bank-connect]').count()) === 1 && (await api('GET', `/api/money?month=${months[0]}`)).entries.length >= 1);
 const after = await api('GET', '/api/money/simplefin');
 check('the connection and the accounts are gone', after.connection === null && after.accounts.length === 0);
-await block().getByRole('button', { name: 'Turn off' }).click(); await wait(800);
+await block().getByLabel('Turn on bank reading').click(); await wait(800);
 check('turned off again', /Off/.test(await block().innerText()) && (await api('GET', '/api/money/simplefin')).on === false);
 
 // ---- the phone app keeping everything on the phone: not offered, and says why

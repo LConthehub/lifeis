@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from './Icon';
 import axios from 'axios';
+import { OnOffBox } from './OnOff';
 import { quietButtonClass, cardClass, errorMessage } from './ui';
 
 const NHTSA_RECALLS = 'https://www.nhtsa.gov/recalls';
@@ -54,7 +55,7 @@ export function RecallAlertsService() {
       </p>
       {!s.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : (
         <div className="mt-2 space-y-2">
-          <button type="button" onClick={() => turn(!s.on)} className={`${quietButtonClass} ${tall}`}>{s.on ? 'Turn off' : 'Turn on'}</button>
+          <OnOffBox name="recalls-on" label="Turn on recall alerts" checked={s.on} onChange={turn} />
           {s.on && (
             <div className="space-y-2 text-sm text-gray-800 dark:text-life-50">
               <div className="flex flex-wrap items-center gap-2">

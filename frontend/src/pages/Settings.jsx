@@ -896,7 +896,7 @@ function BookLookupService() {
         {' '}<span className="font-medium">What it's sent:</span> {l.grocery_service.sends} Scanning works without it; you just type the name yourself the first time.
       </p>
       {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p>
-        : <button type="button" onClick={() => turnGroceries(!l.groceries)} className={`${quietButtonClass} mt-2`}>{l.groceries ? 'Turn off' : 'Turn on'}</button>}
+        : <OnOffBox name="lookup-groceries" label="Turn on grocery lookups" checked={l.groceries} onChange={turnGroceries} />}
     </div>
     <div className="py-3">
       <div className="flex items-baseline gap-2">
@@ -908,7 +908,7 @@ function BookLookupService() {
         {' '}<span className="font-medium">What it's sent:</span> {l.service.sends}
       </p>
       {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p>
-        : <button type="button" onClick={() => turn(!l.books)} className={`${quietButtonClass} mt-2`}>{l.books ? 'Turn off' : 'Turn on'}</button>}
+        : <OnOffBox name="lookup-books" label="Turn on book lookups" checked={l.books} onChange={turn} />}
     </div>
     <div className="py-3">
       <div className="flex items-baseline gap-2">
@@ -921,7 +921,7 @@ function BookLookupService() {
         {' '}<span className="font-medium">What it's sent:</span> {l.title_services.sends}
       </p>
       {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p>
-        : <button type="button" onClick={() => turnTitles(!l.titles)} className={`${quietButtonClass} mt-2`}>{l.titles ? 'Turn off' : 'Turn on'}</button>}
+        : <OnOffBox name="lookup-titles" label="Turn on film, music and game lookups" checked={l.titles} onChange={turnTitles} />}
     </div>
     {!onDevice() && <FilmLookupService l={l} setL={setL} />}
     </>
@@ -936,11 +936,17 @@ function FilmLookupService({ l, setL }) {
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState({ text: '', bad: false });
+  const [asking, setAsking] = useState(false);   // the box is checked and the key is being typed
   if (!s) return null;
   const send = async (body, done) => {
     setBusy(true); setMessage({ text: '', bad: false });
     try { const { data } = await axios.put('/api/lookups', body); setL(data); setKey(''); if (done) setMessage({ text: done, bad: false }); } catch (err) { setMessage({ text: errorMessage(err, "Couldn't change that"), bad: true }); }
     setBusy(false);
+  };
+  // A key already kept switches it on at once; otherwise the key is asked for, and it is on once saved.
+  const check = (on) => {
+    if (!on) { setAsking(false); if (l.films) send({ films: false }); return; }
+    if (l.film_key) send({ films: true }); else setAsking(true);
   };
   const test = async () => {
     setBusy(true); setMessage({ text: '', bad: false });
@@ -961,20 +967,25 @@ function FilmLookupService({ l, setL }) {
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Your key is kept locked on this computer and is never shown again, to you or to the page.</p>
       {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : (
         <div className="mt-2 space-y-2">
-          <Field label={l.film_key ? 'TMDB key (one is saved; type a new one to replace it)' : 'TMDB key'}>
-            <input type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} className={inputClass} />
-          </Field>
-          <div className="flex flex-wrap gap-2">
-            {l.films
-              ? <>
-                <button type="button" disabled={busy} onClick={() => (key.trim() ? send({ films: true, films_key: key }, 'The new key is kept.') : send({ films: false }))} className={quietButtonClass}>{key.trim() ? 'Keep this key' : 'Turn off'}</button>
-                <button type="button" disabled={busy} onClick={test} className={quietButtonClass}>Test it</button>
-              </>
-              : <button type="button" disabled={busy || (!key.trim() && !l.film_key)} onClick={() => send({ films: true, ...(key.trim() ? { films_key: key } : {}) })} className={quietButtonClass}>Turn on</button>}
-            {l.film_key && <button type="button" disabled={busy} onClick={() => send({ forget_films_key: true }, 'The key is forgotten.')} className={quietButtonClass}>Forget the key</button>}
-          </div>
+          <OnOffBox name="lookup-films" label="Turn on TMDB film lookups" checked={l.films || asking} onChange={check} />
+          {!l.films && !asking && l.film_key && <p className="text-sm text-gray-700 dark:text-life-100">Your key is kept for later. <ForgetIt ask="Forget the TMDB key? Film lookups stay off until you give a new one." onForget={() => send({ forget_films_key: true }, 'The key is forgotten.')} /></p>}
+          {(l.films || asking) && (
+            <>
+              <Field label={l.film_key ? 'TMDB key (one is saved; type a new one to replace it)' : 'TMDB key'}>
+                <input type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} className={inputClass} />
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                {l.films
+                  ? <>
+                    {key.trim() && <button type="button" disabled={busy} onClick={() => send({ films: true, films_key: key }, 'The new key is kept.')} className={quietButtonClass}>Keep this key</button>}
+                    <button type="button" disabled={busy} onClick={test} className={quietButtonClass}>Test it</button>
+                  </>
+                  : <button type="button" disabled={busy || !key.trim()} onClick={() => send({ films: true, films_key: key }).then(() => setAsking(false))} className={quietButtonClass}>Save and turn on</button>}
+              </div>
+              <p className="text-xs text-gray-500 dark:text-life-300">Test it asks TMDB for its list of settings, with your key, and nothing else.</p>
+            </>
+          )}
           {message.text && <p role="status" className={`text-sm ${message.bad ? 'text-red-600' : 'text-gray-700 dark:text-life-100'}`}>{message.text}</p>}
-          <p className="text-xs text-gray-500 dark:text-life-300">Test it asks TMDB for its list of settings, with your key, and nothing else.</p>
         </div>
       )}
       <p className="mt-2 text-xs text-gray-500 dark:text-life-300" data-tmdb-notice>{s.notice}</p>

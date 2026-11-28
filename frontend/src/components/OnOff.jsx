@@ -14,9 +14,9 @@ export function OnOffBox({ label, checked, onChange, disabled = false, why = '',
   );
 }
 
-/** The small link under an unchecked card that wipes what was kept. It always asks first. */
+/** The small link under an unchecked card that wipes what was kept. It asks first (`ask` left out: the action asks itself). */
 export function ForgetIt({ onForget, ask, children = 'Forget it' }) {
   return (
-    <button type="button" data-forget onClick={() => { if (window.confirm(ask)) onForget(); }} className="inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200">{children}</button>
+    <button type="button" data-forget onClick={() => { if (!ask || window.confirm(ask)) onForget(); }} className="inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200">{children}</button>
   );
 }

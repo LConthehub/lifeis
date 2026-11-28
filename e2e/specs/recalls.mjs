@@ -42,7 +42,7 @@ say('the VIN note is there, and its link opens a new tab telling the other site 
   /This checks by make, model and year, so some recalls listed may not apply to your car\. For a certain answer, enter your VIN on NHTSA's own site\. Life Is never sends the VIN\./.test(s)
   && await note.getAttribute('href') === 'https://www.nhtsa.gov/recalls' && await note.getAttribute('target') === '_blank' && /noopener/.test(await note.getAttribute('rel')) && /noreferrer/.test(await note.getAttribute('rel')));
 say('nothing has been asked of NHTSA', (await log()).length === 0);
-await section().getByRole('button', { name: 'Turn on' }).click(); await wait(900);
+await section().getByLabel('Turn on recall alerts').click(); await wait(900);
 s = flat(await section().innerText());
 say('turned on: it says so, and nothing is asked by that alone: ' + s.slice(0, 200), /On/.test(s) && /Not checked yet/.test(s) && /No car can be checked yet/.test(s) && (await log()).length === 0);
 
@@ -136,13 +136,13 @@ say('a car missing its year says it needs one: ' + t.match(/Recall alerts need[^
 
 // ---- off: nothing but one quiet line ----
 await page.goto(base + '/settings/connections#recalls'); await wait(1500);
-await section().getByRole('button', { name: 'Turn off' }).click(); await wait(900);
+await section().getByLabel('Turn on recall alerts').click(); await wait(900);
 await page.goto(base + '/things'); await wait(1000);
 await page.getByRole('link', { name: /Family wagon/ }).first().click(); await wait(1500);
 t = flat(await text());
 say('with it off, the car shows no recalls, only a quiet line to turn it on', !/STRUCTURE|FUEL SYSTEM/.test(t) && /Recall alerts for this car can be turned on in Settings\./.test(t));
 await page.goto(base + '/settings/connections#recalls'); await wait(1200);
-await section().getByRole('button', { name: 'Turn on' }).click(); await wait(900);
+await section().getByLabel('Turn on recall alerts').click(); await wait(900);
 
 // ---- a phone: nothing runs off the side, and the buttons are big enough ----
 await page.setViewportSize({ width: 375, height: 812 });

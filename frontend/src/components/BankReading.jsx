@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { OnOffBox, ForgetIt } from './OnOff';
 import Icon from './Icon';
 import { Field, inputClass, buttonClass, quietButtonClass, errorMessage } from './ui';
 import { onDevice } from '../where';
@@ -83,16 +84,17 @@ export function BankReadingService() {
     <div className="py-3" data-bank>
       <div className="flex items-baseline gap-2">
         <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="bank" /> Read your bank accounts (SimpleFIN)</h3>
-        <span className={`rounded px-1.5 text-[11px] ${s.on ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{s.on ? 'On' : 'Off'}</span>
+        <span className={`rounded px-1.5 text-[11px] ${s.on && c ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{s.on && c ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
         Bring what you spent into Life Is straight from your bank accounts, so you don't type it or download a file. It is read only. It goes through <a href={s.service.site} target="_blank" rel="noreferrer" className="underline">SimpleFIN</a>, a service you sign up for yourself at <a href={s.service.bridge} target="_blank" rel="noreferrer" className="underline">the SimpleFIN Bridge</a>; see those pages for what it costs and which banks it reaches.
         {' '}<span className="font-medium">What it's sent:</span> <span data-bank-sends>{s.service.sends}</span>
       </p>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">The private access address SimpleFIN gives is kept locked on this computer. It is never shown again, to you or to this page, and it is not in your downloads.</p>
-      {!s.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : !s.on ? (
-        <button type="button" disabled={busy} onClick={() => turn(true)} className={`${quietButtonClass} ${touch} mt-2`}>Turn on</button>
-      ) : (
+      {!s.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : <>
+      <OnOffBox name="bank-on" label="Turn on bank reading" checked={s.on} disabled={busy} onChange={turn} />
+      {!s.on && c && <p className="text-sm text-gray-700 dark:text-life-100" data-bank-kept>Your connection to {c.host} is kept for later, and nothing is read. <ForgetIt onForget={disconnect} /></p>}
+      {!s.on ? null : (
         <div className="mt-3 space-y-3">
           {!c ? (
             <form onSubmit={connect} className="space-y-2" data-bank-connect>
@@ -102,7 +104,6 @@ export function BankReadingService() {
               <p className="text-xs text-gray-500 dark:text-life-300">Make a setup token in your SimpleFIN Bridge account and paste it here. A token works once: Life Is uses it to claim the access address, and then forgets it.</p>
               <div className="flex flex-wrap gap-2">
                 <button type="submit" disabled={busy || !token.trim()} className={`${buttonClass} ${touch}`}>Connect</button>
-                <button type="button" disabled={busy} onClick={() => turn(false)} className={`${quietButtonClass} ${touch}`}>Turn off</button>
               </div>
             </form>
           ) : (
@@ -149,6 +150,7 @@ export function BankReadingService() {
           )}
         </div>
       )}
+      </>}
       {message.text && <p role="status" className={`mt-2 text-sm ${message.bad ? 'text-red-600' : 'text-gray-700 dark:text-life-100'}`}>{message.text}</p>}
       {result && (
         <div className="mt-3 space-y-2 rounded-xl bg-life-50 p-3 text-sm text-life-800 dark:bg-life-700 dark:text-life-50" data-bank-result>

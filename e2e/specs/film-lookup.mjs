@@ -37,9 +37,11 @@ await block.scrollIntoViewIfNeeded();
 let t = flat(await block.innerText());
 say('it starts off, says what it sends, and carries the notice: ' + t.slice(0, 120),
   /Off/.test(t) && /sent to themoviedb\.org with your own key; nothing else/.test(t) && /image\.tmdb\.org/.test(t) && /not endorsed, certified, or otherwise approved by TMDB/.test(t));
-say('Turn on needs a key first', await block.getByRole('button', { name: 'Turn on' }).isDisabled());
+say('unchecked, the key field is hidden', (await block.locator('input[type=password]').count()) === 0);
+await block.getByLabel('Turn on TMDB film lookups').click(); await wait(300);
+say('Save and turn on needs a key first', await block.getByRole('button', { name: 'Save and turn on' }).isDisabled());
 await block.locator('input[type=password]').fill(KEY);
-await block.getByRole('button', { name: 'Turn on' }).click(); await wait(900);
+await block.getByRole('button', { name: 'Save and turn on' }).click(); await wait(900);
 t = flat(await block.innerText());
 say('on with a key, and the field is empty again (the key is not shown): ' + t.slice(0, 60), /On/.test(t) && (await block.locator('input[type=password]').inputValue()) === '' && /one is saved/.test(t));
 say('the key is nowhere on the page', !(await page.content()).includes(KEY));
@@ -55,6 +57,12 @@ await block.locator('input[type=password]').fill(KEY);
 await block.getByRole('button', { name: 'Keep this key' }).click(); await wait(700);
 await block.getByRole('button', { name: 'Test it' }).click(); await wait(900);
 say('the right key again', /TMDB accepted the key/.test(await block.innerText()));
+// Unchecking turns it off at once and keeps the key; Forget it removes the key after asking.
+await block.getByLabel('Turn on TMDB film lookups').click(); await wait(800);
+t = flat(await block.innerText());
+say('unchecked: off, key hidden, kept for later with Forget it', /Off/.test(t) && /kept for later/.test(t) && (await block.locator('input[type=password]').count()) === 0 && await block.getByRole('button', { name: 'Forget it' }).isVisible());
+await block.getByLabel('Turn on TMDB film lookups').click(); await wait(800);
+say('checked again: on with the kept key, no typing', /On/.test(flat(await block.innerText())) && /one is saved/.test(flat(await block.innerText())));
 
 // ---- The add form: look a film up by title and year
 await page.goto(base + '/media'); await wait(900);
