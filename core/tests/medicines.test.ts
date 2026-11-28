@@ -288,3 +288,26 @@ it('leaves a pet\'s medicine out when the pet is not there, rather than putting 
   expect([report.found, report.fresh, report.skipped.length]).toEqual([0, 0, 1]);
   expect((await meds(fresh).list()).mine).toEqual([]);
 });
+
+it('does not count a pet\'s time as finished while a medicine step its viewer cannot see is still not checked', async () => {
+  const dog = await pets(db, owner, clock).create({ name: 'George', species: 'dog' });
+  const routine = await routs().addStarter('dog-daily', null, null, dog.id);
+  const morning = routine.times.find((t) => t.name === 'Morning')!;
+  const pill = await meds().create({ name: 'Heart pill', for_pet: dog.id, left: 20 });
+  await db.run("INSERT INTO routine_steps (time_id, words, rule, sort_order, medicine_id) VALUES (?, 'x', 'daily', 99, ?)", [morning.id, pill.id]);
+  const seeing = async (who: number) => (await routs(who).today(undefined, dog.id)).find((t) => t.id === morning.id)!;
+  // The partner may not see the pill, and checks every step they can see.
+  let theirs = await seeing(partner);
+  expect(theirs.steps.map((s) => s.words)).not.toContain('Heart pill');
+  for (const step of theirs.steps) await routs(partner).tick(step.id, true);
+  theirs = await seeing(partner);
+  expect([theirs.done, theirs.total, theirs.finished]).toEqual([theirs.total, theirs.total, false]);
+  expect(await db.get('SELECT 1 AS n FROM routine_finished WHERE time_id = ? AND day = ?', [morning.id, day])).toBeUndefined();
+  // Nothing about the pill shows in what they are sent.
+  expect(JSON.stringify(theirs)).not.toContain('Heart pill');
+  // Once the keeper gives the pill, the time is finished for both.
+  const mineNow = await seeing(owner);
+  await routs().tick(mineNow.steps.find((s) => s.medicine_id === pill.id)!.id, true);
+  expect((await seeing(partner)).finished).toBe(true);
+  expect(await db.get('SELECT 1 AS n FROM routine_finished WHERE time_id = ? AND day = ?', [morning.id, day])).toBeDefined();
+});

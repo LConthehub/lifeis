@@ -451,11 +451,20 @@ export function routines(db: Db, viewer: number, clock: Clock = () => new Date()
       steps.push({ ...s, ticked: Boolean(t), by: t?.by ?? null, at: t?.at ?? null, last, prefill: lastNums ?? s.nums, kept, kept_words: kept ? numbersWords(kept) : null });
     }
     const done = due.filter((s) => ticked.has(s.id)).length;
+    // A medicine step this person may not see is not shown, but until it is checked the time is not finished.
+    let waiting = 0;
+    for (const h of await q.all<StepRow>(
+      `SELECT s.id, '' AS words, s.rule, s.weekdays, s.night, s.every_days, s.every_from, s.item_id, NULL AS item, s.wait_seconds, s.medicine_id, s.sets, s.reps, s.weight, s.weight_unit, s.minutes, s.distance, s.distance_unit
+       FROM routine_steps s JOIN medicines m ON m.id = s.medicine_id
+       WHERE s.time_id = ? AND s.medicine_id IS NOT NULL AND m.owner_id <> ? AND NOT EXISTS (SELECT 1 FROM medicine_shares x WHERE x.medicine_id = m.id AND x.user_id = ?)`, [t.id, viewer, viewer])) {
+      if (!fallsOn(asStep(h, r.cycle_length), day, night)) continue;
+      if (!(await q.get('SELECT 1 AS n FROM routine_ticks WHERE step_id = ? AND day = ?', [h.id, day]))) waiting++;
+    }
     return {
       id: t.id, routine_id: r.id, routine: r.name, kind: r.kind, name: t.name,
       title: r.for_pet !== null ? `${r.who}: ${t.name}` : labelKey(r.name) === labelKey(t.name) ? r.name : `${r.name}: ${t.name}`,
       who_kind: r.who_kind, who: r.who, member_id: r.for_member, pet_id: r.for_pet, day, at: t.at, at_words: t.at_words, night, cycle_length: r.cycle_length, points: r.for_member !== null ? r.points : null,
-      steps, total: due.length, done, finished: due.length > 0 && done === due.length, last7: t.last7, last_done: t.last_done,
+      steps, total: due.length, done, finished: due.length > 0 && done === due.length && waiting === 0, last7: t.last7, last_done: t.last_done,
     };
   }
 
