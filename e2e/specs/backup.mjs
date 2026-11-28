@@ -100,6 +100,48 @@ await page.reload(); await wait(1500);
 t = await text();
 say('and still does after closing and opening', /Kept omelette/.test(t) && !/Written afterwards/.test(t));
 
+// ---------- a backup every week, by itself ----------
+{
+  const WEEKLY = 'a weekly passphrase 5521';
+  const part = page.locator('[data-auto-backup]');
+  await page.goto(base + '/settings/data'); await wait(1500);
+  say('weekly backups are off until turned on, and say the file is sent nowhere', (await part.getAttribute('data-auto-backup')) === 'off' && /sends it nowhere/.test(await part.innerText()));
+  await part.getByRole('button', { name: 'Turn on weekly backups' }).click(); await wait(300);
+  await part.getByLabel('A passphrase for your weekly backups').fill(WEEKLY);
+  await part.getByLabel('The same passphrase once more').fill(WEEKLY);
+  await part.getByRole('button', { name: 'Turn on', exact: true }).click(); await wait(6000);
+  let words = await part.innerText();
+  say('turned on, the first one is made at once and it says where it is kept', (await part.getAttribute('data-auto-backup')) === 'on' && /Last one made today/.test(words) && /on this phone/i.test(words) && /lost if the phone is/.test(words));
+  await page.locator('#backup').screenshot({ path: shots + '/app-weekly-backup.png' });
+  await part.getByRole('button', { name: 'Show the passphrase' }).click(); await wait(500);
+  say('the phone can show the passphrase it remembers, to write down', (await part.locator('[data-auto-passphrase]').innerText()) === WEEKLY);
+  await part.getByRole('button', { name: 'Hide the passphrase' }).click(); await wait(300);
+  const [copy] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), part.getByRole('button', { name: 'Save a copy somewhere else' }).click()]);
+  const copied = shots + '/weekly-' + copy.suggestedFilename();
+  await copy.saveAs(copied);
+  say('a copy goes somewhere else with one tap and nothing typed: ' + copy.suggestedFilename(), readFileSync(copied).toString('latin1').startsWith('LIFEIS-BACKUP-1\n'));
+  // Eight days on: the app makes a fresh one by itself when it is opened.
+  const moved = await page.evaluate(() => {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key.includes('auto_backup')) continue;
+      const held = JSON.parse(localStorage.getItem(key));
+      const inner = typeof held === 'string' ? JSON.parse(held) : held;
+      inner.last = new Date(Date.now() - 8 * 86400000).toISOString();
+      localStorage.setItem(key, typeof held === 'string' ? JSON.stringify(JSON.stringify(inner)) : JSON.stringify(inner));
+      return true;
+    }
+    return false;
+  });
+  await page.reload(); await wait(1200);
+  const stale = await part.innerText();
+  await wait(9000);
+  await page.reload(); await wait(1500);
+  say('after a week it makes a fresh one by itself when the app is opened', moved && /8 days ago/.test(stale) && /Last one made today/.test(await part.innerText()));
+  await part.getByRole('button', { name: 'Turn off' }).click(); await wait(1500);
+  say('turned off, the phone forgets the passphrase and says the backups made are still there', (await part.getAttribute('data-auto-backup')) === 'off' && /forgotten the passphrase/.test(await part.innerText()));
+}
+
 // ---------- a new phone: the backup brought back from the first screen ----------
 {
   const fresh = await browser.newContext({ viewport: { width: 375, height: 812 } });

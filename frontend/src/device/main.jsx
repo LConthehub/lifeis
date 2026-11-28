@@ -88,6 +88,7 @@ async function start() {
     },
   };
   root.render(<React.StrictMode><App /></React.StrictMode>);
+  if (place.kind === 'device') weeklyBackup();
   if (onPhone) {
     await followLinks();
     await phoneReminders();
@@ -103,6 +104,13 @@ async function phoneReminders() {
   Phone.addListener('appStateChange', ({ isActive }) => { if (isActive) again(); });
   window.addEventListener('lifeis-reminders', again);
   await again();
+}
+
+/** The backup that makes itself (autoBackup.js): looked at a moment after opening, and whenever the app comes back. */
+function weeklyBackup() {
+  const look = () => import('./autoBackup.js').then((m) => m.autoBackupIfDue()).catch((problem) => console.error(problem));
+  setTimeout(look, 3000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') look(); });
 }
 
 /** Show a page of the app, as if it had been tapped to. */

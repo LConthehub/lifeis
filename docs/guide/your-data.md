@@ -47,6 +47,8 @@ This lets an AI app you use, such as Claude, read the parts you check and add a 
 
 **In the phone app:** Settings › Your data makes a backup file, locked with a passphrase you choose. Keep it wherever you like. Life Is makes no copies of itself anywhere.
 
+**A backup every week, by itself:** turn it on in the same place and choose a passphrase once. The phone remembers it, locked away. Each week Life Is makes a fresh backup and puts it in the phone's Documents, in a folder called Life Is, keeping the newest two. These stay on the phone, so save a copy somewhere else now and then: one tap, nothing to type. On a new phone, choose **I have a backup** on the first screen.
+
 **On a computer you run:** copy the data folder and the keys folder you chose when you [installed it](install.html). Keep both together: one is no use without the other. Life Is also saves a copy of the database by itself before every upgrade.
 
 ## Taking it with you

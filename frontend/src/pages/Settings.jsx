@@ -5,6 +5,7 @@ import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-route
 import axios from 'axios';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { LifeAreasPicker } from '../components/LifeAreas';
+import AutoBackup from '../components/AutoBackup';
 import { chooseAgain, inApp, linkedServer, onDevice, serverOrigin } from '../where';
 import Art from '../components/Art';
 import { ConnectorService } from '../components/Connector';
@@ -448,6 +449,7 @@ function DeviceBackup() {
           <div className="flex justify-end gap-2"><button type="button" onClick={() => setDoing(null)} className={quietButtonClass}>Cancel</button><button type="submit" disabled={busy || !file} className={buttonClass}>{busy ? 'Bringing it back…' : 'Replace what is here'}</button></div>
         </form>
       )}
+      <AutoBackup />
     </section>
   );
 }
