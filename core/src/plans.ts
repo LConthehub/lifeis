@@ -74,6 +74,17 @@ export const PLAN_STARTS: readonly { key: string; label: string; parts: PlanPart
 /** The starting points with their parts in words, for the page that offers them. */
 export const planStarts = () => PLAN_STARTS.map((s) => ({ key: s.key, label: s.label, longer: s.longer, parts: s.parts.map((key) => PLAN_PARTS.find((p) => p.key === key)!.label) }));
 
+/**
+ * The parts a trip's year uses, by what the trip has turned on: the bring list, the camp menu as Food, a site booking as
+ * When and where, Seasons and licenses, the Harvest log, and After the trip. Any can be taken off a year.
+ */
+export function tripPlanParts(on: readonly string[]): PlanPart[] {
+  const parts: PlanPart[] = ['bring', 'budget', 'more_days', 'tasks', 'after_trip'];
+  if (on.includes('camping')) parts.push('food', 'when_where');
+  if (on.includes('fishing') || on.includes('hunting')) parts.push('seasons');
+  if (on.includes('hunting')) parts.push('harvest');
+  return partsChecked(parts);
+}
 /** The parts asked for, checked: known keys only, each once, in the order they show. */
 export function partsChecked(parts: readonly string[]): PlanPart[] {
   for (const p of parts) if (!PART_KEYS.includes(p)) throw new Problem(400, `${p} isn't one of a plan's parts`);
@@ -166,10 +177,19 @@ export type PlanYearly = {
   /** No year of it is today or still ahead, so the next one can be started from the latest. */
   next_due: boolean;
 };
+/** For a plan that is a year of an outdoor trip (outdoorTrips.ts): which trip, what it has turned on, and its other years, newest first. */
+export type PlanTrip = {
+  trip_id: number; name: string; parts: ('camping' | 'fishing' | 'hunting')[]; private: boolean; year: number;
+  years: { plan_id: number; year: number; day: string }[];
+  /** No year of it is today or still ahead, so the next one can be started from the latest. */
+  next_due: boolean;
+};
 export type Plan = PlanSummary & {
   story: string | null; items_list: PlanItem[]; photos_list: PlanPhoto[]; /** What the calendar holds for its days, once they've come. */ happened: Entry[];
   /** Set when it comes back every year (see holidays.ts); null for a one-time plan. */
   yearly: PlanYearly | null;
+  /** Set when it is a year of an outdoor trip; null otherwise. */
+  trip: PlanTrip | null;
   /** When the food is served (18:00), or null before it is set. */
   served_at: string | null;
   /** A meal, or refreshments. */
@@ -367,7 +387,10 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
     const happened = found.start_day <= today
       ? (await calendar(db, owner, clock).between(found.start_day, dayNumber(lastSeen) - dayNumber(found.start_day) + 1)).filter((e) => ['meal', 'session', 'media'].includes(e.kind))
       : [];
-    return { ...summary!, story: found.story, items_list: await itemsOf(db, id), photos_list: await photosOf(db, id), happened, yearly: await yearlyOf(id),
+    // A year of a trip made before trips used parts has the default few: it shows the trip's parts too, until it is saved with them.
+    const trip = await tripOf(id);
+    const parts = trip && !summary!.parts.includes('after_trip') ? partsChecked([...summary!.parts, ...tripPlanParts(trip.parts)]) : summary!.parts;
+    return { ...summary!, parts, story: found.story, items_list: await itemsOf(db, id), photos_list: await photosOf(db, id), happened, yearly: await yearlyOf(id), trip,
       served_at: found.served_at, food_kind: found.food_kind ?? 'meal', food_lines: await foodOf(db, id), traditions: await traditionsOf(db, id) };
   }
 
@@ -381,6 +404,18 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
       'SELECT y.plan_id, y.year, p.start_day AS day FROM holiday_years y JOIN plans p ON p.id = y.plan_id WHERE y.holiday_id = ? AND p.owner_id = ? ORDER BY y.year DESC', [h.holiday_id, owner]);
     const rule = ruleFromColumns(h);
     return { holiday_id: h.holiday_id, name: h.name, rule, rule_words: ruleWords(rule), lead_weeks: h.lead_weeks, year: h.year, years, next_due: !years.some((y) => y.day >= todayOf(clock)) };
+  }
+
+  /** What a plan is a year of, when it is a year of an outdoor trip. */
+  async function tripOf(id: number): Promise<PlanTrip | null> {
+    const t = await db.get<{ trip_id: number; name: string; camping: number; fishing: number; hunting: number; private: number; year: number }>(
+      `SELECT t.id AS trip_id, t.name, t.camping, t.fishing, t.hunting, t.private, y.year
+       FROM outdoor_trip_years y JOIN outdoor_trips t ON t.id = y.trip_id WHERE y.plan_id = ? AND t.owner_id = ?`, [id, owner]);
+    if (!t) return null;
+    const years = await db.all<{ plan_id: number; year: number; day: string }>(
+      'SELECT y.plan_id, y.year, p.start_day AS day FROM outdoor_trip_years y JOIN plans p ON p.id = y.plan_id WHERE y.trip_id = ? AND p.owner_id = ? ORDER BY y.year DESC', [t.trip_id, owner]);
+    const on = (['camping', 'fishing', 'hunting'] as const).filter((p) => t[p] === 1);
+    return { trip_id: t.trip_id, name: t.name, parts: on, private: t.private === 1, year: t.year, years, next_due: !years.some((y) => y.day >= todayOf(clock)) };
   }
 
   const planOfItem = async (q: Queries, itemId: number): Promise<number> => {

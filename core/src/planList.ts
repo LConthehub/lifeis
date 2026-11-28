@@ -85,7 +85,7 @@ export function planList(db: Db, owner: number, clock: Clock = () => new Date())
           'SELECT y.trip_id, t.name FROM outdoor_trip_years y JOIN outdoor_trips t ON t.id = y.trip_id WHERE y.plan_id = ? AND t.owner_id = ?', [p.id, owner]);
         if (trip) {
           out.push({ key: `plan-${p.id}`, name: p.name, kind: 'trip', yearly: true, start_day: p.start_day, end_day: p.end_day, band: band(p.start_day, p.end_day),
-            days_until: daysUntil(p.start_day, p.end_day), link: `/plans/trips/${trip.trip_id}/${p.id}`,
+            days_until: daysUntil(p.start_day, p.end_day), link: `/plans/${p.id}`,
             next: p.when === 'past' ? null : p.tasks_left > 0 ? `${p.tasks_left} still to do` : null, small: false, not_started: false, years: null, cover_photo: p.cover_photo, time: p.start_time, place: p.place });
           continue;
         }

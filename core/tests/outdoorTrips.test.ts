@@ -212,7 +212,7 @@ it('reminds before opening day, and the day before a trip with things left to pa
   await mine().addSeason(planId, { part: 'fishing', label: 'Walleye opener', opens_on: '2046-05-15', remind_days: 7 });
   await mine().fillGear(planId, 'camping');
   day = '2046-05-08';
-  expect(await mine().digestLines()).toEqual([expect.objectContaining({ title: 'Walleye opener opens in 7 days', link: `/plans/trips/${made.id}/${planId}` })]);
+  expect(await mine().digestLines()).toEqual([expect.objectContaining({ title: 'Walleye opener opens in 7 days', link: `/plans/${planId}` })]);
   day = '2046-05-16';
   expect(await mine().digestLines()).toEqual([expect.objectContaining({ title: 'Lake weekend starts tomorrow', detail: '3 still to pack', urgent: true })]);
   const all = (await mine().year(planId)).gear;
@@ -377,4 +377,60 @@ it('a trip year shows its own data through the plan page route, and a plan that 
   expect(view.seasons.map((s) => s.label)).toEqual(['Walleye opener']);
   // Hunting is not on for this trip, so a harvest line is refused, as on the trip's own page.
   await expect(mine().addHarvest(planId, { animal: 'Deer' })).rejects.toEqual(problem(400));
+});
+
+it('a trip year opens as a plan with the parts its trip uses, and next year keeps them', async () => {
+  const made = await mine().create({ name: 'Lake weekend', parts: ['camping', 'fishing'], day: '2046-06-13', end_day: '2046-06-15' });
+  const planId = made.years[0]!.plan_id;
+  const plan = await plansOf(db, owner, clock).get(planId);
+  expect(plan.parts).toEqual(['food', 'budget', 'more_days', 'when_where', 'tasks', 'bring', 'seasons', 'after_trip']);
+  expect(plan.trip).toMatchObject({ trip_id: made.id, name: 'Lake weekend', parts: ['camping', 'fishing'], private: false, year: 2046, next_due: false });
+  const hunter = await mine().create({ name: 'Fall hunt', parts: ['hunting'], day: '2046-10-01' });
+  expect((await plansOf(db, owner, clock).get(hunter.years[0]!.plan_id)).parts).toEqual(['budget', 'more_days', 'tasks', 'bring', 'seasons', 'harvest', 'after_trip']);
+  // a part taken off the plan stays off next year; a part turned on for the trip is checked on its years
+  await plansOf(db, owner, clock).setParts(planId, ['food', 'budget', 'more_days', 'when_where', 'bring', 'seasons', 'after_trip']);
+  day = '2046-07-01';
+  const next = await mine().startYear(made.id);
+  expect((await plansOf(db, owner, clock).get(next.plan_id)).parts).toEqual(['food', 'budget', 'more_days', 'when_where', 'bring', 'seasons', 'after_trip']);
+  expect((await plansOf(db, owner, clock).get(next.plan_id)).trip!.years.map((y) => y.year)).toEqual([2047, 2046]);
+  await mine().update(made.id, { parts: ['camping', 'fishing', 'hunting'] });
+  expect((await plansOf(db, owner, clock).get(planId)).parts).toContain('harvest');
+  expect((await plansOf(db, owner, clock).get(planId)).parts).not.toContain('tasks');
+});
+
+it('a trip year made before trips used parts shows its trip parts, and a year started from it has them saved', async () => {
+  const made = await mine().create({ name: 'Lake weekend', parts: ['camping', 'hunting'], day: '2046-06-13', end_day: '2046-06-15' });
+  const planId = made.years[0]!.plan_id;
+  await db.run("UPDATE plans SET parts = 'food,budget,tasks,bring' WHERE id = ?", [planId]); // how a year was saved before
+  expect((await plansOf(db, owner, clock).get(planId)).parts).toEqual(['food', 'budget', 'more_days', 'when_where', 'tasks', 'bring', 'seasons', 'harvest', 'after_trip']);
+  day = '2046-07-01';
+  const next = await mine().startYear(made.id);
+  expect((await db.get<{ parts: string }>('SELECT parts FROM plans WHERE id = ?', [next.plan_id]))!.parts).toContain('harvest');
+  // a plan that is not a trip's year never gets trip parts
+  const plain = await plansOf(db, owner, clock).create({ name: 'Picnic', start_day: '2046-08-01' });
+  expect(plain.trip).toBeNull();
+  expect(plain.parts).not.toContain('after_trip');
+});
+
+it("another person in the house gets nothing of a hunting trip's plan page data", async () => {
+  await gear();
+  const made = await mine().create({ name: 'Fall hunt', parts: ['camping', 'hunting'], day: '2046-10-01', end_day: '2046-10-03' });
+  const planId = made.years[0]!.plan_id;
+  await mine().addGear(planId, { part: 'hunting', label: '.308 ammunition', caliber: '.308', quantity: 20 });
+  await mine().addSeason(planId, { part: 'hunting', label: 'Deer secret-season', opens_on: '2046-09-15' });
+  await mine().addHarvest(planId, { animal: 'Buck secret-buck', tag_number: 'secret-tag' });
+  const mineView = JSON.stringify([await plansOf(db, owner, clock).get(planId), await mine().outdoor(planId), await mine().year(planId)]);
+  expect(mineView).toMatch(/secret-buck/); // the person sees their own
+  const other = await person('other');
+  const theirs = plansOf(db, other, clock);
+  const theirTrips = outdoorTrips(db, other, clock);
+  for (const ask of [() => theirs.get(planId), () => theirTrips.outdoor(planId), () => theirTrips.year(planId), () => theirTrips.get(made.id), () => theirTrips.setYear(planId, { water: 'x' }),
+    () => theirTrips.addHarvest(planId, { animal: 'x' }), () => theirTrips.menuToGroceries(planId)]) await expect(ask()).rejects.toEqual(problem(404));
+  expect(await theirs.list()).toEqual([]);
+  // what the house is shown: the trip's name and days, and no word of hunting
+  const seen = JSON.stringify(await theirTrips.shared());
+  expect(seen).toMatch(/Fall hunt/);
+  expect(seen).not.toMatch(/secret|hunting|\.308|Buck|harvest/i);
+  // and the owner's trip stays off the house's morning lines
+  expect(JSON.stringify(await theirTrips.digestLines())).not.toMatch(/secret|Fall hunt/);
 });

@@ -34,7 +34,7 @@ import { inventory, type Inventory, type Item } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
 import type { EquipmentShortage } from './kitchenTypes.ts';
 import { licenses } from './licenses.ts';
-import { plans as plansOf, type Plan, type PlanItem } from './plans.ts';
+import { plans as plansOf, tripPlanParts, type Plan, type PlanItem } from './plans.ts';
 import { Problem } from './problem.ts';
 import { addDays, clean, dayNumber, dayOrNull, labelKey, stamp, todayOf, type Clock } from './small.ts';
 import { spendingByTag } from './tags.ts';
@@ -236,7 +236,9 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
     if (last) {
       planId = (await plans().copy(last.plan_id, { name, start_day: day })).id;
       if (endDay) { const p = await plans().get(planId); await plans().update(planId, { name: p.name, start_day: day, end_day: endDay, note: p.note, story: p.story }); }
-    } else planId = (await plans().create({ name, start_day: day, end_day: endDay ?? undefined })).id;
+    } else planId = (await plans().create({ name, start_day: day, end_day: endDay ?? undefined, parts: tripPlanParts(partsOf(t)) })).id;
+    // A year starts with the parts last year showed (for a last year from before parts, the ones its trip uses), saved.
+    if (last) await plans().setParts(planId, (await plans().get(last.plan_id)).parts);
     await atomic(db, async (tx) => {
       if (last) await copyOwn(tx, last, planId, day);
       else await tx.run('INSERT INTO outdoor_trip_years (plan_id, trip_id, year) VALUES (?, ?, ?)', [planId, t.id, year]);
@@ -486,7 +488,14 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
       const parts = partsChecked(input.parts, t);
       await db.run('UPDATE outdoor_trips SET name = ?, camping = ?, fishing = ?, hunting = ?, private = ?, updated_at = ? WHERE id = ? AND owner_id = ?',
         [name, parts.camping, parts.fishing, parts.hunting, (input.private ?? t.private === 1) ? 1 : 0, now(), id, owner]);
-      for (const y of await yearsOf(db, id)) await atomic(db, (tx) => syncBooking(tx, y.plan_id));
+      for (const y of await yearsOf(db, id)) {
+        await atomic(db, (tx) => syncBooking(tx, y.plan_id));
+        // Turning a part on checks what it uses on each year's plan. Turning one off, or taking a part off a plan, is left as it is.
+        const had = tripPlanParts(partsOf(t));
+        const wanted = tripPlanParts(PARTS.filter((p) => parts[p] === 1)).filter((p) => !had.includes(p));
+        const have = (await plans().get(y.plan_id)).parts;
+        if (wanted.some((p) => !have.includes(p))) await plans().setParts(y.plan_id, [...have, ...wanted]);
+      }
       return this.get(id);
     },
 
@@ -818,12 +827,12 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
         `SELECT s.label, s.opens_on, s.remind_days, s.plan_id, y.trip_id, t.name AS trip FROM outdoor_seasons s JOIN plans p ON p.id = s.plan_id
          JOIN outdoor_trip_years y ON y.plan_id = s.plan_id JOIN outdoor_trips t ON t.id = y.trip_id WHERE p.owner_id = ? AND s.opens_on >= ? AND s.opens_on <= ? ORDER BY s.opens_on`, [owner, day, addDays(day, 121)])) {
         if (addDays(s.opens_on, -s.remind_days) !== day) continue;
-        out.push({ title: `${s.label} opens ${s.remind_days === 0 ? 'today' : `in ${plural(s.remind_days, 'day')}`}`, detail: s.trip, link: `/plans/trips/${s.trip_id}/${s.plan_id}`, urgent: false });
+        out.push({ title: `${s.label} opens ${s.remind_days === 0 ? 'today' : `in ${plural(s.remind_days, 'day')}`}`, detail: s.trip, link: `/plans/${s.plan_id}`, urgent: false });
       }
       for (const r of await db.all<{ plan_id: number; trip_id: number; trip: string }>(
         `SELECT y.plan_id, y.trip_id, t.name AS trip FROM outdoor_trip_years y JOIN outdoor_trips t ON t.id = y.trip_id JOIN plans p ON p.id = y.plan_id WHERE t.owner_id = ? AND p.start_day = ?`, [owner, addDays(day, 1)])) {
         const left = (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM outdoor_gear WHERE plan_id = ? AND packed = 0', [r.plan_id]))!.n;
-        if (left > 0) out.push({ title: `${r.trip} starts tomorrow`, detail: `${left} still to pack`, link: `/plans/trips/${r.trip_id}/${r.plan_id}`, urgent: true });
+        if (left > 0) out.push({ title: `${r.trip} starts tomorrow`, detail: `${left} still to pack`, link: `/plans/${r.plan_id}`, urgent: true });
       }
       return out;
     },
