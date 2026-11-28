@@ -10,7 +10,7 @@
  */
 import { addDays, todayOf } from '../../core/src/small.ts';
 import { search, type SearchKind } from '../../core/src/index.ts';
-import { homeServices, manual } from '../../core/src/index.ts';
+import { busyLink, homeServices, manual } from '../../core/src/index.ts';
 import { prep, type PrepStepInput } from '../../core/src/index.ts';
 import { reminders, COVERS, EMAIL_SERVICE, NTFY_SERVICE, PUSH_SERVICE, type PushSender, type ReminderSettings } from '../../core/src/index.ts';
 import { displayName, dontForget, home, life, lookups, MAX_THING_PHOTO, recipeFromWeb, recipeText, weather, BOOK_SERVICE, GROCERY_SERVICE, RECIPE_WEB_SERVICE, TITLE_SERVICES, WEATHER_SERVICE, type Db, type Fetcher } from '../../core/src/index.ts';
@@ -218,6 +218,11 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ['PUT', /^\/api\/manual\/until$/, async (c) => ({ json: await book(c).setShowUntil(read.yesNo(c.body, 'on')) })],
     ['PUT', /^\/api\/manual\/credit$/, async (c) => ({ json: await book(c).setCredit(read.yesNo(c.body, 'on')) })],
     ['DELETE', /^\/api\/manual\/share$/, async (c) => ({ json: await book(c).stopSharing() })],
+    // The busy-times link: a page of busy and free blocks only. See core/'s busy.ts.
+    ['GET', /^\/api\/busy\/link$/, async (c) => ({ json: await busyLink(db, c.user.id, c.clock).get() })],
+    ['PUT', /^\/api\/busy\/link$/, async (c) => ({ json: await busyLink(db, c.user.id, c.clock).shareFor(read.maybeWhole(c.body, 'days') ?? 0) })],
+    ['PUT', /^\/api\/busy\/credit$/, async (c) => ({ json: await busyLink(db, c.user.id, c.clock).setCredit(read.yesNo(c.body, 'on')) })],
+    ['DELETE', /^\/api\/busy\/link$/, async (c) => ({ json: await busyLink(db, c.user.id, c.clock).stopSharing() })],
     // Home services: links to programs at home. The person in charge keeps them; each person pins the ones they want on their Home page. See core/'s homeServices.ts.
     ['GET', /^\/api\/home-services$/, async (c) => ({ json: await services(c).list() })],
     ['POST', /^\/api\/home-services$/, async (c) => ({ status: 201, json: await services(c).create(serviceFrom(c.body)) })],

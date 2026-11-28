@@ -106,6 +106,8 @@ export type { Pet, PetInput, PetSummary, PetWeight, Pets } from './pets.ts';
 export { licenses, expiring, defaultLead, renewalName, LICENSE_CATEGORIES, LICENSE_STARTERS, SOON_DAYS } from './licenses.ts';
 export type { License, LicenseFull, LicenseInput, LicenseReminder, LicenseStarter, Licenses, RemindInput, Lead } from './licenses.ts';
 export { manual, manualFor, manualHtml, MANUAL_SECTIONS } from './manual.ts';
+export { busyLink, busyFor, busyHtml, busyBlocks, BUSY_DAYS } from './busy.ts';
+export type { BusyLink, SharedBusy, BusyDay } from './busy.ts';
 export { homeServices, SERVICE_COLORS, SERVICE_ICONS } from './homeServices.ts';
 export type { ServiceInput, ServiceList, ServiceView, SharedService } from './homeServices.ts';
 export type { Manual, ManualEntry, SharedManual } from './manual.ts';

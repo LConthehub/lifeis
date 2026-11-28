@@ -1995,6 +1995,33 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE items ADD COLUMN pieces_checked_missing INTEGER`,
     ],
   },
+  {
+    // Two things in one block. A busy-times link (busy.ts): like the shared house manual's link, but its page holds only
+    // blocks of busy time. And a second, locked backup copy sent off the computer (backupCopy.ts): one row for the whole
+    // Life Is. `secret` and `passphrase` are sealed; nothing readable is stored.
+    number: 80,
+    name: 'busy-times link and a second backup copy',
+    statements: [
+      `CREATE TABLE busy_shares (
+        owner_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        expires_on TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE TABLE backup_copy (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        place TEXT NOT NULL CHECK(place IN ('webdav', 'folder')),
+        address TEXT,
+        username TEXT,
+        secret TEXT,
+        passphrase TEXT NOT NULL,
+        last_at TEXT,
+        last_ok INTEGER,
+        last_note TEXT,
+        created_at TEXT NOT NULL
+      )`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

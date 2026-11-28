@@ -16,6 +16,7 @@ import { BankReadingService } from '../components/BankReading';
 import { PeopleSignIn, SignInSecurity } from '../components/Security';
 import { PersonalKeys } from '../components/Keys';
 import YourFiles, { CopyNotice, noteCopyMade } from '../components/YourFiles';
+import BusyLink from '../components/BusyLink';
 
 const IDLE_TEXT = { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 120: '2 hours', 480: '8 hours', 0: 'Stay signed in' };
 
@@ -46,6 +47,7 @@ const GROUPS = [
     id: 'calendars', label: 'Calendars', icon: 'date',
     sections: [
       { id: 'calendar-link', title: 'Your phone’s calendar', words: 'apple google ical ics subscribe link feed outlook', when: server, render: () => <CalendarLink /> },
+      { id: 'busy-link', title: 'A link to your busy times', words: 'busy free share link planning schedule availability times', when: server, render: () => <BusyLink /> },
       { id: 'other-calendars', title: 'Other calendars', words: 'follow ical ics sworkr busy google apple work', render: () => <Plain><OtherCalendarsService /></Plain> },
     ],
   },

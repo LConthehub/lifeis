@@ -602,6 +602,29 @@ it('the house manual is written signed in, and read by its link without signing 
   expect((await reader.get(`/m/${share.token}`)).status).toBe(404);
 });
 
+it('the busy-times link answers anyone with its address with times only, until its day, and can be ended', async () => {
+  const admin = await owner();
+  expect((await admin.get('/api/busy/link')).json).toEqual({ on: false, token: null, expires_on: null, credit: true });
+  await admin.post('/api/calendar/events', { title: 'Charlie dentist', day: new Date().toISOString().slice(0, 10), time: '10:00', note: 'Room 12 on Maple Street' });
+  expect((await admin.put('/api/busy/link', {})).status).toBe(400);
+  expect((await admin.put('/api/busy/link', { days: 0 })).status).toBe(400);
+  const link = (await admin.put('/api/busy/link', { days: 3 })).json;
+  expect([link.on, link.token.length]).toEqual([true, 64]);
+  const reader = visitor(); // nobody signed in
+  const page = await reader.get(`/b/${link.token}`);
+  const html = page.bytes.toString('utf8');
+  expect([page.status, page.headers.get('content-type'), page.headers.get('content-security-policy'), page.headers.get('x-robots-tag')])
+    .toEqual([200, 'text/html; charset=utf-8', "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self'", 'noindex, nofollow']);
+  expect(html).toContain('Busy from 10:00 AM to 11:00 AM');
+  expect([html.includes('Charlie'), html.includes('dentist'), html.includes('Maple'), html.includes('<script')]).toEqual([false, false, false, false]);
+  expect((await reader.get(`/b/${'0'.repeat(64)}`)).status).toBe(404);
+  expect((await reader.get('/api/busy/link')).status).toBe(401);
+  expect((await admin.put('/api/busy/credit', { on: false })).json.credit).toBe(false);
+  expect((await reader.get(`/b/${link.token}`)).bytes.toString('utf8')).not.toContain('Made with Life Is');
+  expect((await admin.delete('/api/busy/link')).json.on).toBe(false);
+  expect((await reader.get(`/b/${link.token}`)).status).toBe(404);
+});
+
 it('packing over the web: boxes made, filled, marked and unpacked', async () => {
   const admin = await owner();
   const kind = (await admin.post('/api/things/kinds', { name: 'Kitchen' })).json[0];
@@ -1126,7 +1149,7 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   for (const column of ['returned', 'after_trip', 'after_done', 'job_id', 'thaw_pounds']) await database.db.run(`ALTER TABLE plan_items DROP COLUMN ${column}`);
   for (const column of ['served_at', 'food_kind', 'parts']) await database.db.run(`ALTER TABLE plans DROP COLUMN ${column}`);
   for (const column of ['every_days', 'every_from']) await database.db.run(`ALTER TABLE routine_steps DROP COLUMN ${column}`);
-  for (const table of ['item_pieces', 'routine_closed','dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients', 'measure_entries', 'measures', 'home_service_pins', 'home_service_people', 'home_services', 'media_list_items', 'media_lists', 'item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['busy_shares', 'backup_copy', 'item_pieces', 'routine_closed','dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients', 'measure_entries', 'measures', 'home_service_pins', 'home_service_people', 'home_services', 'media_list_items', 'media_lists', 'item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.

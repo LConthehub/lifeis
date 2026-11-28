@@ -7,7 +7,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BlockList, isIP } from 'node:net';
-import { manualFor, manualHtml } from '../../core/src/index.ts';
+import { busyFor, busyHtml, manualFor, manualHtml } from '../../core/src/index.ts';
 import type { PushSender } from '../../core/src/index.ts';
 import { atomic, feedFor, kitchen, Problem, shownName, type Db, type Sealer } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
@@ -323,6 +323,7 @@ export function createApp(options: Options) {
       if (path === '/api/auth/change-password') throw new Refusal(403, "The demo's password can't be changed: everyone shares it");
       if (path === '/api/auth/setup' || path === '/api/users') throw new Refusal(403, "People can't be added to the demo");
       if (path === '/api/account/name') throw new Refusal(403, "The demo's name can't be changed: everyone shares it");
+      if (path === '/api/busy/link') throw new Refusal(403, "The demo's busy times can't be shared by a link. In your own Life Is they can.");
       if (path === '/api/manual/share') throw new Refusal(403, "The demo's manual can't be shared by a link. In your own Life Is it can.");
       // Two-step sign-in and passkeys would let one visitor lock the others out of the shared account.
       if (path.startsWith('/api/security/')) throw new Refusal(403, "Sign-in security can't be changed in the demo: everyone shares its account");
@@ -379,6 +380,8 @@ export function createApp(options: Options) {
     const feed = /^\/cal\/([0-9a-f]{64})\.ics$/.exec(path);
     // The shared house manual: the same kind of link, for a sitter or a guest, who can't sign in either.
     const shared = /^\/m\/([0-9a-f]{64})$/.exec(path);
+    // The shared busy-times page: the same kind of link, and it holds times only.
+    const busy = /^\/b\/([0-9a-f]{64})$/.exec(path);
 
     let reply: Reply;
     try {
@@ -398,6 +401,11 @@ export function createApp(options: Options) {
         if (!found) throw new Refusal(404, 'Not found');
         // A page of its own with no scripts, kept out of search engines and out of any cache but the reader's.
         reply = { body: Buffer.from(manualHtml(found), 'utf8'), headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'private, no-store',
+          'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self'", 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' } };
+      } else if (busy && (req.method === 'GET' || req.method === 'HEAD')) {
+        const found = await busyFor(db, busy[1]!, clock);
+        if (!found) throw new Refusal(404, 'Not found');
+        reply = { body: Buffer.from(busyHtml(found), 'utf8'), headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'private, no-store',
           'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self'", 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' } };
       } else if (path.startsWith('/.well-known/')) {
         // Programs look for these addresses (an AI app signing in, among others). Any that isn't one of Life Is's own is

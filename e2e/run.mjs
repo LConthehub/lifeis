@@ -65,6 +65,7 @@ const SUITE = [
   { specs: ['connector'] },
   { specs: ['home'], account: TRIAL, online: true },
   { specs: ['calendar-link'], account: TRIAL },
+  { specs: ['busy-link'], account: TRIAL },
   { specs: ['collection'], account: TRIAL },
   { specs: ['bring-in'], account: TRIAL },
   { specs: ['homebox-in'], account: TRIAL },
