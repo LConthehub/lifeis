@@ -1,9 +1,40 @@
 import { useState } from 'react';
 import axios from 'axios';
-import { inputClass, quietButtonClass, cardClass } from './ui';
+import { Field, inputClass, quietButtonClass, cardClass } from './ui';
 
 const tall = `${inputClass} min-h-[44px]`;
 const iconButton = 'flex h-11 w-11 flex-none items-center justify-center rounded-lg text-gray-500 hover:bg-life-50 hover:text-life-800 disabled:opacity-30 dark:text-life-300 dark:hover:bg-life-800';
+
+/** A plan's times as words: "15:30 to 18:00", "15:30", or nothing. */
+export const timesText = (plan) => (plan.start_time ? (plan.end_time ? `${plan.start_time} to ${plan.end_time}` : plan.start_time) : '');
+
+/**
+ * When and where: a start time, an optional end time and a place, all in the person's own words. Nothing is looked up,
+ * mapped or sent. Each is saved when its box is left.
+ */
+export function WhenWhere({ plan, act }) {
+  const save = (patch) => act(() => axios.put(`/api/plans/${plan.id}/when-where`, patch));
+  const timeBox = (field, label) => (
+    <Field label={label}>
+      <input type="time" key={`${field}:${plan[field] ?? 'none'}`} defaultValue={plan[field] ?? ''} disabled={field === 'end_time' && !plan.start_time}
+        onBlur={(e) => (e.target.value || null) !== plan[field] && save({ [field]: e.target.value || null })} className={tall} />
+    </Field>
+  );
+  return (
+    <section className={`${cardClass} space-y-3`} aria-label="When and where">
+      <h2 className="font-semibold text-life-800 dark:text-life-50">When and where</h2>
+      <div className="grid grid-cols-2 gap-3">
+        {timeBox('start_time', 'Starts at')}
+        {timeBox('end_time', 'Ends at (if you know)')}
+      </div>
+      <Field label="Where">
+        <input key={plan.place ?? 'none'} defaultValue={plan.place ?? ''} maxLength={200} placeholder="In your own words: Aunt Ruth's back yard"
+          onBlur={(e) => (e.target.value.trim() || null) !== plan.place && save({ place: e.target.value })} className={tall} />
+      </Field>
+      <p className="text-xs text-gray-500 dark:text-life-300">Kept here as you write it. Nothing is looked up or sent anywhere.</p>
+    </section>
+  );
+}
 
 /**
  * Traditions: short lines of what is always done ("Grandpa carves"). Add, reword (change the words and leave the box),

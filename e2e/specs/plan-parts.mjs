@@ -263,5 +263,25 @@ say('a line can be removed', (await region('Traditions').locator('[data-traditio
 const again = await send('POST', `/api/plans/${bare.id}/copy`, { start_day: later(400) });
 say('doing the plan again carries the lines over unchecked', again.traditions.length === 2 && again.traditions.every((l) => !l.done));
 
+// ---------- when and where ----------
+await page.goto(base + `/plans/${bare.id}`); await wait(1200);
+say('a plan without the part has no When and where card', (await region('When and where').count()) === 0);
+await page.getByRole('button', { name: 'Parts', exact: true }).click(); await wait(500);
+await dialog.getByRole('checkbox', { name: 'When and where', exact: true }).check();
+await dialog.getByRole('button', { name: 'Save' }).click(); await wait(1200);
+const when = region('When and where');
+say('checking the part shows the card', await when.isVisible());
+await when.getByLabel('Starts at').fill('15:30'); await when.getByLabel('Starts at').blur(); await wait(1000);
+await when.getByLabel('Ends at (if you know)').fill('18:00'); await when.getByLabel('Ends at (if you know)').blur(); await wait(1000);
+await when.getByLabel('Where').fill("Aunt Ruth's back yard"); await when.getByLabel('Where').blur(); await wait(1000);
+say('the plan page shows the times and the place', /15:30 to 18:00 · Aunt Ruth's back yard/.test(await text()));
+await page.reload(); await wait(1400);
+say('after a reload they are kept', (await region('When and where').getByLabel('Starts at').inputValue()) === '15:30' && (await region('When and where').getByLabel('Where').inputValue()) === "Aunt Ruth's back yard");
+const smallWhen = await tooSmall([region('When and where').locator('input')]);
+say('the card has 44px controls and fits the phone' + (smallWhen.length ? ` (too small: ${smallWhen})` : ''), smallWhen.length === 0 && await noSideways());
+const dayOfBare = (await send('GET', `/api/plans/${bare.id}`)).start_day;
+await page.goto(base + `/calendar?day=${dayOfBare}`); await wait(1200);
+say('the calendar line for the plan shows its time and place', /15:30\s*Lake picnic\s*until 18:00 · Aunt Ruth's back yard/.test(await text()));
+
 say('no request failed' + (bad.length ? `: ${bad.join(' | ')}` : ''), bad.length === 0);
 await browser.close();

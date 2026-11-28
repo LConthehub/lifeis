@@ -1985,6 +1985,10 @@ export const MIGRATIONS: Migration[] = [
         sort_order INTEGER NOT NULL DEFAULT 0
       )`,
       `CREATE INDEX idx_plan_traditions ON plan_traditions(plan_id)`,
+      // When and where: a start time, an optional end time (both as 18:30) and a place in the person's own words.
+      `ALTER TABLE plans ADD COLUMN start_time TEXT`,
+      `ALTER TABLE plans ADD COLUMN end_time TEXT`,
+      `ALTER TABLE plans ADD COLUMN place TEXT`,
     ],
   },
 ];

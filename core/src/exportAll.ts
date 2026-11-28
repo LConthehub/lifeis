@@ -602,10 +602,10 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('project-costs.csv', ['Project', 'What', 'Planned', 'Spent', 'Paid on', 'Notes'],
     (await all('SELECT c.project_id, c.label, c.planned_cents, c.actual_cents, c.paid_on, c.note FROM project_costs c JOIN projects p ON p.id = c.project_id WHERE p.owner_id = ? ORDER BY c.project_id, c.sort_order, c.id'))
       .map((c) => [str(projectOf.get(c.project_id as number)?.name), str(c.label), dollars(c.planned_cents), dollars(c.actual_cents), str(c.paid_on), str(c.note)]));
-  const plans = await all('SELECT id, name, start_day, end_day, note, story, parts, served_at, food_kind FROM plans WHERE owner_id = ? ORDER BY start_day, id');
+  const plans = await all('SELECT id, name, start_day, end_day, note, story, parts, served_at, food_kind, start_time, end_time, place FROM plans WHERE owner_id = ? ORDER BY start_day, id');
   const planOf = new Map(plans.map((p) => [p.id as number, p]));
-  out.csv('plans.csv', ['Plan', 'Starts', 'Ends', 'Notes', 'The story', 'Parts', 'Served at', 'Food is'], plans.map((p) => [str(p.name), str(p.start_day), str(p.end_day), str(p.note), str(p.story),
-    p.parts === null ? '' : String(p.parts).split(',').map((k) => PLAN_PARTS.find((x) => x.key === k)?.label ?? k).join('; '), str(p.served_at), str(p.food_kind)]));
+  out.csv('plans.csv', ['Plan', 'Starts', 'Ends', 'Notes', 'The story', 'Parts', 'Served at', 'Food is', 'Starts at', 'Ends at', 'Place'], plans.map((p) => [str(p.name), str(p.start_day), str(p.end_day), str(p.note), str(p.story),
+    p.parts === null ? '' : String(p.parts).split(',').map((k) => PLAN_PARTS.find((x) => x.key === k)?.label ?? k).join('; '), str(p.served_at), str(p.food_kind), str(p.start_time), str(p.end_time), str(p.place)]));
   // Food that is bought or brought comes after the things on the plan, as rows of kind "food" (Done: it is here).
   const foodRows = await all('SELECT f.plan_id, f.label, f.brought_by, f.thaw_pounds, f.done FROM plan_food f JOIN plans p ON p.id = f.plan_id WHERE p.owner_id = ? ORDER BY f.plan_id, f.sort_order, f.id');
   // What is always done comes last, as rows of kind "tradition" (Done: checked off this year).
@@ -2119,9 +2119,12 @@ ${mediaId}`);
       const parts = partWords.length ? PLAN_PARTS.filter((p) => partWords.includes(p.label.toLowerCase())).map((p) => p.key).join(',') || null : null;
       const served = cellOf(row, 'Served at');
       const foodKind = cellOf(row, 'Food is').toLowerCase();
-      const made = await c.tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, served_at, food_kind, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      const timeOf = (words: string) => (/^([01]\d|2[0-3]):[0-5]\d$/.test(words) ? words : null);
+      const startsAt = timeOf(cellOf(row, 'Starts at'));
+      const endsAt = startsAt ? timeOf(cellOf(row, 'Ends at')) : null;
+      const made = await c.tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, served_at, food_kind, start_time, end_time, place, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [c.owner, name, start, end && end >= start ? end : start, clean(row.notes, 5000),clean(cellOf(row, 'The story'), 20000), parts,
-          /^([01]\d|2[0-3]):[0-5]\d$/.test(served) ? served : null, ['meal', 'refreshments'].includes(foodKind) ? foodKind : null, c.at, c.at]);
+          /^([01]\d|2[0-3]):[0-5]\d$/.test(served) ? served : null, ['meal', 'refreshments'].includes(foodKind) ? foodKind : null, startsAt, endsAt, clean(cellOf(row, 'Place'), 200), c.at, c.at]);
       d.fresh += 1;
       if (filled.has(key)) continue;
       filled.add(key);

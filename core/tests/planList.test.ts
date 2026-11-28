@@ -66,3 +66,12 @@ it('counts a plan under way as 0 days off', async () => {
   await plans(db, owner, clock).create({ name: 'Painting week', start_day: '2026-09-28', end_day: '2026-10-03' });
   expect((await planList(db, owner, clock).list())[0]).toMatchObject({ band: 'soon', days_until: 0 });
 });
+
+it('carries a plan\'s time and place to its line', async () => {
+  const p = await plans(db, owner, clock).create({ name: 'Craft afternoon', start_day: '2026-10-05', parts: ['food'] });
+  await plans(db, owner, clock).setWhenWhere(p.id, { start_time: '14:00', place: 'The library' });
+  await plans(db, owner, clock).create({ name: 'Quiet day', start_day: '2026-10-06' });
+  const list = await planList(db, owner, clock).list();
+  expect(list.find((l) => l.name === 'Craft afternoon')).toMatchObject({ time: '14:00', place: 'The library' });
+  expect(list.find((l) => l.name === 'Quiet day')).toMatchObject({ time: null, place: null });
+});

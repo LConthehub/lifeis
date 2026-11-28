@@ -49,6 +49,14 @@ t = await text();
 const years = soon.getFullYear() - 1958;
 say(`the birthday shows on Coming up, counting ${years} years: ` + flat(t).match(/Mom's birthday[^|]{0,60}/)?.[0], new RegExp(`Mom's birthday\\s*${years} years`).test(flat(t)) && /in 2 days/.test(t));
 
+// A plan with a time and a place: Coming up shows the time.
+const craftDay = new Date(); craftDay.setDate(craftDay.getDate() + 3);
+const craft = await send('POST', '/api/plans', { name: 'Craft afternoon', start_day: `${craftDay.getFullYear()}-${String(craftDay.getMonth() + 1).padStart(2, '0')}-${String(craftDay.getDate()).padStart(2, '0')}`, parts: ['food'] });
+await send('PUT', `/api/plans/${craft.id}/when-where`, { start_time: '14:00', end_time: '16:30', place: 'The library' });
+await page.goto(base + '/'); await wait(1200);
+t = await text();
+say('Coming up shows the time of a plan: ' + flat(t).match(/Craft afternoon[^|]{0,60}/)?.[0], /Craft afternoon\s*at 14:00/.test(flat(t)));
+
 // Something going off in the pantry, and a recipe that uses it: the kitchen card says so, and the line opens the pantry.
 await send('POST', '/api/kitchen/recipes', { title: 'Yogurt flatbread', servings: 4, ingredients_text: '2 cups flour\n1 cup yogurt', steps_text: 'Bake.' });
 const twoDaysOn = new Date(); twoDaysOn.setDate(twoDaysOn.getDate() + 2);

@@ -327,3 +327,24 @@ it('traditions of a yearly plan carry over, unchecked, into next year', async ()
   const second = await holidays(db, owner, clock).startYear(h.id);
   expect((await mine.get(second.plan_id)).traditions.map((r) => [r.words, r.done])).toEqual([['Grandpa carves', false]]);
 });
+
+it('when and where: a start time, an optional end time and a place, shown on the calendar and kept when done again', async () => {
+  const p = await mine.create({ name: 'Garden party', start_day: '2046-03-12', parts: ['food'] });
+  expect([p.start_time, p.end_time, p.place]).toEqual([null, null, null]);
+  await expect(mine.setWhenWhere(p.id, { start_time: '25:00' })).rejects.toEqual(problem(400));
+  await expect(mine.setWhenWhere(p.id, { end_time: '20:00' })).rejects.toEqual(problem(400)); // needs a start
+  const set = await mine.setWhenWhere(p.id, { start_time: '15:30', place: "Aunt Ruth's back yard" });
+  expect([set.start_time, set.end_time, set.place, set.parts]).toEqual(['15:30', null, "Aunt Ruth's back yard", ['food', 'when_where']]);
+  await expect(mine.setWhenWhere(p.id, { end_time: '15:30' })).rejects.toEqual(problem(400)); // one day: must end after it starts
+  const ended = await mine.setWhenWhere(p.id, { end_time: '18:00' });
+  expect([ended.start_time, ended.end_time, ended.place]).toEqual(['15:30', '18:00', "Aunt Ruth's back yard"]);
+  expect((await mine.setWhenWhere(p.id, { place: '  ' })).place).toBeNull();
+  await mine.setWhenWhere(p.id, { place: 'The park' });
+  const line = (await calendar(db, owner, clock).between('2046-03-12', 1)).find((e) => e.kind === 'plan')!;
+  expect([line.time, line.detail]).toEqual(['15:30', 'until 18:00 · The park']);
+  expect((await mine.list()).find((x) => x.id === p.id)).toMatchObject({ start_time: '15:30', place: 'The park' });
+  const again = await mine.copy(p.id, { start_day: '2047-03-12' });
+  expect([again.start_time, again.end_time, again.place]).toEqual(['15:30', '18:00', 'The park']);
+  // Taking a time off keeps the rest.
+  expect((await mine.setWhenWhere(p.id, { start_time: null, end_time: null })).place).toBe('The park');
+});

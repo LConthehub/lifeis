@@ -70,6 +70,13 @@ export function planRoutes(db: Db, tools?: PhotoTools): Route[] {
         quantity: read.maybeNumber(c.body, 'quantity'), note: read.maybeText(c.body, 'note'), day: read.maybeText(c.body, 'day'), meal: read.maybeText(c.body, 'meal'), servings: read.maybeNumber(c.body, 'servings'),
         thaw_pounds: read.maybeNumber(c.body, 'thaw_pounds') }),
     })],
+    // When and where: a start time, an end time and a place, in the person's own words.
+    ['PUT', at('/:id/when-where'), async (c) => ({
+      json: await mine(c).setWhenWhere(c.id, {
+        ...(sent(c.body, 'start_time') ? { start_time: read.maybeText(c.body, 'start_time') } : {}), ...(sent(c.body, 'end_time') ? { end_time: read.maybeText(c.body, 'end_time') } : {}),
+        ...(sent(c.body, 'place') ? { place: read.maybeText(c.body, 'place') } : {}),
+      }),
+    })],
     // Food: when it is served and whether it is a meal or refreshments, and food that is bought or brought.
     ['PUT', at('/:id/food'), async (c) => ({
       json: await mine(c).setFood(c.id, {

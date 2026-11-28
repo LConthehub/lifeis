@@ -43,7 +43,7 @@ export const PLAN_PARTS = [
   { key: 'decorations', label: 'Decorations', ready: true },
   { key: 'budget', label: 'Budget', ready: true },
   { key: 'more_days', label: 'More than one day', ready: true },
-  { key: 'when_where', label: 'When and where', ready: false },
+  { key: 'when_where', label: 'When and where', ready: true },
   { key: 'traditions', label: 'Traditions', ready: true },
   { key: 'tasks', label: 'Helpers and tasks', ready: true },
   { key: 'bring', label: 'Bring list', ready: true },
@@ -149,6 +149,8 @@ export type PlanSummary = {
   items: number; tasks_left: number; photos: number; cover_photo: number | null; tag_list: TagRef[];
   /** The parts it shows, in order. */
   parts: PlanPart[];
+  /** When it starts and ends on its day (18:30), and where, in the person's own words. Null until set. */
+  start_time: string | null; end_time: string | null; place: string | null;
 };
 /** For a plan that comes back every year: what it is a year of, how it finds its day, and its other years, newest first. */
 export type PlanYearly = {
@@ -183,7 +185,7 @@ export const MAX_PHOTO_BYTES = 3_000_000;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 type Slot = { day: string; meal: string; servings: number | null };
-type PlanRow = { id: number; name: string; start_day: string; end_day: string; note: string | null; story: string | null; served_at: string | null; food_kind: FoodKind | null };
+type PlanRow = { id: number; name: string; start_day: string; end_day: string; note: string | null; story: string | null; served_at: string | null; food_kind: FoodKind | null; start_time: string | null; end_time: string | null; place: string | null };
 type ItemRow = { id: number; plan_id: number; kind: PlanItemKind; ref_id: number | null; label: string; quantity: number | null; note: string | null; done: number; meal_plan_id: number | null; thaw_pounds: number | null };
 const ITEM_COLUMNS = 'id, plan_id, kind, ref_id, label, quantity, note, done, meal_plan_id, thaw_pounds';
 
@@ -206,7 +208,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
   }
 
   async function row(q: Queries, id: number): Promise<PlanRow> {
-    const found = await q.get<PlanRow>('SELECT id, name, start_day, end_day, note, story, served_at, food_kind FROM plans WHERE id = ? AND owner_id = ?', [id, owner]);
+    const found = await q.get<PlanRow>('SELECT id, name, start_day, end_day, note, story, served_at, food_kind, start_time, end_time, place FROM plans WHERE id = ? AND owner_id = ?', [id, owner]);
     if (!found) throw new Problem(404, "That plan isn't here anymore. It may have been deleted.");
     return found;
   }
@@ -318,7 +320,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
 
   async function summaries(where: string, args: Value[]): Promise<PlanSummary[]> {
     const rows = await db.all<PlanRow & { items: number; tasks_left: number; photos: number; cover_photo: number | null; parts: string | null; kinds: string | null }>(
-      `SELECT p.id, p.name, p.start_day, p.end_day, p.note, p.story, p.parts,
+      `SELECT p.id, p.name, p.start_day, p.end_day, p.note, p.story, p.parts, p.start_time, p.end_time, p.place,
          (SELECT GROUP_CONCAT(DISTINCT i.kind) FROM plan_items i WHERE i.plan_id = p.id) AS kinds,
          (SELECT COUNT(*) FROM plan_items i WHERE i.plan_id = p.id) AS items,
          (SELECT COUNT(*) FROM plan_items i WHERE i.plan_id = p.id AND i.kind = 'task' AND i.done = 0) AS tasks_left,
@@ -434,7 +436,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
         const old = await row(tx, id);
         const length = dayNumber(old.end_day) - dayNumber(old.start_day);
         const values = checked({ name: clean(input.name, 200) ?? old.name, start_day: input.start_day, end_day: addDays(input.start_day, length), note: old.note });
-        const made = await tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, served_at, food_kind, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, (SELECT parts FROM plans WHERE id = ?), ?, ?, ?, ?)', [owner, ...values, id, old.served_at, old.food_kind, now(), now()]);
+        const made = await tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, served_at, food_kind, start_time, end_time, place, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, (SELECT parts FROM plans WHERE id = ?), ?, ?, ?, ?, ?, ?, ?)', [owner, ...values, id, old.served_at, old.food_kind, old.start_time, old.end_time, old.place, now(), now()]);
         const moved = dayNumber(input.start_day) - dayNumber(old.start_day);
         for (const item of await tx.all<ItemRow>(`SELECT ${ITEM_COLUMNS} FROM plan_items WHERE plan_id = ? ORDER BY sort_order, id`, [id])) {
           // Food that was on the week goes on the new week, the same number of days in.
@@ -470,6 +472,27 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
         // Something added to a part the plan doesn't show (from a recipe's page, say) checks that part.
         await showPart(tx, planId, PART_OF_ITEM[v.kind]);
       }).then(() => whole(planId));
+    },
+
+    // ---------- when and where ----------
+
+    /**
+     * Set when a plan starts and ends on its day, and where it is, in the person's own words (nothing is looked up or sent).
+     * A time is written 18:30; an end time needs a start time, and on a one-day plan comes after it. Left out means leave it.
+     */
+    async setWhenWhere(planId: number, c: { start_time?: string | null; end_time?: string | null; place?: string | null }): Promise<Plan> {
+      const old = await row(db, planId);
+      const start = c.start_time === undefined ? old.start_time : c.start_time;
+      const end = c.end_time === undefined ? old.end_time : c.end_time;
+      for (const t of [start, end]) if (t !== null && !timeOk(t)) throw new Problem(400, 'A time is written like 18:30');
+      if (end !== null && start === null) throw new Problem(400, 'Say when it starts first');
+      if (end !== null && start !== null && old.start_day === old.end_day && end <= start) throw new Problem(400, 'It has to end after it starts');
+      const place = c.place === undefined ? old.place : clean(c.place, 200);
+      await atomic(db, async (tx) => {
+        await tx.run('UPDATE plans SET start_time = ?, end_time = ?, place = ?, updated_at = ? WHERE id = ? AND owner_id = ?', [start, end, place, now(), planId, owner]);
+        await showPart(tx, planId, 'when_where');
+      });
+      return whole(planId);
     },
 
     // ---------- food ----------
