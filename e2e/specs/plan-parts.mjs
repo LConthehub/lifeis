@@ -129,5 +129,27 @@ say('the new plan form does not scroll sideways', await noSideways());
 await dialog.getByRole('button', { name: 'Save' }).click(); await wait(1800);
 say('a birthday starts with Guests and Gifts, and no Bring list', await region('Guests').isVisible() && await region('Gifts').isVisible() && !/Bring list/.test(await text()));
 
+// ---------- a one-time plan comes back every year ----------
+const cookout = await send('POST', '/api/plans', { name: 'Summer cookout', start_day: later(45), parts: ['food', 'guests'] });
+await page.goto(base + `/plans/${cookout.id}`); await wait(1200);
+say('a one-time plan is not yearly, and offers Do it again and Every year', !/Yearly/.test(await text()) && await page.getByRole('button', { name: 'Do it again' }).isVisible() && await page.getByRole('button', { name: 'Every year' }).isVisible());
+await page.getByRole('button', { name: 'Every year' }).click(); await wait(600);
+const smallYearly = await tooSmall([dialog.locator('form button'), dialog.locator('form select'), dialog.locator('form input:not([type=checkbox])')]);
+say('the Every year form has 44px controls' + (smallYearly.length ? ` (too small: ${smallYearly})` : ''), smallYearly.length === 0);
+say('the Every year form does not scroll sideways', await noSideways());
+say('the Every year form offers the three ways to find its day, and the weeks ahead', (await dialog.getByLabel('Its day').locator('option').count()) === 3 && await dialog.getByLabel('Start planning this many weeks ahead').isVisible());
+await dialog.getByRole('button', { name: 'Make it yearly' }).click(); await wait(1800);
+t = await text();
+say('the plan says it is yearly, with its rule', /Yearly · /.test(t) && !(await page.getByRole('button', { name: 'Do it again' }).count()));
+say('the server knows it as the first year of a yearly plan', (await send('GET', `/api/plans/${cookout.id}`)).yearly?.years.length === 1);
+await shot('plan-yearly', { fullPage: true });
+say('the yearly plan does not scroll sideways', await noSideways());
+await page.getByRole('button', { name: 'Every year' }).click(); await wait(600);
+const smallEdit = await tooSmall([dialog.locator('form button'), dialog.locator('form select'), dialog.locator('form input:not([type=checkbox])')]);
+say('the form to change or stop it has 44px controls' + (smallEdit.length ? ` (too small: ${smallEdit})` : ''), smallEdit.length === 0);
+page.once('dialog', (d) => d.accept());
+await dialog.getByRole('button', { name: 'Stop coming back every year' }).click(); await wait(1800);
+say('stopping it takes Yearly off, and brings Do it again back', !/Yearly/.test(await text()) && await page.getByRole('button', { name: 'Do it again' }).isVisible());
+
 say('no request failed' + (bad.length ? `: ${bad.join(' | ')}` : ''), bad.length === 0);
 await browser.close();

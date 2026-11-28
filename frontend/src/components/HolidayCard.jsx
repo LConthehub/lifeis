@@ -53,7 +53,7 @@ export function HolidayRow({ card, onChange }) {
       {card.stage === 'take_down' && <p className="pl-6 text-xs text-gray-600 dark:text-life-200">{card.next}</p>}
       {card.stage === 'start' && (
         <div className="pl-6">
-          <button type="button" onClick={() => run(async () => { const { data } = await axios.post(`${API}/${card.holiday_id}/years`, {}); navigate(`/plans/holidays/${card.holiday_id}/${data.plan_id}`); })} className={`${quietButtonClass} min-h-[44px]`}>Start this year's from last year's</button>
+          <button type="button" onClick={() => run(async () => { const { data } = await axios.post(`${API}/${card.holiday_id}/years`, {}); navigate(`/plans/${data.plan_id}`); })} className={`${quietButtonClass} min-h-[44px]`}>Start this year's from last year's</button>
         </div>
       )}
       {card.stage === 'notes' && (
@@ -65,7 +65,7 @@ export function HolidayRow({ card, onChange }) {
         </form>
       )}
       {card.stage === 'next_date' && (
-        <form className="flex flex-wrap items-end gap-2 pl-6" onSubmit={(e) => { e.preventDefault(); run(async () => { const { data } = await axios.post(`${API}/${card.holiday_id}/years`, { day }); navigate(`/plans/holidays/${card.holiday_id}/${data.plan_id}`); }); }}>
+        <form className="flex flex-wrap items-end gap-2 pl-6" onSubmit={(e) => { e.preventDefault(); run(async () => { const { data } = await axios.post(`${API}/${card.holiday_id}/years`, { day }); navigate(`/plans/${data.plan_id}`); }); }}>
           <label className="text-xs font-medium text-gray-600 dark:text-life-200">{card.next}
             <input type="date" required value={day} onChange={(e) => setDay(e.target.value)} className={`${inputClass} mt-1 min-h-[44px]`} />
           </label>

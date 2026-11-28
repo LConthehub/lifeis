@@ -64,12 +64,12 @@ export function planList(db: Db, owner: number, clock: Clock = () => new Date())
         for (const y of h.years) {
           if (ahead && y.plan_id === ahead.plan_id) continue;
           out.push({ key: `plan-${y.plan_id}`, name: `${h.name} ${y.year}`, kind: 'gathering', yearly: true, start_day: y.day, end_day: y.day,
-            band: 'past', days_until: until(y.day), link: `/plans/holidays/${h.id}/${y.plan_id}`, next: null, small: false, not_started: false, years: null, cover_photo: null });
+            band: 'past', days_until: until(y.day), link: `/plans/${y.plan_id}`, next: null, small: false, not_started: false, years: null, cover_photo: null });
         }
         const day = ahead?.day ?? (h.rule.kind === 'manual' ? null : nextDate(h.rule, today));
         if (!day) continue;
         out.push({ key: `holiday-${h.id}`, name: h.name, kind: 'gathering', yearly: true, start_day: day, end_day: day, band: band(day, day),
-          days_until: daysUntil(day, day), link: ahead ? `/plans/holidays/${h.id}/${ahead.plan_id}` : `/plans/holidays/${h.id}`,
+          days_until: daysUntil(day, day), link: ahead ? `/plans/${ahead.plan_id}` : `/plans/holidays/${h.id}`,
           next: h.next, small: false, not_started: !ahead, years: null, cover_photo: null });
       }
 

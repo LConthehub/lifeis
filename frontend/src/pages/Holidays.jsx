@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import SubChips, { PLAN_CHIPS } from '../components/SubChips';
 import Icon from '../components/Icon';
 import Picture from '../components/Picture';
 import { shrink } from '../components/shrink';
 import { money } from '../components/Budget';
-import { PlanGoal } from '../components/Goals';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, fromDateInput, toDateInput } from '../components/ui';
 import { photoAddress } from './Plans';
 
@@ -48,7 +47,7 @@ export const Remove = ({ onClick, label }) => <button type="button" onClick={onC
  * What other people gave you at a holiday. The server says nothing until the day has passed, so this part is only
  * there afterward. On a holiday's page, only what was given at a holiday of that name.
  */
-function GivenToYou({ only }) {
+export function GivenToYou({ only }) {
   const [given, setGiven] = useState([]);
   useEffect(() => { axios.get(`${API}/given-to-me`).then(({ data }) => setGiven(data)).catch(() => {}); }, []);
   const shown = only ? given.filter((g) => g.holiday.toLowerCase() === only.toLowerCase()) : given;
@@ -78,7 +77,7 @@ export default function HolidaysPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
   if (!list) return null;
-  const open = (h) => navigate(h.latest ? `/plans/holidays/${h.id}/${h.latest.plan_id}` : `/plans/holidays/${h.id}`);
+  const open = (h) => navigate(h.latest ? `/plans/${h.latest.plan_id}` : `/plans/holidays/${h.id}`);
   const fromDate = async (event) => {
     setError('');
     try { open((await axios.post(`${API}/from-event`, { event_id: event.id })).data); } catch (err) { setError(errorMessage(err, "Couldn't make that a holiday")); }
@@ -132,30 +131,27 @@ export default function HolidaysPage() {
   );
 }
 
-/** A holiday's name and how it finds its day: the same date, a weekday rule, or set each year. */
-function HolidayForm({ holiday, onDone }) {
-  const rule = holiday?.rule ?? { kind: 'weekday', month: 11, weekday: 4, nth: 4 };
-  const [form, setForm] = useState({
-    name: holiday?.name ?? '', kind: rule.kind, month: rule.month ?? 11, day_of_month: rule.day ?? 1, weekday: rule.weekday ?? 4, nth: rule.nth ?? 4,
-    day: toDateInput(new Date()), lead_weeks: holiday?.lead_weeks ?? 6,
-  });
-  const [error, setError] = useState('');
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-  const submit = async (e) => {
-    e.preventDefault();
-    const body = { name: form.name, rule: form.kind, lead_weeks: Number(form.lead_weeks) };
-    if (form.kind !== 'manual') body.month = Number(form.month);
-    if (form.kind === 'fixed') body.day_of_month = Number(form.day_of_month);
-    if (form.kind === 'weekday') { body.weekday = Number(form.weekday); body.nth = Number(form.nth); }
-    if (!holiday && form.kind === 'manual') body.day = form.day;
-    try {
-      const { data } = holiday ? await axios.put(`${API}/${holiday.id}`, body) : await axios.post(API, body);
-      onDone(data);
-    } catch (err) { setError(errorMessage(err, "Couldn't save")); }
-  };
+/** The rule's own words for a form: what its fields start as, from a holiday's rule or from a plan's first day. */
+export function ruleStart(rule, lead_weeks, startDay) {
+  if (rule) return { kind: rule.kind, month: rule.month ?? 11, day_of_month: rule.day ?? 1, weekday: rule.weekday ?? 4, nth: rule.nth ?? 4, lead_weeks: lead_weeks ?? 6 };
+  if (!startDay) return { kind: 'weekday', month: 11, day_of_month: 1, weekday: 4, nth: 4, lead_weeks: 6 };
+  const d = fromDateInput(startDay);
+  return { kind: 'fixed', month: d.getMonth() + 1, day_of_month: d.getDate(), weekday: d.getDay(), nth: d.getDate() > 28 ? -1 : Math.ceil(d.getDate() / 7), lead_weeks: 6 };
+}
+
+/** What the server wants for a rule from the form's fields. */
+export function ruleBody(form) {
+  const body = { rule: form.kind, lead_weeks: Number(form.lead_weeks) };
+  if (form.kind !== 'manual') body.month = Number(form.month);
+  if (form.kind === 'fixed') body.day_of_month = Number(form.day_of_month);
+  if (form.kind === 'weekday') { body.weekday = Number(form.weekday); body.nth = Number(form.nth); }
+  return body;
+}
+
+/** How a holiday finds its day (the same date, a weekday rule, or set each year) and how early to start. Used by the holiday form and by Every year on a plan. */
+export function RuleFields({ form, set, askDay = false }) {
   return (
-    <form onSubmit={submit} className="space-y-3">
-      <Field label="Name *"><input required autoFocus value={form.name} onChange={set('name')} placeholder="e.g. Thanksgiving" className={field} /></Field>
+    <>
       <Field label="Its day">
         <select value={form.kind} onChange={set('kind')} className={field}>
           <option value="weekday">A weekday of a month (the fourth Thursday of November)</option>
@@ -176,77 +172,83 @@ function HolidayForm({ holiday, onDone }) {
           <Field label="Day"><input type="number" min="1" max="31" value={form.day_of_month} onChange={set('day_of_month')} className={field} /></Field>
         </div>
       )}
-      {form.kind === 'manual' && !holiday && <Field label="This year's day"><input type="date" required value={form.day} onChange={set('day')} className={field} /></Field>}
+      {form.kind === 'manual' && askDay && <Field label="This year's day"><input type="date" required value={form.day} onChange={set('day')} className={field} /></Field>}
       {form.kind === 'manual' && <Hint>Life Is asks for next year's day when this year's is finished.</Hint>}
       <Field label="Start planning this many weeks ahead"><input type="number" min="1" max="26" value={form.lead_weeks} onChange={set('lead_weeks')} className={field} /></Field>
+    </>
+  );
+}
+
+/** A holiday's name and how it finds its day: the same date, a weekday rule, or set each year. */
+function HolidayForm({ holiday, onDone }) {
+  const [form, setForm] = useState({ ...ruleStart(holiday?.rule ?? null, holiday?.lead_weeks, null), name: holiday?.name ?? '', day: toDateInput(new Date()) });
+  const [error, setError] = useState('');
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const submit = async (e) => {
+    e.preventDefault();
+    const body = { name: form.name, ...ruleBody(form) };
+    if (!holiday && form.kind === 'manual') body.day = form.day;
+    try {
+      const { data } = holiday ? await axios.put(`${API}/${holiday.id}`, body) : await axios.post(API, body);
+      onDone(data);
+    } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+  };
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <Field label="Name *"><input required autoFocus value={form.name} onChange={set('name')} placeholder="e.g. Thanksgiving" className={field} /></Field>
+      <RuleFields form={form} set={set} askDay={!holiday} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex justify-end"><button type="submit" className={button}>{holiday ? 'Save' : 'Add it'}</button></div>
     </form>
   );
 }
 
-// ==================== one holiday, one year ====================
+// ==================== one holiday ====================
 
-/** A holiday and one of its years: the day, the countdown, the menu, guests, cards, gifts, decorations and budget. */
+/**
+ * A holiday's address. Each of its years is a plan, so this sends you to the plan page of the upcoming year (else the
+ * latest). Only a holiday with no year yet still shows a small page here: its name, its rule, and a button to start it.
+ */
 export function HolidayPage() {
   const { id, planId } = useParams();
+  if (planId) return <Navigate to={`/plans/${planId}`} replace />;
+  return <HolidayStart key={id} id={id} />;
+}
+
+function HolidayStart({ id }) {
   const navigate = useNavigate();
   const [holiday, setHoliday] = useState(undefined);
-  const [year, setYear] = useState(null);
-  const [options, setOptions] = useState({ dates: [], members: [], users: [], boxes: [] });
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
-  const load = useCallback(async () => {
-    try {
-      const { data: h } = await axios.get(`${API}/${id}`);
-      setHoliday(h);
-      const wanted = planId ? Number(planId) : h.years.find((y) => y.day >= toDateInput(new Date()))?.plan_id ?? h.latest?.plan_id;
-      setYear(wanted ? (await axios.get(`${API}/years/${wanted}`)).data : null);
-    } catch { setHoliday(null); }
-  }, [id, planId]);
+  const load = useCallback(() => { axios.get(`${API}/${id}`).then(({ data }) => setHoliday(data)).catch(() => setHoliday(null)); }, [id]);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { axios.get(`${API}/options`).then(({ data }) => setOptions(data)).catch(() => {}); }, []);
   if (holiday === undefined) return null;
   if (holiday === null) return <p className="text-sm text-gray-500 dark:text-life-300">That holiday isn't here anymore. It may have been deleted. <Link to="/plans/holidays" className="underline">All holidays</Link></p>;
-
-  /** Does something that answers with the year, and shows what came back. */
-  const act = async (work) => {
-    setError('');
-    try { const done = await work(); if (done?.data?.plan_id) setYear(done.data); else await load(); } catch (err) { setError(errorMessage(err, "Couldn't do that")); }
-  };
+  const wanted = holiday.years.find((y) => y.day >= toDateInput(new Date()))?.plan_id ?? holiday.latest?.plan_id;
+  if (wanted) return <Navigate to={`/plans/${wanted}`} replace />;
   const start = async (day) => {
     setError('');
-    try { const { data } = await axios.post(`${API}/${id}/years`, day ? { day } : {}); navigate(`/plans/holidays/${id}/${data.plan_id}`); await load(); } catch (err) { setError(errorMessage(err, "Couldn't start it")); }
+    try { const { data } = await axios.post(`${API}/${id}/years`, day ? { day } : {}); navigate(`/plans/${data.plan_id}`); } catch (err) { setError(errorMessage(err, "Couldn't start it")); }
   };
   const removeHoliday = async () => {
     if (!window.confirm(`Stop keeping ${holiday.name} as a holiday? Each of its years stays as a plan, to look back on.`)) return;
     await axios.delete(`${API}/${id}`).catch(() => {});
     navigate('/plans/holidays');
   };
-  const upcoming = holiday.years.some((y) => y.day >= toDateInput(new Date()));
   return (
     <div className="space-y-4">
       <Link to="/plans/holidays" className="text-sm text-life-600 hover:underline dark:text-life-200">← Holidays</Link>
       <div className="flex flex-wrap items-start gap-2">
         <div className="mr-auto">
-          <h1 className="text-2xl font-semibold text-life-800 dark:text-life-50">{holiday.name}{year ? ` ${year.year}` : ''}</h1>
-          <p className="text-sm text-gray-600 dark:text-life-200">{holiday.rule_words}{year ? ` · ${dayText(year.day, true)}` : ''}{year?.turns ? ` · ${year.turns} years` : ''}</p>
+          <h1 className="text-2xl font-semibold text-life-800 dark:text-life-50">{holiday.name}</h1>
+          <p className="text-sm text-gray-600 dark:text-life-200">{holiday.rule_words}</p>
         </div>
         <button type="button" onClick={() => setEditing(true)} className={quiet}>Change</button>
       </div>
-      {holiday.years.length > 0 && (
-        <nav aria-label="Years" className="flex flex-wrap gap-1.5">
-          {holiday.years.map((y) => (
-            <Link key={y.plan_id} to={`/plans/holidays/${id}/${y.plan_id}`} aria-current={year && y.plan_id === year.plan_id ? 'page' : undefined}
-              className={`flex min-h-[44px] items-center rounded-full px-3 text-sm ${year && y.plan_id === year.plan_id ? 'bg-life-600 text-white' : 'bg-life-50 text-life-700 hover:bg-life-100 dark:bg-life-700 dark:text-life-50'}`}>{y.year}</Link>
-          ))}
-        </nav>
-      )}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <GivenToYou only={holiday.name} />
-      {!upcoming && <NextYear holiday={holiday} year={year} start={start} />}
-      {!year && upcoming === false && holiday.years.length === 0 && <p className="text-sm text-gray-600 dark:text-life-100">No year has been started yet.</p>}
-      {year && <YearBody key={year.plan_id} year={year} options={options} act={act} reload={load} />}
+      <p className="text-sm text-gray-600 dark:text-life-100">No year has been started yet.</p>
+      <NextYear name={holiday.name} manual={holiday.rule.kind === 'manual'} start={start} />
       <p className="pt-4"><button type="button" onClick={removeHoliday} className="min-h-[44px] text-sm text-red-700 hover:underline dark:text-red-300">Stop keeping this holiday</button></p>
       {editing && (
         <Modal title={`Change ${holiday.name}`} onClose={() => setEditing(false)}>
@@ -258,13 +260,11 @@ export function HolidayPage() {
 }
 
 /** When the last year is over: start the next from it, or ask for its day when the day is set each year. */
-function NextYear({ holiday, year, start }) {
+export function NextYear({ name, manual, start }) {
   const [day, setDay] = useState(toDateInput(new Date()));
-  const manual = holiday.rule.kind === 'manual';
-  if (!year && !manual && holiday.years.length > 0) return null;
   return (
-    <section className={`${cardClass} space-y-2`}>
-      <Heading icon="plan">{manual ? `When is this year's ${holiday.name}?` : `Start this year's ${holiday.name}`}</Heading>
+    <section className={`${cardClass} space-y-2`} aria-label="Start the next year">
+      <Heading icon="plan">{manual ? `When is this year's ${name}?` : `Start this year's ${name}`}</Heading>
       <Hint>{manual ? "You set its day each year. Next year's starts from this one: the same guests, cards, decorations and countdown, with nothing checked off." : "Starts from last year's: the same guests, cards, decorations and countdown, with nothing checked off, and what broke or ran out last year on the shopping list."}</Hint>
       {manual && <Field label="The day"><input type="date" value={day} onChange={(e) => setDay(e.target.value)} className={field} /></Field>}
       <button type="button" onClick={() => start(manual ? day : null)} className={button}>Start it</button>
@@ -272,50 +272,33 @@ function NextYear({ holiday, year, start }) {
   );
 }
 
-function YearBody({ year, options, act, reload }) {
-  const put = (path, body) => act(() => axios.put(`${API}/${path}`, body));
-  const post = (path, body) => act(() => axios.post(`${API}/${path}`, body));
-  const del = (path) => act(() => axios.delete(`${API}/${path}`));
-  const past = year.when === 'past';
+/** The note you left yourself at the end of last year. */
+export function LastNote({ year }) {
+  if (!year.last_notes) return null;
   return (
-    <div className="space-y-4">
-      {year.last_notes && (
-        <section className={`${cardClass} border-l-4 border-honey-300`}>
-          <Heading icon="reminder">You left yourself a note</Heading>
-          <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-life-50">{year.last_notes}</p>
-        </section>
-      )}
-      <Basics year={year} put={put} />
-      <Countdown year={year} put={put} post={post} del={del} />
-      <Menu year={year} act={act} reload={reload} />
-      <Decor year={year} options={options} post={post} put={put} del={del} act={act} mode="up" />
-      <Shopping year={year} put={put} />
-      <People year={year} options={options} post={post} put={put} del={del} role="guest" />
-      <People year={year} options={options} post={post} put={put} del={del} role="card" />
-      <Gifts year={year} options={options} post={post} put={put} del={del} />
-      <Budget year={year} put={put} />
-      <PlanGoal kind="plan" id={year.plan_id} />
-      <Decor year={year} options={options} post={post} put={put} del={del} act={act} mode="down" />
-      <Ending year={year} past={past} post={post} reload={reload} />
-    </div>
+    <section className={`${cardClass} border-l-4 border-honey-300`}>
+      <Heading icon="reminder">You left yourself a note</Heading>
+      <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-life-50">{year.last_notes}</p>
+    </section>
   );
 }
 
 /** The day, dinner, the turkey, when the decorations go up and come down. */
-function Basics({ year, put }) {
+export function Basics({ year, put, parts }) {
   const save = (patch) => put(`years/${year.plan_id}`, patch);
+  const uses = (part) => parts.includes(part);
   return (
     <section className={`${cardClass} space-y-3`} aria-label="The day">
       <Heading icon="plan">The day</Heading>
       <div className="grid grid-cols-2 gap-3">
         <Field label="The day"><input type="date" key={year.day} defaultValue={year.day} onBlur={(e) => e.target.value && e.target.value !== year.day && save({ day: e.target.value })} className={field} /></Field>
-        <Field label="Dinner is at"><input type="time" key={year.dinner_time ?? 'none'} defaultValue={year.dinner_time ?? ''} onBlur={(e) => (e.target.value || null) !== year.dinner_time && save({ dinner_time: e.target.value || null })} className={field} /></Field>
-        <Field label="Frozen turkey, in pounds"><input type="number" min="1" max="60" step="0.5" key={year.turkey_pounds ?? 'none'} defaultValue={year.turkey_pounds ?? ''} placeholder="none" onBlur={(e) => (e.target.value === '' ? null : Number(e.target.value)) !== year.turkey_pounds && save({ turkey_pounds: e.target.value === '' ? null : Number(e.target.value) })} className={field} /></Field>
-        <Field label="Budget"><input type="number" min="0" step="0.01" key={year.budget_cents ?? 'none'} defaultValue={dollars(year.budget_cents)} placeholder="none" onBlur={(e) => cents(e.target.value) !== year.budget_cents && save({ budget_cents: cents(e.target.value) })} className={field} /></Field>
-        <Field label="Put the decorations up on"><input type="date" key={year.put_up_on ?? 'none'} defaultValue={year.put_up_on ?? ''} onBlur={(e) => (e.target.value || null) !== year.put_up_on && save({ put_up_on: e.target.value || null })} className={field} /></Field>
-        <Field label="Take them down on"><input type="date" key={year.take_down_on ?? 'none'} defaultValue={year.take_down_on ?? ''} onBlur={(e) => (e.target.value || null) !== year.take_down_on && save({ take_down_on: e.target.value || null })} className={field} /></Field>
+        {uses('food') && <Field label="Dinner is at"><input type="time" key={year.dinner_time ?? 'none'} defaultValue={year.dinner_time ?? ''} onBlur={(e) => (e.target.value || null) !== year.dinner_time && save({ dinner_time: e.target.value || null })} className={field} /></Field>}
+        {uses('food') && <Field label="Frozen turkey, in pounds"><input type="number" min="1" max="60" step="0.5" key={year.turkey_pounds ?? 'none'} defaultValue={year.turkey_pounds ?? ''} placeholder="none" onBlur={(e) => (e.target.value === '' ? null : Number(e.target.value)) !== year.turkey_pounds && save({ turkey_pounds: e.target.value === '' ? null : Number(e.target.value) })} className={field} /></Field>}
+        {uses('budget') && <Field label="Budget"><input type="number" min="0" step="0.01" key={year.budget_cents ?? 'none'} defaultValue={dollars(year.budget_cents)} placeholder="none" onBlur={(e) => cents(e.target.value) !== year.budget_cents && save({ budget_cents: cents(e.target.value) })} className={field} /></Field>}
+        {uses('decorations') && <Field label="Put the decorations up on"><input type="date" key={year.put_up_on ?? 'none'} defaultValue={year.put_up_on ?? ''} onBlur={(e) => (e.target.value || null) !== year.put_up_on && save({ put_up_on: e.target.value || null })} className={field} /></Field>}
+        {uses('decorations') && <Field label="Take them down on"><input type="date" key={year.take_down_on ?? 'none'} defaultValue={year.take_down_on ?? ''} onBlur={(e) => (e.target.value || null) !== year.take_down_on && save({ take_down_on: e.target.value || null })} className={field} /></Field>}
       </div>
-      <Hint>You get a reminder the morning of each of those days if something is left to do.</Hint>
+      {uses('decorations') && <Hint>You get a reminder the morning of each of those days if something is left to do.</Hint>}
     </section>
   );
 }
@@ -323,7 +306,7 @@ function Basics({ year, put }) {
 const RULES = [['night_before', 'The night before'], ['morning_of', 'The morning of'], ['hours_before', 'Hours before dinner']];
 
 /** Dinner, and everything counted back from it: each recipe's prep steps, a frozen turkey's thaw, steps of your own. */
-function Countdown({ year, put, post, del }) {
+export function Countdown({ year, put, post, del }) {
   const { countdown } = year;
   const [form, setForm] = useState({ words: '', rule: 'morning_of', at: '09:00', hours: 2 });
   const add = async (e) => {
@@ -363,44 +346,6 @@ function Countdown({ year, put, post, del }) {
             : <input type="time" value={form.at} onChange={(e) => setForm({ ...form, at: e.target.value })} aria-label="Time of day" className={`${field} w-auto`} />}
           <button type="submit" className={quiet}>Add the step</button>
         </div>
-      </form>
-    </section>
-  );
-}
-
-/** The menu: recipes on the plan. The plan itself keeps the checklist, the story and the photos. */
-function Menu({ year, act, reload }) {
-  const [recipes, setRecipes] = useState([]);
-  const [pick, setPick] = useState('');
-  useEffect(() => { axios.get('/api/kitchen/recipes').then(({ data }) => setRecipes(data)).catch(() => {}); }, []);
-  const menu = year.plan.items_list.filter((i) => i.kind === 'recipe');
-  const have = new Set(menu.map((i) => i.ref_id));
-  const add = async (e) => {
-    e.preventDefault();
-    if (!pick) return;
-    await act(() => axios.post(`/api/plans/${year.plan_id}/items`, { kind: 'recipe', ref_id: Number(pick) }));
-    setPick('');
-    reload();
-  };
-  const take = async (item) => { await act(() => axios.delete(`/api/plans/items/${item.id}`)); reload(); };
-  return (
-    <section className={`${cardClass} space-y-2`} aria-label="The menu">
-      <Heading icon="meal" aside={<Link to={`/plans/${year.plan_id}`} className="text-xs text-life-600 hover:underline dark:text-life-200">The full plan, checklist and photos →</Link>}>The menu</Heading>
-      {menu.length === 0 && <p className="text-sm text-gray-600 dark:text-life-100">Nothing on the menu yet. Pick from your recipes.</p>}
-      <ul className="divide-y divide-life-100 dark:divide-life-700">
-        {menu.map((i) => (
-          <li key={i.id} className="flex items-center gap-1">
-            <span className="min-w-0 flex-1 py-2 text-sm">{i.link ? <Link to={i.link} className="text-life-700 hover:underline dark:text-life-100">{i.label}</Link> : i.label}{i.on_week && <span className="text-xs text-gray-500 dark:text-life-300"> · on the week's meals</span>}</span>
-            <Remove label={`Take ${i.label} off the menu`} onClick={() => take(i)} />
-          </li>
-        ))}
-      </ul>
-      <form onSubmit={add} className="flex gap-2">
-        <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Add a recipe" className={field}>
-          <option value="">Add a recipe…</option>
-          {recipes.filter((r) => !have.has(r.id)).map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
-        </select>
-        <button type="submit" className={quiet} disabled={!pick}>Add</button>
       </form>
     </section>
   );
@@ -502,7 +447,7 @@ export function Gifts({ year, options, post, put, del }) {
 }
 
 /** What it came to, from spending tagged with the holiday's tag. */
-function Budget({ year }) {
+export function Budget({ year }) {
   const { budget } = year;
   const over = budget.target_cents !== null && budget.spent_cents > budget.target_cents;
   return (
@@ -518,7 +463,7 @@ function Budget({ year }) {
 }
 
 /** What broke or ran out last year, to buy for this one. */
-function Shopping({ year, put }) {
+export function Shopping({ year, put }) {
   if (year.shopping.length === 0) return null;
   return (
     <section className={`${cardClass} space-y-1`} aria-label="To buy">
@@ -643,7 +588,7 @@ export function Decor({ year, options, post, put, del, act, mode }) {
 }
 
 /** How it went, notes for next year, and finishing the year, which starts the next one. */
-function Ending({ year, past, post, reload }) {
+export function Ending({ year, past, post, reload }) {
   const [story, setStory] = useState(year.plan.story ?? '');
   const [notes, setNotes] = useState(year.notes_next ?? '');
   const [saved, setSaved] = useState('');

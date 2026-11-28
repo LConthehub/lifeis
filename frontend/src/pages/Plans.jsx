@@ -5,7 +5,7 @@ import axios from 'axios';
 import { shrink } from '../components/shrink';
 import Picture from '../components/Picture';
 import { PlanGoal } from '../components/Goals';
-import { Decor, Gifts, People } from './Holidays';
+import { Basics, Budget, Countdown, Decor, Ending, Gifts, GivenToYou, LastNote, NextYear, People, RuleFields, Shopping, ruleBody, ruleStart } from './Holidays';
 import { After, Harvest, Licenses, Seasons } from './Trips';
 import { BulkBar, PickBox, SelectButton, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, fromDateInput } from '../components/ui';
@@ -28,29 +28,68 @@ const HOLIDAY_API = '/api/plans/holidays';
 const TRIP_API = '/api/plans/trips';
 
 /**
- * Guests, cards, gifts and decorations on any plan, using the same sections as a holiday's year. Each sits in the
- * plan's grid in its part's place.
+ * What guests, cards, gifts, decorations and a yearly plan's holiday sections need: the plan's view from the server, who
+ * can be picked, and the ways to change it. Asked for when the plan has one of those parts or comes back every year.
+ * `reloadPlan` runs when a change reaches the plan itself (its day, finishing the year).
  */
-function Gathering({ plan }) {
+function useGathering(plan, reloadPlan) {
+  const planId = plan?.id;
+  const needed = Boolean(plan && (plan.yearly || GATHERING.some((p) => plan.parts.includes(p))));
+  const yearKey = plan?.yearly ? plan.yearly.holiday_id : 0;
+  const day = plan?.start_day;
+  // The countdown follows the plan's recipes: ask again when they change.
+  const recipesKey = plan ? plan.items_list.filter((i) => i.kind === 'recipe').map((i) => i.ref_id).join(',') : '';
   const [view, setView] = useState(null);
   const [options, setOptions] = useState(null);
   const [error, setError] = useState('');
-  const load = useCallback(() => { axios.get(`${HOLIDAY_API}/gathering/${plan.id}`).then(({ data }) => setView(data)).catch(() => setView(null)); }, [plan.id]);
-  useEffect(() => { load(); axios.get(`${HOLIDAY_API}/options`).then(({ data }) => setOptions(data)).catch(() => setOptions({ members: [], users: [], boxes: [], dates: [] })); }, [load]);
-  if (!view || !options) return null;
-  const act = async (work) => { setError(''); try { setView((await work()).data); } catch (err) { setError(errorMessage(err, "Couldn't do that")); } };
-  const post = (path, body) => act(() => axios.post(`${HOLIDAY_API}/${path}`, body));
-  const put = (path, body) => act(() => axios.put(`${HOLIDAY_API}/${path}`, body));
+  const load = useCallback(() => {
+    if (!needed) { setView(null); return; }
+    axios.get(`${HOLIDAY_API}/gathering/${planId}`).then(({ data }) => setView(data)).catch(() => setView(null));
+  }, [planId, needed, yearKey, day, recipesKey]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (needed && !options) axios.get(`${HOLIDAY_API}/options`).then(({ data }) => setOptions(data)).catch(() => setOptions({ members: [], users: [], boxes: [], dates: [] }));
+  }, [needed, options]);
+  const act = async (work, touchesPlan = false) => {
+    setError('');
+    try { setView((await work()).data); if (touchesPlan) reloadPlan(); } catch (err) { setError(errorMessage(err, "Couldn't do that")); }
+  };
+  // A change to the plan's own day, or finishing the year, changes the plan too.
+  const touches = (path, body) => (path === `years/${planId}` && Boolean(body?.day)) || path.endsWith('/finish');
+  const post = (path, body) => act(() => axios.post(`${HOLIDAY_API}/${path}`, body), touches(path, body));
+  const put = (path, body) => act(() => axios.put(`${HOLIDAY_API}/${path}`, body), touches(path, body));
   const del = (path) => act(() => axios.delete(`${HOLIDAY_API}/${path}`));
+  // A view made before the plan became yearly (or stopped being yearly) is not the one to show.
+  const current = view && view.plan_id === planId && Boolean(plan.yearly) === (view.holiday !== null);
+  return { view: current ? view : null, options, error, act, post, put, del };
+}
+
+/**
+ * Guests, cards, gifts and decorations on any plan, using the same sections as a holiday's year. A plan that comes back
+ * every year also gets the holiday's own sections, each by its part. Each sits in the plan's grid in its part's place.
+ */
+function Gathering({ plan, g }) {
+  const { view, options, error, act, post, put, del } = g;
+  if (!view || !options) return null;
   const uses = (part) => plan.parts.includes(part);
   const box = (part, child) => <div style={{ order: partOrder(part) }}>{child}</div>;
+  const yearly = view.holiday !== null;
   return (
     <>
       {error && <p className="text-sm text-red-600" style={{ order: 0 }}>{error}</p>}
+      {yearly && <div style={{ order: -1 }}><Basics year={view} put={put} parts={plan.parts} /></div>}
+      {yearly && uses('food') && box('food', <Countdown year={view} put={put} post={post} del={del} />)}
       {uses('guests') && box('guests', <People year={view} options={options} post={post} put={put} del={del} role="guest" />)}
       {uses('cards') && box('cards', <People year={view} options={options} post={post} put={put} del={del} role="card" />)}
       {uses('gifts') && box('gifts', <Gifts year={view} options={options} post={post} put={put} del={del} />)}
-      {uses('decorations') && box('decorations', <Decor year={view} options={options} post={post} put={put} del={del} act={act} mode={plan.when === 'past' ? 'down' : 'up'} />)}
+      {uses('decorations') && box('decorations', yearly ? (
+        <div className="space-y-3">
+          <Shopping year={view} put={put} />
+          <Decor year={view} options={options} post={post} put={put} del={del} act={act} mode="up" />
+          <Decor year={view} options={options} post={post} put={put} del={del} act={act} mode="down" />
+        </div>
+      ) : <Decor year={view} options={options} post={post} put={put} del={del} act={act} mode={plan.when === 'past' ? 'down' : 'up'} />)}
+      {yearly && uses('budget') && box('budget', <Budget year={view} />)}
     </>
   );
 }
@@ -166,9 +205,11 @@ export default function PlansPage() {
   useEffect(() => { load(); }, [load]);
   if (!lines) return null;
   const shown = lines.filter((l) => (kind === 'all' || (kind === 'yearly' ? l.yearly : l.kind === kind)) && (!tagged || tagged.has(l.key)));
-  const plainIds = lines.filter((l) => l.link.startsWith('/plans/') && /^\/plans\/\d+$/.test(l.link)).map((l) => Number(l.key.slice(5)));
+  // Only one-time plans can be picked together: a yearly plan's years are kept as they are.
+  const plainOf = (l) => (!l.yearly && /^\/plans\/\d+$/.test(l.link) && /^plan-\d+$/.test(l.key) ? Number(l.key.slice(5)) : null);
+  const plainIds = lines.map(plainOf).filter((n) => n !== null);
   const row = (l) => {
-    const planId = /^\/plans\/\d+$/.test(l.link) ? Number(l.key.slice(5)) : null;
+    const planId = plainOf(l);
     if (l.small) return (
       <li key={l.key}>
         <Link to={l.link} className="flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-sm text-gray-700 hover:bg-life-50 dark:text-life-100 dark:hover:bg-life-800">
@@ -309,6 +350,7 @@ export function PlanPage() {
     if (!recipesKey) { setCost(null); return; }
     axios.get(`/api/plans/${id}/cost`).then(({ data }) => setCost(data)).catch(() => setCost(null));
   }, [id, recipesKey]);
+  const g = useGathering(plan ?? undefined, load);
   if (plan === undefined) return null;
   if (plan === null) return <p className="text-sm text-gray-500 dark:text-life-300">That plan isn't here anymore. It may have been deleted. <Link to="/plans" className="underline">All plans</Link></p>;
 
@@ -322,6 +364,11 @@ export function PlanPage() {
     navigate('/plans');
   };
   const BADGE = { ahead: 'Coming up', now: 'Now', past: 'A memory' };
+  const yearly = plan.yearly;
+  const startNext = async (day) => {
+    setError('');
+    try { const { data } = await axios.post(`${HOLIDAY_API}/${yearly.holiday_id}/years`, day ? { day } : {}); navigate(`/plans/${data.plan_id}`); } catch (err) { setError(errorMessage(err, "Couldn't start it")); }
+  };
   return (
     <div className="space-y-4">
       <Link to="/plans" className="text-sm text-life-600 hover:underline dark:text-life-200">← Plans</Link>
@@ -329,13 +376,26 @@ export function PlanPage() {
         <div className="mr-auto">
           <h1 className="text-2xl font-semibold text-life-800 dark:text-life-50">{plan.name} <span className="ml-1 rounded bg-life-100 px-1.5 align-middle text-[11px] font-normal text-life-700">{BADGE[plan.when]}</span></h1>
           <p className="text-sm text-gray-600 dark:text-life-200">{daysText(plan, true)}</p>
+          {yearly && <p className="text-sm text-gray-600 dark:text-life-200">Yearly · {yearly.rule_words}{g.view?.turns ? ` · ${g.view.turns} years` : ''}</p>}
           {plan.note && <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700 dark:text-life-100">{plan.note}</p>}
         </div>
-        <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Change</button>
-        <button type="button" onClick={() => setModal('parts')} className={quietButtonClass}>Parts</button>
-        <button type="button" onClick={() => setModal('again')} className={quietButtonClass}>Do it again</button>
+        <button type="button" onClick={() => setModal('edit')} className={`${quietButtonClass} min-h-[44px]`}>Change</button>
+        <button type="button" onClick={() => setModal('parts')} className={`${quietButtonClass} min-h-[44px]`}>Parts</button>
+        <button type="button" onClick={() => setModal('yearly')} className={`${quietButtonClass} min-h-[44px]`}>Every year</button>
+        {!yearly && <button type="button" onClick={() => setModal('again')} className={`${quietButtonClass} min-h-[44px]`}>Do it again</button>}
       </div>
+      {yearly && yearly.years.length > 1 && (
+        <nav aria-label="Years" className="flex flex-wrap gap-1.5">
+          {yearly.years.map((y) => (
+            <Link key={y.plan_id} to={`/plans/${y.plan_id}`} aria-current={y.plan_id === plan.id ? 'page' : undefined}
+              className={`flex min-h-[44px] items-center rounded-full px-3 text-sm ${y.plan_id === plan.id ? 'bg-life-600 text-white' : 'bg-life-50 text-life-700 hover:bg-life-100 dark:bg-life-700 dark:text-life-50'}`}>{y.year}</Link>
+          ))}
+        </nav>
+      )}
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {yearly && <GivenToYou only={yearly.name} />}
+      {yearly && yearly.next_due && <NextYear name={yearly.name} manual={yearly.rule.kind === 'manual'} start={startNext} />}
+      {yearly && g.view && <LastNote year={g.view} />}
       {cost && cost.ingredients > 0 && plan.when !== 'past' && (uses('food') || uses('budget')) && (
         <div className="rounded-lg bg-life-50 px-3 py-2 text-sm text-gray-700 dark:bg-life-800 dark:text-life-100" data-plan-cost>
           {cost.priced === 0 ? <p>No prices yet for this plan's food. Type prices as you shop and a rough cost shows here.</p> : (
@@ -353,7 +413,7 @@ export function PlanPage() {
       )}
 
       <div className="grid gap-3 md:grid-cols-2">
-        {GATHERING.some(uses) && <Gathering plan={plan} />}
+        <Gathering plan={plan} g={g} />
         {OUTDOOR.some(uses) && <Outdoor plan={plan} />}
         {uses('tasks') && <section className={cardClass} style={{ order: partOrder('tasks') }}>
           <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">Helpers and tasks {tasks.length > 0 && <span className="text-sm font-normal text-gray-500 dark:text-life-300">{tasks.filter((t) => t.done).length} of {tasks.length}</span>}</h2>
@@ -425,18 +485,55 @@ export function PlanPage() {
         </section>
       )}
 
-      {plan.when !== 'ahead' && <Story plan={plan} onSaved={setPlan} />}
+      {yearly ? (g.view && <Ending key={plan.id} year={g.view} past={g.view.when === 'past'} post={g.post} reload={load} />) : plan.when !== 'ahead' && <Story plan={plan} onSaved={setPlan} />}
       <Photos plan={plan} onChanged={setPlan} onOpen={(photo) => setModal({ photo })} />
 
       <button type="button" onClick={remove} className="text-sm text-red-600 hover:underline">Remove this plan</button>
 
       {modal === 'edit' && <Modal title={plan.name} onClose={() => setModal(null)}><PlanForm plan={plan} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
       {modal === 'parts' && <Modal title="Parts of this plan" onClose={() => setModal(null)}><PartsForm plan={plan} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
+      {modal === 'yearly' && <Modal title={`${plan.name}, every year`} onClose={() => setModal(null)}><YearlyForm plan={plan} onDone={(p) => { if (p) setPlan(p); else load(); setModal(null); }} /></Modal>}
       {modal === 'again' && <Modal title={`${plan.name}, again`} onClose={() => setModal(null)}><AgainForm plan={plan} onDone={(p) => { setModal(null); navigate(`/plans/${p.id}`); }} /></Modal>}
       {modal?.add && <Modal title={`Add ${HOLDS[modal.add].add}`} onClose={() => setModal(null)}><Picker kind={modal.add} plan={plan} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
       {modal?.eaten && <Modal title={modal.eaten.label} onClose={() => setModal(null)}><EatenForm plan={plan} item={modal.eaten} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
       {modal?.photo && <Modal title="Photo" wide onClose={() => setModal(null)}><PhotoView photo={modal.photo} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
     </div>
+  );
+}
+
+/**
+ * Make a one-time plan come back every year, or change how a yearly plan finds its day. A yearly plan can also stop:
+ * each of its years stays as a plan.
+ */
+function YearlyForm({ plan, onDone }) {
+  const y = plan.yearly;
+  const [form, setForm] = useState(() => ruleStart(y ? y.rule : null, y?.lead_weeks, plan.start_day));
+  const [error, setError] = useState('');
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const submit = async (e) => {
+    e.preventDefault();
+    try {
+      if (y) { await axios.put(`${HOLIDAY_API}/${y.holiday_id}`, { name: y.name, ...ruleBody(form) }); onDone(null); }
+      else onDone((await axios.post(`${HOLIDAY_API}/from-plan`, { plan_id: plan.id, ...ruleBody(form) })).data);
+    } catch (err) { setError(errorMessage(err, "Couldn't save")); }
+  };
+  const stop = async () => {
+    if (!window.confirm(`Stop keeping ${y.name} as a yearly plan? Each of its years stays as a plan, to look back on.`)) return;
+    try { await axios.delete(`${HOLIDAY_API}/${y.holiday_id}`); onDone(null); } catch (err) { setError(errorMessage(err, "Couldn't stop it")); }
+  };
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <p className="text-sm text-gray-600 dark:text-life-100">
+        {y ? 'This plan comes back each year. Change how its day is found, or when to start planning.'
+          : 'This plan becomes the first year of a yearly plan. Each year starts from the one before: the same parts and lists, with nothing checked off.'}
+      </p>
+      <RuleFields form={form} set={set} />
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {y ? <button type="button" onClick={stop} className="min-h-[44px] text-sm text-red-700 hover:underline dark:text-red-300">Stop coming back every year</button> : <span />}
+        <button type="submit" className={`${buttonClass} min-h-[44px]`}>{y ? 'Save' : 'Make it yearly'}</button>
+      </div>
+    </form>
   );
 }
 

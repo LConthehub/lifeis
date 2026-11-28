@@ -61,7 +61,7 @@ await dialog.getByLabel('Name *').fill('Thanksgiving');
 say('the form starts on the fourth Thursday of November', (await dialog.locator('select').nth(1).inputValue()) === '4' && (await dialog.locator('select').nth(2).inputValue()) === '4' && (await dialog.locator('select').nth(3).inputValue()) === '11');
 await dialog.getByRole('button', { name: 'Add it' }).click(); await wait(1500);
 t = await text();
-say(`Thanksgiving ${year1} is made on ${day1}`, t.includes(`Thanksgiving ${year1}`) && t.includes('Fourth Thursday of November'));
+say(`Thanksgiving ${year1} is made on ${day1}, on its plan page`, /\/plans\/\d+$/.test(page.url()) && t.includes(`Thanksgiving ${year1}`) && /Yearly · Fourth Thursday of November/.test(t));
 const holiday = (await send('GET', '/api/plans/holidays'))[0];
 say('its first year is the fourth Thursday', holiday.years[0].day === day1);
 const planId = holiday.years[0].plan_id;
@@ -71,8 +71,11 @@ await page.getByLabel('Dinner is at').fill('17:00'); await page.getByLabel('Dinn
 await page.getByLabel('Frozen turkey, in pounds').fill('16'); await page.getByLabel('Frozen turkey, in pounds').blur(); await wait(900);
 t = await text();
 say('a 16 pound turkey asks for 4 days in the refrigerator, with its source', /needs 4 days in the refrigerator/.test(t) && /USDA: thawing in the refrigerator/.test(t));
-await region('The menu').getByLabel('Add a recipe').selectOption({ label: 'Roast turkey' });
-await region('The menu').getByRole('button', { name: 'Add', exact: true }).click(); await wait(1200);
+// The menu is the plan's Food list.
+await page.getByRole('button', { name: '+ Add', exact: true }).click(); await wait(600);
+await dialog.getByLabel('Which *').selectOption({ label: 'Roast turkey' });
+await dialog.getByLabel("On the week's meals").selectOption({ label: "Not on the week: just note it here" });
+await dialog.getByRole('button', { name: 'Add', exact: true }).click(); await wait(1500);
 await page.getByLabel('Put the decorations up on').fill(iso(new Date(new Date(day1 + 'T12:00').getTime() - 7 * 86400000))); await page.getByLabel('Put the decorations up on').blur(); await wait(600);
 const count = region('Dinner countdown');
 t = await count.innerText();
@@ -120,9 +123,12 @@ if (Date.parse(day1 + 'T12:00') - Date.now() <= 42 * 86400000) {
   await homeCard.screenshot({ path: `${shots}/holidays-home-card-375.png` });
   if (extra) await homeCard.screenshot({ path: `${extra}/holidays-home-card-375.png` });
 } else say('more than six weeks ahead, Coming up shows no step for the holiday yet', !/Next:/.test(await homeCard.innerText().catch(() => '')));
-await page.goto(base + `/plans/holidays/${holiday.id}/${planId}`); await wait(1200);
+await page.goto(base + `/plans/holidays/${holiday.id}/${planId}`); await wait(1500);
+say('the old holiday-year address opens the plan page', page.url().endsWith(`/plans/${planId}`));
 await shot('holidays-year-375', { fullPage: true });
-const small = await tooSmall([page.locator('main button'), page.locator('main select'), page.locator('main input:not([type=checkbox]):not([type=file])'), page.locator('main summary')]);
+// The year's own sections (the rest of the plan page has its own checks).
+const mine = ['The day', 'Dinner countdown', 'Put up', 'Take down', 'Who came', 'Cards', 'Gifts', 'Budget', 'How it went'].map(region);
+const small = await tooSmall(mine.flatMap((r) => [r.locator('button'), r.locator('select'), r.locator('input:not([type=checkbox]):not([type=file])'), r.locator('summary')]));
 say('the year page has 44px controls' + (small.length ? ` (too small: ${small})` : ''), small.length === 0);
 say('the year page does not scroll sideways', await noSideways());
 
@@ -143,7 +149,7 @@ await page.getByLabel('What should next year remember?').fill('Brine the turkey 
 await page.getByRole('button', { name: 'Finish this year' }).click(); await wait(1500);
 const after = (await send('GET', `/api/plans/holidays/${holiday.id}`));
 say('finishing started next year on its own day, the fourth Thursday', after.years.length === 2 && after.years[0].day === day2);
-await page.goto(base + `/plans/holidays/${holiday.id}/${after.years[0].plan_id}`); await wait(1500);
+await page.goto(base + `/plans/${after.years[0].plan_id}`); await wait(1500);
 t = await text();
 say('next year keeps the notes, the guests and the cards, none ticked', /Brine the turkey a day earlier/.test(t) && /Aunt June/.test(t) && /0 of 1 came/.test(t) && /Grandma/.test(t));
 say('what broke is on the shopping list', /To buy for this year/.test(t) && /String lights/.test(t) && /broke last year/.test(t));
@@ -176,12 +182,12 @@ await page.goto(base + '/plans/holidays'); await wait(1000);
 t = await text();
 say('after the day the holidays page shows what you were given: ' + t.replace(/\s+/g, ' ').slice(0, 120), /Given to you/.test(t) && /A pair of binoculars/.test(t) && /Thanksgiving 2020/.test(t));
 await page.goto(base + `/plans/holidays/${holiday.id}`); await wait(1000);
-say('and the page of a holiday with that name shows it too', /A pair of binoculars/.test(await text()));
+say('and the holiday opens its plan page, which shows it too', /\/plans\/\d+$/.test(page.url()) && /A pair of binoculars/.test(await text()));
 await page.unroute('**/api/plans/holidays/given-to-me');
 
 // ---------- wide screen, and nothing broke ----------
 await page.setViewportSize({ width: 1280, height: 900 }); await wait(500);
-await page.goto(base + `/plans/holidays/${holiday.id}/${after.years[0].plan_id}`); await wait(1200);
+await page.goto(base + `/plans/${after.years[0].plan_id}`); await wait(1200);
 say('at 1280px the year page has no sideways scroll', await noSideways());
 await page.setViewportSize({ width: 375, height: 812 });
 say('no request failed' + (bad.length ? `: ${bad.join(' | ')}` : ''), bad.length === 0);

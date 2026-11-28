@@ -332,6 +332,8 @@ it('offers to start this year when none was started and its lead time has come',
   expect((await mine().cards())[0]).toMatchObject({ stage: 'start', plan_id: null, link: `/plans/holidays/${made.id}` });
   const year = await mine().startYear(made.id);
   expect(year.day).toBe('2026-11-26');
+  // With a year made, the card opens that year's plan page.
+  expect((await mine().cards())[0]).toMatchObject({ plan_id: year.plan_id, link: `/plans/${year.plan_id}` });
 });
 
 it('reminds in the morning round: start planning, put up, take down', async () => {

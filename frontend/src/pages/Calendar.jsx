@@ -128,7 +128,7 @@ function EventForm({ event, onDone }) {
   const remove = async () => { await axios.delete(`/api/calendar/events/${event.id}`).catch(() => {}); onDone(); };
   // A birthday, anniversary or other yearly date becomes a holiday with one tap: its own plan each year, started from last year's.
   const makeHoliday = async () => {
-    try { const { data } = await axios.post('/api/plans/holidays/from-event', { event_id: event.id }); navigate(`/plans/holidays/${data.id}/${data.years[0].plan_id}`); } catch (err) { setError(errorMessage(err, "Couldn't make that a holiday")); }
+    try { const { data } = await axios.post('/api/plans/holidays/from-event', { event_id: event.id }); navigate(`/plans/${data.years[0].plan_id}`); } catch (err) { setError(errorMessage(err, "Couldn't make that a holiday")); }
   };
   return (
     <form onSubmit={submit} className="space-y-3">

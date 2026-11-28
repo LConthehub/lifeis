@@ -801,7 +801,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
         const y = s.year;
         out.push({ holiday_id: h.id, plan_id: y?.plan_id ?? null, name: h.name, year: y?.year ?? null, day: y?.day ?? null,
           days_until: y ? Math.max(0, dayNumber(y.day) - dayNumber(today())) : null, stage: s.stage, next: s.next,
-          link: y && s.stage !== 'start' ? `/plans/holidays/${h.id}/${y.plan_id}` : `/plans/holidays/${h.id}` });
+          link: y && s.stage !== 'start' ? `/plans/${y.plan_id}` : `/plans/holidays/${h.id}` });
       }
       return out.sort((a, b) => (a.days_until ?? 9999) - (b.days_until ?? 9999));
     },
@@ -813,7 +813,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       for (const r of await db.all<{ holiday_id: number; name: string; lead_weeks: number; plan_id: number; start_day: string; put_up_on: string | null; take_down_on: string | null }>(
         `SELECT h.id AS holiday_id, h.name, h.lead_weeks, y.plan_id, p.start_day, y.put_up_on, y.take_down_on FROM holiday_years y JOIN holidays h ON h.id = y.holiday_id JOIN plans p ON p.id = y.plan_id
          WHERE h.owner_id = ? AND p.start_day >= ? AND p.start_day <= ? ORDER BY p.start_day`, [owner, addDays(day, -30), addDays(day, 26 * 7 + 1)])) {
-        const link = `/plans/holidays/${r.holiday_id}/${r.plan_id}`;
+        const link = `/plans/${r.plan_id}`;
         if (addDays(r.start_day, -r.lead_weeks * 7) === day) out.push({ title: `Time to start planning ${r.name}`, detail: `${r.lead_weeks} weeks to go`, link, urgent: false });
         const left = async (col: 'put_up' | 'taken_down') => (await db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM holiday_decor WHERE plan_id = ? AND ${col} = 0`, [r.plan_id]))!.n;
         if (r.put_up_on === day && (await left('put_up')) > 0) out.push({ title: `Put up the ${r.name} decorations`, detail: `${await left('put_up')} still to put up`, link, urgent: true });
@@ -834,7 +834,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
         const c = await countdownOf(r.plan_id, await yearRow(db, r.plan_id), r.day);
         for (const s of c.steps) {
           if (s.done || s.reminded_on_week || s.due_day < from || s.due_day > to) continue;
-          out.push({ key: `holiday|${r.plan_id}|${s.key}|${s.due_day}T${s.due_time}`, words: s.words, what: `${r.name} dinner`, eat_time: c.dinner_time!, due_day: s.due_day, due_time: s.due_time, link: `/plans/holidays/${r.holiday_id}/${r.plan_id}` });
+          out.push({ key: `holiday|${r.plan_id}|${s.key}|${s.due_day}T${s.due_time}`, words: s.words, what: `${r.name} dinner`, eat_time: c.dinner_time!, due_day: s.due_day, due_time: s.due_time, link: `/plans/${r.plan_id}` });
         }
       }
       return out;
