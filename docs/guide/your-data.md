@@ -55,7 +55,7 @@ This lets an AI app you use, such as Claude, read the parts you check and add a 
 
 ## Taking it with you
 
-**Export everything** (Settings › Your data, under Import and export) makes one zip of it all. Recipes export as a zip on their own. The home inventory prints or saves as a PDF. A backup holds everything.
+**Export everything** (Settings › Your data, under Import and export) makes one zip of it all. Recipes export as a zip on their own. The home inventory prints or saves as a PDF. A backup holds everything. Car recall look-ups are not in the download, because they are copied from the safety agency and read again the next time you check (a recall you dismissed will show again).
 
 **Letterboxd, in and out.** On the Lists tab, **From Letterboxd** brings in the zip from Letterboxd's Export your data: watched days, watchlist, lists, half-star ratings and reviews. The files are read here, you see the counts first, and nothing is kept until you say so. Reading the same download again adds nothing. Any list can also be saved as a CSV that Letterboxd's importer takes (**Make a Letterboxd file**). Neither way sends anything to Letterboxd: you carry the file yourself. Your ratings are in the download of everything too. [Films, music and books](collection.html#letterboxd) has the details.
 

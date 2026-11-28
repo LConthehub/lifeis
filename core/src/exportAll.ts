@@ -419,14 +419,19 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     const bytes = bytesOf(p.bytes);
     if (bytes) photoPath.set(p.item_id as number, out.binary('pictures/things', slug(str(p.name), p.item_id as number), str(p.type), bytes));
   }
-  const shownValue = (f: R, stored: string | undefined) => (stored === undefined ? '' : f.type === 'yesno' ? (stored === '1' ? 'yes' : 'no') : stored);
+  // A private thing (a gun, ammunition) is shared only with the people chosen for it, by sign-in name.
+  const sharedItems = new Map<number, string[]>();
+  for (const s of await all('SELECT s.item_id, u.username FROM item_shares s JOIN items i ON i.id = s.item_id JOIN users u ON u.id = s.user_id WHERE i.owner_id = ? ORDER BY u.username')) {
+    sharedItems.set(s.item_id as number, [...(sharedItems.get(s.item_id as number) ?? []), str(s.username)]);
+  }
+  const shownValue = (f: R,stored: string | undefined) => (stored === undefined ? '' : f.type === 'yesno' ? (stored === '1' ? 'yes' : 'no') : stored);
   out.csv('things.csv',
     ['Name', 'Kind', 'Place', 'Amount', 'Unit', 'Running low at', 'Notes', 'For activities', 'Barcode', 'Make or model', 'Serial number', 'Bought on', 'Bought at', 'Cost', 'Worth now', 'Warranty until', 'Photo file',
-      'Asset number', 'Insured', 'No longer have', 'Gone on', 'Gone to', 'Gone price', ...fieldColumns.map((c) => c.heading)],
+      'Asset number', 'Insured', 'No longer have', 'Gone on', 'Gone to', 'Gone price', 'Shared with', ...fieldColumns.map((c) => c.heading)],
     items.map((i) => [
       str(i.name), str(i.kind), where(i.place_id), str(i.quantity), str(i.unit), str(i.low_at), str(i.note), (doing.get(i.id as number) ?? []).join('; '), str(i.barcode),
       str(i.model), str(i.serial), str(i.bought_on), str(i.bought_at), dollars(i.price_cents), dollars(i.value_cents), str(i.warranty_until), photoPath.get(i.id as number) ?? '',
-      assetLabel(num(i.asset_no) ?? 0), i.insured ? 'yes' : 'no', str(i.gone_how), str(i.gone_on), str(i.gone_to), dollars(i.gone_cents),
+      assetLabel(num(i.asset_no) ?? 0), i.insured ? 'yes' : 'no', str(i.gone_how), str(i.gone_on), str(i.gone_to), dollars(i.gone_cents), (sharedItems.get(i.id as number) ?? []).join('; '),
       ...fieldColumns.map((c) => (c.field.kind_id === i.kind_id ? shownValue(c.field, values.get(`${i.id}:${c.field.id}`)) : '')),
     ]));
   const itemName = new Map(items.map((i) => [i.id as number, i]));
@@ -612,6 +617,23 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
       .map((i) => [str(planOf.get(i.plan_id as number)?.name), str(i.kind), str(i.label), str(i.quantity), yes(i.done), str(i.note), yes(i.returned), str(i.after_trip), yes(i.after_done), '', str(i.thaw_pounds)]),
     ...foodRows.map((f) => [str(planOf.get(f.plan_id as number)?.name), 'food', str(f.label), '', yes(f.done), '', '', '', '', str(f.brought_by), str(f.thaw_pounds)]),
   ]);
+  // The check marks on a plan's countdown that are not steps of its own (thawing, cooking, a recipe's prep steps), by name, because their numbers do not travel.
+  const foodName = new Map((await all('SELECT f.id, f.label FROM plan_food f JOIN plans p ON p.id = f.plan_id WHERE p.owner_id = ?')).map((f) => [f.id as number, str(f.label)]));
+  const itemLabel = new Map((await all("SELECT i.id, i.label FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ? AND i.kind = 'recipe'")).map((i) => [i.id as number, str(i.label)]));
+  const recipeName = new Map((await all('SELECT id, title FROM recipes WHERE owner_id = ?')).map((r) => [r.id as number, str(r.title)]));
+  const stepWords = new Map((await all('SELECT id, words FROM prep_steps WHERE owner_id = ?')).map((s) => [s.id as number, str(s.words)]));
+  const checkRows: Cell[][] = [];
+  for (const t of await all('SELECT t.plan_id, t.key FROM holiday_ticks t JOIN plans p ON p.id = t.plan_id WHERE p.owner_id = ? ORDER BY t.plan_id, t.key')) {
+    const key = str(t.key);
+    const plan = [str(planOf.get(t.plan_id as number)?.name), str(planOf.get(t.plan_id as number)?.start_day)];
+    const one = /^([ftc])(\d+)$/.exec(key);
+    const step = /^r(\d+):(\d+)$/.exec(key);
+    if (one?.[1] === 'f' && foodName.has(Number(one[2]))) checkRows.push([...plan, 'thaw food', foodName.get(Number(one[2]))!, '']);
+    else if (one?.[1] === 't' && itemLabel.has(Number(one[2]))) checkRows.push([...plan, 'thaw recipe', itemLabel.get(Number(one[2]))!, '']);
+    else if (one?.[1] === 'c' && recipeName.has(Number(one[2]))) checkRows.push([...plan, 'cook', recipeName.get(Number(one[2]))!, '']);
+    else if (step && recipeName.has(Number(step[1])) && stepWords.has(Number(step[2]))) checkRows.push([...plan, 'recipe step', recipeName.get(Number(step[1]))!, stepWords.get(Number(step[2]))!]);
+  }
+  out.csv('plan-checks.csv', ['Plan', 'Starts', 'Checked off', 'What', 'Step'], checkRows);
   const planPhotos: Cell[][] = [];
   for (const p of await all('SELECT p.id, p.plan_id, p.source, p.type, p.bytes, p.caption, p.spot FROM plan_photos p JOIN plans pl ON pl.id = p.plan_id WHERE pl.owner_id = ? ORDER BY p.plan_id, p.sort_order, p.id')) {
     const plan = planOf.get(p.plan_id as number)!;
@@ -793,7 +815,7 @@ const FILE_ABOUT: [string, string][] = [
   ['barcodes.csv', 'The barcodes you taught Life Is for groceries: which ingredient each is, its product name and its size.'],
   ['places.csv', 'Every place (a room, a shelf, a box) as its full path, such as Sewing room › Shelf 2.'],
   ['kinds.csv', 'The kinds of thing you made (Fabric, Seeds) and the fields each has.'],
-  ['things.csv', 'Everything you keep: where it is, how many, what it cost and is worth, model and serial number, warranty, asset number, whether it is insured, whether it has gone (sold, given away, thrown out or stolen), and a column for each field of its kind.'],
+  ['things.csv', 'Everything you keep: where it is, how many, what it cost and is worth, model and serial number, warranty, asset number, whether it is insured, whether it has gone (sold, given away, thrown out or stolen), who a private thing is shared with, and a column for each field of its kind.'],
   ['thing-own-fields.csv', 'The fields you added to one thing yourself: a name and a value for each.'],
   ['thing-papers.csv', 'The receipts, manuals and warranty cards kept with things, and the file each is in.'],
   ['thing-history.csv', 'Where each thing has been and what it was used for.'],
@@ -813,7 +835,7 @@ const FILE_ABOUT: [string, string][] = [
   ['lists.csv', 'Your lists of titles (To watch, read or hear, and the ones you made): each title on each list, in order, and whether the list is shared. Titles you do not own yet are in collection.csv, marked Not owned yet.'],
   ['events.csv', 'Calendar events you wrote.'],
   ['projects.csv', 'Projects, and project-lines.csv, project-time.csv and project-costs.csv for what they use, the time spent and what they cost.'],
-  ['plans.csv', 'Plans (with when the food is served), and plan-items.csv and plan-photos.csv for what belongs to each. In plan-items.csv, rows of kind food are food that is bought or brought; a frozen weight makes a step to thaw it.'],
+  ['plans.csv', 'Plans (with when the food is served), and plan-items.csv and plan-photos.csv for what belongs to each. In plan-items.csv, rows of kind food are food that is bought or brought; a frozen weight makes a step to thaw it. plan-checks.csv has the thawing, cooking and recipe steps checked off on a plan.'],
   ['holidays.csv', 'Holidays: how each finds its day. holiday-years.csv has each year (its plan, days to put up and take down, notes for next year) and holiday-lists.csv has what each year keeps: guests, cards, gifts, decorations and countdown steps.'],
   ['outdoor-trips.csv', 'Outdoor trips: the parts each has on. outdoor-trip-years.csv has each year (its plan, the water, the site booking, notes for next year) and outdoor-trip-lists.csv has what each year kept: the bring list, seasons, the catch log and the harvest log.'],
   ['money-categories.csv', 'Your spending categories and what each is for a month.'],
@@ -1180,6 +1202,13 @@ const importers: Record<string, Importer> = {
           goneOn ? dayOf(goneOn) : null, goneOn ? goneHow : null, goneOn ? clean(cellOf(row, 'Gone to'), 200) : null, goneOn ? centsOf(cellOf(row, 'Gone price')) : null, c.at, c.at]);
       const id = made.lastId;
       fresh.set(key, fresh.get(key) ?? id);
+      // Who a private thing is shared with: the people here with those sign-in names. Only a private thing can be shared.
+      if ((await c.tx.get<{ guard: string | null }>('SELECT guard FROM kinds WHERE id = ?', [kind.id]))?.guard) {
+        for (const person of new Set(listOf(cellOf(row, 'Shared with')))) {
+          const found = await c.tx.get<{ id: number }>('SELECT id FROM users WHERE username = ? COLLATE NOCASE', [person]);
+          if (found && found.id !== c.owner) await c.tx.run('INSERT OR IGNORE INTO item_shares (item_id, user_id, created_at) VALUES (?, ?, ?)', [id, found.id, c.at]);
+        }
+      }
       d.fresh += 1;
       for (const [n, activity] of [...new Map(listOf(cellOf(row, 'For activities')).map((a) => [labelKey(a), a])).entries()].slice(0, 20).entries()) {
         void n;
@@ -1891,6 +1920,11 @@ ${mediaId}`);
       const name = clean(cellOf(row, 'Category'), 80);
       if (!name || mine.has(labelKey(name))) continue;
       const id = (await c.tx.run('INSERT INTO money_categories (owner_id, name, monthly_cents, sort_order, created_at) VALUES (?, ?, ?, ?, ?)', [c.owner, name, centsOf(cellOf(row, 'Each month')) ?? 0, next, c.at])).lastId;
+      // Who it is shared with: the people here with those sign-in names.
+      for (const person of new Set(listOf(cellOf(row, 'Shared with')))) {
+        const found = await c.tx.get<{ id: number }>('SELECT id FROM users WHERE username = ? COLLATE NOCASE', [person]);
+        if (found && found.id !== c.owner) await c.tx.run('INSERT OR IGNORE INTO money_shares (category_id, user_id) VALUES (?, ?)', [id, found.id]);
+      }
       next += 1;
       madeCategories += 1;
       mine.set(labelKey(name), id);
@@ -2147,6 +2181,26 @@ ${mediaId}`);
           [made.lastId, kind, ref, label, quantity !== null && quantity > 0 ? quantity : null, clean(i.notes, 1000), yesOf(cellOf(i, 'Done')) ? 1 : 0, order,
             kind === 'thing' && yesOf(cellOf(i, 'Back home')) ? 1 : 0, kept, kept && yesOf(cellOf(i, 'After the trip done')) ? 1 : 0, kind === 'recipe' ? thaw : null]);
         order += 1;
+      }
+      // The check marks on its countdown, found again by the names of what they were for.
+      const planChecks = (tableOf(c.files, 'plan-checks.csv')?.rows ?? []).filter((r) => labelKey(cellOf(r, 'Plan')) === key && dayOf(cellOf(r, 'Starts')) === start);
+      if (planChecks.length > 0) {
+        const foodIds = new Map((await c.tx.all<{ id: number; label: string }>('SELECT id, label FROM plan_food WHERE plan_id = ? ORDER BY id DESC', [made.lastId])).map((f) => [labelKey(f.label), f.id]));
+        const recipeItemIds = new Map((await c.tx.all<{ id: number; label: string }>("SELECT id, label FROM plan_items WHERE plan_id = ? AND kind = 'recipe' ORDER BY id DESC", [made.lastId])).map((f) => [labelKey(f.label), f.id]));
+        for (const k of planChecks) {
+          const what = labelKey(cellOf(k, 'What'));
+          const kindOf = cellOf(k, 'Checked off').toLowerCase();
+          const recipe = pointed.recipe!.get(what);
+          let tick: string | null = null;
+          if (kindOf === 'thaw food' && foodIds.has(what)) tick = `f${foodIds.get(what)}`;
+          else if (kindOf === 'thaw recipe' && recipeItemIds.has(what)) tick = `t${recipeItemIds.get(what)}`;
+          else if (kindOf === 'cook' && recipe !== undefined) tick = `c${recipe}`;
+          else if (kindOf === 'recipe step' && recipe !== undefined) {
+            const found = await c.tx.get<{ id: number }>('SELECT id FROM prep_steps WHERE owner_id = ? AND recipe_id = ? AND words = ? ORDER BY id LIMIT 1', [c.owner, recipe, cellOf(k, 'Step')]);
+            if (found) tick = `r${recipe}:${found.id}`;
+          }
+          if (tick) await c.tx.run('INSERT OR IGNORE INTO holiday_ticks (plan_id, key) VALUES (?, ?)', [made.lastId, tick]);
+        }
       }
       for (const p of photos.filter(mine)) {
         const file = cellOf(p, 'File');
