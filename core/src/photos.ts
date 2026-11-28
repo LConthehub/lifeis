@@ -15,6 +15,7 @@
 import { serverUrl, type Answer, type Fetcher, type Sealer } from './connections.ts';
 import type { Db } from './db.ts';
 import { pictureType } from './plans.ts';
+import { unlessPaused } from './paused.ts';
 import { Problem } from './problem.ts';
 import { addDays, clean, dayNumber, type Clock } from './small.ts';
 
@@ -33,7 +34,9 @@ const SETTING = 'photo_library';
 const ASSET_ID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const MAX_PICTURE = 20_000_000;
 
-export function photoLibrary(db: Db, owner: number, _clock: Clock = () => new Date(), tools?: { fetcher: Fetcher; sealer: Sealer }) {
+export function photoLibrary(db: Db, owner: number, _clock: Clock = () => new Date(), reachable?: { fetcher: Fetcher; sealer: Sealer }) {
+  // Switched off in Settings, it keeps its setup and asks nothing of the library.
+  const tools = reachable && { ...reachable, fetcher: unlessPaused(db, owner, 'photos', reachable.fetcher) };
   const need = () => {
     if (!tools) throw new Problem(400, "This copy of Life Is isn't set up to reach outside services");
     return tools;

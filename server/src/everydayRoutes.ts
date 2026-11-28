@@ -23,6 +23,7 @@ import { mailRoutes, type MailTools } from './mailRoutes.ts';
 import { makingRoutes } from './makingRoutes.ts';
 import { moneyRoutes } from './moneyRoutes.ts';
 import { assistantRoutes } from './assistantRoutes.ts';
+import { pausedRoutes } from './pausedRoutes.ts';
 import { actionRoutes } from './actionRoutes.ts';
 import { holidayRoutes } from './holidayRoutes.ts';
 import { outdoorTripRoutes } from './outdoorTripRoutes.ts';
@@ -399,6 +400,7 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ...makingRoutes(db),
     ...moneyRoutes(db, options.bank),
     ...assistantRoutes(db, options.assistant),
+    ...pausedRoutes(db),
     ...actionRoutes(db),
     ...(options.reach ? connectionRoutes(db, options.reach) : []),
     ...enjoyingRoutes(db, options.calendars),

@@ -3,7 +3,7 @@ import CopyButton from '../components/Copy';
 import Icon from '../components/Icon';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
-import { OnOffBox, ForgetIt } from '../components/OnOff';
+import { OnOffBox, ForgetIt, usePaused } from '../components/OnOff';
 import { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { LifeAreasPicker } from '../components/LifeAreas';
 import AutoBackup from '../components/AutoBackup';
@@ -728,11 +728,13 @@ function MailService() {
   const [setup, setSetup] = useState(null);
   const [form, setForm] = useState(null);       // null: not adding
   const [details, setDetails] = useState(false);
+  const [opening, setOpening] = useState(false);   // the box is checked and no account is kept yet
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [paused, setPaused] = usePaused('mail');
   const load = () => axios.get('/api/mail').then(({ data }) => setSetup(data)).catch(() => {});
   useEffect(() => { load(); }, []);
-  if (!setup) return null;
+  if (!setup || paused === null) return null;
   const provider = form ? MAIL_PROVIDERS.find((p) => p.match.test(form.address.trim().toLowerCase())) : null;
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   // Typing the address fills in where its servers are, until the person changes them by hand.
@@ -748,27 +750,42 @@ function MailService() {
     setBusy(true); setMessage('');
     try {
       await axios.post('/api/mail/accounts', { ...form, name: form.name || null, username: form.username || null, imap_port: Number(form.imap_port), smtp_port: Number(form.smtp_port) });
-      setForm(null); setDetails(false); await load();
+      setForm(null); setDetails(false); setOpening(false); await load();
     } catch (err) { setMessage(errorMessage(err, "Couldn't add it")); }
     setBusy(false);
   };
   const remove = async (id) => { await axios.delete(`/api/mail/accounts/${id}`).catch(() => {}); load(); };
+  const has = setup.accounts.length > 0;
+  const on = has && !paused;
+  // Checking brings back kept accounts at once; with none kept, the sign-in form opens and it counts as on once an account is added.
+  const check = async (wanted) => {
+    setMessage('');
+    if (wanted) { if (has) await setPaused(false); else { setForm(EMPTY_ACCOUNT); setOpening(true); } return; }
+    setForm(null); setDetails(false); setOpening(false);
+    if (has) await setPaused(true);
+  };
+  const forget = async () => {
+    for (const a of setup.accounts) await axios.delete(`/api/mail/accounts/${a.id}`).catch(() => {});
+    await setPaused(false); load();
+  };
   return (
     <div className="py-3">
       <div className="flex items-baseline gap-2">
         <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="email" /> Email: read and answer your inbox</h3>
-        <span className={`rounded px-1.5 text-[11px] ${setup.accounts.length ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{setup.accounts.length ? 'On' : 'Off'}</span>
+        <span className={`rounded px-1.5 text-[11px] ${on ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{on ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Works with any provider that lets mail programs in (IMAP and SMTP). <span className="font-medium">What it does:</span> {setup.service.sends}</p>
       {!setup.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so email can't be turned on.</p> : (
         <div className="mt-2 space-y-2">
-          {setup.accounts.map((a) => (
+          <OnOffBox name="mail-on" label="Turn on email" checked={on || opening} onChange={check} />
+          {has && paused && <p className="text-sm text-gray-700 dark:text-life-100">Kept for later: {setup.accounts.map((a) => a.address).join(', ')}. <ForgetIt ask="Forget these email accounts? Their locked passwords are removed too." onForget={forget} /></p>}
+          {(on || opening) && setup.accounts.map((a) => (
             <div key={a.id} className="flex flex-wrap items-center gap-2 text-sm text-gray-800 dark:text-life-50">
               <span className="mr-auto"><span className="font-medium">{a.address}</span> <span className="text-xs text-gray-500 dark:text-life-300">{a.imap_host}</span></span>
               <button type="button" onClick={() => remove(a.id)} className={quietButtonClass}>Remove and forget its password</button>
             </div>
           ))}
-          {!form ? <button type="button" onClick={() => { setForm(EMPTY_ACCOUNT); setMessage(''); }} className={quietButtonClass}>+ Add an email account</button> : (
+          {!(on || opening) ? null : !form ? <button type="button" onClick={() => { setForm(EMPTY_ACCOUNT); setMessage(''); }} className={quietButtonClass}>+ Add an email account</button> : (
             <form onSubmit={add} className="space-y-3 rounded-lg bg-life-50/60 p-3 dark:bg-life-800">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Email address *"><input required type="email" autoComplete="off" value={form.address} onChange={setAddress} className={inputClass} /></Field>
@@ -792,7 +809,7 @@ function MailService() {
               )}
               {message && <p className="text-sm text-red-600">{message}</p>}
               <div className="flex items-center justify-end gap-2">
-                <button type="button" onClick={() => { setForm(null); setDetails(false); }} className={quietButtonClass}>Not now</button>
+                <button type="button" onClick={() => { setForm(null); setDetails(false); setOpening(false); }} className={quietButtonClass}>Not now</button>
                 <button type="submit" disabled={busy} className={buttonClass}>{busy ? 'Signing in to check…' : 'Sign in and add'}</button>
               </div>
               <p className="text-xs text-gray-500 dark:text-life-300">The account is only saved if signing in works. The password is stored locked, on this computer.</p>
@@ -812,8 +829,9 @@ function OtherCalendarsService() {
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [paused, setPaused] = usePaused('calendars');
   useEffect(() => { axios.get('/api/calendar/others').then(({ data }) => setO(data)).catch(() => {}); }, []);
-  if (!o) return null;
+  if (!o || paused === null) return null;
   const ask = async (send) => { setMessage(''); try { setO((await send()).data); return true; } catch (err) { setMessage(errorMessage(err, "Couldn't do that")); return false; } };
   const add = async (e) => {
     e.preventDefault();
@@ -823,7 +841,20 @@ function OtherCalendarsService() {
     if (await ask(() => axios.post('/api/calendar/others', { ...form, zone }))) setForm(null);
     setBusy(false);
   };
-  const on = o.calendars.length > 0;
+  const has = o.calendars.length > 0;
+  const on = has && !paused;
+  // Checking brings back kept links at once; with none kept, the form opens and it is on once a calendar is followed.
+  const check = async (wanted) => {
+    setMessage('');
+    if (wanted) { if (has) await setPaused(false); else setForm({ name: '', url: '', show: 'busy' }); return; }
+    setForm(null);
+    if (has) await setPaused(true);
+  };
+  const forget = async () => {
+    for (const c of o.calendars) await axios.delete(`/api/calendar/others/${c.id}`).catch(() => {});
+    await setPaused(false);
+    await ask(() => axios.get('/api/calendar/others'));
+  };
   return (
     <div className="py-3" id="other-calendars">
       <div className="flex items-baseline gap-2">
@@ -835,7 +866,9 @@ function OtherCalendarsService() {
       </p>
       {!o.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : (
         <div className="mt-2 space-y-2">
-          {o.calendars.map((c) => (
+          <OnOffBox name="calendars-on" label="Turn on other calendars" checked={on || Boolean(form)} onChange={check} />
+          {has && paused && <p className="text-sm text-gray-700 dark:text-life-100">Kept for later: {o.calendars.map((c) => c.name).join(', ')}. <ForgetIt ask="Forget these calendars? What was read from them, and their links, are removed." onForget={forget} /></p>}
+          {(on || form) && o.calendars.map((c) => (
             <div key={c.id} className="flex flex-wrap items-center gap-2 text-sm text-gray-800 dark:text-life-50">
               <span className="mr-auto">
                 <span className="font-medium">{c.name}</span> <span className="text-xs text-gray-500 dark:text-life-300">{SHOW_WORDS[c.show]} · {c.events} in view{c.fetched_at ? ` · read ${new Date(c.fetched_at).toLocaleString()}` : ''}</span>
@@ -846,7 +879,7 @@ function OtherCalendarsService() {
               <button type="button" onClick={() => { if (window.confirm(`Stop following ${c.name}? What was read from it, and its link, are forgotten.`)) ask(() => axios.delete(`/api/calendar/others/${c.id}`)); }} className={quietButtonClass}>Stop and forget</button>
             </div>
           ))}
-          {!form ? <button type="button" onClick={() => { setForm({ name: '', url: '', show: 'busy' }); setMessage(''); }} className={quietButtonClass}>+ Follow a calendar</button> : (
+          {!(on || form) ? null : !form ? <button type="button" onClick={() => { setForm({ name: '', url: '', show: 'busy' }); setMessage(''); }} className={quietButtonClass}>+ Follow a calendar</button> : (
             <form onSubmit={add} className="space-y-3 rounded-lg bg-life-50/60 p-3 dark:bg-life-800">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="What to call it *"><input required maxLength={60} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Work" className={inputClass} /></Field>
@@ -998,30 +1031,42 @@ function PhotoLibraryService() {
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [paused, setPaused] = usePaused('photos');
   useEffect(() => { axios.get('/api/photos').then(({ data }) => setL(data)).catch(() => {}); }, []);
-  if (!l) return null;
+  if (!l || paused === null) return null;
   const connect = async (e) => {
     e.preventDefault();
     setBusy(true); setMessage('');
     try { const { data } = await axios.put('/api/photos', form); setL(data); setForm(null); } catch (err) { setMessage(errorMessage(err, "Couldn't connect it")); }
     setBusy(false);
   };
-  const disconnect = async () => { const { data } = await axios.delete('/api/photos'); setL(data); };
+  const disconnect = async () => { const { data } = await axios.delete('/api/photos'); setL(data); await setPaused(false); setForm(null); };
+  const on = l.connected && !paused;
+  // Checking brings back a kept connection at once; with none kept, the form opens and it is on once saved.
+  const check = async (wanted) => {
+    setMessage('');
+    if (wanted) { if (l.connected) await setPaused(false); else setForm({ url: '', key: '' }); return; }
+    setForm(null);
+    if (l.connected) await setPaused(true);
+  };
   return (
     <div className="py-3">
       <div className="flex items-baseline gap-2">
         <h3 className="flex-1 font-medium text-gray-800 dark:text-life-50"><Icon of="photo" /> Photos from your Immich, on plans and memories</h3>
-        <span className={`rounded px-1.5 text-[11px] ${l.connected ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{l.connected ? 'On' : 'Off'}</span>
+        <span className={`rounded px-1.5 text-[11px] ${on ? 'bg-life-100 text-life-700' : 'bg-gray-100 text-gray-600'}`}>{on ? 'On' : 'Off'}</span>
       </div>
       <p className="mt-1 text-sm text-gray-600 dark:text-life-100">
         Link photos from your own <a href={l.service.site} target="_blank" rel="noreferrer" className="underline">{l.service.name}</a> library to a plan, without copying them. <span className="font-medium">What it does:</span> {l.service.sends}
       </p>
-      {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : l.connected ? (
+      {!l.available ? <p className="mt-2 text-sm text-gray-500 dark:text-life-300">This copy of Life Is isn't set up to reach outside, so this can't be turned on.</p> : <>
+      <OnOffBox name="photos-on" label="Turn on photos from Immich" checked={on || Boolean(form)} onChange={check} />
+      {l.connected && paused && <p className="text-sm text-gray-700 dark:text-life-100">Kept for later: <span className="font-medium">{l.url}</span>. <ForgetIt ask="Forget the Immich connection and its key?" onForget={disconnect} /></p>}
+      {!on && !form ? null : l.connected ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-800 dark:text-life-50">
           <span className="mr-auto">Connected to <span className="font-medium">{l.url}</span></span>
           <button type="button" onClick={disconnect} className={quietButtonClass}>Disconnect and forget its key</button>
         </div>
-      ) : !form ? <button type="button" onClick={() => { setForm({ url: '', key: '' }); setMessage(''); }} className={`${quietButtonClass} mt-2`}>Connect Immich</button> : (
+      ) : !form ? null : (
         <form onSubmit={connect} className="mt-2 space-y-3 rounded-lg bg-life-50/60 p-3 dark:bg-life-800">
           <p className="text-sm text-gray-600 dark:text-life-100">{l.service.needs}</p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -1035,6 +1080,7 @@ function PhotoLibraryService() {
           </div>
         </form>
       )}
+      </>}
     </div>
   );
 }

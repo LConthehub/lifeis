@@ -13,6 +13,7 @@
 import { upkeep } from './upkeep.ts';
 import type { Db, Value } from './db.ts';
 import { attachTags, idsWithTag, tagsOnto, unlink, type TagRef } from './tags.ts';
+import { PAUSED_CALENDARS } from './paused.ts';
 import { Problem } from './problem.ts';
 import { addDays, clean, dayNumber, dayOrNull, inOrder, stamp, type Clock } from './small.ts';
 
@@ -124,7 +125,7 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
       // Other calendars a person follows. One followed "busy only" has no titles: its times go under its own name.
       for (const o of await db.all<{ day: string; end_day: string | null; time: string | null; end_time: string | null; title: string | null; name: string; show: string }>(
         `SELECT e.day, e.end_day, e.time, e.end_time, e.title, f.name, f.show FROM followed_events e JOIN followed_calendars f ON f.id = e.calendar_id
-         WHERE f.owner_id = ? AND e.day <= ? AND COALESCE(e.end_day, e.day) >= ? ORDER BY e.day, e.time, e.id`, [owner, end, start])) {
+         WHERE f.owner_id = ? AND e.day <= ? AND COALESCE(e.end_day, e.day) >= ? AND NOT ${PAUSED_CALENDARS} ORDER BY e.day, e.time, e.id`, [owner, end, start, owner])) {
         const last = o.end_day ?? o.day;
         for (let day = o.day < start ? start : o.day; day <= last && day <= end; day = addDays(day, 1)) {
           const until = day === last && o.end_time ? `until ${o.end_time}` : null;

@@ -20,6 +20,7 @@ import type { Db } from './db.ts';
 import type { Fetcher, Sealer } from './connections.ts';
 import { placePaths } from './inventory.ts';
 import { money } from './money.ts';
+import { PAUSED_CALENDARS } from './paused.ts';
 import { Problem } from './problem.ts';
 import { projects } from './projects.ts';
 import { addDays, clean, todayOf, type Clock } from './small.ts';
@@ -207,7 +208,7 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
       // Other calendars: when, and nothing about what.
       out.busy_times = (await db.all<{ day: string; time: string | null; end_time: string | null }>(
         `SELECT e.day, e.time, e.end_time FROM followed_events e JOIN followed_calendars f ON f.id = e.calendar_id
-         WHERE f.owner_id = ? AND e.day BETWEEN ? AND ? ORDER BY e.day, e.time`, [owner, today, until])).map((b) => ({ ...b, what: 'busy' }));
+         WHERE f.owner_id = ? AND e.day BETWEEN ? AND ? AND NOT ${PAUSED_CALENDARS} ORDER BY e.day, e.time`, [owner, today, until, owner])).map((b) => ({ ...b, what: 'busy' }));
     }
     // Small models take in only so much: the longest lists are shortened until it fits, and the model is told.
     const lists = ['recipes', 'things', 'spent_on', 'calendar_next_30_days', 'pantry'];

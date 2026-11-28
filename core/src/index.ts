@@ -134,3 +134,4 @@ export { CONNECTOR_SERVICE, CONNECTOR_SECTIONS, CONNECTOR_NEVER, CONNECTOR_ADDS,
 export type { SectionId, ConnectionInfo, LogLine, ConnectorStatus, Live, ToolInfo } from './connector.ts';
 export { KEY_ACTIONS, isKeyAction, voice, splitGroceries, spokenList, spokenTime, spokenDay, readWhen } from './voice.ts';
 export type { KeyAction } from './voice.ts';
+export { PAUSABLE, isPaused, pausedKinds, setPaused, unlessPaused, unlessPausedAll, type Pausable, type PausedKinds } from './paused.ts';

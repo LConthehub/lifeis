@@ -12,6 +12,7 @@
  */
 import type { Sealer } from './connections.ts';
 import type { Db } from './db.ts';
+import { unlessPausedAll } from './paused.ts';
 import { Problem } from './problem.ts';
 import { clean, stamp, type Clock } from './small.ts';
 
@@ -93,7 +94,9 @@ type Glance = { id: number; address: string; unread: number; newest: MailSummary
 const glances = new WeakMap<Db, Map<number, { at: number; glance: Glance }>>();
 const GLANCE_MINUTES = 2;
 
-export function mail(db: Db, owner: number, clock: Clock = () => new Date(), tools?: { postbox: Postbox; sealer: Sealer }) {
+export function mail(db: Db, owner: number, clock: Clock = () => new Date(), reachable?: { postbox: Postbox; sealer: Sealer }) {
+  // Switched off in Settings, it keeps its accounts and touches no mail server.
+  const tools = reachable && { ...reachable, postbox: unlessPausedAll(db, owner, 'mail', reachable.postbox) };
   const COLUMNS = 'id, address, name, username, password, imap_host, imap_port, smtp_host, smtp_port, local';
   const open = (row: Row): MailAccount => ({ id: row.id, address: row.address, name: row.name, username: row.username,
     imap_host: row.imap_host, imap_port: row.imap_port, smtp_host: row.smtp_host, smtp_port: row.smtp_port, local: row.local === 1 });

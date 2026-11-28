@@ -37,7 +37,7 @@ say('before a library is connected, the plan only offers this device, and says I
 await page.goto(base + '/settings/connections'); await wait(1000);
 const row = page.locator('div.py-3').filter({ hasText: 'Photos from your Immich' });
 say('settings lists Immich, off, with what it does and what the key needs', /Off/.test(await row.innerText()) && /Photos stay in Immich/.test(await row.innerText()));
-await row.getByRole('button', { name: 'Connect Immich' }).click();
+await row.getByLabel('Turn on photos from Immich').click();
 say('the form says which two permissions the key needs', /asset\.read and asset\.view/.test(await row.innerText()));
 await field("Immich's address").fill('http://photos.internal:2283'); await field('API key').fill('wrong-key');
 await row.getByRole('button', { name: 'Check and connect' }).click(); await wait(2000);

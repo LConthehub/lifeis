@@ -14,6 +14,7 @@
  */
 import type { Fetcher, Sealer } from './connections.ts';
 import { atomic, type Db } from './db.ts';
+import { isPaused, unlessPaused } from './paused.ts';
 import { Problem } from './problem.ts';
 import { addDays, clean, stamp, todayOf, type Clock } from './small.ts';
 
@@ -278,11 +279,13 @@ const COLUMNS = 'id, owner_id, name, url, show, zone, fetched_at, problem';
 export async function followedDue(db: Db, clock: Clock, tools: Tools): Promise<number> {
   const before = stamp(new Date(clock().getTime() - STALE_MINUTES * 60_000));
   const due = await db.all<Row>(`SELECT ${COLUMNS} FROM followed_calendars WHERE fetched_at IS NULL OR fetched_at < ? ORDER BY id`, [before]);
-  for (const row of due) await refreshRow(db, row, clock, tools);
+  for (const row of due) if (!await isPaused(db, row.owner_id, 'calendars')) await refreshRow(db, row, clock, tools);
   return due.length;
 }
 
-export function followedCalendars(db: Db, owner: number, clock: Clock = () => new Date(), tools?: Tools) {
+export function followedCalendars(db: Db, owner: number, clock: Clock = () => new Date(), reachable?: Tools) {
+  // Switched off in Settings, the links are kept and nothing is read from them.
+  const tools = reachable && { ...reachable, fetcher: unlessPaused(db, owner, 'calendars', reachable.fetcher) };
   const need = () => {
     if (!tools) throw new Problem(400, "This copy of Life Is isn't set up to reach outside services");
     return tools;

@@ -17,6 +17,7 @@ import { kitchen } from './kitchen.ts';
 import type { EquipmentShortage, PlannedMeal } from './kitchenTypes.ts';
 import { life, type Section } from './life.ts';
 import { media } from './media.ts';
+import { isPaused } from './paused.ts';
 import { Problem } from './problem.ts';
 import { projects, type ProjectSummary } from './projects.ts';
 import { problemCard } from './start.ts';
@@ -125,7 +126,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
       const out = await hidden();
       const skies = weather(db, owner, clock, fetcher);
       const place = await skies.place();
-      const hasMail = (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM mail_accounts WHERE owner_id = ?', [owner]))!.n > 0;
+      const hasMail = (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM mail_accounts WHERE owner_id = ?', [owner]))!.n > 0 && !await isPaused(db, owner, 'mail');
       const any = async (sql: string) => Boolean(await db.get(sql, [owner]));
       const hasServices = (await homeServices(db, owner, clock).pinned()).length > 0;
       const hasCoupons = await any('SELECT 1 AS n FROM coupons WHERE owner_id = ? AND used_on IS NULL LIMIT 1');

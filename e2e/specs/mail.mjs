@@ -33,7 +33,7 @@ say('and the front page has no email card', !(await page.locator('main h2').allI
 
 await page.goto(base + '/settings/connections'); await wait(1000);
 say('settings shows email as off', /read and answer your inbox\s*Off/.test(flat(await text())));
-await page.getByRole('button', { name: '+ Add an email account' }).click();
+await page.getByLabel('Turn on email').click(); await wait(300);
 await field('Email address').fill('someone@gmail.com'); await wait(200);
 say('a Gmail address explains the app password', /Gmail needs an "app password"/.test(await text()));
 await field('Email address').fill('me@example.org');
