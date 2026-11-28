@@ -22,6 +22,8 @@ import type { Reach } from './connectionRoutes.ts';
 import { cookTimers, type CookTimers } from './cookTimers.ts';
 import { cookingTimerRoutes, sendFinished } from './cookingTimerRoutes.ts';
 import { everydayRoutes } from './everydayRoutes.ts';
+import { backupCopyRoutes } from './backupCopyRoutes.ts';
+import type { CopyTools } from '../../core/src/index.ts';
 import { pages } from './pages.ts';
 import { zip } from './zip.ts';
 
@@ -48,6 +50,8 @@ export type Options = {
   reach?: Reach;
   /** How Life Is talks to mail providers and locks an account's password. Left out: email can't be set up. */
   mail?: MailTools;
+  /** How the second backup copy is carried and its secrets locked. Left out (and in the demo): it isn't offered. */
+  backupCopy?: CopyTools;
   /** How Life Is reaches a photo library and locks its key. Left out: none can be connected. */
   photos?: Reach;
   /** How Life Is reads another calendar's link and locks it. Left out: none can be followed. */
@@ -294,6 +298,7 @@ export function createApp(options: Options) {
     })],
 
     ...cookingTimerRoutes(timers),
+    ...backupCopyRoutes(db, options.backupCopy),
     ...everydayRoutes(db, { fetcher: outside, reach: options.reach, mail: options.mail, photos: options.photos, calendars: options.calendars, bank: options.bank, assistant: options.assistant, push: options.push }),
   ];
 

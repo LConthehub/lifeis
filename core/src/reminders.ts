@@ -15,6 +15,7 @@
  */
 import type { Fetcher, Sealer } from './connections.ts';
 import { calendar } from './calendar.ts';
+import { copyProblem } from './backupCopy.ts';
 import type { Db } from './db.ts';
 import { holidays } from './holidays.ts';
 import { outdoorTrips } from './outdoorTrips.ts';
@@ -232,6 +233,11 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
         const n = c.days ?? c.started_days;
         lines.push({ kind: 'copy', icon: '💾', title: `Make a copy of your Life Is: it's been ${n} days.`, detail: null, link: '/settings/data', urgent: false });
       }
+    }
+    // The second backup copy, when it failed: said to the person in charge each morning until a copy goes.
+    if (await db.get('SELECT id FROM users WHERE id = ? AND is_admin = 1', [owner])) {
+      const failed = await copyProblem(db);
+      if (failed) lines.push({ kind: 'copy', icon: '💾', title: "The second backup copy didn't go", detail: failed, link: '/settings/data', urgent: true });
     }
     // Mondays: what to get done this week, or, once, whether to keep asking. Only for someone who has a way to be reminded.
     const week = await start(db, owner, clock).weeklyLine();

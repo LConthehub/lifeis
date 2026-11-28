@@ -8,6 +8,9 @@
  *   SESSION_IDLE_MINUTES   sign out after this long unused                    (15)
  *   TRUSTED_PROXY          addresses of proxies in front of Life Is, comma separated; only from these is
  *                          X-Forwarded-For read, to count wrong sign-in guesses per visitor   (none)
+ *   BACKUP_COPY_DIR        a folder on a second drive of this computer, where the second backup copy can be sent
+ *                          (locked with the passphrase the person in charge chooses; the newest three are kept).
+ *                          Left out, Settings offers only a WebDAV folder. The copy is off until turned on there   (none)
  */
 import { createServer } from 'node:http';
 import path from 'node:path';
@@ -20,6 +23,8 @@ import { demoFromEnv, keepDemoFresh } from './demo.ts';
 import { openDatabase } from './database.ts';
 import { realPostbox } from './postbox.ts';
 import { vault } from './vault.ts';
+import { copyTools } from './backupCopyRoutes.ts';
+import { copyDue } from '../../core/src/index.ts';
 
 const dataDir = process.env.DATA_DIR || path.resolve('data');
 const keyDir = process.env.KEY_DIR || path.join(dataDir, 'keys');
@@ -34,6 +39,8 @@ const reach = { fetcher: webFetcher, sealer: vault(keyDir, 'media_source') };
 const calendars = { fetcher: webFetcher, sealer: vault(keyDir, 'calendar_source') };
 const mail = { postbox: realPostbox, sealer: vault(keyDir, 'mail_account') };
 const push = browserPush(keyDir);
+// The second backup copy: its passphrase and app password are sealed like the other saved secrets.
+const backups = copyTools({ passphrase: vault(keyDir, 'backup_copy_passphrase'), secret: vault(keyDir, 'backup_copy_secret') }, process.env.BACKUP_COPY_DIR || undefined);
 const server = createServer(createApp({
   db: database.db,
   // Locks each person's authenticator-app secret, with the same key folder as everything else kept locked.
@@ -49,6 +56,7 @@ const server = createServer(createApp({
     assistant: { fetcher: patientFetcher, sealer: vault(keyDir, 'assistant') },
     mail,
     push,
+    backupCopy: backups,
   }),
   staticDir: process.env.STATIC_DIR || undefined,
   idleMinutes: Number.isInteger(idle) && idle >= 0 ? idle : 15,
@@ -96,6 +104,16 @@ const reminderTimer = setInterval(async () => {
   }
 }, 60_000);
 reminderTimer.unref();
+
+// The second backup copy: once a day, from 3 in the morning, if the person in charge turned it on. A failure is noted
+// on its card and in the morning reminder; it never stops anything else.
+let copying = false;
+const copyTimer = setInterval(async () => {
+  if (copying || demo) return;
+  copying = true;
+  try { await copyDue(database.db, new Date(), backups); } catch (problem) { console.error(problem); } finally { copying = false; }
+}, 60_000);
+copyTimer.unref();
 
 // Recall alerts: for each person who turned them on, each car is asked about once a week, a person at a time.
 let recalling = false;
