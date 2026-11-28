@@ -19,7 +19,7 @@
 import { atomic, type Db, type Queries } from './db.ts';
 import { checkedRule, dateInYear, nextDate, ruleWords, thawDays, THAW_SOURCE, type DateRule } from './holidayDates.ts';
 import { inventory } from './inventory.ts';
-import { plans as plansOf, type Plan } from './plans.ts';
+import { plans as plansOf, type FoodKind, type Plan } from './plans.ts';
 import { clockWords, momentMinutes, prep, prepTime, tidyStep, whenWords, type Moment, type PrepStepInput } from './prep.ts';
 import { Problem } from './problem.ts';
 import { addDays, clean, dayNumber, dayOrNull, labelKey, stamp, todayOf, type Clock } from './small.ts';
@@ -42,7 +42,7 @@ const QUIET_AFTER = 60;
 
 export type HolidayInput = { name: string; rule: DateRule; /** The first year's day. Needed when the person sets it each year. */ day?: string | null; lead_weeks?: number | null };
 export type YearChange = {
-  day?: string | null; dinner_time?: string | null; turkey_pounds?: number | null; put_up_on?: string | null; take_down_on?: string | null;
+  day?: string | null; put_up_on?: string | null; take_down_on?: string | null;
   budget_cents?: number | null; notes_next?: string | null;
 };
 export type PersonInput = { name?: string | null; user_id?: number | null; member_id?: number | null; note?: string | null };
@@ -81,12 +81,20 @@ export type CountdownStep = {
   /** A recipe that is also on the week's meals has its steps reminded there, so the countdown doesn't remind them twice. */
   reminded_on_week: boolean;
 };
+/**
+ * The countdown of any plan with food: each step counted back from when it is served. `thaw` lists what starts frozen
+ * (a food line or a recipe with a weight), each with its own step.
+ */
+export type Countdown = {
+  served_at: string | null; food_kind: FoodKind; steps: CountdownStep[];
+  thaw: { label: string; pounds: number; days: number; source: string }[];
+};
 export type YearView = {
   holiday: { id: number; name: string; rule_words: string; lead_weeks: number; years: YearOf[]; from_calendar: boolean };
   plan_id: number; year: number; day: string; when: 'ahead' | 'now' | 'past';
   /** The age, or years since, for a birthday or anniversary made into a holiday. */
   turns: number | null;
-  dinner_time: string | null; turkey_pounds: number | null; put_up_on: string | null; take_down_on: string | null; taken_down_on: string | null;
+  put_up_on: string | null; take_down_on: string | null; taken_down_on: string | null;
   budget_cents: number | null; notes_next: string | null; notes_done: boolean;
   /** What the person wrote for next year at the end of last year's. */
   last_notes: string | null;
@@ -96,7 +104,7 @@ export type YearView = {
   spots: Spot[];
   /** What broke or ran out last year, still to buy this year. */
   shopping: Decor[];
-  countdown: { dinner_time: string | null; steps: CountdownStep[]; thaw: { pounds: number; days: number; source: string } | null };
+  countdown: Countdown;
   budget: { tag: string | null; spent_cents: number; count: number; target_cents: number | null };
   stage: Stage;
 };
@@ -107,6 +115,7 @@ export type YearView = {
 export type GatheringView = {
   holiday: null; plan_id: number; day: string; when: 'ahead' | 'now' | 'past';
   guests: Person[]; cards: Person[]; gifts: Gift[]; spots: Spot[];
+  countdown: Countdown;
 };
 
 export type HolidayCard = {
@@ -120,16 +129,15 @@ type HolidayRow = {
   lead_weeks: number; event_id: number | null; first_year: number | null; tag_id: number | null;
 };
 type YearRow = {
-  plan_id: number; holiday_id: number; year: number; dinner_time: string | null; turkey_pounds: number | null; put_up_on: string | null; take_down_on: string | null;
+  plan_id: number; holiday_id: number; year: number; put_up_on: string | null; take_down_on: string | null;
   taken_down_on: string | null; budget_cents: number | null; notes_next: string | null; notes_done: number;
 };
 type PlanRow = { id: number; name: string; start_day: string; end_day: string };
 const HOLIDAY_COLUMNS = 'id, name, rule, month, day_of_month, weekday, nth, lead_weeks, event_id, first_year, tag_id';
-const YEAR_COLUMNS = 'plan_id, holiday_id, year, dinner_time, turkey_pounds, put_up_on, take_down_on, taken_down_on, budget_cents, notes_next, notes_done';
+const YEAR_COLUMNS = 'plan_id, holiday_id, year, put_up_on, take_down_on, taken_down_on, budget_cents, notes_next, notes_done';
 
 const ruleOf = (h: HolidayRow): DateRule =>
   h.rule === 'fixed' ? { kind: 'fixed', month: h.month!, day: h.day_of_month! } : h.rule === 'weekday' ? { kind: 'weekday', month: h.month!, weekday: h.weekday!, nth: h.nth! } : { kind: 'manual' };
-const timeOk = (t: unknown): t is string => typeof t === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
 const pad = (n: number) => String(n).padStart(2, '0');
 const pounds = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)} lb`;
 
@@ -197,8 +205,9 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       await tx.run('INSERT INTO holiday_steps (plan_id, words, rule, at_time, hours, done, sort_order) VALUES (?, ?, ?, ?, ?, 0, ?)', [to, s.words, s.rule, s.at_time, s.hours, s.sort_order]);
     }
     const shift = (d: string | null) => (d ? addDays(d, moved) : null);
-    await tx.run('INSERT INTO holiday_years (plan_id, holiday_id, year, dinner_time, turkey_pounds, put_up_on, take_down_on, budget_cents) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [to, from.holiday_id, Number(toDay.slice(0, 4)), from.dinner_time, from.turkey_pounds, shift(from.put_up_on), shift(from.take_down_on), from.budget_cents]);
+    // The time it is served, the food and what thaws were copied with the plan itself (plans.ts).
+    await tx.run('INSERT INTO holiday_years (plan_id, holiday_id, year, put_up_on, take_down_on, budget_cents) VALUES (?, ?, ?, ?, ?, ?)',
+      [to, from.holiday_id, Number(toDay.slice(0, 4)), shift(from.put_up_on), shift(from.take_down_on), from.budget_cents]);
   }
 
   /** Makes the year whose day is `day`: from the latest one when there is one, else a fresh plan. */
@@ -296,11 +305,23 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
     return { tag: found?.path ?? (await db.get<{ name: string }>('SELECT name FROM tags WHERE id = ?', [h.tag_id]))?.name ?? null, spent_cents: cents, count, target_cents: target };
   }
 
-  /** The meal countdown: each step counted back from when dinner is. */
-  async function countdownOf(planId: number, y: YearRow, day: string): Promise<YearView['countdown']> {
-    const thaw = y.turkey_pounds ? { pounds: y.turkey_pounds, days: thawDays(y.turkey_pounds), source: THAW_SOURCE } : null;
-    if (!y.dinner_time) return { dinner_time: null, steps: [], thaw };
-    const eat = y.dinner_time;
+  /** The countdown of any plan with food: each step counted back from when it is served. */
+  async function countdownOf(planId: number, day: string): Promise<Countdown> {
+    const plan = (await db.get<{ served_at: string | null; food_kind: FoodKind | null }>('SELECT served_at, food_kind FROM plans WHERE id = ? AND owner_id = ?', [planId, owner]))!;
+    const food_kind = plan.food_kind ?? 'meal';
+    // What starts frozen: food lines first, then recipes on the plan, each with its own step.
+    const frozen: { key: string; label: string; pounds: number; days: number }[] = [];
+    for (const f of await db.all<{ id: number; label: string; thaw_pounds: number }>('SELECT id, label, thaw_pounds FROM plan_food WHERE plan_id = ? AND thaw_pounds IS NOT NULL ORDER BY sort_order, id', [planId])) {
+      frozen.push({ key: `f${f.id}`, label: f.label, pounds: f.thaw_pounds, days: thawDays(f.thaw_pounds) });
+    }
+    for (const r of await db.all<{ id: number; title: string; thaw_pounds: number }>(
+      `SELECT i.id, r.title, i.thaw_pounds FROM plan_items i JOIN recipes r ON r.id = i.ref_id AND r.owner_id = ?
+       WHERE i.plan_id = ? AND i.kind = 'recipe' AND i.thaw_pounds IS NOT NULL ORDER BY i.sort_order, i.id`, [owner, planId])) {
+      frozen.push({ key: `t${r.id}`, label: r.title, pounds: r.thaw_pounds, days: thawDays(r.thaw_pounds) });
+    }
+    const thaw = frozen.map((f) => ({ label: f.label, pounds: f.pounds, days: f.days, source: THAW_SOURCE }));
+    if (!plan.served_at) return { served_at: null, food_kind, steps: [], thaw };
+    const eat = plan.served_at;
     const here = await prep(db, owner, clock).localNow();
     const ticked = new Set((await db.all<{ key: string }>('SELECT key FROM holiday_ticks WHERE plan_id = ?', [planId])).map((r) => r.key));
     const steps: CountdownStep[] = [];
@@ -308,10 +329,10 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       const { due, ...rest } = s;
       steps.push({ ...rest, due_day: due.day, due_time: due.time, label: whenWords(due, today()), late: !rest.done && momentMinutes(due) < momentMinutes(here) });
     };
-    if (thaw) {
-      add({ key: 'thaw', source: 'thaw', step_id: null, what: null, reminded_on_week: false, done: ticked.has('thaw'), due: { day: addDays(day, -thaw.days), time: THAW_AT },
-        words: `Put the ${pounds(thaw.pounds)} turkey in the refrigerator to thaw`,
-        detail: `${thaw.days} ${thaw.days === 1 ? 'day' : 'days'}: about 1 day for each 4 pounds, to be safe. ${THAW_SOURCE}` });
+    for (const f of frozen) {
+      add({ key: f.key, source: 'thaw', step_id: null, what: null, reminded_on_week: false, done: ticked.has(f.key), due: { day: addDays(day, -f.days), time: THAW_AT },
+        words: `Put the ${pounds(f.pounds)} ${f.label} in the refrigerator to thaw`,
+        detail: `${f.days} ${f.days === 1 ? 'day' : 'days'}: about 1 day for each 4 pounds, to be safe. ${THAW_SOURCE}` });
     }
     for (const s of await db.all<{ id: number; words: string; rule: PrepStepInput['rule'] | null; at_time: string | null; hours: number | null; done: number }>(
       'SELECT id, words, rule, at_time, hours, done FROM holiday_steps WHERE plan_id = ? ORDER BY sort_order, id', [planId])) {
@@ -333,7 +354,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       }
     }
     steps.sort((a, b) => momentMinutes({ day: a.due_day, time: a.due_time }) - momentMinutes({ day: b.due_day, time: b.due_time }));
-    return { dinner_time: eat, steps, thaw };
+    return { served_at: eat, food_kind, steps, thaw };
   }
 
   /** Where a holiday stands today, and what Home should say about it. */
@@ -346,7 +367,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
     if (ahead) {
       if (dayNumber(ahead.day) - dayNumber(day) > lead) return { stage: 'quiet', next: null, year: ahead };
       const y = await yearRow(db, ahead.plan_id);
-      const steps = (await countdownOf(ahead.plan_id, y, ahead.day)).steps.filter((s) => !s.done);
+      const steps = (await countdownOf(ahead.plan_id, ahead.day)).steps.filter((s) => !s.done);
       const undone = (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM holiday_decor WHERE plan_id = ? AND put_up = 0', [ahead.plan_id]))!.n;
       const tasks = (await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM plan_items WHERE plan_id = ? AND kind = 'task' AND done = 0", [ahead.plan_id]))!.n;
       const next = steps[0] ? `${steps[0].words}: ${steps[0].label}`
@@ -391,6 +412,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       holiday: null, plan_id: planId, day: plan.start_day, when: plan.when,
       guests: await peopleOf(planId, 'guest'), cards: await peopleOf(planId, 'card'), gifts: await giftsOf(planId, null, 0),
       spots: await spotsOf(planId, null, await decorOf(planId)),
+      countdown: await countdownOf(planId, plan.start_day),
     };
   }
   /** What a change hands back: the year of a holiday, or the gathering parts of any other plan. */
@@ -408,11 +430,11 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       holiday: { id: h.id, name: h.name, rule_words: ruleWords(ruleOf(h)), lead_weeks: h.lead_weeks, years, from_calendar: h.event_id !== null },
       plan_id: planId, year: y.year, day: plan.start_day, when: plan.when,
       turns: h.first_year !== null && y.year > h.first_year ? y.year - h.first_year : null,
-      dinner_time: y.dinner_time, turkey_pounds: y.turkey_pounds, put_up_on: y.put_up_on, take_down_on: y.take_down_on, taken_down_on: y.taken_down_on,
+      put_up_on: y.put_up_on, take_down_on: y.take_down_on, taken_down_on: y.taken_down_on,
       budget_cents: y.budget_cents, notes_next: y.notes_next, notes_done: y.notes_done === 1, last_notes: last?.notes_next ?? null, previous,
       plan, guests: await peopleOf(planId, 'guest'), cards: await peopleOf(planId, 'card'), gifts: await giftsOf(planId, h, y.year),
       spots: await spotsOf(planId, previous, decor), shopping: decor.filter((d) => d.need !== null),
-      countdown: await countdownOf(planId, y, plan.start_day), budget: await budgetOf(h, planId, plan.start_day, y.budget_cents),
+      countdown: await countdownOf(planId, plan.start_day), budget: await budgetOf(h, planId, plan.start_day, y.budget_cents),
       stage: (await standing(h, years)).stage,
     };
   }
@@ -596,14 +618,10 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
 
     year: yearView,
 
-    /** Change what a year keeps: dinner time, the turkey, the days to put up and take down, its budget, notes for next year. */
+    /** Change what a year keeps: its day, the days to put up and take down, its budget, notes for next year. (The time it is served is the plan's own.) */
     async setYear(planId: number, c: YearChange): Promise<YearView> {
       const y = await yearRow(db, planId);
       const p = await planRow(db, planId);
-      const dinner = c.dinner_time === undefined ? y.dinner_time : c.dinner_time;
-      if (dinner !== null && !timeOk(dinner)) throw new Problem(400, 'A time is written like 18:00');
-      const turkey = c.turkey_pounds === undefined ? y.turkey_pounds : c.turkey_pounds;
-      if (turkey !== null) thawDays(turkey);
       const budget = c.budget_cents === undefined ? y.budget_cents : c.budget_cents;
       if (budget !== null && !(Number.isInteger(budget) && budget >= 0)) throw new Problem(400, 'A budget is an amount of money');
       const putUp = c.put_up_on === undefined ? y.put_up_on : dayOrNull(c.put_up_on);
@@ -613,13 +631,8 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
         const full = await plans().get(planId);
         await plans().update(planId, { name: full.name, start_day: c.day, end_day: addDays(c.day, dayNumber(p.end_day) - dayNumber(p.start_day)), note: full.note, story: full.story });
       }
-      await db.run('UPDATE holiday_years SET dinner_time = ?, turkey_pounds = ?, put_up_on = ?, take_down_on = ?, budget_cents = ?, notes_next = ? WHERE plan_id = ?',
-        [dinner, turkey, putUp, takeDown, budget, c.notes_next === undefined ? y.notes_next : clean(c.notes_next, 5000), planId]);
-      // Dinner is when the year's meals on the week are eaten, so their own prep reminders count back from it.
-      if (dinner !== null && dinner !== y.dinner_time) {
-        const pr = prep(db, owner, clock);
-        for (const m of await db.all<{ meal_plan_id: number }>('SELECT meal_plan_id FROM plan_items WHERE plan_id = ? AND meal_plan_id IS NOT NULL', [planId])) await pr.setMeal(m.meal_plan_id, { eat_time: dinner }).catch(() => {});
-      }
+      await db.run('UPDATE holiday_years SET put_up_on = ?, take_down_on = ?, budget_cents = ?, notes_next = ? WHERE plan_id = ?',
+        [putUp, takeDown, budget, c.notes_next === undefined ? y.notes_next : clean(c.notes_next, 5000), planId]);
       return yearView(planId);
     },
 
@@ -764,29 +777,29 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
 
     // ---------- the countdown ----------
 
-    async addStep(planId: number, input: PrepStepInput): Promise<YearView> {
-      await yearRow(db, planId);
+    async addStep(planId: number, input: PrepStepInput): Promise<YearView | GatheringView> {
+      await ownPlan(db, planId);
       const s = tidyStep(input);
       await db.run('INSERT INTO holiday_steps (plan_id, words, rule, at_time, hours, done, sort_order) VALUES (?, ?, ?, ?, ?, 0, ?)',
         [planId, s.words, s.rule, s.at ?? null, s.hours ?? null, await roomFor('holiday_steps', planId)]);
-      return yearView(planId);
+      return viewOf(planId);
     },
-    async removeStep(id: number): Promise<YearView> {
+    async removeStep(id: number): Promise<YearView | GatheringView> {
       const planId = await planOf('holiday_steps', id);
       await db.run('DELETE FROM holiday_steps WHERE id = ?', [id]);
-      return yearView(planId);
+      return viewOf(planId);
     },
     /** Tick a countdown step (by its key) or take the tick off. */
-    async tick(planId: number, key: string, done: boolean): Promise<YearView> {
-      await yearRow(db, planId);
+    async tick(planId: number, key: string, done: boolean): Promise<YearView | GatheringView> {
+      await ownPlan(db, planId);
       const own = /^s(\d{1,15})$/.exec(key);
       if (own) {
         await planOf('holiday_steps', Number(own[1]));
         await db.run('UPDATE holiday_steps SET done = ? WHERE id = ?', [done ? 1 : 0, Number(own[1])]);
-      } else if (/^(thaw|r\d{1,15}:\d{1,15}|c\d{1,15})$/.test(key)) {
+      } else if (/^(r\d{1,15}:\d{1,15}|c\d{1,15}|f\d{1,15}|t\d{1,15})$/.test(key)) {
         await db.run(done ? 'INSERT OR IGNORE INTO holiday_ticks (plan_id, key) VALUES (?, ?)' : 'DELETE FROM holiday_ticks WHERE plan_id = ? AND key = ?', [planId, key]);
       } else throw new Problem(400, "That isn't a step");
-      return yearView(planId);
+      return viewOf(planId);
     },
 
     // ---------- Home, reminders ----------
@@ -828,13 +841,15 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
      */
     async countdownDue(from: string, to: string): Promise<{ key: string; words: string; what: string; eat_time: string; due_day: string; due_time: string; link: string }[]> {
       const out: { key: string; words: string; what: string; eat_time: string; due_day: string; due_time: string; link: string }[] = [];
-      for (const r of await db.all<{ plan_id: number; day: string; holiday_id: number; name: string }>(
-        `SELECT y.plan_id, p.start_day AS day, h.id AS holiday_id, h.name FROM holiday_years y JOIN holidays h ON h.id = y.holiday_id JOIN plans p ON p.id = y.plan_id
-         WHERE h.owner_id = ? AND y.dinner_time IS NOT NULL AND p.start_day >= ? AND p.start_day <= ? ORDER BY p.start_day`, [owner, from, addDays(to, 70)])) {
-        const c = await countdownOf(r.plan_id, await yearRow(db, r.plan_id), r.day);
+      // Any plan with a time it is served, a holiday's year or not. A holiday's year goes by the holiday's name.
+      for (const r of await db.all<{ plan_id: number; day: string; name: string }>(
+        `SELECT p.id AS plan_id, p.start_day AS day, COALESCE(h.name, p.name) AS name FROM plans p
+         LEFT JOIN holiday_years y ON y.plan_id = p.id LEFT JOIN holidays h ON h.id = y.holiday_id
+         WHERE p.owner_id = ? AND p.served_at IS NOT NULL AND p.start_day >= ? AND p.start_day <= ? ORDER BY p.start_day, p.id`, [owner, from, addDays(to, 70)])) {
+        const c = await countdownOf(r.plan_id, r.day);
         for (const s of c.steps) {
           if (s.done || s.reminded_on_week || s.due_day < from || s.due_day > to) continue;
-          out.push({ key: `holiday|${r.plan_id}|${s.key}|${s.due_day}T${s.due_time}`, words: s.words, what: `${r.name} dinner`, eat_time: c.dinner_time!, due_day: s.due_day, due_time: s.due_time, link: `/plans/${r.plan_id}` });
+          out.push({ key: `holiday|${r.plan_id}|${s.key}|${s.due_day}T${s.due_time}`, words: s.words, what: `${r.name} ${c.food_kind === 'meal' ? 'dinner' : 'refreshments'}`, eat_time: c.served_at!, due_day: s.due_day, due_time: s.due_time, link: `/plans/${r.plan_id}` });
         }
       }
       return out;

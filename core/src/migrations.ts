@@ -1927,6 +1927,33 @@ export const MIGRATIONS: Migration[] = [
       `UPDATE plans SET parts = COALESCE(parts || ',', 'tasks,bring,') || 'food,guests,cards,gifts,decorations,budget' WHERE id IN (SELECT plan_id FROM holiday_years)`,
     ],
   },
+  {
+    number: 65,
+    name: 'Food works the same on any plan',
+    // served_at is when the food is served (HH:MM); food_kind is 'meal' or 'refreshments' (NULL reads as a meal). A recipe on the plan
+    // can start frozen (thaw_pounds). plan_food is food that is bought or brought, not cooked from a recipe.
+    // A holiday year's dinner time and frozen turkey carry over: the time to served_at, the weight to a Turkey line that thaws.
+    // (holiday_years.dinner_time and turkey_pounds stay in place, unused.)
+    statements: [
+      `ALTER TABLE plans ADD COLUMN served_at TEXT`,
+      `ALTER TABLE plans ADD COLUMN food_kind TEXT CHECK(food_kind IS NULL OR food_kind IN ('meal', 'refreshments'))`,
+      `ALTER TABLE plan_items ADD COLUMN thaw_pounds REAL`,
+      `CREATE TABLE plan_food (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        label TEXT NOT NULL,
+        brought_by TEXT,
+        thaw_pounds REAL,
+        done INTEGER NOT NULL DEFAULT 0 CHECK(done IN (0, 1)),
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )`,
+      `CREATE INDEX idx_plan_food ON plan_food(plan_id)`,
+      `UPDATE plans SET served_at = (SELECT y.dinner_time FROM holiday_years y WHERE y.plan_id = plans.id) WHERE id IN (SELECT plan_id FROM holiday_years WHERE dinner_time IS NOT NULL)`,
+      `INSERT INTO plan_food (plan_id, label, thaw_pounds, done, sort_order) SELECT plan_id, 'Turkey', turkey_pounds, 0, 1 FROM holiday_years WHERE turkey_pounds IS NOT NULL`,
+      `UPDATE holiday_ticks SET key = 'f' || (SELECT f.id FROM plan_food f WHERE f.plan_id = holiday_ticks.plan_id) WHERE key = 'thaw' AND plan_id IN (SELECT plan_id FROM plan_food)`,
+      `DELETE FROM holiday_ticks WHERE key = 'thaw'`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

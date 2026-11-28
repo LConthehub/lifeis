@@ -67,19 +67,22 @@ say('its first year is the fourth Thursday', holiday.years[0].day === day1);
 const planId = holiday.years[0].plan_id;
 
 // ---------- dinner, a frozen turkey, the countdown ----------
-await page.getByLabel('Dinner is at').fill('17:00'); await page.getByLabel('Dinner is at').blur(); await wait(900);
-await page.getByLabel('Frozen turkey, in pounds').fill('16'); await page.getByLabel('Frozen turkey, in pounds').blur(); await wait(900);
+const foodCard = region('Food');
+say('the day card no longer asks for dinner or a turkey', !/Dinner is at|Frozen turkey/.test(await region('The day').innerText()));
+await foodCard.getByLabel('Served at').fill('17:00'); await foodCard.getByLabel('Served at').blur(); await wait(900);
+await foodCard.getByLabel('What is it').fill('Turkey'); await foodCard.getByLabel('Frozen, in pounds (if it is)').fill('16');
+await foodCard.getByRole('button', { name: 'Add the food' }).click(); await wait(1200);
 t = await text();
 say('a 16 pound turkey asks for 4 days in the refrigerator, with its source', /needs 4 days in the refrigerator/.test(t) && /USDA: thawing in the refrigerator/.test(t));
 // The menu is the plan's Food list.
-await page.getByRole('button', { name: '+ Add', exact: true }).click(); await wait(600);
+await page.getByRole('button', { name: '+ Add a recipe' }).click(); await wait(600);
 await dialog.getByLabel('Which *').selectOption({ label: 'Roast turkey' });
-await dialog.getByLabel("On the week's meals").selectOption({ label: "Not on the week: just note it here" });
+await dialog.getByLabel("Put it on that day's meals and the grocery list").uncheck();
 await dialog.getByRole('button', { name: 'Add', exact: true }).click(); await wait(1500);
 await page.getByLabel('Put the decorations up on').fill(iso(new Date(new Date(day1 + 'T12:00').getTime() - 7 * 86400000))); await page.getByLabel('Put the decorations up on').blur(); await wait(600);
 const count = region('Dinner countdown');
 t = await count.innerText();
-say('the countdown works back from dinner: thaw, brine, start cooking', /Put the 16 lb turkey in the refrigerator to thaw/.test(t) && /Brine the turkey/.test(t) && /Start cooking Roast turkey/.test(t) && /about 180 minutes to cook/.test(t));
+say('the countdown works back from dinner: thaw, brine, start cooking', /Put the 16 lb Turkey in the refrigerator to thaw/.test(t) && /Brine the turkey/.test(t) && /Start cooking Roast turkey/.test(t) && /about 180 minutes to cook/.test(t));
 const thawDay = new Date(new Date(day1 + 'T12:00').getTime() - 4 * 86400000);
 say('the thaw is 4 days before dinner, at 9 am', (await send('GET', `/api/plans/holidays/years/${planId}`)).countdown.steps[0].due_day === iso(thawDay));
 await count.scrollIntoViewIfNeeded(); await page.evaluate(() => window.scrollBy(0, -130)); await wait(200);
@@ -127,7 +130,7 @@ await page.goto(base + `/plans/holidays/${holiday.id}/${planId}`); await wait(15
 say('the old holiday-year address opens the plan page', page.url().endsWith(`/plans/${planId}`));
 await shot('holidays-year-375', { fullPage: true });
 // The year's own sections (the rest of the plan page has its own checks).
-const mine = ['The day', 'Dinner countdown', 'Put up', 'Take down', 'Who came', 'Cards', 'Gifts', 'Budget', 'How it went'].map(region);
+const mine = ['The day', 'Food', 'Dinner countdown', 'Put up', 'Take down', 'Who came', 'Cards', 'Gifts', 'Budget', 'How it went'].map(region);
 const small = await tooSmall(mine.flatMap((r) => [r.locator('button'), r.locator('select'), r.locator('input:not([type=checkbox]):not([type=file])'), r.locator('summary')]));
 say('the year page has 44px controls' + (small.length ? ` (too small: ${small})` : ''), small.length === 0);
 say('the year page does not scroll sideways', await noSideways());
@@ -153,7 +156,7 @@ await page.goto(base + `/plans/${after.years[0].plan_id}`); await wait(1500);
 t = await text();
 say('next year keeps the notes, the guests and the cards, none ticked', /Brine the turkey a day earlier/.test(t) && /Aunt June/.test(t) && /0 of 1 came/.test(t) && /Grandma/.test(t));
 say('what broke is on the shopping list', /To buy for this year/.test(t) && /String lights/.test(t) && /broke last year/.test(t));
-say('the countdown carried over with nothing ticked', /Put the 16 lb turkey/.test(t) && !(await page.getByRole('checkbox', { name: 'Brine the turkey is done' }).isChecked()));
+say('the countdown carried over with nothing ticked', /Put the 16 lb Turkey/.test(t) && !(await page.getByRole('checkbox', { name: 'Brine the turkey is done' }).isChecked()));
 const up2 = region('Put up');
 say("last year's photo of the mantel is on the put-up list", (await up2.getByRole('img', { name: `Mantel in ${year1}` }).count()) === 1 && /Last year/.test(await up2.innerText()));
 say('nothing is put up yet this year', !(await up2.getByRole('checkbox', { name: 'Wreath is up' }).isChecked()));

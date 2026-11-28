@@ -151,5 +151,36 @@ page.once('dialog', (d) => d.accept());
 await dialog.getByRole('button', { name: 'Stop coming back every year' }).click(); await wait(1800);
 say('stopping it takes Yearly off, and brings Do it again back', !/Yearly/.test(await text()) && await page.getByRole('button', { name: 'Do it again' }).isVisible());
 
+// ---------- food on a plain plan ----------
+const supper = await send('POST', '/api/plans', { name: 'Backyard supper', start_day: later(10), parts: ['food'] });
+await page.goto(base + `/plans/${supper.id}`); await wait(1200);
+const food = region('Food');
+say('a plain plan has a Food card with a time and a choice of a meal or refreshments', await food.isVisible() && await food.getByLabel('Served at').isVisible() && (await food.getByLabel('A meal or refreshments').inputValue()) === 'meal');
+say('with no time yet there is no countdown', (await region('Dinner countdown').count()) === 0);
+await food.getByLabel('Served at').fill('18:00'); await food.getByLabel('Served at').blur(); await wait(1200);
+await food.getByLabel('What is it').fill('Ham');
+await food.getByLabel('Who brings it (if anyone)').fill('Aunt June');
+await food.getByLabel('Frozen, in pounds (if it is)').fill('8');
+await food.getByRole('button', { name: 'Add the food' }).click(); await wait(1500);
+t = await food.innerText();
+say('the line says who brings it and that it is frozen', /Ham/.test(t) && /Aunt June brings it/.test(t) && /8 lb, frozen/.test(t));
+const count = region('Dinner countdown');
+say('once a time is set the countdown has a step to thaw the ham', /Put the 8 lb Ham in the refrigerator to thaw/.test(await count.innerText()));
+say('8 pounds thaws 2 days ahead', (await send('GET', `/api/plans/holidays/gathering/${supper.id}`)).countdown.steps[0].due_day === later(8));
+await page.getByRole('checkbox', { name: 'Put the 8 lb Ham in the refrigerator to thaw is done' }).click(); await wait(800);
+say('the thaw step can be ticked', await page.getByRole('checkbox', { name: 'Put the 8 lb Ham in the refrigerator to thaw is done' }).isChecked());
+await food.getByRole('checkbox', { name: 'Ham is here' }).click(); await wait(900);
+say('the line can be checked off when it is here', await food.getByRole('checkbox', { name: 'Ham is here' }).isChecked());
+await page.reload(); await wait(1500);
+say('after a reload the time, the line and its check are still there', (await region('Food').getByLabel('Served at').inputValue()) === '18:00' && await region('Food').getByRole('checkbox', { name: 'Ham is here' }).isChecked());
+await region('Food').getByLabel('A meal or refreshments').selectOption('refreshments'); await wait(1200);
+say('refreshments say served, not dinner', await region('Countdown').isVisible() && (await region('Countdown').getByLabel('When').locator('option').allInnerTexts()).includes('Hours before it is served'));
+await region('Food').scrollIntoViewIfNeeded(); await wait(300);
+const foodBox = await region('Food').evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y + window.scrollY, width: r.width, height: r.height }; });
+await shot('plan-food', { fullPage: true, clip: foodBox });
+const smallFood = await tooSmall([region('Food').locator('button'), region('Food').locator('select'), region('Food').locator('input:not([type=checkbox])'), region('Countdown').locator('button, select, input:not([type=checkbox])')]);
+say('the Food card and countdown have 44px controls' + (smallFood.length ? ` (too small: ${smallFood})` : ''), smallFood.length === 0);
+say('the food plan does not scroll sideways', await noSideways());
+
 say('no request failed' + (bad.length ? `: ${bad.join(' | ')}` : ''), bad.length === 0);
 await browser.close();

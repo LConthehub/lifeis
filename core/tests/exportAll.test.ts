@@ -544,7 +544,11 @@ it('holidays go out and come back: how each finds its day, each year, its lists 
   const mine = holidays(db, ana, clock);
   const made = await mine.create({ name: 'Thanksgiving', rule: { kind: 'weekday', month: 11, weekday: 4, nth: 4 } });
   const year = made.years[0]!.plan_id;
-  await mine.setYear(year, { dinner_time: '17:00', turkey_pounds: 16, put_up_on: '2046-11-15', budget_cents: 20000 });
+  await mine.setYear(year, { put_up_on: '2046-11-15', budget_cents: 20000 });
+  await plans(db, ana, clock).setFood(year, { served_at: '17:00', food_kind: 'refreshments' });
+  await plans(db, ana, clock).addFood(year, { label: 'Turkey', thaw_pounds: 16 });
+  await plans(db, ana, clock).addFood(year, { label: 'Rolls', brought_by: 'Sam' });
+  await plans(db, ana, clock).updateFood((await plans(db, ana, clock).get(year)).food_lines[1]!.id, { done: true });
   await mine.addPerson(year, 'guest', { name: 'Aunt June' });
   await mine.addPerson(year, 'card', { name: 'Grandma' });
   await mine.addStep(year, { words: 'Chill the wine', rule: 'morning_of', at: '09:00' });
@@ -561,7 +565,13 @@ it('holidays go out and come back: how each finds its day, each year, its lists 
   expect([theirs.name, theirs.rule_words, theirs.years.map((y) => y.day)]).toEqual(['Thanksgiving', 'Fourth Thursday of November', ['2047-11-28', '2046-11-22']]);
   const there = await rows(bob).year(theirs.years[1]!.plan_id);
   const here = await rows(ana).year(year);
-  expect([there.dinner_time, there.turkey_pounds, there.put_up_on, there.budget_cents, there.notes_next, there.notes_done]).toEqual([here.dinner_time, here.turkey_pounds, here.put_up_on, here.budget_cents, here.notes_next, here.notes_done]);
+  expect([there.put_up_on, there.budget_cents, there.notes_next, there.notes_done]).toEqual([here.put_up_on, here.budget_cents, here.notes_next, here.notes_done]);
+  // When the food is served, what it is, and the food that is bought or brought (and what thaws) come back with the plan.
+  const foodOf = (p: { served_at: string | null; food_kind: string; food_lines: { label: string; brought_by: string | null; thaw_pounds: number | null; done: boolean }[] }) =>
+    [p.served_at, p.food_kind, p.food_lines.map((f) => [f.label, f.brought_by, f.thaw_pounds, f.done])];
+  expect(foodOf(there.plan)).toEqual(foodOf(here.plan));
+  expect(foodOf(there.plan)).toEqual(['17:00', 'refreshments', [['Turkey', null, 16, false], ['Rolls', 'Sam', null, true]]]);
+  expect(there.countdown.thaw.map((t) => t.pounds)).toEqual([16]);
   expect([there.guests.map((g) => g.name), there.cards.map((g) => g.name), there.countdown.steps.map((s) => s.words)]).toEqual([['Aunt June'], ['Grandma'], expect.arrayContaining(['Chill the wine'])]);
   expect(there.gifts.map((g) => [g.who, g.idea, g.status, g.cents])).toEqual([['Maya', 'A scarf', 'bought', 2500]]);
   expect(there.spots.map((s) => [s.name, s.items.map((i) => i.label), s.photos.length])).toEqual([['Mantel', ['Garland'], 1]]); // the photo kept its spot

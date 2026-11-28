@@ -283,7 +283,7 @@ export function LastNote({ year }) {
   );
 }
 
-/** The day, dinner, the turkey, when the decorations go up and come down. */
+/** The day, the budget, when the decorations go up and come down. (When the food is served is in the Food card.) */
 export function Basics({ year, put, parts }) {
   const save = (patch) => put(`years/${year.plan_id}`, patch);
   const uses = (part) => parts.includes(part);
@@ -292,8 +292,6 @@ export function Basics({ year, put, parts }) {
       <Heading icon="plan">The day</Heading>
       <div className="grid grid-cols-2 gap-3">
         <Field label="The day"><input type="date" key={year.day} defaultValue={year.day} onBlur={(e) => e.target.value && e.target.value !== year.day && save({ day: e.target.value })} className={field} /></Field>
-        {uses('food') && <Field label="Dinner is at"><input type="time" key={year.dinner_time ?? 'none'} defaultValue={year.dinner_time ?? ''} onBlur={(e) => (e.target.value || null) !== year.dinner_time && save({ dinner_time: e.target.value || null })} className={field} /></Field>}
-        {uses('food') && <Field label="Frozen turkey, in pounds"><input type="number" min="1" max="60" step="0.5" key={year.turkey_pounds ?? 'none'} defaultValue={year.turkey_pounds ?? ''} placeholder="none" onBlur={(e) => (e.target.value === '' ? null : Number(e.target.value)) !== year.turkey_pounds && save({ turkey_pounds: e.target.value === '' ? null : Number(e.target.value) })} className={field} /></Field>}
         {uses('budget') && <Field label="Budget"><input type="number" min="0" step="0.01" key={year.budget_cents ?? 'none'} defaultValue={dollars(year.budget_cents)} placeholder="none" onBlur={(e) => cents(e.target.value) !== year.budget_cents && save({ budget_cents: cents(e.target.value) })} className={field} /></Field>}
         {uses('decorations') && <Field label="Put the decorations up on"><input type="date" key={year.put_up_on ?? 'none'} defaultValue={year.put_up_on ?? ''} onBlur={(e) => (e.target.value || null) !== year.put_up_on && save({ put_up_on: e.target.value || null })} className={field} /></Field>}
         {uses('decorations') && <Field label="Take them down on"><input type="date" key={year.take_down_on ?? 'none'} defaultValue={year.take_down_on ?? ''} onBlur={(e) => (e.target.value || null) !== year.take_down_on && save({ take_down_on: e.target.value || null })} className={field} /></Field>}
@@ -303,11 +301,12 @@ export function Basics({ year, put, parts }) {
   );
 }
 
-const RULES = [['night_before', 'The night before'], ['morning_of', 'The morning of'], ['hours_before', 'Hours before dinner']];
-
-/** Dinner, and everything counted back from it: each recipe's prep steps, a frozen turkey's thaw, steps of your own. */
+/** Everything counted back from when the food is served: each recipe's prep steps, what thaws, steps of your own. */
 export function Countdown({ year, put, post, del }) {
   const { countdown } = year;
+  // Words for a meal say dinner; for refreshments, "served".
+  const meal = countdown.food_kind === 'meal';
+  const RULES = [['night_before', 'The night before'], ['morning_of', 'The morning of'], ['hours_before', meal ? 'Hours before dinner' : 'Hours before it is served']];
   const [form, setForm] = useState({ words: '', rule: 'morning_of', at: '09:00', hours: 2 });
   const add = async (e) => {
     e.preventDefault();
@@ -315,14 +314,14 @@ export function Countdown({ year, put, post, del }) {
     setForm({ ...form, words: '' });
   };
   return (
-    <section className={`${cardClass} space-y-2`} aria-label="Dinner countdown">
-      <Heading icon="timer">Dinner countdown{countdown.dinner_time ? `: dinner at ${timeText(countdown.dinner_time)}` : ''}</Heading>
-      {!countdown.dinner_time && <p className="text-sm text-gray-600 dark:text-life-100">Set when dinner is, above, and Life Is works back from it: each recipe's prep reminders, its cooking time, a frozen turkey's thaw, and steps of your own.</p>}
-      {countdown.thaw && (
-        <p className="rounded-lg bg-life-50/70 p-2 text-sm text-gray-800 dark:bg-life-700/60 dark:text-life-50">
-          A frozen {countdown.thaw.pounds} lb turkey needs {countdown.thaw.days} {countdown.thaw.days === 1 ? 'day' : 'days'} in the refrigerator: 24 hours for each 4 pounds, rounded up to be safe. <span className="text-xs text-gray-500 dark:text-life-300">{countdown.thaw.source}</span>
+    <section className={`${cardClass} space-y-2`} aria-label={meal ? 'Dinner countdown' : 'Countdown'}>
+      <Heading icon="timer">{meal ? 'Dinner countdown' : 'Countdown'}{countdown.served_at ? `: ${meal ? 'dinner' : 'served'} at ${timeText(countdown.served_at)}` : ''}</Heading>
+      {!countdown.served_at && <p className="text-sm text-gray-600 dark:text-life-100">Set when it is served, above, and Life Is works back from it: each recipe's prep reminders, its cooking time, what thaws, and steps of your own.</p>}
+      {countdown.thaw.map((t) => (
+        <p key={t.label} className="rounded-lg bg-life-50/70 p-2 text-sm text-gray-800 dark:bg-life-700/60 dark:text-life-50">
+          A frozen {t.pounds} lb {t.label} needs {t.days} {t.days === 1 ? 'day' : 'days'} in the refrigerator: 24 hours for each 4 pounds, rounded up to be safe. <span className="text-xs text-gray-500 dark:text-life-300">{t.source}</span>
         </p>
-      )}
+      ))}
       <ul className="divide-y divide-life-100 dark:divide-life-700">
         {countdown.steps.map((s) => (
           <li key={s.key} className="flex items-center gap-1" data-countdown-step>
@@ -342,7 +341,7 @@ export function Countdown({ year, put, post, del }) {
         <div className="flex flex-wrap items-end gap-2">
           <select value={form.rule} onChange={(e) => setForm({ ...form, rule: e.target.value })} aria-label="When" className={`${field} w-auto`}>{RULES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           {form.rule === 'hours_before'
-            ? <input type="number" min="1" max="72" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} aria-label="Hours before dinner" className={`${field} w-20`} />
+            ? <input type="number" min="1" max="72" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} aria-label={meal ? 'Hours before dinner' : 'Hours before it is served'} className={`${field} w-20`} />
             : <input type="time" value={form.at} onChange={(e) => setForm({ ...form, at: e.target.value })} aria-label="Time of day" className={`${field} w-auto`} />}
           <button type="submit" className={quiet}>Add the step</button>
         </div>

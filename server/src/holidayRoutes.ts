@@ -56,8 +56,7 @@ export function holidayRoutes(db: Db): Route[] {
     ['GET', at('/years/:id'), async (c) => ({ json: await mine(c).year(c.id) })],
     ['PUT', at('/years/:id'), async (c) => ({
       json: await mine(c).setYear(c.id, {
-        ...maybe(c.body, 'day', () => read.maybeText(c.body, 'day')), ...maybe(c.body, 'dinner_time', () => read.maybeText(c.body, 'dinner_time')),
-        ...maybe(c.body, 'turkey_pounds', () => read.maybeNumber(c.body, 'turkey_pounds')), ...maybe(c.body, 'put_up_on', () => read.maybeText(c.body, 'put_up_on')),
+        ...maybe(c.body, 'day', () => read.maybeText(c.body, 'day')), ...maybe(c.body, 'put_up_on', () => read.maybeText(c.body, 'put_up_on')),
         ...maybe(c.body, 'take_down_on', () => read.maybeText(c.body, 'take_down_on')), ...maybe(c.body, 'budget_cents', () => read.maybeWhole(c.body, 'budget_cents')),
         ...maybe(c.body, 'notes_next', () => read.maybeText(c.body, 'notes_next')),
       }),

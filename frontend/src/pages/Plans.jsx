@@ -5,7 +5,7 @@ import axios from 'axios';
 import { shrink } from '../components/shrink';
 import Picture from '../components/Picture';
 import { PlanGoal } from '../components/Goals';
-import { Basics, Budget, Countdown, Decor, Ending, Gifts, GivenToYou, LastNote, NextYear, People, RuleFields, Shopping, ruleBody, ruleStart } from './Holidays';
+import { Basics, Budget, Countdown, Decor, Ending, Gifts, GivenToYou, Heading, Hint, LastNote, NextYear, People, Remove, RuleFields, Shopping, ruleBody, ruleStart } from './Holidays';
 import { After, Harvest, Licenses, Seasons } from './Trips';
 import { BulkBar, PickBox, SelectButton, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, fromDateInput } from '../components/ui';
@@ -34,18 +34,19 @@ const TRIP_API = '/api/plans/trips';
  */
 function useGathering(plan, reloadPlan) {
   const planId = plan?.id;
-  const needed = Boolean(plan && (plan.yearly || GATHERING.some((p) => plan.parts.includes(p))));
+  const needed = Boolean(plan && (plan.yearly || plan.parts.includes('food') || GATHERING.some((p) => plan.parts.includes(p))));
   const yearKey = plan?.yearly ? plan.yearly.holiday_id : 0;
   const day = plan?.start_day;
-  // The countdown follows the plan's recipes: ask again when they change.
-  const recipesKey = plan ? plan.items_list.filter((i) => i.kind === 'recipe').map((i) => i.ref_id).join(',') : '';
+  // The countdown follows the plan's recipes and food: ask again when they, or the time it is served, change.
+  const recipesKey = plan ? plan.items_list.filter((i) => i.kind === 'recipe').map((i) => `${i.ref_id}:${i.thaw_pounds ?? ''}`).join(',') : '';
+  const foodKey = plan ? `${plan.served_at ?? ''}|${plan.food_kind}|${plan.food_lines.map((f) => `${f.id}:${f.label}:${f.thaw_pounds ?? ''}`).join(',')}` : '';
   const [view, setView] = useState(null);
   const [options, setOptions] = useState(null);
   const [error, setError] = useState('');
   const load = useCallback(() => {
     if (!needed) { setView(null); return; }
     axios.get(`${HOLIDAY_API}/gathering/${planId}`).then(({ data }) => setView(data)).catch(() => setView(null));
-  }, [planId, needed, yearKey, day, recipesKey]);
+  }, [planId, needed, yearKey, day, recipesKey, foodKey]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     if (needed && !options) axios.get(`${HOLIDAY_API}/options`).then(({ data }) => setOptions(data)).catch(() => setOptions({ members: [], users: [], boxes: [], dates: [] }));
@@ -78,7 +79,6 @@ function Gathering({ plan, g }) {
     <>
       {error && <p className="text-sm text-red-600" style={{ order: 0 }}>{error}</p>}
       {yearly && <div style={{ order: -1 }}><Basics year={view} put={put} parts={plan.parts} /></div>}
-      {yearly && uses('food') && box('food', <Countdown year={view} put={put} post={post} del={del} />)}
       {uses('guests') && box('guests', <People year={view} options={options} post={post} put={put} del={del} role="guest" />)}
       {uses('cards') && box('cards', <People year={view} options={options} post={post} put={put} del={del} role="card" />)}
       {uses('gifts') && box('gifts', <Gifts year={view} options={options} post={post} put={put} del={del} />)}
@@ -354,7 +354,7 @@ export function PlanPage() {
   if (plan === undefined) return null;
   if (plan === null) return <p className="text-sm text-gray-500 dark:text-life-300">That plan isn't here anymore. It may have been deleted. <Link to="/plans" className="underline">All plans</Link></p>;
 
-  const act = async (work) => { setError(''); try { setPlan((await work()).data); } catch (err) { setError(errorMessage(err, "Couldn't do that")); } };
+  const act = async (work) => { setError(''); try { setPlan((await work()).data); return true; } catch (err) { setError(errorMessage(err, "Couldn't do that")); return false; } };
   const tasks = plan.items_list.filter((i) => i.kind === 'task');
   const uses = (part) => plan.parts.includes(part);
   const short = plan.items_list.filter((i) => i.short);
@@ -431,7 +431,13 @@ export function PlanPage() {
           <AddTask onAdd={(label) => act(() => axios.post(`/api/plans/${plan.id}/items`, { kind: 'task', label }))} />
         </section>}
 
-        {Object.entries(HOLDS).filter(([, hold]) => uses(hold.part)).map(([kind, hold]) => {
+        {uses('food') && (
+          <div style={{ order: partOrder('food') }} className="space-y-3">
+            <FoodCard plan={plan} act={act} onAdd={() => setModal({ add: 'recipe' })} onWhen={(item) => setModal({ eaten: item })} />
+            {g.view && g.view.countdown.served_at && <Countdown year={g.view} put={g.put} post={g.post} del={g.del} />}
+          </div>
+        )}
+        {Object.entries(HOLDS).filter(([kind, hold]) => kind !== 'recipe' && uses(hold.part)).map(([kind, hold]) => {
           const mine = plan.items_list.filter((i) => i.kind === kind);
           return (
             <section key={kind} className={cardClass} style={{ order: partOrder(hold.part) }}>
@@ -498,6 +504,125 @@ export function PlanPage() {
       {modal?.eaten && <Modal title={modal.eaten.label} onClose={() => setModal(null)}><EatenForm plan={plan} item={modal.eaten} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
       {modal?.photo && <Modal title="Photo" wide onClose={() => setModal(null)}><PhotoView photo={modal.photo} onDone={(p) => { setPlan(p); setModal(null); }} /></Modal>}
     </div>
+  );
+}
+
+const tall = `${inputClass} min-h-[44px]`;
+const tallQuiet = `${quietButtonClass} min-h-[44px]`;
+const FOOD_KINDS = [['meal', 'A meal'], ['refreshments', 'Refreshments']];
+
+/** Which meal a recipe goes on when nobody says: refreshments are a snack; a meal goes by the time it is served. */
+function mealFor(plan) {
+  if (plan.food_kind === 'refreshments') return 'snack';
+  const t = plan.served_at;
+  if (!t) return 'dinner';
+  return t < '10:30' ? 'breakfast' : t < '15:00' ? 'lunch' : 'dinner';
+}
+
+/** A recipe that starts frozen: how many pounds, so the countdown says when to put it in the refrigerator. */
+function Frozen({ item, save }) {
+  const [open, setOpen] = useState(false);
+  if (item.thaw_pounds === null && !open) return <button type="button" onClick={() => setOpen(true)} className="min-h-[44px] text-xs text-life-600 hover:underline dark:text-life-200">Starts frozen</button>;
+  return (
+    <label className="flex min-h-[44px] flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-life-200">
+      Starts frozen, in pounds
+      <input type="number" min="1" max="60" step="0.5" autoFocus={open} defaultValue={item.thaw_pounds ?? ''} placeholder="none" aria-label={`${item.label}: pounds, frozen`}
+        onBlur={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); if (v !== item.thaw_pounds) save(v); }} className={`${tall} w-24`} />
+    </label>
+  );
+}
+
+/**
+ * Food on any plan: when it is served and whether it is a meal or refreshments, the recipes (put on that day's meals and
+ * the grocery list), and food that is bought or brought, with who brings it. Anything frozen gets a step to thaw it in
+ * the countdown below.
+ */
+function FoodCard({ plan, act, onAdd, onWhen }) {
+  const recipes = plan.items_list.filter((i) => i.kind === 'recipe');
+  const [form, setForm] = useState({ label: '', who: '', pounds: '' });
+  const setFood = (patch) => act(() => axios.put(`/api/plans/${plan.id}/food`, patch));
+  const add = async (e) => {
+    e.preventDefault();
+    const ok = await act(() => axios.post(`/api/plans/${plan.id}/food-lines`, { label: form.label, brought_by: form.who.trim() || null, thaw_pounds: form.pounds === '' ? null : Number(form.pounds) }));
+    if (ok) setForm({ label: '', who: '', pounds: '' });
+  };
+  const frozen = recipes.some((r) => r.thaw_pounds !== null) || plan.food_lines.some((f) => f.thaw_pounds !== null);
+  return (
+    <section className={`${cardClass} space-y-3`} aria-label="Food">
+      <Heading icon="meal">Food</Heading>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Served at">
+          <input type="time" key={plan.served_at ?? 'none'} defaultValue={plan.served_at ?? ''}
+            onBlur={(e) => (e.target.value || null) !== plan.served_at && setFood({ served_at: e.target.value || null })} className={tall} />
+        </Field>
+        <Field label="It is">
+          <select value={plan.food_kind} aria-label="A meal or refreshments" onChange={(e) => setFood({ food_kind: e.target.value })} className={tall}>
+            {FOOD_KINDS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </Field>
+      </div>
+      {frozen && !plan.served_at && <Hint>Set when it is served and Life Is says when to put what is frozen in the refrigerator.</Hint>}
+
+      <div>
+        <div className="mb-1 flex items-center gap-2">
+          <h3 className="flex-1 text-sm font-semibold text-life-800 dark:text-life-50">Recipes</h3>
+          <button type="button" onClick={onAdd} className="min-h-[44px] px-2 text-sm text-life-600 hover:underline dark:text-life-200">+ Add a recipe</button>
+        </div>
+        {recipes.length === 0 ? <p className="text-sm text-gray-400 dark:text-life-400">No recipes yet.</p> : (
+          <ul className="divide-y divide-life-100 dark:divide-life-700">
+            {recipes.map((i) => (
+              <li key={i.id} className="py-1 text-sm">
+                <div className="flex items-start gap-2">
+                  <span className="flex min-h-[44px] flex-1 items-center gap-2">
+                    <Icon of="meal" />
+                    <span className="min-w-0 flex-1">
+                      {i.link ? <Link to={i.link} className="text-gray-800 hover:underline dark:text-life-50">{i.label}</Link> : <span className="text-gray-500 dark:text-life-300">{i.label}</span>}
+                      {[i.detail, i.note].filter(Boolean).length > 0 && <span className="block text-xs text-gray-500 dark:text-life-300">{[i.detail, i.note].filter(Boolean).join(' · ')}</span>}
+                    </span>
+                  </span>
+                  <Remove label={`Take ${i.label} off the plan`} onClick={() => act(() => axios.delete(`/api/plans/items/${i.id}`))} />
+                </div>
+                {i.link && (
+                  <button type="button" onClick={() => onWhen(i)} className="flex min-h-[44px] items-center gap-1 text-left text-xs text-life-600 hover:underline dark:text-life-200">
+                    {i.on_week ? <><Icon of="date" /> {onWeekText(i.on_week)}</> : 'Not on the week yet: put it on'}
+                  </button>
+                )}
+                {i.link && <Frozen item={i} save={(v) => act(() => axios.put(`/api/plans/items/${i.id}`, { thaw_pounds: v }))} />}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div>
+        <h3 className="mb-1 text-sm font-semibold text-life-800 dark:text-life-50">Bought or brought</h3>
+        {plan.food_lines.length === 0 && <Hint>Anything that is not cooked from a recipe: a cake from the store, a dish someone brings. Check it off when it is here.</Hint>}
+        <ul className="divide-y divide-life-100 dark:divide-life-700">
+          {plan.food_lines.map((f) => (
+            <li key={f.id} className="flex items-center gap-1" data-food-line>
+              <label className="flex min-h-[44px] flex-1 cursor-pointer items-center gap-3 text-sm text-gray-800 dark:text-life-50">
+                <input type="checkbox" checked={f.done} onChange={(e) => act(() => axios.put(`/api/plans/food-lines/${f.id}`, { done: e.target.checked }))} aria-label={`${f.label} is here`} className="h-5 w-5 flex-none accent-life-600" />
+                <span className={`min-w-0 flex-1 ${f.done ? 'text-gray-400 line-through' : ''}`}>
+                  {f.label}
+                  {[f.brought_by ? `${f.brought_by} brings it` : null, f.thaw_pounds !== null ? `${f.thaw_pounds} lb, frozen` : null].filter(Boolean).length > 0 && (
+                    <span className="block text-xs text-gray-500 dark:text-life-300">{[f.brought_by ? `${f.brought_by} brings it` : null, f.thaw_pounds !== null ? `${f.thaw_pounds} lb, frozen` : null].filter(Boolean).join(' · ')}</span>
+                  )}
+                </span>
+              </label>
+              <Remove label={`Remove ${f.label}`} onClick={() => act(() => axios.delete(`/api/plans/food-lines/${f.id}`))} />
+            </li>
+          ))}
+        </ul>
+        <form onSubmit={add} className="mt-2 space-y-2">
+          <Field label="What is it"><input required value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Apple pie" className={tall} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Who brings it (if anyone)"><input value={form.who} onChange={(e) => setForm({ ...form, who: e.target.value })} className={tall} /></Field>
+            <Field label="Frozen, in pounds (if it is)"><input type="number" min="1" max="60" step="0.5" value={form.pounds} onChange={(e) => setForm({ ...form, pounds: e.target.value })} className={tall} /></Field>
+          </div>
+          <div className="text-right"><button type="submit" className={tallQuiet}>Add the food</button></div>
+        </form>
+      </div>
+    </section>
   );
 }
 
@@ -586,7 +711,9 @@ function Picker({ kind, plan, onDone }) {
   const [quantity, setQuantity] = useState('1');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
-  const [eaten, setEaten] = useState({ day: plan.start_day, meal: 'dinner', servings: '' });
+  const [eaten, setEaten] = useState({ day: plan.start_day, meal: mealFor(plan), servings: '' });
+  // A recipe goes on that day's meals and the grocery list unless this is unchecked, which only notes it on the plan.
+  const [onWeek, setOnWeek] = useState(true);
   useEffect(() => { axios.get(hold.from).then(({ data }) => setChoices(data)).catch(() => setChoices([])); }, [hold.from]);
   if (!choices) return null;
   const taken = new Set(plan.items_list.filter((i) => i.kind === kind).map((i) => i.ref_id));
@@ -596,7 +723,7 @@ function Picker({ kind, plan, onDone }) {
     e.preventDefault();
     try {
       onDone((await axios.post(`/api/plans/${plan.id}/items`, { kind, ref_id: Number(ref), quantity: kind === 'thing' && quantity !== '' ? Number(quantity) : null, note: note || null,
-        ...(kind === 'recipe' && eaten.day ? { day: eaten.day, meal: eaten.meal, servings: eaten.servings === '' ? null : Number(eaten.servings) } : {}) })).data);
+        ...(kind === 'recipe' && onWeek && eaten.day ? { day: eaten.day, meal: eaten.meal, servings: eaten.servings === '' ? null : Number(eaten.servings) } : {}) })).data);
     } catch (err) { setError(errorMessage(err, "Couldn't add it")); }
   };
   return (
@@ -610,8 +737,12 @@ function Picker({ kind, plan, onDone }) {
       {kind === 'thing' && <Field label="How many are needed"><input type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} className={inputClass} /></Field>}
       {kind === 'recipe' && (
         <>
-          <WhenEaten plan={plan} day={eaten.day} meal={eaten.meal} servings={eaten.servings} onChange={(day, meal, servings) => setEaten({ day, meal, servings })} />
-          <p className="text-xs text-gray-500 dark:text-life-300">On the week, it counts toward the grocery list and the pans and dishes that meal needs. It moves if the plan moves.</p>
+          <label className="flex min-h-[44px] items-center gap-3 text-sm text-gray-800 dark:text-life-50">
+            <input type="checkbox" checked={onWeek} onChange={(e) => setOnWeek(e.target.checked)} className="h-5 w-5 flex-none accent-life-600" />
+            Put it on that day's meals and the grocery list
+          </label>
+          {onWeek && <WhenEaten plan={plan} day={eaten.day} meal={eaten.meal} servings={eaten.servings} onChange={(day, meal, servings) => setEaten({ day, meal, servings })} />}
+          <p className="text-xs text-gray-500 dark:text-life-300">{onWeek ? 'On the week, it counts toward the grocery list and the pans and dishes that meal needs. It moves if the plan moves.' : 'Unchecked, it is only noted on the plan. You can put it on the week later.'}</p>
         </>
       )}
       <Field label="A note"><input value={note} onChange={(e) => setNote(e.target.value)} className={inputClass} /></Field>

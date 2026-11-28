@@ -46,7 +46,7 @@ export { lookups, isbnOf, bookGenres, readProduct, BOOK_SERVICE, GROCERY_SERVICE
 export type { FoundBook, FoundProduct, FoundTitle, Lookups } from './lookups.ts';
 export { holidays, givenTo, GIFT_STATES } from './holidays.ts';
 export type { GatheringView } from './holidays.ts';
-export type { Holidays, HolidayInput, HolidayCard, HolidaySummary, YearView, Stage as HolidayStage, CountdownStep, GiftInput, DecorInput, PersonInput, YearChange } from './holidays.ts';
+export type { Countdown, Holidays, HolidayInput, HolidayCard, HolidaySummary, YearView, Stage as HolidayStage, CountdownStep, GiftInput, DecorInput, PersonInput, YearChange } from './holidays.ts';
 export { dateInYear, nextDate, checkedRule, thawDays, ruleWords as holidayRuleWords, WEEKDAY_NAMES, MONTHS, THAW_SOURCE } from './holidayDates.ts';
 export type { DateRule } from './holidayDates.ts';
 export { plans, pictureType, EARLY_DAYS, MAX_PHOTO_BYTES, PLAN_ITEM_KINDS, PLAN_PARTS, PLAN_STARTS, planStarts, partsChecked } from './plans.ts';
@@ -54,7 +54,7 @@ export { planList, PLAN_SOON_DAYS } from './planList.ts';
 export type { PlanLine, PlanKind, PlanBand, PlanList } from './planList.ts';
 export type { OnWeek } from './plans.ts';
 export type { PlanPart } from './plans.ts';
-export type { Plan, PlanInput, PlanItem, PlanItemInput, PlanItemKind, PlanPhoto, Plans, PlanSummary, PlanWhen, PlanYearly } from './plans.ts';
+export type { FoodKind, FoodLine, Plan, PlanInput, PlanItem, PlanItemInput, PlanItemKind, PlanPhoto, Plans, PlanSummary, PlanWhen, PlanYearly } from './plans.ts';
 export { photoLibrary, PHOTO_SERVICE } from './photos.ts';
 export type { LibraryPhoto, PhotoLibrary, Photos } from './photos.ts';
 export { shopping, sizeOf } from './shopping.ts';

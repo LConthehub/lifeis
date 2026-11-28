@@ -75,12 +75,23 @@ it('adds Thanksgiving, plans a countdown with a frozen turkey, and plans next ye
   expect([made.status, made.json.rule_words, made.json.years[0].day]).toEqual([201, 'Fourth Thursday of November', '2026-11-26']);
   const planId = made.json.years[0].plan_id;
 
-  const year = (await admin.put(`/api/plans/holidays/years/${planId}`, { dinner_time: '16:30', turkey_pounds: 15 })).json;
-  expect(year.countdown.thaw).toEqual({ pounds: 15, days: 4, source: 'USDA: thawing in the refrigerator' });
+  expect((await admin.put(`/api/plans/${planId}/food`, { served_at: 'late' })).status).toBe(400);
+  expect((await admin.post(`/api/plans/${planId}/food-lines`, { label: 'Turkey', thaw_pounds: 0 })).status).toBe(400);
+  expect((await admin.put(`/api/plans/${planId}/food`, { served_at: '16:30', food_kind: 'meal' })).json.served_at).toBe('16:30');
+  const added = await admin.post(`/api/plans/${planId}/food-lines`, { label: 'Turkey', brought_by: 'Aunt June', thaw_pounds: 15 });
+  expect([added.status, added.json.food_lines[0].brought_by]).toEqual([201, 'Aunt June']);
+  const year = (await admin.get(`/api/plans/holidays/years/${planId}`)).json;
+  expect(year.countdown.thaw).toEqual([{ label: 'Turkey', pounds: 15, days: 4, source: 'USDA: thawing in the refrigerator' }]);
   expect(year.countdown.steps[0]).toMatchObject({ due_day: '2026-11-22', due_time: '09:00' });
   expect(year.countdown.steps[0].detail).toContain('USDA: thawing in the refrigerator');
-  expect((await admin.put(`/api/plans/holidays/years/${planId}`, { turkey_pounds: 0 })).status).toBe(400);
-  expect((await admin.put(`/api/plans/holidays/years/${planId}`, { dinner_time: 'late' })).status).toBe(400);
+  // Any plan has it: the gathering view of a plan that is not a holiday's year carries a countdown too.
+  const lunch = (await admin.post('/api/plans', { name: 'Lunch', start_day: '2026-11-28' })).json;
+  await admin.put(`/api/plans/${lunch.id}/food`, { served_at: '12:00', food_kind: 'refreshments' });
+  const line = (await admin.post(`/api/plans/${lunch.id}/food-lines`, { label: 'Ham', thaw_pounds: 8 })).json.food_lines[0];
+  const view = (await admin.put(`/api/plans/holidays/years/${lunch.id}/ticks`, { key: `f${line.id}`, done: true })).json;
+  expect([view.countdown.food_kind, view.countdown.steps[0].words, view.countdown.steps[0].done]).toEqual(['refreshments', 'Put the 8 lb Ham in the refrigerator to thaw', true]);
+  expect((await admin.put(`/api/plans/food-lines/${line.id}`, { done: true })).json.food_lines[0].done).toBe(true);
+  expect((await admin.delete(`/api/plans/food-lines/${line.id}`)).json.food_lines).toEqual([]);
 
   expect((await admin.post(`/api/plans/holidays/years/${planId}/decor`, { spot: 'Mantel', label: 'Garland' })).status).toBe(201);
   expect((await admin.post(`/api/plans/holidays/years/${planId}/people`, { role: 'guest', name: 'Aunt June' })).status).toBe(201);
@@ -89,13 +100,13 @@ it('adds Thanksgiving, plans a countdown with a frozen turkey, and plans next ye
   const holiday = (await admin.get(`/api/plans/holidays/${made.json.id}`)).json;
   expect(holiday.years.map((y: { day: string }) => y.day)).toEqual(['2027-11-25', '2026-11-26']);
   const next = (await admin.get(`/api/plans/holidays/years/${holiday.years[0].plan_id}`)).json;
-  expect([next.last_notes, next.guests[0].name, next.countdown.thaw.days, next.spots[0].items[0].label]).toEqual(['More pie', 'Aunt June', 4, 'Garland']);
+  expect([next.last_notes, next.guests[0].name, next.countdown.thaw[0].days, next.spots[0].items[0].label]).toEqual(['More pie', 'Aunt June', 4, 'Garland']);
 
   // Both years are plans, so they are found like any other.
   expect((await admin.get('/api/search?q=Thanksgiving')).json.some((r: { title: string }) => r.title === 'Thanksgiving 2027')).toBe(true);
   expect((await admin.get('/api/home')).json.cards).toContain('coming');
   expect((await admin.delete(`/api/plans/holidays/${made.json.id}`)).status).toBe(204);
-  expect((await admin.get('/api/plans')).json.map((p: { name: string }) => p.name)).toEqual(['Thanksgiving 2027', 'Thanksgiving 2026']);
+  expect((await admin.get('/api/plans')).json.map((p: { name: string }) => p.name)).toEqual(['Thanksgiving 2027', 'Lunch', 'Thanksgiving 2026']);
 });
 
 it('turns a birthday into a holiday with one request', async () => {

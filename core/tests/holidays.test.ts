@@ -74,30 +74,33 @@ it('works a countdown back from dinner, with a frozen turkey thawed in the refri
 
   // Nothing is worked out until the person says when dinner is.
   expect((await mine().year(planId)).countdown.steps).toEqual([]);
-  await expect(mine().setYear(planId, { dinner_time: '6pm' })).rejects.toEqual(problem(400));
-  await expect(mine().setYear(planId, { turkey_pounds: 0 })).rejects.toEqual(problem(400));
-  const year = await mine().setYear(planId, { dinner_time: '17:00', turkey_pounds: 18 });
+  await expect(plans(db, owner, clock).setFood(planId, { served_at: '6pm' })).rejects.toEqual(problem(400));
+  await expect(plans(db, owner, clock).addFood(planId, { label: 'Turkey', thaw_pounds: 0 })).rejects.toEqual(problem(400));
+  await plans(db, owner, clock).setFood(planId, { served_at: '17:00' });
+  const turkeyLine = (await plans(db, owner, clock).addFood(planId, { label: 'Turkey', thaw_pounds: 18 })).food_lines[0]!.id;
+  const year = await mine().year(planId);
   const steps = year.countdown.steps.map((s) => `${s.due_day} ${s.due_time} ${s.words}`);
   expect([...steps].sort()).toEqual([
-    '2026-11-21 09:00 Put the 18 lb turkey in the refrigerator to thaw', // 18 lb: 5 days, 24 hours for each 4 pounds
+    '2026-11-21 09:00 Put the 18 lb Turkey in the refrigerator to thaw', // 18 lb: 5 days, 24 hours for each 4 pounds
     '2026-11-25 20:00 Brine the turkey',
     '2026-11-26 13:00 Mix the dough',
     '2026-11-26 13:00 Start cooking Roast turkey', // dinner at 5 pm, 240 minutes to cook
   ].sort());
-  expect(steps[0]).toContain('Put the 18 lb turkey'); // and they come in the order of the day
-  expect(year.countdown.thaw).toEqual({ pounds: 18, days: 5, source: 'USDA: thawing in the refrigerator' });
+  expect(steps[0]).toContain('Put the 18 lb Turkey'); // and they come in the order of the day
+  expect(year.countdown.thaw).toEqual([{ label: 'Turkey', pounds: 18, days: 5, source: 'USDA: thawing in the refrigerator' }]);
   expect(year.countdown.steps[0]!.detail).toContain('USDA: thawing in the refrigerator');
 
   // The person's own steps count back too, and dinner moving moves them all.
   await mine().addStep(planId, { words: 'Set the table', rule: 'morning_of', at: '10:00' });
   await mine().addStep(planId, { words: 'Make the gravy', rule: 'hours_before', hours: 1 });
-  const moved = await mine().setYear(planId, { dinner_time: '15:00' });
+  await plans(db, owner, clock).setFood(planId, { served_at: '15:00' });
+  const moved = await mine().year(planId);
   expect(moved.countdown.steps.find((s) => s.words === 'Make the gravy')).toMatchObject({ due_day: '2026-11-26', due_time: '14:00' });
   expect(moved.countdown.steps.find((s) => s.words === 'Mix the dough')).toMatchObject({ due_time: '11:00' });
 
   // Ticking a step off, whichever kind it is.
-  const ticked = await mine().tick(planId, 'thaw', true);
-  expect(ticked.countdown.steps.find((s) => s.key === 'thaw')!.done).toBe(true);
+  const ticked = await mine().tick(planId, `f${turkeyLine}`, true);
+  expect(ticked.countdown.steps.find((s) => s.key === `f${turkeyLine}`)!.done).toBe(true);
   await mine().tick(planId, `s${moved.countdown.steps.find((s) => s.words === 'Set the table')!.step_id}`, true);
   expect((await mine().year(planId)).countdown.steps.filter((s) => s.done)).toHaveLength(2);
   await expect(mine().tick(planId, 'x1', true)).rejects.toEqual(problem(400));
@@ -105,10 +108,11 @@ it('works a countdown back from dinner, with a frozen turkey thawed in the refri
 
 it('says a step is late when its time has gone and it is not done', async () => {
   const planId = (await mine().create(THANKSGIVING)).years[0]!.plan_id;
-  await mine().setYear(planId, { dinner_time: '17:00', turkey_pounds: 12 }); // thaw: 3 days, so Nov 23 at 9 am
+  await plans(db, owner, clock).setFood(planId, { served_at: '17:00' });
+  const line = (await plans(db, owner, clock).addFood(planId, { label: 'Turkey', thaw_pounds: 12 })).food_lines[0]!.id; // thaw: 3 days, so Nov 23 at 9 am
   day = '2026-11-24';
   expect((await mine().year(planId)).countdown.steps[0]).toMatchObject({ late: true, label: 'yesterday 9 am' });
-  await mine().tick(planId, 'thaw', true);
+  await mine().tick(planId, `f${line}`, true);
   expect((await mine().year(planId)).countdown.steps[0]!.late).toBe(false);
 });
 
@@ -123,7 +127,8 @@ it('starts next year from last year, with nothing ticked and what broke as the s
   const first = (await mine().create(THANKSGIVING)).years[0]!.plan_id;
   await plans(db, owner, clock).addItem(first, { kind: 'recipe', ref_id: pie });
   await plans(db, owner, clock).addItem(first, { kind: 'task', label: 'Buy the turkey' });
-  await mine().setYear(first, { dinner_time: '16:00', turkey_pounds: 14 });
+  await plans(db, owner, clock).setFood(first, { served_at: '16:00' });
+  const firstTurkey = (await plans(db, owner, clock).addFood(first, { label: 'Turkey', brought_by: 'Uncle Bo', thaw_pounds: 14 })).food_lines[0]!.id;
   await mine().addPerson(first, 'guest', { name: 'Aunt June' });
   await mine().addPerson(first, 'guest', { name: 'Uncle Bo' });
   await mine().addPerson(first, 'card', { name: 'Grandma' });
@@ -145,7 +150,7 @@ it('starts next year from last year, with nothing ticked and what broke as the s
   await mine().updateDecor(wreath.id, { taken_down: true });
   expect((await mine().year(first)).spots.flatMap((s) => s.items).find((d) => d.label === 'Wreath')!.boxed).toBe(false);
   await mine().updateDecor(wreath.id, { boxed: true });
-  await mine().tick(first, 'thaw', true);
+  await mine().tick(first, `f${firstTurkey}`, true);
 
   day = '2026-12-01';
   const done = await mine().finish(first, 'Do the pie the day before. Less stuffing.');
@@ -159,7 +164,7 @@ it('starts next year from last year, with nothing ticked and what broke as the s
   expect(next.previous!.year).toBe(2026);
   expect(next.guests.map((g) => [g.name, g.done])).toEqual([['Aunt June', false], ['Uncle Bo', false]]);
   expect(next.cards.map((g) => g.name)).toEqual(['Grandma']);
-  expect([next.dinner_time, next.turkey_pounds]).toEqual(['16:00', 14]);
+  expect([next.plan.served_at, next.plan.food_lines.map((f) => [f.label, f.brought_by, f.thaw_pounds, f.done])]).toEqual(['16:00', [['Turkey', 'Uncle Bo', 14, false]]]);
   expect(next.countdown.steps.every((s) => !s.done)).toBe(true);
   expect(next.countdown.steps.map((s) => s.words)).toContain('Chill the wine');
   expect(next.plan.items_list.map((i) => [i.label, i.done])).toEqual([['Pumpkin pie', false], ['Buy the turkey', false]]);
@@ -293,7 +298,8 @@ it('asks for the day each year when the person sets it, once this year is finish
 it('shows on Home six weeks ahead, what is next until take-down, asks for notes, then goes quiet', async () => {
   const made = await mine().create(THANKSGIVING);
   const planId = made.years[0]!.plan_id;
-  await mine().setYear(planId, { dinner_time: '17:00', turkey_pounds: 12 });
+  await plans(db, owner, clock).setFood(planId, { served_at: '17:00' });
+  const thawLine = (await plans(db, owner, clock).addFood(planId, { label: 'Turkey', thaw_pounds: 12 })).food_lines[0]!.id;
   await mine().addDecor(planId, { spot: 'Porch', label: 'Wreath' });
   const card = async () => (await home(db, owner, clock).summary()).coming.holidays[0];
 
@@ -302,9 +308,9 @@ it('shows on Home six weeks ahead, what is next until take-down, asks for notes,
   expect((await home(db, owner, clock).summary()).cards).toContain('coming');
   day = '2026-10-15'; // 42 days: six weeks to the day
   expect(await card()).toMatchObject({ stage: 'planning', days_until: 42, name: 'Thanksgiving' });
-  expect((await card())!.next).toContain('Put the 12 lb turkey in the refrigerator to thaw');
+  expect((await card())!.next).toContain('Put the 12 lb Turkey in the refrigerator to thaw');
   day = '2026-11-10';
-  await mine().tick(planId, 'thaw', true);
+  await mine().tick(planId, `f${thawLine}`, true);
   expect((await card())!.next).toBe('1 decoration to put up by 2026-11-19');
   const decor = (await mine().year(planId)).spots[0]!.items[0]!;
   await mine().updateDecor(decor.id, { put_up: true });
@@ -354,7 +360,8 @@ it('reminds in the morning round: start planning, put up, take down', async () =
 
 it('sends each countdown step once, at its time, and never late', async () => {
   const planId = (await mine().create(THANKSGIVING)).years[0]!.plan_id;
-  await mine().setYear(planId, { dinner_time: '17:00', turkey_pounds: 8 }); // thaw: 2 days, Nov 24 at 9 am
+  await plans(db, owner, clock).setFood(planId, { served_at: '17:00' });
+  await plans(db, owner, clock).addFood(planId, { label: 'Turkey', thaw_pounds: 8 }); // thaw: 2 days, Nov 24 at 9 am
   await mine().addStep(planId, { words: 'Chill the wine', rule: 'morning_of', at: '10:30' });
   const sent: string[] = [];
   const tools = { fetcher: (async (_url, _headers, send) => { sent.push(send?.body ?? ''); return { status: 200, type: 'text/plain', json: async () => ({}), bytes: async () => new Uint8Array() } as Answer; }) as Fetcher };
@@ -362,7 +369,7 @@ it('sends each countdown step once, at its time, and never late', async () => {
   expect(await prepDue(db, new Date(Date.UTC(2026, 10, 24, 8, 59)), tools)).toEqual([]); // not yet
   const at9 = await prepDue(db, new Date(Date.UTC(2026, 10, 24, 9, 0)), tools);
   expect(at9).toHaveLength(1);
-  expect(sent.join(' ')).toContain('Put the 8 lb turkey in the refrigerator to thaw');
+  expect(sent.join(' ')).toContain('Put the 8 lb Turkey in the refrigerator to thaw');
   expect(await prepDue(db, new Date(Date.UTC(2026, 10, 24, 9, 1)), tools)).toEqual([]); // once only
   expect(await prepDue(db, new Date(Date.UTC(2026, 10, 24, 9, 30)), tools)).toEqual([]); // the wine is at 10:30 on the 26th
   // A step whose time went by a long while ago is not sent late.
@@ -376,12 +383,13 @@ it('does not remind a recipe step twice when the recipe is also on the week\'s m
   await prep(db, owner, clock).setRecipeSteps(turkey, [{ words: 'Brine the turkey', rule: 'night_before', at: '20:00' }]);
   const planId = (await mine().create(THANKSGIVING)).years[0]!.plan_id;
   await plans(db, owner, clock).addItem(planId, { kind: 'recipe', ref_id: turkey, day: '2026-11-26', meal: 'dinner' });
-  await mine().setYear(planId, { dinner_time: '17:00' });
+  await plans(db, owner, clock).setFood(planId, { served_at: '17:00' });
   const year = await mine().year(planId);
   expect(year.countdown.steps[0]).toMatchObject({ words: 'Brine the turkey', reminded_on_week: true });
-  // The week's meal now has the dinner time, so its own reminders count back from it.
+  // The week's meal now has the time it is served, so its own reminders count back from it.
   const meal = year.plan.items_list[0]!.on_week!;
   expect(meal).toMatchObject({ day: '2026-11-26' });
+  expect((await db.get<{ eat_time: string }>('SELECT eat_time FROM meal_plan WHERE recipe_id = ?', [turkey]))!.eat_time).toBe('17:00');
   expect(await mine().countdownDue('2026-11-25', '2026-11-25')).toEqual([]);
 });
 

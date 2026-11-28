@@ -601,13 +601,17 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('project-costs.csv', ['Project', 'What', 'Planned', 'Spent', 'Paid on', 'Notes'],
     (await all('SELECT c.project_id, c.label, c.planned_cents, c.actual_cents, c.paid_on, c.note FROM project_costs c JOIN projects p ON p.id = c.project_id WHERE p.owner_id = ? ORDER BY c.project_id, c.sort_order, c.id'))
       .map((c) => [str(projectOf.get(c.project_id as number)?.name), str(c.label), dollars(c.planned_cents), dollars(c.actual_cents), str(c.paid_on), str(c.note)]));
-  const plans = await all('SELECT id, name, start_day, end_day, note, story, parts FROM plans WHERE owner_id = ? ORDER BY start_day, id');
+  const plans = await all('SELECT id, name, start_day, end_day, note, story, parts, served_at, food_kind FROM plans WHERE owner_id = ? ORDER BY start_day, id');
   const planOf = new Map(plans.map((p) => [p.id as number, p]));
-  out.csv('plans.csv', ['Plan', 'Starts', 'Ends', 'Notes', 'The story', 'Parts'], plans.map((p) => [str(p.name), str(p.start_day), str(p.end_day), str(p.note), str(p.story),
-    p.parts === null ? '' : String(p.parts).split(',').map((k) => PLAN_PARTS.find((x) => x.key === k)?.label ?? k).join('; ')]));
-  out.csv('plan-items.csv', ['Plan', 'Kind', 'What', 'Amount', 'Done', 'Notes', 'Back home', 'After the trip', 'After the trip done'],
-    (await all('SELECT i.plan_id, i.kind, i.label, i.quantity, i.done, i.note, i.returned, i.after_trip, i.after_done FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ? ORDER BY i.plan_id, i.sort_order, i.id'))
-      .map((i) => [str(planOf.get(i.plan_id as number)?.name), str(i.kind), str(i.label), str(i.quantity), yes(i.done), str(i.note), yes(i.returned), str(i.after_trip), yes(i.after_done)]));
+  out.csv('plans.csv', ['Plan', 'Starts', 'Ends', 'Notes', 'The story', 'Parts', 'Served at', 'Food is'], plans.map((p) => [str(p.name), str(p.start_day), str(p.end_day), str(p.note), str(p.story),
+    p.parts === null ? '' : String(p.parts).split(',').map((k) => PLAN_PARTS.find((x) => x.key === k)?.label ?? k).join('; '), str(p.served_at), str(p.food_kind)]));
+  // Food that is bought or brought comes after the things on the plan, as rows of kind "food" (Done: it is here).
+  const foodRows = await all('SELECT f.plan_id, f.label, f.brought_by, f.thaw_pounds, f.done FROM plan_food f JOIN plans p ON p.id = f.plan_id WHERE p.owner_id = ? ORDER BY f.plan_id, f.sort_order, f.id');
+  out.csv('plan-items.csv', ['Plan', 'Kind', 'What', 'Amount', 'Done', 'Notes', 'Back home', 'After the trip', 'After the trip done', 'Brought by', 'Frozen (pounds)'], [
+    ...(await all('SELECT i.plan_id, i.kind, i.label, i.quantity, i.done, i.note, i.returned, i.after_trip, i.after_done, i.thaw_pounds FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ? ORDER BY i.plan_id, i.sort_order, i.id'))
+      .map((i) => [str(planOf.get(i.plan_id as number)?.name), str(i.kind), str(i.label), str(i.quantity), yes(i.done), str(i.note), yes(i.returned), str(i.after_trip), yes(i.after_done), '', str(i.thaw_pounds)]),
+    ...foodRows.map((f) => [str(planOf.get(f.plan_id as number)?.name), 'food', str(f.label), '', yes(f.done), '', '', '', '', str(f.brought_by), str(f.thaw_pounds)]),
+  ]);
   const planPhotos: Cell[][] = [];
   for (const p of await all('SELECT p.id, p.plan_id, p.source, p.type, p.bytes, p.caption, p.spot FROM plan_photos p JOIN plans pl ON pl.id = p.plan_id WHERE pl.owner_id = ? ORDER BY p.plan_id, p.sort_order, p.id')) {
     const plan = planOf.get(p.plan_id as number)!;
@@ -622,10 +626,10 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   const holidayOf = new Map(holidayRows.map((h) => [h.id as number, h]));
   out.csv('holidays.csv', ['Holiday', 'How it finds its day', 'Month', 'Day of the month', 'Weekday (0 is Sunday)', 'Which one (1 to 4, or -1 for the last)', 'Start planning (weeks ahead)', 'First year of the date'],
     holidayRows.map((h) => [str(h.name), str(h.rule), str(h.month), str(h.day_of_month), str(h.weekday), str(h.nth), str(h.lead_weeks), str(h.first_year)]));
-  const yearRows = await all(`SELECT y.plan_id, y.holiday_id, y.year, y.dinner_time, y.turkey_pounds, y.put_up_on, y.take_down_on, y.taken_down_on, y.budget_cents, y.notes_next, y.notes_done
+  const yearRows = await all(`SELECT y.plan_id, y.holiday_id, y.year, y.put_up_on, y.take_down_on, y.taken_down_on, y.budget_cents, y.notes_next, y.notes_done
     FROM holiday_years y JOIN plans p ON p.id = y.plan_id WHERE p.owner_id = ? ORDER BY y.holiday_id, y.year`);
-  out.csv('holiday-years.csv', ['Holiday', 'Plan', 'Starts', 'Dinner at', 'Turkey (pounds)', 'Put up on', 'Take down on', 'Taken down on', 'Budget', 'Notes for next year', 'Notes for next year asked for'],
-    yearRows.map((y) => [str(holidayOf.get(y.holiday_id as number)?.name), str(planOf.get(y.plan_id as number)?.name), str(planOf.get(y.plan_id as number)?.start_day), str(y.dinner_time), str(y.turkey_pounds),
+  out.csv('holiday-years.csv', ['Holiday', 'Plan', 'Starts', 'Put up on', 'Take down on', 'Taken down on', 'Budget', 'Notes for next year', 'Notes for next year asked for'],
+    yearRows.map((y) => [str(holidayOf.get(y.holiday_id as number)?.name), str(planOf.get(y.plan_id as number)?.name), str(planOf.get(y.plan_id as number)?.start_day),
       str(y.put_up_on), str(y.take_down_on), str(y.taken_down_on), dollars(y.budget_cents), str(y.notes_next), yes(y.notes_done)]));
   const listRows: Cell[][] = [];
   const planCells = (planId: Value | undefined) => [str(planOf.get(planId as number)?.name), str(planOf.get(planId as number)?.start_day)];
@@ -809,8 +813,8 @@ const FILE_ABOUT: [string, string][] = [
   ['lists.csv', 'Your lists of titles (To watch, read or hear, and the ones you made): each title on each list, in order, and whether the list is shared. Titles you do not own yet are in collection.csv, marked Not owned yet.'],
   ['events.csv', 'Calendar events you wrote.'],
   ['projects.csv', 'Projects, and project-lines.csv, project-time.csv and project-costs.csv for what they use, the time spent and what they cost.'],
-  ['plans.csv', 'Plans, and plan-items.csv and plan-photos.csv for what belongs to each.'],
-  ['holidays.csv', 'Holidays: how each finds its day. holiday-years.csv has each year (its plan, dinner time, turkey, days to put up and take down, notes for next year) and holiday-lists.csv has what each year keeps: guests, cards, gifts, decorations and countdown steps.'],
+  ['plans.csv', 'Plans (with when the food is served), and plan-items.csv and plan-photos.csv for what belongs to each. In plan-items.csv, rows of kind food are food that is bought or brought; a frozen weight makes a step to thaw it.'],
+  ['holidays.csv', 'Holidays: how each finds its day. holiday-years.csv has each year (its plan, days to put up and take down, notes for next year) and holiday-lists.csv has what each year keeps: guests, cards, gifts, decorations and countdown steps.'],
   ['outdoor-trips.csv', 'Outdoor trips: the parts each has on. outdoor-trip-years.csv has each year (its plan, the water, the site booking, notes for next year) and outdoor-trip-lists.csv has what each year kept: the bring list, seasons, the catch log and the harvest log.'],
   ['money-categories.csv', 'Your spending categories and what each is for a month.'],
   ['money-entries.csv', 'What you wrote down as spent.'],
@@ -2107,26 +2111,41 @@ ${mediaId}`);
       // Parts in words ("Food; Bring list"); words not known are left out, and none at all means the plan shows what it has.
       const partWords = cellOf(row, 'Parts').split(';').map((w) => w.trim().toLowerCase()).filter(Boolean);
       const parts = partWords.length ? PLAN_PARTS.filter((p) => partWords.includes(p.label.toLowerCase())).map((p) => p.key).join(',') || null : null;
-      const made = await c.tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [c.owner, name, start, end && end >= start ? end : start, clean(row.notes, 5000),clean(cellOf(row, 'The story'), 20000), parts, c.at, c.at]);
+      const served = cellOf(row, 'Served at');
+      const foodKind = cellOf(row, 'Food is').toLowerCase();
+      const made = await c.tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, served_at, food_kind, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, name, start, end && end >= start ? end : start, clean(row.notes, 5000),clean(cellOf(row, 'The story'), 20000), parts,
+          /^([01]\d|2[0-3]):[0-5]\d$/.test(served) ? served : null, ['meal', 'refreshments'].includes(foodKind) ? foodKind : null, c.at, c.at]);
       d.fresh += 1;
       if (filled.has(key)) continue;
       filled.add(key);
       const mine = (r: Record<string, string>) => labelKey(cellOf(r, 'Plan')) === key;
       let lost = false;
       let order = 1;
+      let foods = 0;
       for (const i of items.filter(mine)) {
         const kind = cellOf(i, 'Kind').toLowerCase();
         const label = clean(cellOf(i, 'What'), 200);
+        // Frozen weight: 1 to 60 pounds, as a plan allows; anything else is left out.
+        const frozen = numberOf(cellOf(i, 'Frozen (pounds)'));
+        const thaw = frozen !== null && frozen >= 1 && frozen <= 60 ? frozen : null;
+        if (label && kind === 'food') {
+          if (foods < 100) {
+            await c.tx.run('INSERT INTO plan_food (plan_id, label, brought_by, thaw_pounds, done, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+              [made.lastId, label, clean(cellOf(i, 'Brought by'), 100), thaw, yesOf(cellOf(i, 'Done')) ? 1 : 0, foods + 1]);
+            foods += 1;
+          }
+          continue;
+        }
         if (!label || !['task', 'recipe', 'thing', 'media', 'project'].includes(kind)) continue;
         const ref = kind === 'task' ? null : pointed[kind]!.get(labelKey(label)) ?? null;
         if (kind !== 'task' && ref === null) lost = true;
         const quantity = numberOf(cellOf(i, 'Amount'));
         const after = cellOf(i, 'After the trip').toLowerCase();
         const kept = kind === 'thing' && ['dry', 'clean', 'repair', 'replace'].includes(after) ? after : null;
-        await c.tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id, returned, after_trip, after_done) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)',
+        await c.tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id, returned, after_trip, after_done, thaw_pounds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)',
           [made.lastId, kind, ref, label, quantity !== null && quantity > 0 ? quantity : null, clean(i.notes, 1000), yesOf(cellOf(i, 'Done')) ? 1 : 0, order,
-            kind === 'thing' && yesOf(cellOf(i, 'Back home')) ? 1 : 0, kept, kept && yesOf(cellOf(i, 'After the trip done')) ? 1 : 0]);
+            kind === 'thing' && yesOf(cellOf(i, 'Back home')) ? 1 : 0, kept, kept && yesOf(cellOf(i, 'After the trip done')) ? 1 : 0, kind === 'recipe' ? thaw : null]);
         order += 1;
       }
       for (const p of photos.filter(mine)) {
@@ -2186,10 +2205,15 @@ ${mediaId}`);
         if (await c.tx.get('SELECT 1 AS x FROM holiday_years WHERE plan_id = ?', [plan])) continue;
         const year = Number(start.slice(0, 4));
         if (await c.tx.get('SELECT 1 AS x FROM holiday_years WHERE holiday_id = ? AND year = ?', [id, year])) continue;
+        // A download made before food worked on any plan has the dinner time and the turkey here: they become what the plan holds now.
         const time = cellOf(y, 'Dinner at');
         const pounds = numberOf(cellOf(y, 'Turkey (pounds)'));
-        await c.tx.run('INSERT INTO holiday_years (plan_id, holiday_id, year, dinner_time, turkey_pounds, put_up_on, take_down_on, taken_down_on, budget_cents, notes_next, notes_done) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [plan, id, year, /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : null, pounds !== null && pounds > 0 ? pounds : null, dayOf(cellOf(y, 'Put up on')), dayOf(cellOf(y, 'Take down on')),
+        if (/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) await c.tx.run('UPDATE plans SET served_at = ? WHERE id = ? AND served_at IS NULL', [time, plan]);
+        if (pounds !== null && pounds >= 1 && pounds <= 60 && !(await c.tx.get('SELECT 1 AS x FROM plan_food WHERE plan_id = ?', [plan]))) {
+          await c.tx.run("INSERT INTO plan_food (plan_id, label, thaw_pounds, done, sort_order) VALUES (?, 'Turkey', ?, 0, 1)", [plan, pounds]);
+        }
+        await c.tx.run('INSERT INTO holiday_years (plan_id, holiday_id, year, put_up_on, take_down_on, taken_down_on, budget_cents, notes_next, notes_done) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [plan, id, year, dayOf(cellOf(y, 'Put up on')), dayOf(cellOf(y, 'Take down on')),
             dayOf(cellOf(y, 'Taken down on')), centsOf(cellOf(y, 'Budget')), clean(cellOf(y, 'Notes for next year'), 5000), yesOf(cellOf(y, 'Notes for next year asked for')) ? 1 : 0]);
         // What a year keeps comes with a year that is new, never added to one already kept.
         await putLists(c, plan, name, lists.filter((r) => cellOf(r, 'Plan').toLowerCase() === cellOf(y, 'Plan').toLowerCase() && cellOf(r, 'Starts') === start));

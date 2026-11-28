@@ -498,8 +498,11 @@ it('upgrades from the version before pet routines: routines and ticks kept, tick
   for (const table of ['routine_closed', 'dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE measure_entries');
   await db.run('DROP TABLE measures');
-  for (const column of ['returned', 'after_trip', 'after_done', 'job_id']) await db.run(`ALTER TABLE plan_items DROP COLUMN ${column}`);
-  await db.run('ALTER TABLE plans DROP COLUMN parts');
+  await db.run('DROP TABLE plan_food');
+
+  for (const column of ['returned', 'after_trip', 'after_done', 'job_id', 'thaw_pounds']) await db.run(`ALTER TABLE plan_items DROP COLUMN ${column}`);
+
+  for (const column of ['served_at', 'food_kind', 'parts']) await db.run(`ALTER TABLE plans DROP COLUMN ${column}`);
   for (const column of ['every_days', 'every_from']) await db.run(`ALTER TABLE routine_steps DROP COLUMN ${column}`);
   await db.run('ALTER TABLE routines DROP COLUMN kind');
   for (const column of ['sets', 'reps', 'weight', 'weight_unit', 'minutes', 'distance', 'distance_unit']) for (const table of ['routine_steps', 'routine_ticks']) await db.run(`ALTER TABLE ${table} DROP COLUMN ${column}`);
@@ -633,8 +636,11 @@ it('upgrades from the version before workouts: routines and ticks stay, as plain
   for (const table of ['routine_closed', 'dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE measure_entries');
   await db.run('DROP TABLE measures');
-  for (const column of ['returned', 'after_trip', 'after_done', 'job_id']) await db.run(`ALTER TABLE plan_items DROP COLUMN ${column}`);
-  await db.run('ALTER TABLE plans DROP COLUMN parts');
+  await db.run('DROP TABLE plan_food');
+
+  for (const column of ['returned', 'after_trip', 'after_done', 'job_id', 'thaw_pounds']) await db.run(`ALTER TABLE plan_items DROP COLUMN ${column}`);
+
+  for (const column of ['served_at', 'food_kind', 'parts']) await db.run(`ALTER TABLE plans DROP COLUMN ${column}`);
   for (const column of ['every_days', 'every_from']) await db.run(`ALTER TABLE routine_steps DROP COLUMN ${column}`);
   await db.run('ALTER TABLE routines DROP COLUMN kind');
   for (const column of ['sets', 'reps', 'weight', 'weight_unit', 'minutes', 'distance', 'distance_unit']) for (const table of ['routine_steps', 'routine_ticks']) await db.run(`ALTER TABLE ${table} DROP COLUMN ${column}`);

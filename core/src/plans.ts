@@ -20,7 +20,7 @@
  */
 import { calendar, type Entry } from './calendar.ts';
 import { atomic, type Db, type Queries, type Value } from './db.ts';
-import { ruleFromColumns, ruleWords, type DateRule, type RuleColumns } from './holidayDates.ts';
+import { ruleFromColumns, ruleWords, thawDays, type DateRule, type RuleColumns } from './holidayDates.ts';
 import { inventory } from './inventory.ts';
 import { Problem } from './problem.ts';
 import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
@@ -113,6 +113,8 @@ export type PlanItemInput = {
   quantity?: number | null;
   note?: string | null;
   done?: boolean;
+  /** For a recipe that starts frozen: how many pounds, so the countdown says when to thaw it. */
+  thaw_pounds?: number | null;
   /** For a recipe: the day to put it on the week's meals, and which meal. Left out: it isn't put on the week. */
   day?: string | null;
   meal?: string | null;
@@ -131,7 +133,13 @@ export type PlanItem = {
   detail: string | null;
   /** For a recipe: the meal it is on the week, or null when it's only noted on the plan. */
   on_week: OnWeek | null;
+  /** For a recipe that starts frozen: its weight in pounds. */
+  thaw_pounds: number | null;
 };
+/** Food that is bought or brought, not cooked from a recipe. thaw_pounds is set for something that starts frozen. */
+export type FoodLine = { id: number; label: string; brought_by: string | null; thaw_pounds: number | null; done: boolean };
+export type FoodKind = 'meal' | 'refreshments';
+export const FOOD_KINDS: readonly FoodKind[] = ['meal', 'refreshments'];
 export type PlanPhoto = { id: number; source: 'kept' | 'immich'; caption: string | null };
 export type PlanWhen = 'ahead' | 'now' | 'past';
 export type PlanSummary = {
@@ -151,6 +159,12 @@ export type Plan = PlanSummary & {
   story: string | null; items_list: PlanItem[]; photos_list: PlanPhoto[]; /** What the calendar holds for its days, once they've come. */ happened: Entry[];
   /** Set when it comes back every year (see holidays.ts); null for a one-time plan. */
   yearly: PlanYearly | null;
+  /** When the food is served (18:00), or null before it is set. */
+  served_at: string | null;
+  /** A meal, or refreshments. */
+  food_kind: FoodKind;
+  /** Food that is bought or brought. */
+  food_lines: FoodLine[];
 };
 
 const MAX_DAYS = 62;
@@ -158,13 +172,15 @@ const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'];
 /** How long before a plan's first day its food may be made. */
 export const EARLY_DAYS = 7;
 const MAX_PHOTOS = 80;
+const MAX_FOOD_LINES = 100;
+const timeOk = (t: unknown): t is string => typeof t === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
 export const MAX_PHOTO_BYTES = 3_000_000;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 type Slot = { day: string; meal: string; servings: number | null };
-type PlanRow = { id: number; name: string; start_day: string; end_day: string; note: string | null; story: string | null };
-type ItemRow = { id: number; plan_id: number; kind: PlanItemKind; ref_id: number | null; label: string; quantity: number | null; note: string | null; done: number; meal_plan_id: number | null };
-const ITEM_COLUMNS = 'id, plan_id, kind, ref_id, label, quantity, note, done, meal_plan_id';
+type PlanRow = { id: number; name: string; start_day: string; end_day: string; note: string | null; story: string | null; served_at: string | null; food_kind: FoodKind | null };
+type ItemRow = { id: number; plan_id: number; kind: PlanItemKind; ref_id: number | null; label: string; quantity: number | null; note: string | null; done: number; meal_plan_id: number | null; thaw_pounds: number | null };
+const ITEM_COLUMNS = 'id, plan_id, kind, ref_id, label, quantity, note, done, meal_plan_id, thaw_pounds';
 
 
 export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
@@ -185,7 +201,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
   }
 
   async function row(q: Queries, id: number): Promise<PlanRow> {
-    const found = await q.get<PlanRow>('SELECT id, name, start_day, end_day, note, story FROM plans WHERE id = ? AND owner_id = ?', [id, owner]);
+    const found = await q.get<PlanRow>('SELECT id, name, start_day, end_day, note, story, served_at, food_kind FROM plans WHERE id = ? AND owner_id = ?', [id, owner]);
     if (!found) throw new Problem(404, "That plan isn't here anymore. It may have been deleted.");
     return found;
   }
@@ -245,7 +261,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
 
     return rows.map((r): PlanItem => {
       const meal = r.meal_plan_id !== null ? meals.get(r.meal_plan_id) : undefined;
-      const base = { id: r.id, kind: r.kind, ref_id: r.ref_id, quantity: r.quantity, note: r.note, done: r.done === 1, short: null as string | null, detail: null as string | null,
+      const base = { id: r.id, kind: r.kind, ref_id: r.ref_id, quantity: r.quantity, note: r.note, done: r.done === 1, thaw_pounds: r.thaw_pounds, short: null as string | null, detail: null as string | null,
         on_week: meal ? { day: meal.day, meal: meal.meal, cooked: meal.cooked_on !== null, servings: meal.servings } : null };
       if (r.kind === 'task' || r.ref_id === null) return { ...base, label: r.label, link: null };
       if (r.kind === 'recipe') return { ...base, label: recipes.get(r.ref_id) ?? r.label, link: recipes.has(r.ref_id) ? `/recipes/${r.ref_id}` : null };
@@ -261,6 +277,29 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
       return { ...base, label: thing.name, link: '/things', short, detail: thing.place };
     });
   }
+
+  const foodOf = async (q: Queries, planId: number): Promise<FoodLine[]> =>
+    (await q.all<{ id: number; label: string; brought_by: string | null; thaw_pounds: number | null; done: number }>(
+      'SELECT id, label, brought_by, thaw_pounds, done FROM plan_food WHERE plan_id = ? ORDER BY sort_order, id', [planId])).map((f) => ({ ...f, done: f.done === 1 }));
+  const planOfFood = async (q: Queries, foodId: number): Promise<number> => {
+    const found = await q.get<{ plan_id: number }>('SELECT f.plan_id FROM plan_food f JOIN plans p ON p.id = f.plan_id WHERE f.id = ? AND p.owner_id = ?', [foodId, owner]);
+    if (!found) throw new Problem(404, "That food isn't here anymore. It may have been deleted.");
+    return found.plan_id;
+  };
+  /** Checks a part the plan doesn't show yet, when something is added to it. */
+  async function showPart(tx: Queries, planId: number, part: PlanPart): Promise<void> {
+    const saved = (await tx.get<{ parts: string | null }>('SELECT parts FROM plans WHERE id = ?', [planId]))!.parts;
+    if (saved !== null && !saved.split(',').includes(part)) {
+      await tx.run('UPDATE plans SET parts = ? WHERE id = ?', [partsChecked([...saved.split(',').filter(Boolean), part]).join(','), planId]);
+    }
+  }
+  /** A weight in pounds for something that starts frozen, or null for none. */
+  const weightChecked = (pounds: number | null | undefined): number | null => {
+    if (pounds === null || pounds === undefined) return null;
+    thawDays(pounds);
+    if (pounds < 1) throw new Problem(400, 'A frozen thing weighs between 1 and 60 pounds');
+    return pounds;
+  };
 
   const photosOf = (q: Queries, planId: number) =>
     q.all<{ id: number; source: 'kept' | 'immich'; caption: string | null }>('SELECT id, source, caption FROM plan_photos WHERE plan_id = ? ORDER BY sort_order, id', [planId]);
@@ -288,7 +327,8 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
     const happened = found.start_day <= today
       ? (await calendar(db, owner, clock).between(found.start_day, dayNumber(lastSeen) - dayNumber(found.start_day) + 1)).filter((e) => ['meal', 'session', 'media'].includes(e.kind))
       : [];
-    return { ...summary!, story: found.story, items_list: await itemsOf(db, id), photos_list: await photosOf(db, id), happened, yearly: await yearlyOf(id) };
+    return { ...summary!, story: found.story, items_list: await itemsOf(db, id), photos_list: await photosOf(db, id), happened, yearly: await yearlyOf(id),
+      served_at: found.served_at, food_kind: found.food_kind ?? 'meal', food_lines: await foodOf(db, id) };
   }
 
   /** What a plan is a year of, when it comes back every year. */
@@ -382,15 +422,19 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
         const old = await row(tx, id);
         const length = dayNumber(old.end_day) - dayNumber(old.start_day);
         const values = checked({ name: clean(input.name, 200) ?? old.name, start_day: input.start_day, end_day: addDays(input.start_day, length), note: old.note });
-        const made = await tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, (SELECT parts FROM plans WHERE id = ?), ?, ?)', [owner, ...values, id, now(), now()]);
+        const made = await tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, served_at, food_kind, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, (SELECT parts FROM plans WHERE id = ?), ?, ?, ?, ?)', [owner, ...values, id, old.served_at, old.food_kind, now(), now()]);
         const moved = dayNumber(input.start_day) - dayNumber(old.start_day);
         for (const item of await tx.all<ItemRow>(`SELECT ${ITEM_COLUMNS} FROM plan_items WHERE plan_id = ? ORDER BY sort_order, id`, [id])) {
           // Food that was on the week goes on the new week, the same number of days in.
           const meal = item.meal_plan_id !== null ? await tx.get<Slot>('SELECT day, meal, servings FROM meal_plan WHERE id = ? AND owner_id = ?', [item.meal_plan_id, owner]) : undefined;
           const stillThere = item.kind === 'recipe' && item.ref_id !== null && await tx.get('SELECT id FROM recipes WHERE id = ? AND owner_id = ?', [item.ref_id, owner]);
           const mealId = meal && stillThere ? await putOnWeek(tx, item.ref_id!, { day: addDays(meal.day, moved), meal: meal.meal, servings: meal.servings }) : null;
-          await tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)',
-            [made.lastId, item.kind, item.ref_id, item.label, item.quantity, item.note, item.id, mealId]);
+          await tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id, thaw_pounds) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)',
+            [made.lastId, item.kind, item.ref_id, item.label, item.quantity, item.note, item.id, mealId, item.thaw_pounds]);
+        }
+        for (const f of await tx.all<{ label: string; brought_by: string | null; thaw_pounds: number | null; sort_order: number }>(
+          'SELECT label, brought_by, thaw_pounds, sort_order FROM plan_food WHERE plan_id = ? ORDER BY sort_order, id', [id])) {
+          await tx.run('INSERT INTO plan_food (plan_id, label, brought_by, thaw_pounds, done, sort_order) VALUES (?, ?, ?, ?, 0, ?)', [made.lastId, f.label, f.brought_by, f.thaw_pounds, f.sort_order]);
         }
         return made.lastId;
       }).then(whole);
@@ -405,22 +449,70 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
         if (v.ref !== null && await tx.get('SELECT id FROM plan_items WHERE plan_id = ? AND kind = ? AND ref_id = ?', [planId, v.kind, v.ref])) throw new Problem(409, "That's already part of it");
         const slot = v.kind === 'recipe' ? slotFor(plan, input.day, input.meal, input.servings) : null;
         const last = (await tx.get<{ last: number | null }>('SELECT MAX(sort_order) AS last FROM plan_items WHERE plan_id = ?', [planId]))!.last ?? 0;
-        await tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)',
-          [planId, v.kind, v.ref, v.label, v.quantity, v.note, last + 1, slot ? await putOnWeek(tx, v.ref!, slot) : null]);
+        await tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id, thaw_pounds) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)',
+          [planId, v.kind, v.ref, v.label, v.quantity, v.note, last + 1, slot ? await putOnWeek(tx, v.ref!, slot) : null, v.kind === 'recipe' ? weightChecked(input.thaw_pounds) : null]);
         // Something added to a part the plan doesn't show (from a recipe's page, say) checks that part.
-        const saved = (await tx.get<{ parts: string | null }>('SELECT parts FROM plans WHERE id = ?', [planId]))!.parts;
-        const part = PART_OF_ITEM[v.kind];
-        if (saved !== null && !saved.split(',').includes(part)) {
-          await tx.run('UPDATE plans SET parts = ? WHERE id = ?', [partsChecked([...saved.split(',').filter(Boolean), part]).join(','), planId]);
-        }
+        await showPart(tx, planId, PART_OF_ITEM[v.kind]);
       }).then(() => whole(planId));
+    },
+
+    // ---------- food ----------
+
+    /** When the food is served and whether it is a meal or refreshments. A new time is when the plan's meals on the week are eaten. */
+    async setFood(planId: number, c: { served_at?: string | null; food_kind?: string | null }): Promise<Plan> {
+      const old = await row(db, planId);
+      const served = c.served_at === undefined ? old.served_at : c.served_at;
+      if (served !== null && !timeOk(served)) throw new Problem(400, 'A time is written like 18:00');
+      const kind = c.food_kind === undefined || c.food_kind === null ? (old.food_kind ?? 'meal') : c.food_kind;
+      if (!FOOD_KINDS.includes(kind as FoodKind)) throw new Problem(400, 'Pick one: a meal or refreshments.');
+      await atomic(db, async (tx) => {
+        await tx.run('UPDATE plans SET served_at = ?, food_kind = ?, updated_at = ? WHERE id = ? AND owner_id = ?', [served, kind, now(), planId, owner]);
+        if (served !== null && served !== old.served_at) {
+          await tx.run('UPDATE meal_plan SET eat_time = ? WHERE owner_id = ? AND id IN (SELECT meal_plan_id FROM plan_items WHERE plan_id = ? AND meal_plan_id IS NOT NULL)', [served, owner, planId]);
+        }
+        await showPart(tx, planId, 'food');
+      });
+      return whole(planId);
+    },
+
+    /** Add food that is bought or brought. A weight makes it a frozen thing to thaw. */
+    async addFood(planId: number, input: { label?: string | null; brought_by?: string | null; thaw_pounds?: number | null }): Promise<Plan> {
+      await row(db, planId);
+      const label = clean(input.label, 200);
+      if (!label) throw new Problem(400, 'Say what the food is');
+      const pounds = weightChecked(input.thaw_pounds);
+      await atomic(db, async (tx) => {
+        const count = (await tx.get<{ n: number; last: number | null }>('SELECT COUNT(*) AS n, MAX(sort_order) AS last FROM plan_food WHERE plan_id = ?', [planId]))!;
+        if (count.n >= MAX_FOOD_LINES) throw new Problem(400, `A plan holds ${MAX_FOOD_LINES} lines of food at most`);
+        await tx.run('INSERT INTO plan_food (plan_id, label, brought_by, thaw_pounds, done, sort_order) VALUES (?, ?, ?, ?, 0, ?)', [planId, label, clean(input.brought_by, 100), pounds, (count.last ?? 0) + 1]);
+        await showPart(tx, planId, 'food');
+      });
+      return whole(planId);
+    },
+
+    async updateFood(foodId: number, input: { label?: string | null; brought_by?: string | null; thaw_pounds?: number | null; done?: boolean }): Promise<Plan> {
+      const planId = await planOfFood(db, foodId);
+      const old = (await db.get<{ label: string; brought_by: string | null; thaw_pounds: number | null; done: number }>('SELECT label, brought_by, thaw_pounds, done FROM plan_food WHERE id = ?', [foodId]))!;
+      const label = input.label === undefined ? old.label : clean(input.label, 200);
+      if (!label) throw new Problem(400, 'Say what the food is');
+      const pounds = input.thaw_pounds === undefined ? old.thaw_pounds : weightChecked(input.thaw_pounds);
+      await db.run('UPDATE plan_food SET label = ?, brought_by = ?, thaw_pounds = ?, done = ? WHERE id = ?',
+        [label, input.brought_by === undefined ? old.brought_by : clean(input.brought_by, 100), pounds, (input.done ?? old.done === 1) ? 1 : 0, foodId]);
+      return whole(planId);
+    },
+
+    async removeFood(foodId: number): Promise<Plan> {
+      const planId = await planOfFood(db, foodId);
+      await db.run('DELETE FROM plan_food WHERE id = ?', [foodId]);
+      await db.run('DELETE FROM holiday_ticks WHERE plan_id = ? AND key = ?', [planId, `f${foodId}`]);
+      return whole(planId);
     },
 
     /**
      * Tick it, reword a task, change how many are needed or the note, or, for a recipe, say when it's eaten
      * and for how many: a day puts it on the week's meals (or moves it there), and no day takes it off again.
      */
-    async updateItem(itemId: number, input: { label?: string | null; quantity?: number | null; note?: string | null; done?: boolean; day?: string | null; meal?: string | null; servings?: number | null }): Promise<Plan> {
+    async updateItem(itemId: number, input: { label?: string | null; quantity?: number | null; note?: string | null; done?: boolean; day?: string | null; meal?: string | null; servings?: number | null; thaw_pounds?: number | null }): Promise<Plan> {
       const planId = await planOfItem(db, itemId);
       const old = (await db.get<ItemRow>(`SELECT ${ITEM_COLUMNS} FROM plan_items WHERE id = ?`, [itemId]))!;
       if (input.day !== undefined && old.kind === 'recipe' && old.ref_id !== null) {
@@ -443,8 +535,9 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
       if (!label) throw new Problem(400, 'Say what needs doing');
       const quantity = input.quantity === undefined ? old.quantity : input.quantity;
       if (quantity !== null && !(Number.isFinite(quantity) && quantity > 0)) throw new Problem(400, 'How many is a number above nothing');
-      await db.run('UPDATE plan_items SET label = ?, quantity = ?, note = ?, done = ? WHERE id = ?',
-        [label, old.kind === 'thing' ? quantity : null, input.note === undefined ? old.note : clean(input.note, 1000), (input.done ?? old.done === 1) ? 1 : 0, itemId]);
+      const thaw = input.thaw_pounds === undefined ? old.thaw_pounds : weightChecked(input.thaw_pounds);
+      await db.run('UPDATE plan_items SET label = ?, quantity = ?, note = ?, done = ?, thaw_pounds = ? WHERE id = ?',
+        [label, old.kind === 'thing' ? quantity : null, input.note === undefined ? old.note : clean(input.note, 1000), (input.done ?? old.done === 1) ? 1 : 0, old.kind === 'recipe' ? thaw : null, itemId]);
       return whole(planId);
     },
 
@@ -454,6 +547,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
       await atomic(db, async (tx) => {
         await offWeek(tx, (await tx.get<{ meal_plan_id: number | null }>('SELECT meal_plan_id FROM plan_items WHERE id = ?', [itemId]))!.meal_plan_id);
         await tx.run('DELETE FROM plan_items WHERE id = ?', [itemId]);
+        await tx.run('DELETE FROM holiday_ticks WHERE plan_id = ? AND key = ?', [planId, `t${itemId}`]);
       });
       return whole(planId);
     },

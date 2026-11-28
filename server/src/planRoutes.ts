@@ -67,12 +67,31 @@ export function planRoutes(db: Db, tools?: PhotoTools): Route[] {
     ['POST', at('/:id/items'), async (c) => ({
       status: 201,
       json: await mine(c).addItem(c.id, { kind: read.text(c.body, 'kind'), ref_id: read.maybeWhole(c.body, 'ref_id'), label: read.maybeText(c.body, 'label'),
-        quantity: read.maybeNumber(c.body, 'quantity'), note: read.maybeText(c.body, 'note'), day: read.maybeText(c.body, 'day'), meal: read.maybeText(c.body, 'meal'), servings: read.maybeNumber(c.body, 'servings') }),
+        quantity: read.maybeNumber(c.body, 'quantity'), note: read.maybeText(c.body, 'note'), day: read.maybeText(c.body, 'day'), meal: read.maybeText(c.body, 'meal'), servings: read.maybeNumber(c.body, 'servings'),
+        thaw_pounds: read.maybeNumber(c.body, 'thaw_pounds') }),
     })],
+    // Food: when it is served and whether it is a meal or refreshments, and food that is bought or brought.
+    ['PUT', at('/:id/food'), async (c) => ({
+      json: await mine(c).setFood(c.id, {
+        ...(sent(c.body, 'served_at') ? { served_at: read.maybeText(c.body, 'served_at') } : {}), ...(sent(c.body, 'food_kind') ? { food_kind: read.maybeText(c.body, 'food_kind') } : {}),
+      }),
+    })],
+    ['POST', at('/:id/food-lines'), async (c) => ({
+      status: 201,
+      json: await mine(c).addFood(c.id, { label: read.maybeText(c.body, 'label'), brought_by: read.maybeText(c.body, 'brought_by'), thaw_pounds: read.maybeNumber(c.body, 'thaw_pounds') }),
+    })],
+    ['PUT', at('/food-lines/:id'), async (c) => ({
+      json: await mine(c).updateFood(c.id, {
+        ...(sent(c.body, 'label') ? { label: read.maybeText(c.body, 'label') } : {}), ...(sent(c.body, 'brought_by') ? { brought_by: read.maybeText(c.body, 'brought_by') } : {}),
+        ...(sent(c.body, 'thaw_pounds') ? { thaw_pounds: read.maybeNumber(c.body, 'thaw_pounds') } : {}), ...(sent(c.body, 'done') ? { done: read.yesNo(c.body, 'done') } : {}),
+      }),
+    })],
+    ['DELETE', at('/food-lines/:id'), async (c) => ({ json: await mine(c).removeFood(c.id) })],
     ['PUT', at('/items/:id'), async (c) => ({
       json: await mine(c).updateItem(c.id, {
         ...(sent(c.body, 'label') ? { label: read.maybeText(c.body, 'label') } : {}), ...(sent(c.body, 'quantity') ? { quantity: read.maybeNumber(c.body, 'quantity') } : {}),
         ...(sent(c.body, 'note') ? { note: read.maybeText(c.body, 'note') } : {}), ...(sent(c.body, 'done') ? { done: read.yesNo(c.body, 'done') } : {}),
+        ...(sent(c.body, 'thaw_pounds') ? { thaw_pounds: read.maybeNumber(c.body, 'thaw_pounds') } : {}),
         ...(sent(c.body, 'day') ? { day: read.maybeText(c.body, 'day'), meal: read.maybeText(c.body, 'meal'), servings: read.maybeNumber(c.body, 'servings') } : {}),
       }),
     })],
