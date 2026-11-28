@@ -7,6 +7,7 @@ import AskBack from '../components/AskBack';
 import { Badge, Open } from '../components/ServiceLinks';
 import { StartCard, WeeklyCard, START_CHANGED } from '../components/Start';
 import { RoutinesCard } from '../components/Routines';
+import GardenCard from '../components/GardenCard';
 import { HolidayRow } from '../components/HolidayCard';
 import DontForget from '../components/DontForget';
 import Icon, { hasIcon } from '../components/Icon';
@@ -182,6 +183,8 @@ export default function Home({ user }) {
         )}
 
         {shows('routines') && <RoutinesCard />}
+
+        {shows('garden') && <GardenCard />}
 
         {shows('weather') && s.weather && (
           <Card title={s.weather.place.name} to="/settings" link="Weather settings">

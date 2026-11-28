@@ -17,7 +17,7 @@ import { ACTION_LIST } from './actions.ts';
 export const TRIAL_DAYS = 7;
 export const PRICE = '$14.99';
 /** The first part of an address (/api/<this>/…) for each part the unlock covers. */
-export const PAID_PARTS = ['things', 'projects', 'plans', 'calendar', 'media', 'mail', 'money', 'assistant', 'routines', 'measures', 'manual', 'home-services', 'shopping', 'cooking', 'keys', 'recalls'] as const;
+export const PAID_PARTS = ['things', 'garden', 'projects', 'plans', 'calendar', 'media', 'mail', 'money', 'assistant', 'routines', 'measures', 'manual', 'home-services', 'shopping', 'cooking', 'keys', 'recalls'] as const;
 
 export type Held = { trial_started: string | null; unlocked: boolean };
 export type Access = {

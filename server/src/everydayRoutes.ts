@@ -18,6 +18,7 @@ import { FILM_SERVICE, fillFrom, TMDB_API, TMDB_IMAGES } from '../../core/src/lo
 import { connectionRoutes, type Reach } from './connectionRoutes.ts';
 import type { AssistantTools } from '../../core/src/index.ts';
 import { enjoyingRoutes } from './enjoyingRoutes.ts';
+import { gardenRoutes } from './gardenRoutes.ts';
 import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, type Route } from './http.ts';
 import { mailRoutes, type MailTools } from './mailRoutes.ts';
 import { makingRoutes } from './makingRoutes.ts';
@@ -405,6 +406,7 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ...holidayRoutes(db),
     ...outdoorTripRoutes(db),
     ...planRoutes(db, options.photos),
+    ...gardenRoutes(db, { fetcher: outside, photos: options.photos }),
     ...shoppingRoutes(db),
     ...recallRoutes(db, outside),
     ...startRoutes(db),

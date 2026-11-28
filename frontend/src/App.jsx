@@ -48,6 +48,8 @@ const PackingPage = lazyPage(() => import('./pages/Packing'));
 const UpkeepPage = lazyPage(() => import('./pages/Upkeep'));
 const JobPage = lazyPage(() => import('./pages/Upkeep').then((m) => ({ default: m.JobPage })));
 const RoutinesPage = lazyPage(() => import('./pages/Routines'));
+const GardenPage = lazyPage(() => import('./pages/Garden'));
+const PlantPage = lazyPage(() => import('./pages/Garden').then((m) => ({ default: m.PlantPage })));
 const MeasuresPage = lazyPage(() => import('./pages/Measures'));
 const ChoreChart = lazyPage(() => import('./pages/ChoreChart'));
 const CollectionPrint = lazyPage(() => import('./pages/CollectionPrint'));
@@ -91,8 +93,8 @@ const SECTIONS = [
   { word: 'eating', shown: 'cooking', icon: 'recipe', home: '/week', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
     tabs: [['/week', 'Week'], ['/groceries', 'Groceries'], ['/recipes', 'Recipes'], ['/pantry', 'Pantry'], ['/prices', 'Prices']] },
   // Home services sit inside the House Manual, and Licenses inside Things.
-  { word: 'keeping', shown: 'in order', icon: 'thing', home: '/manual', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || path.startsWith('/manual'),
-    tabs: [['/manual', 'House Manual', ['/manual/services']], ['/things/upkeep', 'Upkeep'], ['/things/pets', 'Pets'], ['/things/places', 'Places'], ['/things', 'Things', ['/things/licenses']]] },
+  { word: 'keeping', shown: 'in order', icon: 'thing', home: '/manual', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || path.startsWith('/manual') || path.startsWith('/garden'),
+    tabs: [['/manual', 'House Manual', ['/manual/services']], ['/things/upkeep', 'Upkeep'], ['/things/pets', 'Pets'], ['/things/places', 'Places'], ['/things', 'Things', ['/things/licenses']], ['/garden', 'Garden']] },
   { word: 'spending', shown: 'budgeted', icon: 'bill', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month'], ['/money/income', 'Income and bills'], ['/money/goals', 'Goals'], ['/money/year', 'Year']] },
   { word: 'enjoying', shown: 'entertaining', icon: 'media', home: '/media', owns: (path) => path.startsWith('/media'),
     // The third place in a tab is the older addresses that still open it (the book shelves are now chips in the Collection).
@@ -141,7 +143,8 @@ function Shell({ user, demo = false, onLogout }) {
   const section = SECTIONS.find((s) => s.owns(pathname));
   // The calendar ("planning") lives in "on track", so choosing it shows that.
   const showing = SECTIONS.filter((s) => !life || life.sections.includes(s.word) || (s.word === 'making' && life.sections.includes('planning')) || s === section);
-  const tabs = section ? section.tabs : [];
+  // The Garden tab shows once gardening is checked in "What Life Is looks after" (or while a garden page is open).
+  const tabs = section ? section.tabs.filter(([to]) => to !== '/garden' || pathname.startsWith('/garden') || life?.areas?.includes('gardening')) : [];
   const exact = (to) => ['/recipes', '/things', '/projects', '/media', '/calendar', '/money'].includes(to);
   // The page an AI app sends a person to stands alone, without the menu bar.
   if (pathname === '/connect') return <main className="safe-sides mx-auto max-w-5xl px-3 py-4"><Suspense fallback={<PageLoading />}><Connect /></Suspense></main>;
@@ -200,6 +203,8 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/things/places/:id/walk" element={<WalkThrough />} />
           <Route path="/things/activities" element={<Activities />} />
           <Route path="/routines" element={<RoutinesPage />} />
+          <Route path="/garden" element={<GardenPage />} />
+          <Route path="/garden/:id" element={<PlantPage />} />
           <Route path="/measures" element={<MeasuresPage />} />
           <Route path="/things/upkeep" element={<UpkeepPage />} />
           <Route path="/things/upkeep/chart" element={<ChoreChart />} />
