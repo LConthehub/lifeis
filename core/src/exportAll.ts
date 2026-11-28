@@ -592,8 +592,8 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('lists.csv', ['List', 'Built in', 'Shared with everyone', 'Order', 'Title', 'Type', 'Added by', 'Notes'], titleListRows);
 
   // ---------- the calendar, projects, plans ----------
-  out.csv('events.csv', ['Title', 'Day', 'Ends on', 'Time', 'Every year', 'Notes'],
-    (await all('SELECT title, day, end_day, time, yearly, note FROM events WHERE owner_id = ? ORDER BY day, time, id')).map((e) => [str(e.title), str(e.day), str(e.end_day), str(e.time), yes(e.yearly), str(e.note)]));
+  out.csv('events.csv', ['Title', 'Day', 'Ends on', 'Time', 'Every year', 'Notes', 'Minutes to get there'],
+    (await all('SELECT title, day, end_day, time, yearly, note, travel_minutes FROM events WHERE owner_id = ? ORDER BY day, time, id')).map((e) => [str(e.title), str(e.day), str(e.end_day), str(e.time), yes(e.yearly), str(e.note), str(e.travel_minutes)]));
   const projects = await all('SELECT id, name, activity, status, due_on, started_on, finished_on, notes FROM projects WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id');
   const projectOf = new Map(projects.map((p) => [p.id as number, p]));
   out.csv('projects.csv', ['Project', 'Activity', 'Status', 'Due on', 'Started on', 'Finished on', 'Notes'],
@@ -819,7 +819,7 @@ const FILE_ABOUT: [string, string][] = [
   ['copies.csv', 'Each copy of a title: format, place, discs, who it is lent to, and its link.'],
   ['collection-log.csv', 'When you watched, read, listened to or played something.'],
   ['lists.csv', 'Your lists of titles (To watch, read or hear, and the ones you made): each title on each list, in order, and whether the list is shared. Titles you do not own yet are in collection.csv, marked Not owned yet.'],
-  ['events.csv', 'Calendar events you wrote.'],
+  ['events.csv', 'Calendar events you wrote, with the minutes it takes to get there when you gave them.'],
   ['jottings.csv', 'Your jottings, with the day of each and whether it is checked off. They are private to you, so only your own download holds them.'],
   ['projects.csv', 'Projects, and project-lines.csv, project-time.csv and project-costs.csv for what they use, the time spent and what they cost.'],
   ['plans.csv', 'Plans (with when the food is served), and plan-items.csv and plan-photos.csv for what belongs to each. In plan-items.csv, rows of kind food are food that is bought or brought; a frozen weight makes a step to thaw it.'],
@@ -1904,8 +1904,10 @@ ${mediaId}`);
       if (seen.take(`${labelKey(title)}\n${day}`)) { d.already += 1; continue; }
       const end = dayOf(cellOf(row, 'Ends on'));
       const time = /^\d{1,2}:\d{2}$/.test(cellOf(row, 'Time')) ? cellOf(row, 'Time') : null;
-      await c.tx.run('INSERT INTO events (owner_id, title, day, end_day, time, note, yearly, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [c.owner, title, day, end && end >= day ? end : null, time, clean(row.notes, 2000), yesOf(cellOf(row, 'Every year')) ? 1 : 0, c.at, c.at]);
+      const away = Number(cellOf(row, 'Minutes to get there'));
+      await c.tx.run('INSERT INTO events (owner_id, title, day, end_day, time, note, yearly, travel_minutes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, title, day, end && end >= day ? end : null, time, clean(row.notes, 2000), yesOf(cellOf(row, 'Every year')) ? 1 : 0,
+          time && Number.isInteger(away) && away >= 1 && away <= 720 ? away : null, c.at, c.at]);
       d.fresh += 1;
     }
     return d;

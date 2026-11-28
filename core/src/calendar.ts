@@ -27,8 +27,10 @@ export type EventInput = {
   note?: string | null;
   /** A birthday or an anniversary: on this day every year from now on. */
   yearly?: boolean;
+  /** How many minutes it takes to get there, typed by the person: the morning reminder says when to leave. Only with a time. */
+  travel_minutes?: number | null;
 };
-export type Event = { id: number; title: string; day: string; end_day: string | null; time: string | null; note: string | null; yearly: boolean; tag_list: TagRef[] };
+export type Event = { id: number; title: string; day: string; end_day: string | null; time: string | null; note: string | null; yearly: boolean; travel_minutes: number | null; tag_list: TagRef[] };
 /** One coming round of a date that returns every year. */
 export type YearlyDate = { id: number; title: string; day: string; time: string | null; note: string | null; /** How many years since the first. */ years: number };
 
@@ -72,11 +74,14 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
     if (time !== null && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Problem(400, 'A time is written like 18:30');
     const yearly = input.yearly === true;
     if (yearly && end !== null && end !== input.day) throw new Problem(400, 'Something that comes every year is on one day');
-    return [title, input.day, end === input.day ? null : end, time, clean(input.note, 2000), yearly ? 1 : 0];
+    const travel = input.travel_minutes ?? null;
+    if (travel !== null && !(Number.isInteger(travel) && travel >= 1 && travel <= 720)) throw new Problem(400, 'The minutes to get there are a whole number from 1 to 720');
+    if (travel !== null && time === null) throw new Problem(400, 'Give it a time to start before saying how long it takes to get there');
+    return [title, input.day, end === input.day ? null : end, time, clean(input.note, 2000), yearly ? 1 : 0, travel];
   }
 
   type Kept = Omit<Event, 'yearly' | 'tag_list'> & { yearly: number };
-  const COLUMNS = 'id, title, day, end_day, time, note, yearly';
+  const COLUMNS = 'id, title, day, end_day, time, note, yearly, travel_minutes';
   const asEvent = (row: Kept): Event => ({ ...row, yearly: row.yearly === 1, tag_list: [] });
 
   /** Each time a yearly date comes round from `start` to `end`, soonest first. */
@@ -195,7 +200,7 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
     },
 
     async createEvent(input: EventInput): Promise<Event> {
-      const made = await db.run('INSERT INTO events (owner_id, title, day, end_day, time, note, yearly, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      const made = await db.run('INSERT INTO events (owner_id, title, day, end_day, time, note, yearly, travel_minutes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [owner, ...checked(input), now(), now()]);
       return event(made.lastId);
     },
@@ -203,7 +208,7 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
     async updateEvent(id: number, input: EventInput): Promise<Event> {
       const values = checked(input);
       await event(id);
-      await db.run('UPDATE events SET title = ?, day = ?, end_day = ?, time = ?, note = ?, yearly = ?, updated_at = ? WHERE id = ? AND owner_id = ?', [...values, now(), id, owner]);
+      await db.run('UPDATE events SET title = ?, day = ?, end_day = ?, time = ?, note = ?, yearly = ?, travel_minutes = ?, updated_at = ? WHERE id = ? AND owner_id = ?', [...values, now(), id, owner]);
       return event(id);
     },
 

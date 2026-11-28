@@ -21,6 +21,8 @@ if (await first.isVisible().catch(() => false)) { await first.getByRole('button'
 
 // Something due, so the digest has a line.
 await page.evaluate(() => fetch('/api/things/upkeep', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Test the smoke alarms', every_n: 1, every_unit: 'month' }) }));
+// An event today with a time and the minutes it takes to get there: the morning round says when to leave.
+await page.evaluate(() => { const d = new Date(); const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; return fetch('/api/calendar/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Dentist', day, time: '15:00', travel_minutes: 25 }) }); });
 
 await page.goto(`${base}/settings/reminders`); await page.waitForTimeout(1500);
 const all = page.locator('[data-reminders]');
@@ -31,6 +33,8 @@ check('each way says what it sends', /What it sends: Each morning's reminder, se
 check('email asks for an account first', await page.getByRole('link', { name: 'Connect your email first' }).isVisible());
 await page.locator('[data-preview] summary').click();
 check('the preview shows this morning’s digest', (await page.locator('[data-preview]').innerText()).includes('Test the smoke alarms'), (await page.locator('[data-preview]').innerText()).replace(/\s+/g, ' ').slice(0, 120));
+
+check('the preview says when to leave for an event with minutes to get there', (await page.locator('[data-preview]').innerText()).includes('Dentist at 3:00. Leave by 2:35.'), (await page.locator('[data-preview]').innerText()).replace(/\s+/g, ' ').slice(0, 200));
 
 await page.getByLabel('When').fill('06:15'); await page.waitForTimeout(800);
 const saved = await page.evaluate(() => fetch('/api/reminders').then((r) => r.json()));
@@ -46,7 +50,7 @@ check('ntfy is turned on with a long random topic to subscribe to', /^lifeis-[a-
 await ntfy.getByRole('button', { name: 'Send one now' }).click(); await page.waitForTimeout(1500);
 check('trying it says it went', (await ntfy.innerText()).includes('Sent.'));
 const got = await (await fetch(`${NTFY}/_seen`)).json();
-check('the ntfy server got only how many, not what', got.length === 1 && got[0].topic === topic && got[0].body === '1 thing needs you today. Open Life Is to see what.' && got[0].priority === 'high', JSON.stringify(got[0] ?? {}));
+check('the ntfy server got only how many, not what', got.length === 1 && got[0].topic === topic && got[0].body === '2 things need you today. Open Life Is to see what.' && got[0].priority === 'high', JSON.stringify(got[0] ?? {}));
 await ntfy.getByLabel(/Say what each thing is/).check(); await page.waitForTimeout(800);
 await ntfy.getByRole('button', { name: 'Send one now' }).click(); await page.waitForTimeout(1500);
 const again = await (await fetch(`${NTFY}/_seen`)).json();
