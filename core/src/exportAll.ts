@@ -75,6 +75,7 @@ export const KINDS: KindInfo[] = [
   { key: 'household', label: 'People in the household (for chores)', file: 'household.csv', importable: true, matched: 'by name' },
   { key: 'pets', label: 'Pets, with their weights and photos', file: 'pets.csv', importable: true, matched: 'by name' },
   { key: 'upkeep', label: 'Upkeep jobs, bills, renewals and chores, with when each was done', file: 'upkeep.csv', importable: true, matched: 'by name (and pet)' },
+  { key: 'renting', label: 'Renting: the lease, the notes written to the landlord, and the move-in and move-out record with its photos', file: 'lease.csv', importable: true, matched: 'the lease only when none is kept; a room by name; a note by job, day and words' },
   { key: 'routines', label: 'Routines, with their times and steps, and the days each time was finished', file: 'routines.csv', importable: true, matched: 'by name' },
   { key: 'measures', label: 'Your own measures, with their entries (private to you: only your own download holds them)', file: 'measures.csv', importable: true, matched: 'a measure by name; an entry by day and value' },
   { key: 'manual', label: 'The house manual', file: 'house-manual.csv', importable: true, matched: 'by part and title' },
@@ -481,7 +482,7 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
     LEFT JOIN household_members m ON m.id = j.assigned_member WHERE j.owner_id = ? ORDER BY j.name COLLATE NOCASE, j.id`);
   const jobName = new Map(jobs.map((j) => [j.id as number, j]));
   out.csv('upkeep.csv',
-    ['Job', 'Kind', 'Activity', 'For this thing', 'Its place', 'For this pet', 'Repeats every', 'Repeats every (unit)', 'Or every (miles, hours)', 'Counted in', 'First due', 'Last done', 'Next due', 'Amount', 'Points', 'Pays by itself', 'Assigned to (sign-in)', 'Assigned to (household)', 'Steps', 'Notes', 'Tools', 'Supplies'],
+    ['Job', 'Kind', 'Activity', 'For this thing', 'Its place', 'For this pet', 'Repeats every', 'Repeats every (unit)', 'Or every (miles, hours)', 'Counted in', 'First due', 'Last done', 'Next due', 'Amount', 'Points', 'Pays by itself', 'Assigned to (sign-in)', 'Assigned to (household)', 'Steps', 'Notes', 'Tools', 'Supplies', 'The landlord’s job', 'Asked the landlord on', 'Fixed on'],
     jobs.map((j) => {
       const mine = done.filter((d) => d.job_id === j.id);
       const last = mine.length ? { day: str(mine[mine.length - 1]!.day), reading: num(mine[mine.length - 1]!.reading) } : null;
@@ -493,6 +494,7 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
         str(j.first_due), last?.day ?? '', next, dollars(j.amount_cents), str(j.points), yes(j.autopay), str(j.signin), str(j.member), str(j.steps), str(j.note),
         tools.filter((t) => t.job_id === j.id).map((t) => str(t.name)).join('; '),
         supplies.filter((s) => s.job_id === j.id).map((s) => `${str(s.name)} | ${str(s.quantity)} | ${str(s.unit)}`).join('\n'),
+        yes(j.landlord), str(j.asked_on), str(j.fixed_on),
       ];
     }));
   out.csv('upkeep-history.csv', ['Job', 'For this pet', 'Done on', 'Done by', 'Reading', 'Minutes', 'Cost', 'Points', 'Notes'],
@@ -558,6 +560,24 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('licenses.csv', ['License', 'Kind', 'Whose it is', 'Number', 'Issued by', 'Issued on', 'Runs out on', 'Notes'],
     (await all('SELECT name, category, holder, number, issuer, issued_on, expires_on, note FROM licenses WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id'))
       .map((l) => [str(l.name), str(l.category), str(l.holder), str(l.number), str(l.issuer), str(l.issued_on), str(l.expires_on), str(l.note)]));
+
+  // ---------- renting: the lease, the notes to the landlord, the move-in and move-out record ----------
+  out.csv('lease.csv', ['Lease starts', 'Lease ends', 'Rent due on day', 'Deposit', 'Landlord', 'Landlord contact', 'Notice due on', 'What the notice is for'],
+    (await all('SELECT start_day, end_day, rent_day, deposit_cents, landlord_name, landlord_contact, notice_day, notice_label FROM leases WHERE owner_id = ?'))
+      .map((l) => [str(l.start_day), str(l.end_day), str(l.rent_day), dollars(l.deposit_cents), str(l.landlord_name), str(l.landlord_contact), str(l.notice_day), str(l.notice_label)]));
+  out.csv('landlord-notes.csv', ['Job', 'Written on', 'Note'],
+    (await all('SELECT j.name, n.day, n.body FROM landlord_notes n JOIN upkeep_jobs j ON j.id = n.job_id WHERE j.owner_id = ? ORDER BY n.job_id, n.day, n.id'))
+      .map((n) => [str(n.name), str(n.day), str(n.body)]));
+  const rentalRooms = await all('SELECT id, name, in_note, out_note FROM rental_rooms WHERE owner_id = ? ORDER BY sort_order, id');
+  out.csv('rental-rooms.csv', ['Room', 'Condition at move-in', 'Condition at move-out'], rentalRooms.map((r) => [str(r.name), str(r.in_note), str(r.out_note)]));
+  const rentalPhotos: Cell[][] = [];
+  for (const p of await all('SELECT p.id, p.room_id, p.phase, p.day, p.type, p.bytes FROM rental_photos p JOIN rental_rooms r ON r.id = p.room_id WHERE r.owner_id = ? ORDER BY p.room_id, p.phase, p.day, p.id')) {
+    const room = rentalRooms.find((r) => r.id === p.room_id)!;
+    const bytes = bytesOf(p.bytes);
+    const file = bytes ? out.binary(`pictures/renting/${slug(str(room.name), room.id as number)}`, `${p.phase === 'in' ? 'move-in' : 'move-out'}-${p.id}`, str(p.type), bytes) : '';
+    rentalPhotos.push([str(room.name), p.phase === 'in' ? 'Move-in' : 'Move-out', str(p.day), file]);
+  }
+  out.csv('rental-photos.csv', ['Room', 'When', 'Taken on', 'File'], rentalPhotos);
 
   // ---------- home services ----------
   // The links this person may see. The person in charge also gets who sees each and which are for guests; anyone else is not told that.
@@ -795,6 +815,7 @@ export async function exportEverything(db: Db, owner: number, clock: Clock = () 
       'SELECT COALESCE(SUM(LENGTH(photo)), 0) AS n FROM pets WHERE owner_id = ?',
       'SELECT COALESCE(SUM(LENGTH(p.bytes)), 0) AS n FROM plan_photos p JOIN plans l ON l.id = p.plan_id WHERE l.owner_id = ?',
       'SELECT COALESCE(SUM(LENGTH(c.bytes)), 0) AS n FROM media_covers c JOIN media m ON m.id = c.media_id WHERE m.owner_id = ?',
+      'SELECT COALESCE(SUM(LENGTH(p.bytes)), 0) AS n FROM rental_photos p JOIN rental_rooms r ON r.id = p.room_id WHERE r.owner_id = ?',
     ]) weight += (await tx.get<{ n: number }>(sql, [owner]))?.n ?? 0;
     if (await hasTable(tx, 'trip_receipts')) weight += (await tx.get<{ n: number }>('SELECT COALESCE(SUM(LENGTH(bytes)), 0) AS n FROM trip_receipts WHERE owner_id = ?', [owner]))?.n ?? 0;
     if (await hasTable(tx, 'recipe_photos')) weight += (await tx.get<{ n: number }>('SELECT COALESCE(SUM(LENGTH(p.bytes)), 0) AS n FROM recipe_photos p JOIN recipes r ON r.id = p.recipe_id WHERE r.owner_id = ?', [owner]))?.n ?? 0;
@@ -835,6 +856,7 @@ const FILE_ABOUT: [string, string][] = [
   ['thing-history.csv', 'Where each thing has been and what it was used for.'],
   ['upkeep.csv', 'Jobs that come round again, bills, renewals and chores: how often, when last done and next due.'],
   ['upkeep-history.csv', 'Each time each job was done.'],
+  ['lease.csv', 'Your lease: its days, the day rent is due, the deposit, the landlord and a notice deadline. landlord-notes.csv has each note written to ask the landlord for a repair; rental-rooms.csv and rental-photos.csv are the move-in and move-out record, room by room, with each photo in pictures/renting/.'],
   ['household.csv', 'People in the household, and the chore points each has earned.'],
   ['routines.csv', 'Routines: one row for each step, with its time of day, which days it falls on and the thing it uses. routine-history.csv has the days each time was finished, and routine-ticks.csv each step checked off, when, by whom and with what numbers. A workout is marked in the Kind column, and its steps carry their numbers.'],
   ['measures.csv', 'Your own measures: one row for each entry, with its unit and target. They are private to you, so only your own download holds them.'],
@@ -959,7 +981,7 @@ export type KindReport = {
   /** Anything else worth saying in a sentence. */
   note?: string;
 };
-export type Pending = { file: string; as: 'thing-photo' | 'thing-paper' | 'pet-photo' | 'cover' | 'plan-photo'; id: number; kind?: string; name?: string; spot?: string };
+export type Pending = { file: string; as: 'thing-photo' | 'thing-paper' | 'pet-photo' | 'cover' | 'plan-photo' | 'rental-photo'; id: number; kind?: string; name?: string; spot?: string };
 export type Brought = { kinds: KindReport[]; pending: Pending[] };
 
 type Ctx = { tx: Queries; owner: number; today: string; at: string; files: Files };
@@ -1527,6 +1549,9 @@ const importers: Record<string, Importer> = {
           dayOf(cellOf(row, 'First due')), assignedTo, clean(row.steps, 5000), clean(row.notes, 2000), c.at, c.at, kind, centsOf(cellOf(row, 'Amount')),
           points !== null && points >= 0 ? points : null, yesOf(cellOf(row, 'Pays by itself')) ? 1 : 0, petId, member ? await memberFor(member) : null]);
       const id = made.lastId;
+      if (yesOf(cellOf(row, 'The landlord’s job'))) {
+        await c.tx.run('UPDATE upkeep_jobs SET landlord = 1, asked_on = ?, fixed_on = ? WHERE id = ?', [dayOf(cellOf(row, 'Asked the landlord on')), dayOf(cellOf(row, 'Fixed on')), id]);
+      }
       for (const [i, tool] of listOf(cellOf(row, 'Tools')).entries()) {
         const toolId = things.get(labelKey(tool));
         if (toolId === undefined) { lost = true; continue; }
@@ -1784,6 +1809,62 @@ ${url.toLowerCase()}`)) { d.already += 1; continue; }
       }
       if (yesOf(cellOf(row, 'On my Home page'))) await c.tx.run('INSERT OR IGNORE INTO home_service_pins (user_id, service_id, created_at) VALUES (?, ?, ?)', [c.owner, made.lastId, c.at]);
       d.fresh += 1;
+    }
+    return d;
+  },
+
+  async renting(c) {
+    const d = blank();
+    const lease = tableOf(c.files, 'lease.csv')?.rows[0];
+    const roomsIn = tableOf(c.files, 'rental-rooms.csv')?.rows ?? [];
+    const notes = tableOf(c.files, 'landlord-notes.csv')?.rows ?? [];
+    const photos = tableOf(c.files, 'rental-photos.csv')?.rows ?? [];
+    // The lease: only when none is kept. One person has one.
+    if (lease) {
+      d.found += 1;
+      if (await c.tx.get('SELECT 1 AS one FROM leases WHERE owner_id = ?', [c.owner])) d.already += 1;
+      else {
+        const rent = wholeOf(cellOf(lease, 'Rent due on day'));
+        await c.tx.run('INSERT INTO leases (owner_id, start_day, end_day, rent_day, deposit_cents, landlord_name, landlord_contact, notice_day, notice_label, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [c.owner, dayOf(cellOf(lease, 'Lease starts')), dayOf(cellOf(lease, 'Lease ends')), rent !== null && rent >= 1 && rent <= 31 ? rent : null, centsOf(cellOf(lease, 'Deposit')),
+            clean(cellOf(lease, 'Landlord'), 120), clean(cellOf(lease, 'Landlord contact'), 300), dayOf(cellOf(lease, 'Notice due on')), clean(cellOf(lease, 'What the notice is for'), 120), c.at]);
+        d.fresh += 1;
+      }
+    }
+    // Rooms, by name: a room already kept keeps its notes, and only its missing photos could be added (never twice the same picture).
+    const kept = new Map((await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM rental_rooms WHERE owner_id = ? ORDER BY id DESC', [c.owner])).map((r) => [labelKey(r.name), r.id]));
+    let last = (await c.tx.get<{ n: number | null }>('SELECT MAX(sort_order) AS n FROM rental_rooms WHERE owner_id = ?', [c.owner]))?.n ?? 0;
+    let count = kept.size;
+    const fresh = new Set<string>();
+    for (const [at, row] of roomsIn.entries()) {
+      const name = clean(cellOf(row, 'Room'), 80);
+      if (!name) { skip(d, at, 'it has no name'); continue; }
+      d.found += 1;
+      const key = labelKey(name);
+      if (kept.has(key)) { d.already += 1; continue; }
+      if (count >= 40) { skip(d, at, 'a record holds 40 rooms at most'); continue; }
+      last += 1; count += 1;
+      const made = await c.tx.run('INSERT INTO rental_rooms (owner_id, name, in_note, out_note, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [c.owner, name, clean(cellOf(row, 'Condition at move-in'), 3000), clean(cellOf(row, 'Condition at move-out'), 3000), last, c.at]);
+      kept.set(key, made.lastId);
+      fresh.add(key);
+      d.fresh += 1;
+    }
+    // Photos come in only for a room that is new here; the page sends the pictures next (as 'rental-photo').
+    for (const p of photos) {
+      const key = labelKey(cellOf(p, 'Room'));
+      const file = cellOf(p, 'File');
+      if (file && fresh.has(key)) d.pending.push({ file, as: 'rental-photo', id: kept.get(key)!, kind: /^move-out$/i.test(cellOf(p, 'When')) ? 'out' : 'in', spot: dayOf(cellOf(p, 'Taken on')) ?? undefined });
+    }
+    // The notes to the landlord, for a job of the same name that is marked the landlord's; the same note on the same day is never added twice.
+    for (const n of notes) {
+      const body = clean(cellOf(n, 'Note'), 5000);
+      const day = dayOf(cellOf(n, 'Written on'));
+      const job = await c.tx.get<{ id: number }>('SELECT id FROM upkeep_jobs WHERE owner_id = ? AND landlord = 1 AND name = ? ORDER BY id LIMIT 1', [c.owner, cellOf(n, 'Job')]);
+      if (!body || !day) continue;
+      if (!job) { d.unlinked += 1; continue; }
+      if (await c.tx.get('SELECT 1 AS one FROM landlord_notes WHERE job_id = ? AND day = ? AND body = ?', [job.id, day, body])) continue;
+      await c.tx.run('INSERT INTO landlord_notes (job_id, day, body, created_at) VALUES (?, ?, ?, ?)', [job.id, day, body, c.at]);
     }
     return d;
   },
@@ -2506,7 +2587,7 @@ ${mediaId}`);
     return d;
   },
 };
-const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'measures', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
+const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'measures', 'manual', 'services', 'licenses', 'renting', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
 
 function rowsIn(files: Files, info: KindInfo): number {
   return tableOf(files, info.file)?.rows.length ?? 0;
@@ -2612,6 +2693,11 @@ export async function bringInPictures(db: Db, owner: number, pictures: PictureIn
           [p.id, owner, p.bytes]);
         if (!ok || type === 'application/pdf' || p.bytes.length > 3_000_000) { left += 1; continue; }
         await tx.run('INSERT INTO plan_photos (plan_id, source, type, bytes, caption, sort_order, created_at, spot) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [p.id, 'kept', type, p.bytes, clean(p.name, 300), (ok.last ?? 0) + 1, at, clean(p.spot, 100)]);
+      } else if (p.as === 'rental-photo') {
+        const phase = p.kind === 'out' ? 'out' : 'in';
+        const ok = await tx.get('SELECT r.id FROM rental_rooms r WHERE r.id = ? AND r.owner_id = ? AND (SELECT COUNT(*) FROM rental_photos x WHERE x.room_id = r.id AND x.phase = ?) < 12 AND NOT EXISTS (SELECT 1 FROM rental_photos x WHERE x.room_id = r.id AND x.bytes = ?)', [p.id, owner, phase, p.bytes]);
+        if (!ok || type === 'application/pdf' || p.bytes.length > 8_000_000) { left += 1; continue; }
+        await tx.run('INSERT INTO rental_photos (room_id, phase, day, type, bytes, created_at) VALUES (?, ?, ?, ?, ?, ?)', [p.id, phase, /^\d{4}-\d\d-\d\d$/.test(p.spot ?? '') ? p.spot! : at.slice(0, 10), type, p.bytes, at]);
       } else if (p.as === 'cover') {
         const ok = await tx.get('SELECT m.id FROM media m WHERE m.id = ? AND m.owner_id = ? AND NOT EXISTS (SELECT 1 FROM media_covers x WHERE x.media_id = m.id)', [p.id, owner]);
         if (!ok || type === 'application/pdf' || p.bytes.length > 8_000_000) { left += 1; continue; }

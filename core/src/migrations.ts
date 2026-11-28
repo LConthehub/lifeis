@@ -1995,6 +1995,57 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE items ADD COLUMN pieces_checked_missing INTEGER`,
     ],
   },
+  {
+    number: 74,
+    name: 'Renters',
+    // An upkeep job can be the landlord's (landlord, asked_on, fixed_on); each note written to ask is kept with its date. One lease
+    // per person. A move-in and move-out record is rooms (a condition note for each visit) with the person's own dated photos.
+    statements: [
+      `ALTER TABLE upkeep_jobs ADD COLUMN landlord INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE upkeep_jobs ADD COLUMN asked_on TEXT`,
+      `ALTER TABLE upkeep_jobs ADD COLUMN fixed_on TEXT`,
+      `CREATE TABLE landlord_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER NOT NULL REFERENCES upkeep_jobs(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_landlord_notes ON landlord_notes(job_id)`,
+      `CREATE TABLE leases (
+        owner_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        start_day TEXT,
+        end_day TEXT,
+        rent_day INTEGER,
+        deposit_cents INTEGER,
+        landlord_name TEXT,
+        landlord_contact TEXT,
+        notice_day TEXT,
+        notice_label TEXT,
+        updated_at TEXT NOT NULL
+      )`,
+      `CREATE TABLE rental_rooms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        in_note TEXT,
+        out_note TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_rental_rooms ON rental_rooms(owner_id, sort_order)`,
+      `CREATE TABLE rental_photos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_id INTEGER NOT NULL REFERENCES rental_rooms(id) ON DELETE CASCADE,
+        phase TEXT NOT NULL CHECK(phase IN ('in', 'out')),
+        day TEXT NOT NULL,
+        type TEXT NOT NULL,
+        bytes BLOB NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_rental_photos ON rental_photos(room_id, phase)`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

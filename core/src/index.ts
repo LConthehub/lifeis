@@ -99,6 +99,8 @@ export { search, SEARCH_KINDS } from './search.ts';
 export type { SearchKind, SearchResult } from './search.ts';
 export { DOCUMENT_KINDS, MAX_DOCUMENT } from './inventory.ts';
 export type { Records, RecordsInput, ItemDocument, DocumentKind, HomeReport, ReportLine } from './inventory.ts';
+export { renters, dayWords, MAX_RENTAL_PHOTO, MAX_ROOMS, MAX_ROOM_PHOTOS, LEASE_END_REMINDERS, NOTICE_REMINDERS } from './renters.ts';
+export type { Lease, LeaseInput, LandlordNote, NoteInput, Room, RoomPhoto, RoomInput, Renters } from './renters.ts';
 export { JOB_KINDS } from './upkeep.ts';
 export type { JobKind } from './upkeep.ts';
 export { pets, careName, PET_CARE, WEIGHT_UNITS, MAX_PET_PHOTO } from './pets.ts';

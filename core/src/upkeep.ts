@@ -43,6 +43,8 @@ export type JobInput = {
   points?: number | null;
   /** A bill that pays itself: it's a reminder that money is about to leave, not something to do. */
   autopay?: boolean;
+  /** The landlord's job to fix: it says "Ask the landlord" in place of Done (see renters.ts). Left out: unchanged. */
+  landlord?: boolean;
   /** The pet this care is for. Left out: unchanged. */
   pet_id?: number | null;
   /** Someone in the household without a sign-in who usually does it. Left out: unchanged. */
@@ -97,6 +99,11 @@ export type Job = {
   amount_cents: number | null;
   points: number | null;
   autopay: boolean;
+  /** The landlord's job. `asked_on` is when the landlord was asked, `fixed_on` when it was fixed, `asked_days` how long ago it was asked while it is not fixed yet. */
+  landlord: boolean;
+  asked_on: string | null;
+  fixed_on: string | null;
+  asked_days: number | null;
   pet: { id: number; name: string } | null;
   /** Someone without a sign-in who usually does it. */
   member: { id: number; name: string } | null;
@@ -125,6 +132,7 @@ type JobRow = {
   every_n: number | null; every_unit: EveryUnit | null; every_reading: number | null; reading_unit: string | null;
   first_due: string | null; assigned_to: number | null; assigned_name: string | null; steps: string | null; note: string | null;
   kind: JobKind; amount_cents: number | null; points: number | null; autopay: number; pet_id: number | null; pet_name: string | null;
+  landlord: number; asked_on: string | null; fixed_on: string | null;
   assigned_member: number | null; member_name: string | null;
 };
 
@@ -389,7 +397,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
   async function rows(q: Queries, where = '', args: Value[] = []): Promise<JobRow[]> {
     return q.all<JobRow>(
       `SELECT j.id, j.owner_id, ${shown('o')} AS owner, j.name, j.activity, j.item_id, j.every_n, j.every_unit, j.every_reading, j.reading_unit,
-              j.first_due, j.assigned_to, ${shown('a')} AS assigned_name, j.steps, j.note, j.kind, j.amount_cents, j.points, j.autopay, j.pet_id, p.name AS pet_name, j.assigned_member, hm.name AS member_name
+              j.first_due, j.assigned_to, ${shown('a')} AS assigned_name, j.steps, j.note, j.kind, j.amount_cents, j.points, j.autopay, j.landlord, j.asked_on, j.fixed_on, j.pet_id, p.name AS pet_name, j.assigned_member, hm.name AS member_name
        FROM upkeep_jobs j JOIN users o ON o.id = j.owner_id LEFT JOIN users a ON a.id = j.assigned_to LEFT JOIN pets p ON p.id = j.pet_id
        LEFT JOIN household_members hm ON hm.id = j.assigned_member
        WHERE (j.owner_id = ? OR j.assigned_to = ?) ${where} ORDER BY j.name COLLATE NOCASE, j.id`, [viewer, viewer, ...args]);
@@ -434,6 +442,8 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
       : (last?.reading ?? null);
     return {
       id: row.id, name: row.name, kind: row.kind, amount_cents: row.amount_cents, points: row.points, autopay: row.autopay === 1,
+      landlord: row.landlord === 1, asked_on: row.asked_on, fixed_on: row.fixed_on,
+      asked_days: row.landlord === 1 && row.asked_on && !row.fixed_on ? Math.max(0, dayNumber(today()) - dayNumber(row.asked_on)) : null,
       pet: row.pet_id !== null ? { id: row.pet_id, name: row.pet_name ?? '' } : null,
       member: row.assigned_member !== null ? { id: row.assigned_member, name: row.member_name ?? '' } : null,
       activity: row.activity, mine: owner === viewer, owner: row.owner,
@@ -483,6 +493,7 @@ export function upkeep(db: Db, viewer: number, clock: Clock = () => new Date()) 
     if (input.amount_cents !== undefined || making) { sets.push('amount_cents = ?'); args.push(input.amount_cents ?? null); }
     if (input.points !== undefined || making) { sets.push('points = ?'); args.push(input.points ?? null); }
     if (input.autopay !== undefined) { sets.push('autopay = ?'); args.push(input.autopay ? 1 : 0); }
+    if (input.landlord !== undefined) { sets.push('landlord = ?'); args.push(input.landlord ? 1 : 0); }
     if (input.pet_id !== undefined) {
       if (input.pet_id !== null && !(await q.get('SELECT id FROM pets WHERE id = ? AND owner_id = ?', [input.pet_id, viewer]))) throw new Problem(404, "That pet isn't one of yours");
       sets.push('pet_id = ?'); args.push(input.pet_id);

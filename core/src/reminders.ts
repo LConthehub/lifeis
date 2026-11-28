@@ -22,6 +22,7 @@ import { inventory } from './inventory.ts';
 import { kitchen } from './kitchen.ts';
 import { mail, type Postbox } from './mail.ts';
 import { Problem } from './problem.ts';
+import { renters } from './renters.ts';
 import { start } from './start.ts';
 import { addDays, clean, dayNumber, todayOf, type Clock } from './small.ts';
 import { upkeep } from './upkeep.ts';
@@ -209,6 +210,8 @@ export function reminders(db: Db, owner: number, clock: Clock = () => new Date()
       }
       // A holiday: the day to start planning, to put the decorations up, to take them down.
       for (const h of await holidays(db, owner, clock).digestLines()) lines.push({ kind: 'dates', icon: '✨', title: h.title, detail: h.detail, link: h.link, urgent: h.urgent });
+      // The lease ending, and a notice deadline the person set.
+      for (const h of await renters(db, owner, clock).digestLines()) lines.push({ kind: 'dates', icon: '📌', title: h.title, detail: h.detail, link: h.link, urgent: h.urgent });
       // An outdoor trip: opening day coming, a trip tomorrow with things left to pack.
       for (const h of await outdoorTrips(db, owner, clock).digestLines()) lines.push({ kind: 'dates', icon: '✨', title: h.title, detail: h.detail, link: h.link, urgent: h.urgent });
     }

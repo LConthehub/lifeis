@@ -100,6 +100,7 @@ function jobFrom(body: Body): JobInput {
     ...(sent(body, 'amount_cents') ? { amount_cents: read.maybeWhole(body, 'amount_cents') } : {}),
     ...(sent(body, 'points') ? { points: read.maybeWhole(body, 'points') } : {}),
     ...(sent(body, 'autopay') ? { autopay: read.yesNo(body, 'autopay') } : {}),
+    ...(sent(body, 'landlord') ? { landlord: read.yesNo(body, 'landlord') } : {}),
     ...(sent(body, 'pet_id') ? { pet_id: read.maybeWhole(body, 'pet_id') } : {}),
     ...(sent(body, 'assigned_member') ? { assigned_member: read.maybeWhole(body, 'assigned_member') } : {}),
     ...(tools !== undefined ? { tools: tools as number[] } : {}),
