@@ -13,8 +13,8 @@ Holidays are in the **on track** section, on the **Plans** tab. Choose the **Hol
 1. Choose **+ Add a holiday** and give it a name, such as Thanksgiving.
 2. Under **Its day**, pick the rule:
    - **A weekday of a month**, such as the fourth Thursday of November. Choose which (first to fourth, or last), the weekday and the month.
-   - **The same date every year**, such as December 25. Choose the month and the day.
-   - **I'll set it each year.** For a day that moves, such as Easter. You type this year's day now, and Life Is asks for next year's day when this year is finished.
+   - **The same date every year**, such as July 4. Choose the month and the day.
+   - **I'll set it each year.** For a day that moves with no rule, such as a family reunion whose day the family picks each year. You type this year's day now, and Life Is asks for next year's day when this year is finished.
 3. Say **Start planning this many weeks ahead**. It starts at 6. During those weeks the holiday shows on your front page, with what to do next.
 4. Press **Add it**.
 
