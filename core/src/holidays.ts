@@ -17,7 +17,7 @@
  * sees it), and what a person was given is only shown to them after the day (`given`).
  */
 import { atomic, type Db, type Queries } from './db.ts';
-import { checkedRule, dateInYear, nextDate, ruleWords, thawDays, THAW_SOURCE, type DateRule } from './holidayDates.ts';
+import { calendarMonths, CALENDARS, checkedRule, columnsFromRule, dateFromYear, nextDate, RULE_COLUMN_NAMES, ruleFromColumns, ruleWords, thawDays, THAW_SOURCE, type CalendarName, type DateRule, type RuleColumns } from './holidayDates.ts';
 import { inventory } from './inventory.ts';
 import { plans as plansOf, type FoodKind, type Plan } from './plans.ts';
 import { clockWords, momentMinutes, prep, prepTime, tidyStep, whenWords, type Moment, type PrepStepInput } from './prep.ts';
@@ -124,20 +124,18 @@ export type HolidayCard = {
   next: string | null; link: string;
 };
 
-type HolidayRow = {
-  id: number; name: string; rule: 'fixed' | 'weekday' | 'manual'; month: number | null; day_of_month: number | null; weekday: number | null; nth: number | null;
-  lead_weeks: number; event_id: number | null; first_year: number | null; tag_id: number | null;
-};
+type HolidayRow = RuleColumns & { id: number; name: string; lead_weeks: number; event_id: number | null; first_year: number | null; tag_id: number | null };
 type YearRow = {
   plan_id: number; holiday_id: number; year: number; put_up_on: string | null; take_down_on: string | null;
   taken_down_on: string | null; budget_cents: number | null; notes_next: string | null; notes_done: number;
 };
 type PlanRow = { id: number; name: string; start_day: string; end_day: string };
-const HOLIDAY_COLUMNS = 'id, name, rule, month, day_of_month, weekday, nth, lead_weeks, event_id, first_year, tag_id';
+const HOLIDAY_COLUMNS = `id, name, ${RULE_COLUMN_NAMES}, lead_weeks, event_id, first_year, tag_id`;
 const YEAR_COLUMNS = 'plan_id, holiday_id, year, put_up_on, take_down_on, taken_down_on, budget_cents, notes_next, notes_done';
 
-const ruleOf = (h: HolidayRow): DateRule =>
-  h.rule === 'fixed' ? { kind: 'fixed', month: h.month!, day: h.day_of_month! } : h.rule === 'weekday' ? { kind: 'weekday', month: h.month!, weekday: h.weekday!, nth: h.nth! } : { kind: 'manual' };
+const ruleOf = (h: HolidayRow): DateRule => ruleFromColumns(h);
+/** A rule that skips years counts them from its first year: the year of its first day. */
+const countedFrom = (rule: DateRule, year: number): DateRule => (rule.kind !== 'manual' && rule.every && rule.every > 1 && rule.from === undefined ? { ...rule, from: year } : rule);
 const pad = (n: number) => String(n).padStart(2, '0');
 const pounds = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)} lb`;
 
@@ -380,9 +378,9 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       const left = (await db.get<{ n: number; total: number }>('SELECT COALESCE(SUM(CASE WHEN taken_down = 0 OR boxed = 0 THEN 1 ELSE 0 END), 0) AS n, COUNT(*) AS total FROM holiday_decor WHERE plan_id = ?', [latest.plan_id]))!;
       if (left.total > 0 && y.taken_down_on === null && left.n > 0) return { stage: 'take_down', next: `${left.n} ${left.n === 1 ? 'decoration' : 'decorations'} to take down and put back in their boxes`, year: latest };
       if (y.notes_done === 0) return { stage: 'notes', next: 'What should next year remember?', year: latest };
-      if (h.rule === 'manual') return { stage: 'next_date', next: `When is next year's ${h.name}?`, year: latest };
+      if (ruleOf(h).kind === 'manual') return { stage: 'next_date', next: `When is next year's ${h.name}?`, year: latest };
     }
-    if (h.rule !== 'manual' && !ahead) {
+    if (ruleOf(h).kind !== 'manual' && !ahead) {
       const upcoming = nextDate(ruleOf(h), day);
       if (upcoming && dayNumber(upcoming) - dayNumber(day) <= lead) return { stage: 'start', next: `Start this year's from last year's`, year: latest };
     }
@@ -505,6 +503,11 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       return viewOf(planId);
     },
 
+    /** The calendars a day can be given on, and each one's months as the platform names them. */
+    calendars(): { calendar: CalendarName; name: string; months: { key: string; label: string }[] }[] {
+      return CALENDARS.map((calendar) => ({ calendar, name: `${calendar[0]!.toUpperCase()}${calendar.slice(1)}`, months: calendarMonths(calendar) }));
+    },
+
     async options(): Promise<{ members: { id: number; name: string }[]; users: { id: number; name: string }[]; boxes: { id: number; path: string }[]; dates: { id: number; title: string; day: string }[] }> {
       return {
         /** Birthdays, anniversaries and other yearly dates on the calendar that are not holidays yet. */
@@ -527,17 +530,18 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
     async create(input: HolidayInput & { event_id?: number | null; first_year?: number | null }): Promise<HolidaySummary> {
       const name = clean(input.name, 100);
       if (!name) throw new Problem(400, 'Give the holiday a name');
-      const rule = checkedRule(input.rule);
+      let rule = checkedRule(input.rule);
       const lead = input.lead_weeks ?? 6;
       if (!Number.isInteger(lead) || lead < 1 || lead > 26) throw new Problem(400, 'Start planning 1 to 26 weeks ahead');
-      const first = rule.kind === 'manual' ? dayOrNull(input.day) : (input.day ? dayOrNull(input.day) : nextDate(rule, today()));
+      // A rule that skips years starts counting at its first day: the next one the rule alone finds (or the day given).
+      const first = rule.kind === 'manual' ? dayOrNull(input.day) : (input.day ? dayOrNull(input.day) : nextDate({ ...rule, every: undefined }, today()));
+      if (first !== null) rule = countedFrom(rule, Number(first.slice(0, 4)));
       if (first === null) throw new Problem(400, 'Say what day it is this year');
       const id = await atomic(db, async (tx) => {
         const tag = await tagFor(tx, name);
         return (await tx.run(
-          `INSERT INTO holidays (owner_id, name, rule, month, day_of_month, weekday, nth, lead_weeks, event_id, first_year, tag_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [owner, name, rule.kind, rule.kind === 'manual' ? null : rule.month, rule.kind === 'fixed' ? rule.day : null, rule.kind === 'weekday' ? rule.weekday : null,
-            rule.kind === 'weekday' ? rule.nth : null, lead, input.event_id ?? null, input.first_year ?? null, tag, now(), now()])).lastId;
+          `INSERT INTO holidays (owner_id, name, ${RULE_COLUMN_NAMES}, lead_weeks, event_id, first_year, tag_id, created_at, updated_at) VALUES (?, ?, ${'?, '.repeat(11)}?, ?, ?, ?, ?, ?)`,
+          [owner, name, ...columnsFromRule(rule), lead, input.event_id ?? null, input.first_year ?? null, tag, now(), now()])).lastId;
       });
       await makeYear(await holidayRow(db, id), first);
       return this.get(id);
@@ -561,17 +565,16 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       const plan = await ownPlan(db, planId);
       if (await isYear(db, planId)) throw new Problem(409, 'That plan already comes back every year');
       if (await db.get('SELECT 1 AS x FROM outdoor_trip_years WHERE plan_id = ?', [planId])) throw new Problem(409, 'That is a year of a trip, which already comes back with its trip');
-      const rule = checkedRule(input.rule);
+      const year = Number(plan.start_day.slice(0, 4));
+      const rule = countedFrom(checkedRule(input.rule), year);
       const lead = input.lead_weeks ?? 6;
       if (!Number.isInteger(lead) || lead < 1 || lead > 26) throw new Problem(400, 'Start planning 1 to 26 weeks ahead');
-      const year = Number(plan.start_day.slice(0, 4));
       // "Thanksgiving 2026" comes back as Thanksgiving: each year's plan carries its own year.
       const name = clean(plan.name.replace(new RegExp(`\\s+${year}$`), ''), 100) ?? plan.name.slice(0, 100);
       await atomic(db, async (tx) => {
         const made = await tx.run(
-          `INSERT INTO holidays (owner_id, name, rule, month, day_of_month, weekday, nth, lead_weeks, event_id, first_year, tag_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)`,
-          [owner, name, rule.kind, rule.kind === 'manual' ? null : rule.month, rule.kind === 'fixed' ? rule.day : null, rule.kind === 'weekday' ? rule.weekday : null,
-            rule.kind === 'weekday' ? rule.nth : null, lead, await tagFor(tx, name), now(), now()]);
+          `INSERT INTO holidays (owner_id, name, ${RULE_COLUMN_NAMES}, lead_weeks, event_id, first_year, tag_id, created_at, updated_at) VALUES (?, ?, ${'?, '.repeat(11)}?, NULL, NULL, ?, ?, ?)`,
+          [owner, name, ...columnsFromRule(rule), lead, await tagFor(tx, name), now(), now()]);
         await tx.run('INSERT INTO holiday_years (plan_id, holiday_id, year) VALUES (?, ?, ?)', [planId, made.lastId, year]);
       });
       return plans().get(planId);
@@ -581,11 +584,15 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       const h = await holidayRow(db, id);
       const name = input.name === undefined ? h.name : clean(input.name, 100);
       if (!name) throw new Problem(400, 'Give the holiday a name');
-      const rule = input.rule ? checkedRule(input.rule) : ruleOf(h);
+      let rule = input.rule ? checkedRule(input.rule) : ruleOf(h);
+      if (rule.kind !== 'manual' && rule.every && rule.from === undefined) {
+        const earliest = await db.get<{ year: number | null }>('SELECT MIN(y.year) AS year FROM holiday_years y JOIN plans p ON p.id = y.plan_id WHERE y.holiday_id = ? AND p.owner_id = ?', [id, owner]);
+        rule = countedFrom(rule, earliest?.year ?? Number(today().slice(0, 4)));
+      }
       const lead = input.lead_weeks ?? h.lead_weeks;
       if (!Number.isInteger(lead) || lead < 1 || lead > 26) throw new Problem(400, 'Start planning 1 to 26 weeks ahead');
-      await db.run('UPDATE holidays SET name = ?, rule = ?, month = ?, day_of_month = ?, weekday = ?, nth = ?, lead_weeks = ?, updated_at = ? WHERE id = ? AND owner_id = ?',
-        [name, rule.kind, rule.kind === 'manual' ? null : rule.month, rule.kind === 'fixed' ? rule.day : null, rule.kind === 'weekday' ? rule.weekday : null, rule.kind === 'weekday' ? rule.nth : null, lead, now(), id, owner]);
+      await db.run(`UPDATE holidays SET name = ?, ${RULE_COLUMN_NAMES.split(', ').map((c) => `${c} = ?`).join(', ')}, lead_weeks = ?, updated_at = ? WHERE id = ? AND owner_id = ?`,
+        [name, ...columnsFromRule(rule), lead, now(), id, owner]);
       return this.get(id);
     },
 
@@ -609,7 +616,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
         const coming = (await yearsOf(db, h.id)).filter((y) => y.day >= today()).pop();
         if (coming) return yearView(coming.plan_id);
         const last = (await yearsOf(db, h.id))[0];
-        const wanted = last ? dateInYear(rule, last.year + 1) : null;
+        const wanted = last ? dateFromYear(rule, last.year + 1) : null;
         // Years were skipped: start the next one coming, not one already past.
         day = wanted && wanted >= today() ? wanted : nextDate(rule, today());
       }
@@ -643,7 +650,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       const h = await holidayRow(db, y.holiday_id);
       const rule = ruleOf(h);
       if (rule.kind !== 'manual') {
-        const next = dateInYear(rule, y.year + 1);
+        const next = dateFromYear(rule, y.year + 1);
         if (next) await makeYear(h, next);
       }
       return yearView(planId);

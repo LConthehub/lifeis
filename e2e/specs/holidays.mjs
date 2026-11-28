@@ -15,6 +15,8 @@ const say = (what, ok) => console.log((ok ? 'ok   ' : 'FAIL ') + what);
 const wait = (ms = 700) => page.waitForTimeout(ms);
 const text = async () => page.locator('main').innerText();
 const dialog = page.getByRole('dialog');
+/** A field of the form, by the words above it (the label also holds what it shows, so its name is not exact). */
+const pick = (words) => dialog.locator('label').filter({ has: page.locator('span', { hasText: new RegExp('^' + words + '$') }) }).locator('select, input');
 const pad = (n) => String(n).padStart(2, '0');
 const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const send = (method, address, body) => page.evaluate(async ([m, a, b]) => { const r = await fetch(a, { method: m, headers: { 'Content-Type': 'application/json' }, body: b === undefined ? undefined : JSON.stringify(b) }); return r.status === 204 ? null : r.json(); }, [method, address, body]);
@@ -177,6 +179,35 @@ say('a birthday becomes a holiday in one tap, with its age', /Grandma's birthday
 await page.goto(base + '/plans/holidays'); await wait(1000);
 t = await text();
 say('both holidays are listed, and the date is off the "from your calendar" list', /Thanksgiving/.test(t) && /Grandma's birthday/.test(t) && !/From your calendar/.test(t));
+
+// ---------- the newer ways to find its day ----------
+await page.getByRole('button', { name: '+ Add a holiday' }).click(); await wait(500);
+await dialog.getByLabel('Name *').fill('Lantern night at the lake');
+await dialog.getByLabel('Its day').selectOption('after'); await wait(300);
+await pick('The first').selectOption('2');
+await pick('on or after').selectOption('11');
+await pick('Day').fill('2');
+const smallAdd = await tooSmall([dialog.locator('form button'), dialog.locator('form select'), dialog.locator('form input:not([type=checkbox])')]);
+say('the weekday-on-or-after form has 44px controls and no sideways scroll' + (smallAdd.length ? ` (too small: ${smallAdd})` : ''), smallAdd.length === 0 && await noSideways());
+await shot('holidays-after-375');
+await dialog.getByRole('button', { name: 'Add it' }).click(); await wait(1500);
+const lantern = (await send('GET', '/api/plans/holidays')).find((h) => h.name === 'Lantern night at the lake');
+const firstTuesday = (y) => { const d = new Date(y, 10, 2); while (d.getDay() !== 2) d.setDate(d.getDate() + 1); return iso(d); };
+say('The first Tuesday on or after November 2 reads back and starts on that Tuesday', lantern.rule_words === 'The first Tuesday on or after November 2' && [firstTuesday(year1), firstTuesday(year1 + 1)].includes(lantern.years[0].day));
+await page.goto(base + '/plans/holidays'); await wait(1000);
+await page.getByRole('button', { name: '+ Add a holiday' }).click(); await wait(500);
+await dialog.getByLabel('Name *').fill('Block party');
+await dialog.getByLabel('Its day').selectOption('calendar'); await wait(900);
+await pick('Calendar').selectOption('hebrew'); await wait(500);
+await pick('Month').selectOption('Tevet');
+await pick('Day').fill('10');
+await pick('Comes back').selectOption('3');
+await shot('holidays-calendar-375');
+say('the other-calendar form says the day is worked out and can be moved', /worked out from the calendar/.test(await dialog.innerText()) && /move it on that year's plan/.test(await dialog.innerText()) && await noSideways());
+await dialog.getByRole('button', { name: 'Add it' }).click(); await wait(1500);
+const party = (await send('GET', '/api/plans/holidays')).find((h) => h.name === 'Block party');
+say('Day 10 of Tevet on the Hebrew calendar, every 3 years, reads back', party.rule_words === 'Day 10 of Tevet on the Hebrew calendar, every 3 years' && party.rule.every === 3 && party.years.length === 1);
+await page.goto(base + '/plans/holidays'); await wait(1000);
 
 // ---------- "Given to you": nothing before the day, the gift after it ----------
 say('nothing is given to you before the day, so there is no such part', !/Given to you/.test(await text()));

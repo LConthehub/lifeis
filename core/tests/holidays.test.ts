@@ -48,6 +48,51 @@ it('adds Thanksgiving as the fourth Thursday of November and makes this year as 
   await expect(mine().create({ name: 'Mystery', rule: { kind: 'manual' } })).rejects.toEqual(problem(400)); // set each year: needs a day
 });
 
+it('a weekday on or after a date finds each year, and the next year starts on its own day', async () => {
+  const made = await mine().create({ name: 'Lantern night at the lake', rule: { kind: 'after', month: 11, day: 2, weekday: 2 } });
+  expect(made.rule_words).toBe('The first Tuesday on or after November 2');
+  expect(made.years.map((y) => y.day)).toEqual(['2026-11-03']);
+  day = '2026-11-10';
+  await mine().finish(made.years[0]!.plan_id, 'More lanterns');
+  expect((await mine().get(made.id)).years.map((y) => y.day)).toEqual(['2027-11-02', '2026-11-03']);
+  const row = await db.get<{ rule: string; rule_kind: string }>('SELECT rule, rule_kind FROM holidays WHERE id = ?', [made.id]);
+  expect(row).toEqual({ rule: 'manual', rule_kind: 'after' }); // the table's own check holds
+  expect((await plans(db, owner, clock).get(made.years[0]!.plan_id)).yearly!.rule_words).toBe('The first Tuesday on or after November 2');
+});
+
+it('a day on another calendar finds each year, and can be changed to one on this calendar', async () => {
+  day = '2026-12-01';
+  const made = await mine().create({ name: 'Block party', rule: { kind: 'calendar', calendar: 'chinese', month: '2', day: 15 } });
+  expect(made.rule_words).toBe('Day 15 of Second Month on the Chinese calendar');
+  expect(made.years.map((y) => y.day)).toEqual(['2027-03-22']);
+  day = '2027-04-01';
+  await mine().finish(made.years[0]!.plan_id, null);
+  expect((await mine().get(made.id)).years.map((y) => y.day)).toEqual(['2028-03-10', '2027-03-22']);
+  const back = await mine().update(made.id, { rule: { kind: 'fixed', month: 3, day: 22 } });
+  expect(back.rule).toEqual({ kind: 'fixed', month: 3, day: 22 });
+  expect(await db.get('SELECT rule_kind, calendar, cal_month, cal_day FROM holidays WHERE id = ?', [made.id])).toEqual({ rule_kind: null, calendar: null, cal_month: null, cal_day: null });
+  await expect(mine().update(made.id, { rule: { kind: 'calendar', calendar: 'chinese', month: '13', day: 1 } })).rejects.toEqual(problem(400));
+});
+
+it('a plan that comes back every 5 years starts its next year five years on, counted from its first', async () => {
+  const planId = (await plans(db, owner, clock).create({ name: 'Family reunion 2026', start_day: '2026-07-04' })).id;
+  await mine().makeYearly(planId, { rule: { kind: 'fixed', month: 7, day: 4, every: 5 } });
+  const holiday = (await mine().list())[0]!;
+  expect([holiday.rule_words, holiday.rule]).toEqual(['July 4, every 5 years', { kind: 'fixed', month: 7, day: 4, every: 5, from: 2026 }]);
+  day = '2026-07-20';
+  await mine().finish(planId, 'Rent the pavilion earlier');
+  expect((await mine().get(holiday.id)).years.map((y) => y.day)).toEqual(['2031-07-04', '2026-07-04']);
+  // Asked to start a year in 2028, it finds the one already on its way.
+  day = '2028-01-10';
+  expect((await mine().startYear(holiday.id)).day).toBe('2031-07-04');
+  // Changing how often keeps the first year it counts from.
+  const every3 = await mine().update(holiday.id, { rule: { kind: 'fixed', month: 7, day: 4, every: 3 } });
+  expect(every3.rule).toEqual({ kind: 'fixed', month: 7, day: 4, every: 3, from: 2026 });
+  const yearly = await mine().update(holiday.id, { rule: { kind: 'fixed', month: 7, day: 4 } });
+  expect([yearly.rule, yearly.rule_words]).toEqual([{ kind: 'fixed', month: 7, day: 4 }, 'July 4']);
+  await expect(mine().update(holiday.id, { rule: { kind: 'fixed', month: 7, day: 4, every: 12 } })).rejects.toEqual(problem(400));
+});
+
 it('suggests nothing: a new Life Is has no holidays', async () => {
   expect(await mine().list()).toEqual([]);
   expect((await home(db, owner, clock).summary()).coming.holidays).toEqual([]);

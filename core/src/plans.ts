@@ -20,7 +20,7 @@
  */
 import { calendar, type Entry } from './calendar.ts';
 import { atomic, type Db, type Queries, type Value } from './db.ts';
-import { ruleFromColumns, ruleWords, thawDays, type DateRule, type RuleColumns } from './holidayDates.ts';
+import { RULE_COLUMN_NAMES, ruleFromColumns, ruleWords, thawDays, type DateRule, type RuleColumns } from './holidayDates.ts';
 import { inventory } from './inventory.ts';
 import { Problem } from './problem.ts';
 import { attachTags, onlyTagged, unlink, type TagRef } from './tags.ts';
@@ -334,7 +334,7 @@ export function plans(db: Db, owner: number, clock: Clock = () => new Date()) {
   /** What a plan is a year of, when it comes back every year. */
   async function yearlyOf(id: number): Promise<PlanYearly | null> {
     const h = await db.get<RuleColumns & { holiday_id: number; name: string; lead_weeks: number; year: number }>(
-      `SELECT h.id AS holiday_id, h.name, h.rule, h.month, h.day_of_month, h.weekday, h.nth, h.lead_weeks, y.year
+      `SELECT h.id AS holiday_id, h.name, ${RULE_COLUMN_NAMES.split(', ').map((c) => `h.${c}`).join(', ')}, h.lead_weeks, y.year
        FROM holiday_years y JOIN holidays h ON h.id = y.holiday_id WHERE y.plan_id = ? AND h.owner_id = ?`, [id, owner]);
     if (!h) return null;
     const years = await db.all<{ plan_id: number; year: number; day: string }>(

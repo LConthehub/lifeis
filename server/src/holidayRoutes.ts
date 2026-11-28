@@ -10,14 +10,23 @@ const ID = '(\\d{1,15})';
 const at = (path: string) => new RegExp(`^/api/plans/holidays${path.replaceAll(':id', ID)}$`);
 const sent = (body: Body, name: string) => Object.hasOwn(body, name);
 
-/** A rule as a page sent it: the same date each year, a weekday rule, or set each year. */
+/**
+ * A rule as a page sent it: the same date each year, a weekday rule, a weekday on or after a date, a day on another
+ * calendar, or set each year. Any of them can come back every few years (`every_years`).
+ */
 function ruleFrom(body: Body): DateRule {
   const kind = read.text(body, 'rule');
   if (kind === 'manual') return { kind: 'manual' };
+  const every = read.maybeWhole(body, 'every_years');
+  const skips = every !== null && every > 1 ? { every } : every === null || every === 1 ? {} : { every };
+  if (kind === 'calendar') {
+    return { kind: 'calendar', calendar: read.text(body, 'calendar') as 'chinese', month: read.text(body, 'cal_month'), day: read.maybeWhole(body, 'cal_day') ?? 0, ...skips };
+  }
   const month = read.maybeWhole(body, 'month');
   if (month === null) throw notUnderstood('month');
-  if (kind === 'fixed') return { kind: 'fixed', month, day: read.maybeWhole(body, 'day_of_month') ?? 0 };
-  if (kind === 'weekday') return { kind: 'weekday', month, weekday: read.maybeWhole(body, 'weekday') ?? -1, nth: read.maybeWhole(body, 'nth') ?? 0 };
+  if (kind === 'fixed') return { kind: 'fixed', month, day: read.maybeWhole(body, 'day_of_month') ?? 0, ...skips };
+  if (kind === 'after') return { kind: 'after', month, day: read.maybeWhole(body, 'day_of_month') ?? 0, weekday: read.maybeWhole(body, 'weekday') ?? -1, ...skips };
+  if (kind === 'weekday') return { kind: 'weekday', month, weekday: read.maybeWhole(body, 'weekday') ?? -1, nth: read.maybeWhole(body, 'nth') ?? 0, ...skips };
   throw notUnderstood('rule');
 }
 const holidayFrom = (body: Body): HolidayInput => ({ name: read.text(body, 'name'), rule: ruleFrom(body), day: read.maybeText(body, 'day'), lead_weeks: read.maybeWhole(body, 'lead_weeks') });
@@ -34,6 +43,7 @@ export function holidayRoutes(db: Db): Route[] {
     ['GET', at(''), async (c) => ({ json: await mine(c).list() })],
     ['POST', at(''), async (c) => ({ status: 201, json: await mine(c).create(holidayFrom(c.body)) })],
     ['GET', at('/options'), async (c) => ({ json: await mine(c).options() })],
+    ['GET', at('/calendars'), async (c) => ({ json: mine(c).calendars() })],
     ['GET', at('/given-to-me'), async (c) => ({ json: await givenTo(db, c.user.id, c.clock) })],
     ['GET', at('/cards'), async (c) => ({ json: await mine(c).cards() })],
     // Guests, cards, gifts and decorations of any plan (a birthday's gifts, a lunch's guests), changed through the addresses below.

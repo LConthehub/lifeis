@@ -376,7 +376,7 @@ export function PlanPage() {
         <div className="mr-auto">
           <h1 className="text-2xl font-semibold text-life-800 dark:text-life-50">{plan.name} <span className="ml-1 rounded bg-life-100 px-1.5 align-middle text-[11px] font-normal text-life-700">{BADGE[plan.when]}</span></h1>
           <p className="text-sm text-gray-600 dark:text-life-200">{daysText(plan, true)}</p>
-          {yearly && <p className="text-sm text-gray-600 dark:text-life-200">Yearly · {yearly.rule_words}{g.view?.turns ? ` · ${g.view.turns} years` : ''}</p>}
+          {yearly && <p className="text-sm text-gray-600 dark:text-life-200">{yearly.rule.every > 1 ? '' : 'Yearly · '}{yearly.rule_words}{g.view?.turns ? ` · ${g.view.turns} years` : ''}</p>}
           {plan.note && <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700 dark:text-life-100">{plan.note}</p>}
         </div>
         <button type="button" onClick={() => setModal('edit')} className={`${quietButtonClass} min-h-[44px]`}>Change</button>

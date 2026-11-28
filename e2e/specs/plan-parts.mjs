@@ -11,6 +11,8 @@ const say = (what, ok) => console.log((ok ? 'ok   ' : 'FAIL ') + what);
 const wait = (ms = 700) => page.waitForTimeout(ms);
 const text = async () => page.locator('main').innerText();
 const dialog = page.getByRole('dialog');
+/** A field of the form, by the words above it (the label also holds what it shows, so its name is not exact). */
+const pick = (words) => dialog.locator('label').filter({ has: page.locator('span', { hasText: new RegExp('^' + words + '$') }) }).locator('select, input');
 const pad = (n) => String(n).padStart(2, '0');
 const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const later = (days) => iso(new Date(Date.now() + days * 86400000));
@@ -137,7 +139,24 @@ await page.getByRole('button', { name: 'Every year' }).click(); await wait(600);
 const smallYearly = await tooSmall([dialog.locator('form button'), dialog.locator('form select'), dialog.locator('form input:not([type=checkbox])')]);
 say('the Every year form has 44px controls' + (smallYearly.length ? ` (too small: ${smallYearly})` : ''), smallYearly.length === 0);
 say('the Every year form does not scroll sideways', await noSideways());
-say('the Every year form offers the three ways to find its day, and the weeks ahead', (await dialog.getByLabel('Its day').locator('option').count()) === 3 && await dialog.getByLabel('Start planning this many weeks ahead').isVisible());
+say('the Every year form offers the three ways to find its day, and the weeks ahead', (await dialog.getByLabel('Its day').locator('option').count()) === 5 && await dialog.getByLabel('Start planning this many weeks ahead').isVisible());
+// The newer ways: a weekday on or after a date, a day on another calendar, and coming back every few years.
+const smallNow = () => tooSmall([dialog.locator('form button'), dialog.locator('form select'), dialog.locator('form input:not([type=checkbox])')]);
+await dialog.getByLabel('Its day').selectOption('after'); await wait(300);
+const smallAfter = await smallNow();
+say('A weekday on or after a date shows the weekday, month and day, at 44px, without scrolling sideways' + (smallAfter.length ? ` (too small: ${smallAfter})` : ''),
+  await pick('The first').isVisible() && await pick('on or after').isVisible() && smallAfter.length === 0 && await noSideways());
+await dialog.getByLabel('Its day').selectOption('calendar'); await wait(900);
+const smallCal = await smallNow();
+say('A date on another calendar lists the calendars and the months the platform names, with the plain line about moving the day',
+  (await pick('Calendar').locator('option').allInnerTexts()).join() === 'Chinese,Hebrew,Islamic' && (await pick('Month').locator('option').count()) === 12
+  && /worked out from the calendar/.test(await dialog.innerText()) && smallCal.length === 0 && await noSideways());
+await pick('Calendar').selectOption('hebrew'); await wait(600);
+say('picking the Hebrew calendar swaps in its months, with its leap Adar', (await pick('Month').locator('option').count()) === 13 && (await pick('Month').locator('option').allInnerTexts()).includes('Adar I (leap years)') && await noSideways());
+say('there is no Hindu calendar', !/Hindu/.test(await dialog.innerText()));
+const everyBox = pick('Comes back');
+say('Comes back offers every year and every 2 to 10 years', (await everyBox.locator('option').count()) === 10 && (await smallNow()).length === 0);
+await dialog.getByLabel('Its day').selectOption('fixed'); await wait(300);
 await dialog.getByRole('button', { name: 'Make it yearly' }).click(); await wait(1800);
 t = await text();
 say('the plan says it is yearly, with its rule', /Yearly · /.test(t) && !(await page.getByRole('button', { name: 'Do it again' }).count()));
@@ -150,6 +169,21 @@ say('the form to change or stop it has 44px controls' + (smallEdit.length ? ` (t
 page.once('dialog', (d) => d.accept());
 await dialog.getByRole('button', { name: 'Stop coming back every year' }).click(); await wait(1800);
 say('stopping it takes Yearly off, and brings Do it again back', !/Yearly/.test(await text()) && await page.getByRole('button', { name: 'Do it again' }).isVisible());
+// A weekday on or after a date, every 5 years, reads back in plain words and starts on the right day.
+await page.getByRole('button', { name: 'Every year' }).click(); await wait(600);
+await dialog.getByLabel('Its day').selectOption('after'); await wait(300);
+await pick('The first').selectOption('2');
+await pick('on or after').selectOption('11');
+await pick('Day').fill('2');
+await pick('Comes back').selectOption('5');
+await dialog.getByRole('button', { name: 'Make it yearly' }).click(); await wait(1800);
+t = await text();
+say('the plan reads back The first Tuesday on or after November 2, every 5 years', /The first Tuesday on or after November 2, every 5 years/.test(t) && !/Yearly · /.test(t));
+const everyFive = (await send('GET', `/api/plans/${cookout.id}`)).yearly;
+say('the server keeps it counted from the plan own year', everyFive?.rule.every === 5 && everyFive.rule.from === Number(cookout.start_day.slice(0, 4)));
+page.once('dialog', (d) => d.accept());
+await page.getByRole('button', { name: 'Every year' }).click(); await wait(600);
+await dialog.getByRole('button', { name: 'Stop coming back every year' }).click(); await wait(1800);
 
 // ---------- food on a plain plan ----------
 const supper = await send('POST', '/api/plans', { name: 'Backyard supper', start_day: later(10), parts: ['food'] });

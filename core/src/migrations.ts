@@ -1954,6 +1954,23 @@ export const MIGRATIONS: Migration[] = [
       `DELETE FROM holiday_ticks WHERE key = 'thaw'`,
     ],
   },
+  {
+    number: 66,
+    name: 'A yearly plan can find its day more ways, and come back every few years',
+    // `holidays.rule` keeps one of its three values (the table cannot be rebuilt), so a weekday on or after a date and a
+    // day on another calendar are kept as 'manual' there, with rule_kind ('after' or 'calendar') saying what they are.
+    // 'after' uses month, day_of_month and weekday. 'calendar' uses calendar ('chinese', 'hebrew' or 'islamic'), cal_month
+    // (the calendar's own month, as holidayDates.ts lists it) and cal_day. any rule can skip years: every_years is 2 to 10,
+    // counted from every_from, the year it began. Rows made before read as they always did: all of these are NULL.
+    statements: [
+      `ALTER TABLE holidays ADD COLUMN rule_kind TEXT CHECK(rule_kind IS NULL OR rule_kind IN ('after', 'calendar'))`,
+      `ALTER TABLE holidays ADD COLUMN calendar TEXT CHECK(calendar IS NULL OR calendar IN ('chinese', 'hebrew', 'islamic'))`,
+      `ALTER TABLE holidays ADD COLUMN cal_month TEXT`,
+      `ALTER TABLE holidays ADD COLUMN cal_day INTEGER CHECK(cal_day IS NULL OR (cal_day >= 1 AND cal_day <= 30))`,
+      `ALTER TABLE holidays ADD COLUMN every_years INTEGER CHECK(every_years IS NULL OR (every_years >= 2 AND every_years <= 10))`,
+      `ALTER TABLE holidays ADD COLUMN every_from INTEGER`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

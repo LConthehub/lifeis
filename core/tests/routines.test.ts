@@ -503,6 +503,7 @@ it('upgrades from the version before pet routines: routines and ticks kept, tick
   for (const column of ['returned', 'after_trip', 'after_done', 'job_id', 'thaw_pounds']) await db.run(`ALTER TABLE plan_items DROP COLUMN ${column}`);
 
   for (const column of ['served_at', 'food_kind', 'parts']) await db.run(`ALTER TABLE plans DROP COLUMN ${column}`);
+  for (const column of ['rule_kind', 'calendar', 'cal_month', 'cal_day', 'every_years', 'every_from']) await db.run(`ALTER TABLE holidays DROP COLUMN ${column}`);
   for (const column of ['every_days', 'every_from']) await db.run(`ALTER TABLE routine_steps DROP COLUMN ${column}`);
   await db.run('ALTER TABLE routines DROP COLUMN kind');
   for (const column of ['sets', 'reps', 'weight', 'weight_unit', 'minutes', 'distance', 'distance_unit']) for (const table of ['routine_steps', 'routine_ticks']) await db.run(`ALTER TABLE ${table} DROP COLUMN ${column}`);
@@ -641,6 +642,7 @@ it('upgrades from the version before workouts: routines and ticks stay, as plain
   for (const column of ['returned', 'after_trip', 'after_done', 'job_id', 'thaw_pounds']) await db.run(`ALTER TABLE plan_items DROP COLUMN ${column}`);
 
   for (const column of ['served_at', 'food_kind', 'parts']) await db.run(`ALTER TABLE plans DROP COLUMN ${column}`);
+  for (const column of ['rule_kind', 'calendar', 'cal_month', 'cal_day', 'every_years', 'every_from']) await db.run(`ALTER TABLE holidays DROP COLUMN ${column}`);
   for (const column of ['every_days', 'every_from']) await db.run(`ALTER TABLE routine_steps DROP COLUMN ${column}`);
   await db.run('ALTER TABLE routines DROP COLUMN kind');
   for (const column of ['sets', 'reps', 'weight', 'weight_unit', 'minutes', 'distance', 'distance_unit']) for (const table of ['routine_steps', 'routine_ticks']) await db.run(`ALTER TABLE ${table} DROP COLUMN ${column}`);

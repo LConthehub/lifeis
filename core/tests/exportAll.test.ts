@@ -540,6 +540,30 @@ it('takes prep reminders and a time to eat along with the recipe and the meal', 
   expect([bobPrep.eat_time, bobPrep.steps.map((s) => s.words), bobPrep.recipe_steps.length]).toEqual(['19:30', ['Make the stock'], 2]);
 });
 
+it('the newer ways a yearly plan finds its day, and coming back every few years, go out and come back', async () => {
+  const mine = holidays(db, ana, clock);
+  await mine.create({ name: 'Lantern night at the lake', rule: { kind: 'after', month: 11, day: 2, weekday: 2 } });
+  await mine.create({ name: 'Block party', rule: { kind: 'calendar', calendar: 'hebrew', month: 'Adar I', day: 14, every: 3 } });
+  await mine.create({ name: 'Family reunion', rule: { kind: 'fixed', month: 7, day: 4, every: 5 }, day: '2046-07-04' });
+  const kept = await mine.list();
+  const zip = (await exportEverything(db, ana, clock)).bytes;
+  const done = await bringIn(bob, zip, ['plans', 'holidays']);
+  for (const kind of done.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  const theirs = await holidays(db, bob, clock).list();
+  const same = (h: { name: string; rule: unknown; rule_words: string; years: { day: string }[] }) => [h.name, h.rule, h.rule_words, h.years.map((y) => y.day)];
+  expect(theirs.map(same)).toEqual(kept.map(same));
+  expect(theirs.map((h) => h.rule_words).sort()).toEqual(['Day 14 of Adar I (leap years) on the Hebrew calendar, every 3 years', 'July 4, every 5 years', 'The first Tuesday on or after November 2']);
+  expect(await db.get("SELECT rule, rule_kind, calendar, cal_month, cal_day, every_years FROM holidays WHERE owner_id = ? AND name = 'Block party'", [bob])).toEqual({ rule: 'manual', rule_kind: 'calendar', calendar: 'hebrew', cal_month: 'Adar I', cal_day: 14, every_years: 3 });
+  // A download made before these columns still comes back: its rules are the first three, every year.
+  const { files } = await splitDownload(zip);
+  const key = Object.keys(files).find((k) => k.toLowerCase().endsWith('holidays.csv'))!;
+  const older = { ...files, [key]: 'Holiday,How it finds its day,Month,Day of the month,Weekday (0 is Sunday),"Which one (1 to 4, or -1 for the last)",Start planning (weeks ahead),First year of the date\nSeed swap,weekday,5,,6,2,6,\nChili cook-off,fixed,6,12,,,6,\n' };
+  const dana = (await db.run("INSERT INTO users (username, password_hash, created_at) VALUES ('dana', 'x', 'now')")).lastId;
+  const old = await bringInDownload(db, dana, older, ['holidays'], clock);
+  expect(old.kinds.find((k) => k.key === 'holidays')).toMatchObject({ ok: true, found: 2, fresh: 2 });
+  expect((await holidays(db, dana, clock).list()).map((h) => [h.name, h.rule_words])).toEqual([['Chili cook-off', 'June 12'], ['Seed swap', 'Second Saturday of May']]);
+});
+
 it('holidays go out and come back: how each finds its day, each year, its lists and its spot photos, once', async () => {
   const mine = holidays(db, ana, clock);
   const made = await mine.create({ name: 'Thanksgiving', rule: { kind: 'weekday', month: 11, weekday: 4, nth: 4 } });

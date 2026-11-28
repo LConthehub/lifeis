@@ -19,6 +19,7 @@
  */
 import { csvRows } from './bookList.ts';
 import { atomic, type Db, type Queries, type Value } from './db.ts';
+import { calendarMonths, CALENDARS, type CalendarName } from './holidayDates.ts';
 import { addressFrom, chosenNames, SERVICE_COLORS, SERVICE_ICONS, servicesSeenBy } from './homeServices.ts';
 import { noteHistory } from './history.ts';
 import { guardOfKindName } from './starters.ts';
@@ -622,10 +623,12 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('plan-photos.csv', ['Plan', 'Caption', 'Where the photo is', 'File', 'Decoration spot'], planPhotos);
 
   // ---------- holidays: how each finds its day, and what each year keeps ----------
-  const holidayRows = await all('SELECT id, name, rule, month, day_of_month, weekday, nth, lead_weeks, first_year FROM holidays WHERE owner_id = ? ORDER BY id');
+  const holidayRows = await all('SELECT id, name, rule, month, day_of_month, weekday, nth, lead_weeks, first_year, rule_kind, calendar, cal_month, cal_day, every_years, every_from FROM holidays WHERE owner_id = ? ORDER BY id');
   const holidayOf = new Map(holidayRows.map((h) => [h.id as number, h]));
-  out.csv('holidays.csv', ['Holiday', 'How it finds its day', 'Month', 'Day of the month', 'Weekday (0 is Sunday)', 'Which one (1 to 4, or -1 for the last)', 'Start planning (weeks ahead)', 'First year of the date'],
-    holidayRows.map((h) => [str(h.name), str(h.rule), str(h.month), str(h.day_of_month), str(h.weekday), str(h.nth), str(h.lead_weeks), str(h.first_year)]));
+  out.csv('holidays.csv', ['Holiday', 'How it finds its day', 'Month', 'Day of the month', 'Weekday (0 is Sunday)', 'Which one (1 to 4, or -1 for the last)', 'Start planning (weeks ahead)', 'First year of the date',
+    'Other way it finds its day (after or calendar)', 'Calendar', 'Month on that calendar', 'Day on that calendar', 'Comes back every (years)', 'Counted from year'],
+    holidayRows.map((h) => [str(h.name), str(h.rule), str(h.month), str(h.day_of_month), str(h.weekday), str(h.nth), str(h.lead_weeks), str(h.first_year),
+      str(h.rule_kind), str(h.calendar), str(h.cal_month), str(h.cal_day), str(h.every_years), str(h.every_from)]));
   const yearRows = await all(`SELECT y.plan_id, y.holiday_id, y.year, y.put_up_on, y.take_down_on, y.taken_down_on, y.budget_cents, y.notes_next, y.notes_done
     FROM holiday_years y JOIN plans p ON p.id = y.plan_id WHERE p.owner_id = ? ORDER BY y.holiday_id, y.year`);
   out.csv('holiday-years.csv', ['Holiday', 'Plan', 'Starts', 'Put up on', 'Take down on', 'Taken down on', 'Budget', 'Notes for next year', 'Notes for next year asked for'],
@@ -2186,14 +2189,28 @@ ${mediaId}`);
       const weekday = wholeOf(cellOf(row, 'Weekday (0 is Sunday)'));
       const nth = wholeOf(cellOf(row, 'Which one (1 to 4, or -1 for the last)'));
       const lead = wholeOf(cellOf(row, 'Start planning (weeks ahead)'));
-      const fine = rule === 'manual' || (month !== null && month >= 1 && month <= 12 && (rule === 'fixed' ? dayOfMonth !== null && dayOfMonth >= 1 && dayOfMonth <= 31 : weekday !== null && weekday >= 0 && weekday <= 6 && nth !== null && [1, 2, 3, 4, -1].includes(nth)));
+      // A download made before these columns has none of them: the rule is one of the first three, every year.
+      const other = cellOf(row, 'Other way it finds its day (after or calendar)').toLowerCase();
+      const calendar = cellOf(row, 'Calendar').toLowerCase();
+      const calMonth = cellOf(row, 'Month on that calendar');
+      const calDay = wholeOf(cellOf(row, 'Day on that calendar'));
+      const everyRaw = wholeOf(cellOf(row, 'Comes back every (years)'));
+      const every = everyRaw !== null && everyRaw >= 2 && everyRaw <= 10 ? everyRaw : null;
+      const from = wholeOf(cellOf(row, 'Counted from year'));
+      const monthOk = month !== null && month >= 1 && month <= 12;
+      const fine = other === 'calendar' ? rule === 'manual' && (CALENDARS as readonly string[]).includes(calendar) && calendarMonths(calendar as CalendarName).some((m) => m.key === calMonth) && calDay !== null && calDay >= 1 && calDay <= 30
+        : other === 'after' ? rule === 'manual' && monthOk && dayOfMonth !== null && dayOfMonth >= 1 && dayOfMonth <= 31 && weekday !== null && weekday >= 0 && weekday <= 6
+        : other === '' && (rule === 'manual' || (monthOk && (rule === 'fixed' ? dayOfMonth !== null && dayOfMonth >= 1 && dayOfMonth <= 31 : weekday !== null && weekday >= 0 && weekday <= 6 && nth !== null && [1, 2, 3, 4, -1].includes(nth))));
       if (!fine) { skip(d, at, 'its date rule is not complete'); continue; }
+      const kept = other === 'calendar' || other === 'after' ? other : null;
       d.found += 1;
       const key = labelKey(name);
       let id = seen.get(key);
       if (id === undefined) {
-        id = (await c.tx.run(`INSERT INTO holidays (owner_id, name, rule, month, day_of_month, weekday, nth, lead_weeks, event_id, first_year, tag_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
-          [c.owner, name, rule, rule === 'manual' ? null : month, rule === 'fixed' ? dayOfMonth : null, rule === 'weekday' ? weekday : null, rule === 'weekday' ? nth : null,
+        const skips = rule !== 'manual' || kept !== null ? every : null;
+        id = (await c.tx.run(`INSERT INTO holidays (owner_id, name, rule, month, day_of_month, weekday, nth, rule_kind, calendar, cal_month, cal_day, every_years, every_from, lead_weeks, event_id, first_year, tag_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+          [c.owner, name, rule, rule === 'manual' && kept !== 'after' ? null : month, rule === 'fixed' || kept === 'after' ? dayOfMonth : null, rule === 'weekday' || kept === 'after' ? weekday : null, rule === 'weekday' ? nth : null,
+            kept, kept === 'calendar' ? calendar : null, kept === 'calendar' ? calMonth : null, kept === 'calendar' ? calDay : null, skips, skips !== null ? from : null,
             lead !== null && lead >= 1 && lead <= 26 ? lead : 6, wholeOf(cellOf(row, 'First year of the date')), await tagFor(name), c.at, c.at])).lastId;
         seen.set(key, id);
         d.fresh += 1;

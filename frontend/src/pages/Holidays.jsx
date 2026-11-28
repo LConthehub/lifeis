@@ -133,29 +133,57 @@ export default function HolidaysPage() {
 
 /** The rule's own words for a form: what its fields start as, from a holiday's rule or from a plan's first day. */
 export function ruleStart(rule, lead_weeks, startDay) {
-  if (rule) return { kind: rule.kind, month: rule.month ?? 11, day_of_month: rule.day ?? 1, weekday: rule.weekday ?? 4, nth: rule.nth ?? 4, lead_weeks: lead_weeks ?? 6 };
-  if (!startDay) return { kind: 'weekday', month: 11, day_of_month: 1, weekday: 4, nth: 4, lead_weeks: 6 };
+  const other = { calendar: 'chinese', cal_month: '1', cal_day: 1, every_years: 1 };
+  if (rule) {
+    const calendar = rule.kind === 'calendar' ? { calendar: rule.calendar, cal_month: rule.month, cal_day: rule.day } : {};
+    return { ...other, ...calendar, kind: rule.kind, month: typeof rule.month === 'number' ? rule.month : 11, day_of_month: rule.day ?? 1, weekday: rule.weekday ?? 4, nth: rule.nth ?? 4, every_years: rule.every ?? 1, lead_weeks: lead_weeks ?? 6 };
+  }
+  if (!startDay) return { ...other, kind: 'weekday', month: 11, day_of_month: 1, weekday: 4, nth: 4, lead_weeks: 6 };
   const d = fromDateInput(startDay);
-  return { kind: 'fixed', month: d.getMonth() + 1, day_of_month: d.getDate(), weekday: d.getDay(), nth: d.getDate() > 28 ? -1 : Math.ceil(d.getDate() / 7), lead_weeks: 6 };
+  return { ...other, kind: 'fixed', month: d.getMonth() + 1, day_of_month: d.getDate(), weekday: d.getDay(), nth: d.getDate() > 28 ? -1 : Math.ceil(d.getDate() / 7), lead_weeks: 6 };
 }
 
 /** What the server wants for a rule from the form's fields. */
 export function ruleBody(form) {
   const body = { rule: form.kind, lead_weeks: Number(form.lead_weeks) };
-  if (form.kind !== 'manual') body.month = Number(form.month);
-  if (form.kind === 'fixed') body.day_of_month = Number(form.day_of_month);
-  if (form.kind === 'weekday') { body.weekday = Number(form.weekday); body.nth = Number(form.nth); }
+  if (form.kind === 'fixed' || form.kind === 'weekday' || form.kind === 'after') body.month = Number(form.month);
+  if (form.kind === 'fixed' || form.kind === 'after') body.day_of_month = Number(form.day_of_month);
+  if (form.kind === 'weekday' || form.kind === 'after') body.weekday = Number(form.weekday);
+  if (form.kind === 'weekday') body.nth = Number(form.nth);
+  if (form.kind === 'calendar') { body.calendar = form.calendar; body.cal_month = String(form.cal_month); body.cal_day = Number(form.cal_day); }
+  if (form.kind !== 'manual') body.every_years = Number(form.every_years);
   return body;
 }
 
-/** How a holiday finds its day (the same date, a weekday rule, or set each year) and how early to start. Used by the holiday form and by Every year on a plan. */
+let calendarsKept = null;
+/** The other calendars and their months, as the server names them (the platform's own names). */
+function useCalendars(wanted) {
+  const [list, setList] = useState(calendarsKept ?? []);
+  useEffect(() => {
+    if (!wanted || calendarsKept) return;
+    let live = true;
+    axios.get(`${API}/calendars`).then(({ data }) => { calendarsKept = data; if (live) setList(data); }).catch(() => {});
+    return () => { live = false; };
+  }, [wanted]);
+  return list;
+}
+
+/** How a holiday finds its day (the same date, a weekday rule, a weekday after a date, a day on another calendar, or set each year), how often, and how early to start. Used by the holiday form and by Every year on a plan. */
 export function RuleFields({ form, set, askDay = false }) {
+  const calendars = useCalendars(form.kind === 'calendar');
+  const months = calendars.find((c) => c.calendar === form.calendar)?.months ?? [];
+  useEffect(() => {
+    // Another calendar has other months: when it changes (or loads), start on its first.
+    if (form.kind === 'calendar' && months.length > 0 && !months.some((m) => m.key === String(form.cal_month))) set('cal_month')({ target: { value: months[0].key } });
+  }, [form.kind, form.calendar, months.length]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
       <Field label="Its day">
         <select value={form.kind} onChange={set('kind')} className={field}>
           <option value="weekday">A weekday of a month (the fourth Thursday of November)</option>
           <option value="fixed">The same date every year (December 25)</option>
+          <option value="after">A weekday on or after a date (the first Tuesday on or after November 2)</option>
+          <option value="calendar">A date on another calendar (Chinese, Hebrew or Islamic)</option>
           <option value="manual">I'll set it each year</option>
         </select>
       </Field>
@@ -171,6 +199,31 @@ export function RuleFields({ form, set, askDay = false }) {
           <Field label="Month"><select value={form.month} onChange={set('month')} className={field}>{MONTHS.map((l, v) => <option key={l} value={v + 1}>{l}</option>)}</select></Field>
           <Field label="Day"><input type="number" min="1" max="31" value={form.day_of_month} onChange={set('day_of_month')} className={field} /></Field>
         </div>
+      )}
+      {form.kind === 'after' && (
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="The first"><select value={form.weekday} onChange={set('weekday')} className={field}>{WEEKDAYS.map((l, v) => <option key={l} value={v}>{l}</option>)}</select></Field>
+          <Field label="on or after"><select value={form.month} onChange={set('month')} className={field}>{MONTHS.map((l, v) => <option key={l} value={v + 1}>{l}</option>)}</select></Field>
+          <Field label="Day"><input type="number" min="1" max="31" value={form.day_of_month} onChange={set('day_of_month')} className={field} /></Field>
+        </div>
+      )}
+      {form.kind === 'calendar' && (
+        <>
+          <Field label="Calendar"><select value={form.calendar} onChange={set('calendar')} className={field}>
+            {(calendars.length ? calendars : [{ calendar: 'chinese', name: 'Chinese' }, { calendar: 'hebrew', name: 'Hebrew' }, { calendar: 'islamic', name: 'Islamic' }]).map((c) => <option key={c.calendar} value={c.calendar}>{c.name}</option>)}
+          </select></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Month"><select value={String(form.cal_month)} onChange={set('cal_month')} className={field}>{months.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}</select></Field>
+            <Field label="Day"><input type="number" min="1" max="30" value={form.cal_day} onChange={set('cal_day')} className={field} /></Field>
+          </div>
+          <Hint>The day is worked out from the calendar. If it falls on a different day where you live, move it on that year's plan.</Hint>
+        </>
+      )}
+      {form.kind !== 'manual' && (
+        <Field label="Comes back"><select value={form.every_years} onChange={set('every_years')} className={field}>
+          <option value={1}>Every year</option>
+          {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>Every {n} years</option>)}
+        </select></Field>
       )}
       {form.kind === 'manual' && askDay && <Field label="This year's day"><input type="date" required value={form.day} onChange={set('day')} className={field} /></Field>}
       {form.kind === 'manual' && <Hint>Life Is asks for next year's day when this year's is finished.</Hint>}

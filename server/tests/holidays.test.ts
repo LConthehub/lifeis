@@ -109,6 +109,24 @@ it('adds Thanksgiving, plans a countdown with a frozen turkey, and plans next ye
   expect((await admin.get('/api/plans')).json.map((p: { name: string }) => p.name)).toEqual(['Thanksgiving 2027', 'Lunch', 'Thanksgiving 2026']);
 });
 
+it('adds a weekday after a date, a day on another calendar, and a rule that skips years, over the web', async () => {
+  const admin = await owner();
+  const after = await admin.post('/api/plans/holidays', { name: 'Lantern night at the lake', rule: 'after', month: 11, day_of_month: 2, weekday: 2, every_years: 1, lead_weeks: 6 });
+  expect([after.status, after.json.rule_words, after.json.years[0].day]).toEqual([201, 'The first Tuesday on or after November 2', '2026-11-03']);
+  const calendars = await admin.get('/api/plans/holidays/calendars');
+  expect(calendars.json.map((c: { calendar: string }) => c.calendar)).toEqual(['chinese', 'hebrew', 'islamic']);
+  expect(calendars.json[0].months).toHaveLength(12);
+  const chinese = await admin.post('/api/plans/holidays', { name: 'Block party', rule: 'calendar', calendar: 'chinese', cal_month: '2', cal_day: 15, every_years: 1, lead_weeks: 6 });
+  expect([chinese.status, chinese.json.rule_words, chinese.json.years[0].day]).toEqual([201, 'Day 15 of Second Month on the Chinese calendar', '2027-03-22']);
+  const reunion = await admin.post('/api/plans/holidays', { name: 'Family reunion', rule: 'fixed', month: 7, day_of_month: 4, every_years: 5, lead_weeks: 6 });
+  expect([reunion.status, reunion.json.rule_words, reunion.json.rule]).toEqual([201, 'July 4, every 5 years', { kind: 'fixed', month: 7, day: 4, every: 5, from: 2027 }]);
+  expect((await admin.post('/api/plans/holidays', { name: 'Too often', rule: 'fixed', month: 7, day_of_month: 4, every_years: 11 })).status).toBe(400);
+  expect((await admin.post('/api/plans/holidays', { name: 'No such month', rule: 'calendar', calendar: 'chinese', cal_month: 'Nowhere', cal_day: 1 })).status).toBe(400);
+  expect((await admin.post('/api/plans/holidays', { name: 'Hindu', rule: 'calendar', calendar: 'hindu', cal_month: '1', cal_day: 1 })).status).toBe(400);
+  const changed = await admin.put(`/api/plans/holidays/${after.json.id}`, { rule: 'after', month: 12, day_of_month: 1, weekday: 6, every_years: 2, lead_weeks: 6 });
+  expect([changed.status, changed.json.rule_words]).toEqual([200, 'The first Saturday on or after December 1, every 2 years']);
+});
+
 it('turns a birthday into a holiday with one request', async () => {
   const admin = await owner();
   const event = (await admin.post('/api/calendar/events', { title: 'Grandma turns', day: '1950-12-02', yearly: true })).json;
