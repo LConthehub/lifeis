@@ -66,9 +66,16 @@ export function planRoutes(db: Db, tools?: PhotoTools): Route[] {
 
     ['POST', at('/:id/items'), async (c) => ({
       status: 201,
-      json: await mine(c).addItem(c.id, { kind: read.text(c.body, 'kind'), ref_id: read.maybeWhole(c.body, 'ref_id'), label: read.maybeText(c.body, 'label'),
+      json: await mine(c).addItem(c.id, { kind: read.text(c.body, 'kind'), ref_id: read.maybeWhole(c.body, 'ref_id'), job_id: read.maybeWhole(c.body, 'job_id'), label: read.maybeText(c.body, 'label'),
         quantity: read.maybeNumber(c.body, 'quantity'), note: read.maybeText(c.body, 'note'), day: read.maybeText(c.body, 'day'), meal: read.maybeText(c.body, 'meal'), servings: read.maybeNumber(c.body, 'servings'),
         thaw_pounds: read.maybeNumber(c.body, 'thaw_pounds') }),
+    })],
+    // When and where: a start time, an end time and a place, in the person's own words.
+    ['PUT', at('/:id/when-where'), async (c) => ({
+      json: await mine(c).setWhenWhere(c.id, {
+        ...(sent(c.body, 'start_time') ? { start_time: read.maybeText(c.body, 'start_time') } : {}), ...(sent(c.body, 'end_time') ? { end_time: read.maybeText(c.body, 'end_time') } : {}),
+        ...(sent(c.body, 'place') ? { place: read.maybeText(c.body, 'place') } : {}),
+      }),
     })],
     // Food: when it is served and whether it is a meal or refreshments, and food that is bought or brought.
     ['PUT', at('/:id/food'), async (c) => ({
@@ -87,6 +94,13 @@ export function planRoutes(db: Db, tools?: PhotoTools): Route[] {
       }),
     })],
     ['DELETE', at('/food-lines/:id'), async (c) => ({ json: await mine(c).removeFood(c.id) })],
+    // Traditions: short lines of what is always done.
+    ['POST', at('/:id/traditions'), async (c) => ({ status: 201, json: await mine(c).addTradition(c.id, read.text(c.body, 'words')) })],
+    ['PUT', at('/traditions/:id'), async (c) => ({
+      json: await mine(c).updateTradition(c.id, { ...(sent(c.body, 'words') ? { words: read.maybeText(c.body, 'words') } : {}), ...(sent(c.body, 'done') ? { done: read.yesNo(c.body, 'done') } : {}) }),
+    })],
+    ['POST', at('/traditions/:id/move'), async (c) => ({ json: await mine(c).moveTradition(c.id, read.text(c.body, 'direction')) })],
+    ['DELETE', at('/traditions/:id'), async (c) => ({ json: await mine(c).removeTradition(c.id) })],
     ['PUT', at('/items/:id'), async (c) => ({
       json: await mine(c).updateItem(c.id, {
         ...(sent(c.body, 'label') ? { label: read.maybeText(c.body, 'label') } : {}), ...(sent(c.body, 'quantity') ? { quantity: read.maybeNumber(c.body, 'quantity') } : {}),

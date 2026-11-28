@@ -216,5 +216,95 @@ const smallFood = await tooSmall([region('Food').locator('button'), region('Food
 say('the Food card and countdown have 44px controls' + (smallFood.length ? ` (too small: ${smallFood})` : ''), smallFood.length === 0);
 say('the food plan does not scroll sideways', await noSideways());
 
+// ---------- a yearly date on the calendar opens as a plan ----------
+const born = new Date(Date.now() + 40 * 86400000);
+const kid = await send('POST', '/api/calendar/events', { title: "Mina's birthday", day: `${born.getFullYear() - 8}-${pad(born.getMonth() + 1)}-${pad(born.getDate())}`, yearly: true });
+await page.goto(base + '/plans'); await wait(1200);
+const dateLine = page.getByRole('link', { name: /Mina's birthday/ });
+say('a calendar date with no plan shows as a small line on Plans', await dateLine.isVisible());
+await dateLine.click(); await wait(1200);
+t = await text();
+say('the small line opens a plan page with the date, its age and the starting points', page.url().includes('/plans/date-') && /Mina's birthday/.test(t) && /turning 8/.test(t) && await region('Starting points').isVisible() && await region('Parts of this plan').isVisible());
+say('looking saves nothing', (await send('GET', '/api/plans/holidays')).every((h) => h.name !== "Mina's birthday"));
+say('the date page fits the phone with 44px controls', await noSideways() && (await tooSmall([region('Starting points').locator('button'), region('Parts of this plan').locator('label'), region('Something to do').locator('button, input')])).length === 0);
+await region('Parts of this plan').getByRole('checkbox', { name: 'Gifts', exact: true }).click(); await wait(1800);
+say('checking a part makes it a yearly plan and moves to its page', /\/plans\/\d+$/.test(page.url()) && /Gifts/.test(await text()) && /Yearly/.test(await text()));
+say('the date is now a yearly plan whose plan has only that part', (await send('GET', '/api/plans/holidays')).some((h) => h.name === "Mina's birthday") && (await send('GET', page.url().replace(base, '/api'))).parts.join() === 'gifts');
+await page.goto(base + '/plans/date-' + kid.id); await wait(1500);
+say('opening the date again goes to the plan', /\/plans\/\d+$/.test(page.url()));
+
+// ---------- traditions ----------
+await page.goto(base + `/plans/${bare.id}`); await wait(1200);
+say('a plan without the part has no Traditions card', (await region('Traditions').count()) === 0);
+await page.getByRole('button', { name: 'Parts', exact: true }).click(); await wait(500);
+await dialog.getByRole('checkbox', { name: 'Traditions', exact: true }).check();
+await dialog.getByRole('button', { name: 'Save' }).click(); await wait(1200);
+const trad = region('Traditions');
+say('checking the part shows a Traditions card', await trad.isVisible());
+for (const words of ['Grandpa carves', 'Kids pick the movie', 'Everyone says one thing they are glad of']) {
+  await trad.getByLabel('Something you always do').fill(words);
+  await trad.getByRole('button', { name: 'Add', exact: true }).click(); await wait(700);
+}
+await wait(800);
+say('three lines are added', (await trad.locator('[data-tradition]').count()) === 3);
+await trad.getByLabel('Reword Kids pick the movie').fill('Kids pick the film');
+await trad.getByLabel('Reword Kids pick the movie').blur(); await wait(900);
+say('a line can be reworded', await trad.getByLabel('Reword Kids pick the film').isVisible());
+await trad.getByRole('button', { name: 'Move Everyone says one thing they are glad of up' }).click(); await wait(900);
+say('a line can be moved up', (await trad.locator('[data-tradition] input:not([type=checkbox])').first().inputValue()) === 'Grandpa carves' && (await trad.locator('[data-tradition] input:not([type=checkbox])').nth(1).inputValue()) === 'Everyone says one thing they are glad of');
+await trad.getByRole('checkbox', { name: 'Grandpa carves is done' }).click(); await wait(800);
+say('a line can be checked off', await trad.getByRole('checkbox', { name: 'Grandpa carves is done' }).isChecked() && /1 of 3/.test(await trad.innerText()));
+await page.reload(); await wait(1400);
+say('after a reload the order, the words and the check are kept', (await region('Traditions').locator('[data-tradition] input:not([type=checkbox])').nth(2).inputValue()) === 'Kids pick the film' && await region('Traditions').getByRole('checkbox', { name: 'Grandpa carves is done' }).isChecked());
+const smallTrad = await tooSmall([region('Traditions').locator('button'), region('Traditions').locator('input:not([type=checkbox])')]);
+say('the Traditions card has 44px controls and fits the phone' + (smallTrad.length ? ` (too small: ${smallTrad})` : ''), smallTrad.length === 0 && await noSideways());
+await region('Traditions').getByRole('button', { name: 'Remove Kids pick the film' }).click(); await wait(800);
+say('a line can be removed', (await region('Traditions').locator('[data-tradition]').count()) === 2);
+const again = await send('POST', `/api/plans/${bare.id}/copy`, { start_day: later(400) });
+say('doing the plan again carries the lines over unchecked', again.traditions.length === 2 && again.traditions.every((l) => !l.done));
+
+// ---------- when and where ----------
+await page.goto(base + `/plans/${bare.id}`); await wait(1200);
+say('a plan without the part has no When and where card', (await region('When and where').count()) === 0);
+await page.getByRole('button', { name: 'Parts', exact: true }).click(); await wait(500);
+await dialog.getByRole('checkbox', { name: 'When and where', exact: true }).check();
+await dialog.getByRole('button', { name: 'Save' }).click(); await wait(1200);
+const when = region('When and where');
+say('checking the part shows the card', await when.isVisible());
+await when.getByLabel('Starts at').fill('15:30'); await when.getByLabel('Starts at').blur(); await wait(1000);
+await when.getByLabel('Ends at (if you know)').fill('18:00'); await when.getByLabel('Ends at (if you know)').blur(); await wait(1000);
+await when.getByLabel('Where').fill("Aunt Ruth's back yard"); await when.getByLabel('Where').blur(); await wait(1000);
+say('the plan page shows the times and the place', /15:30 to 18:00 · Aunt Ruth's back yard/.test(await text()));
+await page.reload(); await wait(1400);
+say('after a reload they are kept', (await region('When and where').getByLabel('Starts at').inputValue()) === '15:30' && (await region('When and where').getByLabel('Where').inputValue()) === "Aunt Ruth's back yard");
+const smallWhen = await tooSmall([region('When and where').locator('input')]);
+say('the card has 44px controls and fits the phone' + (smallWhen.length ? ` (too small: ${smallWhen})` : ''), smallWhen.length === 0 && await noSideways());
+const dayOfBare = (await send('GET', `/api/plans/${bare.id}`)).start_day;
+await page.goto(base + `/calendar?day=${dayOfBare}`); await wait(1200);
+say('the calendar line for the plan shows its time and place', /15:30\s*Lake picnic\s*until 18:00 · Aunt Ruth's back yard/.test(await text()));
+
+// ---------- an upkeep job on a plan ----------
+const gutters = await send('POST', '/api/things/upkeep', { name: 'Clean the gutters', every_n: 1, every_unit: 'year' });
+const tidy = await send('POST', '/api/plans', { name: 'Spring tidy-up', start_day: later(14), parts: ['tasks'] });
+await page.goto(base + `/plans/${tidy.id}`); await wait(1200);
+await page.getByRole('button', { name: '+ Add an upkeep job' }).click(); await wait(800);
+say('the picker lists the upkeep jobs', await dialog.getByRole('button', { name: /Clean the gutters/ }).isVisible());
+await dialog.getByRole('button', { name: /Clean the gutters/ }).click(); await wait(1200);
+say('the job is a line on the plan that links to the job', await page.getByRole('link', { name: 'Clean the gutters' }).first().getAttribute('href') === `/things/upkeep/${gutters.id}`);
+await page.getByRole('checkbox', { name: 'Clean the gutters' }).click(); await wait(1200);
+say('checking the line marks the job done in Upkeep', (await send('GET', `/api/things/upkeep/${gutters.id}`)).done.length === 1);
+await page.reload(); await wait(1300);
+say('the line stays checked after a reload', await page.getByRole('checkbox', { name: 'Clean the gutters' }).isChecked());
+await send('POST', `/api/things/upkeep/${gutters.id}/done`, {});
+const plan2 = await send('POST', '/api/plans', { name: 'Autumn tidy-up', start_day: later(200), parts: ['tasks'] });
+await send('POST', `/api/plans/${plan2.id}/items`, { kind: 'task', job_id: gutters.id });
+await page.goto(base + `/plans/${plan2.id}`); await wait(1200);
+say('a job marked done in Upkeep after the line was added shows the line done', await page.getByRole('checkbox', { name: 'Clean the gutters' }).isChecked() === false);
+await send('POST', `/api/things/upkeep/${gutters.id}/done`, {});
+await page.reload(); await wait(1300);
+say('and done once it is marked done', await page.getByRole('checkbox', { name: 'Clean the gutters' }).isChecked());
+await page.getByRole('button', { name: 'Remove Clean the gutters' }).click(); await wait(1000);
+say('taking the line off leaves the job', (await send('GET', `/api/things/upkeep/${gutters.id}`)).name === 'Clean the gutters');
+
 say('no request failed' + (bad.length ? `: ${bad.join(' | ')}` : ''), bad.length === 0);
 await browser.close();

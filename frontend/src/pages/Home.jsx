@@ -82,7 +82,7 @@ function ComingUp({ coming, today, onChange }) {
               <span className="self-start"><Icon of={COMING_ICONS[l.kind]} /></span>
               <span className="min-w-0 flex-1">
                 <span className="block text-gray-800 dark:text-life-50">{l.name}</span>
-                {(l.years || l.next || l.not_started) && <span className="block text-xs text-gray-600 dark:text-life-200">{l.years ? `${l.years} ${l.years === 1 ? 'year' : 'years'}` : l.not_started ? 'Not started yet' : l.next}</span>}
+                {[l.years ? `${l.years} ${l.years === 1 ? 'year' : 'years'}` : l.not_started ? 'Not started yet' : l.next, l.time && `at ${l.time}`].filter(Boolean).length > 0 && <span className="block text-xs text-gray-600 dark:text-life-200">{[l.years ? `${l.years} ${l.years === 1 ? 'year' : 'years'}` : l.not_started ? 'Not started yet' : l.next, l.time && `at ${l.time}`].filter(Boolean).join(' · ')}</span>}
               </span>
               {l.late ? <Flag>late</Flag> : <span className="text-xs text-gray-500 dark:text-life-300">{l.days_until === 0 ? (l.end_day === today ? 'today' : 'now') : inDays(l.start_day, today)}</span>}
             </Link>

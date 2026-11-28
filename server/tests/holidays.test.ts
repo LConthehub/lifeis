@@ -137,6 +137,32 @@ it('turns a birthday into a holiday with one request', async () => {
   expect((await admin.post('/api/plans/holidays/from-event', {})).status).toBe(422);
 });
 
+it('opens a yearly date as a plan without saving, and makes it a yearly plan when a part is checked', async () => {
+  const admin = await owner();
+  const event = (await admin.post('/api/calendar/events', { title: 'Mina turns', day: '2017-12-02', yearly: true })).json;
+  const draft = await admin.get(`/api/plans/holidays/from-date/${event.id}`);
+  expect([draft.status, draft.json.name, draft.json.day, draft.json.years, draft.json.plan_id]).toEqual([200, 'Mina turns', '2026-12-02', 9, null]);
+  expect((await admin.get('/api/plans/holidays')).json).toEqual([]);
+  const made = await admin.post(`/api/plans/holidays/from-date/${event.id}`, { parts: ['gifts'] });
+  expect([made.status, made.json.parts, made.json.start_day]).toEqual([201, ['gifts'], '2026-12-02']);
+  expect((await admin.get(`/api/plans/holidays/from-date/${event.id}`)).json.plan_id).toBe(made.json.id);
+  expect((await admin.get('/api/plans/holidays/from-date/9999')).status).toBe(404);
+});
+
+it('keeps the time and place of a plan, and its traditions, over the web addresses', async () => {
+  const admin = await owner();
+  const plan = (await admin.post('/api/plans', { name: 'Garden party', start_day: '2026-10-10', parts: ['food'] })).json;
+  const set = await admin.put(`/api/plans/${plan.id}/when-where`, { start_time: '15:30', end_time: '18:00', place: 'The park' });
+  expect([set.status, set.json.start_time, set.json.end_time, set.json.place, set.json.parts]).toEqual([200, '15:30', '18:00', 'The park', ['food', 'when_where']]);
+  expect((await admin.put(`/api/plans/${plan.id}/when-where`, { start_time: 'late' })).status).toBe(400);
+  const one = await admin.post(`/api/plans/${plan.id}/traditions`, { words: 'Grandpa carves' });
+  expect([one.status, one.json.traditions.map((r: { words: string }) => r.words), one.json.parts]).toEqual([201, ['Grandpa carves'], ['food', 'when_where', 'traditions']]);
+  const id = one.json.traditions[0].id;
+  expect((await admin.put(`/api/plans/traditions/${id}`, { done: true })).json.traditions[0].done).toBe(true);
+  expect((await admin.post(`/api/plans/traditions/${id}/move`, { direction: 'up' })).status).toBe(200);
+  expect((await admin.delete(`/api/plans/traditions/${id}`)).json.traditions).toEqual([]);
+});
+
 it('hides a gift from the person it is for, in the holiday, in search, in spending, in tags, until the day has passed', async () => {
   const admin = await owner();
   const partner = await member(admin, 'partner');

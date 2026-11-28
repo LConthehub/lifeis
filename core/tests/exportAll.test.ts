@@ -573,6 +573,10 @@ it('holidays go out and come back: how each finds its day, each year, its lists 
   await plans(db, ana, clock).addFood(year, { label: 'Turkey', thaw_pounds: 16 });
   await plans(db, ana, clock).addFood(year, { label: 'Rolls', brought_by: 'Sam' });
   await plans(db, ana, clock).updateFood((await plans(db, ana, clock).get(year)).food_lines[1]!.id, { done: true });
+  await plans(db, ana, clock).setWhenWhere(year, { start_time: '16:00', end_time: '20:00', place: "Grandma's house" });
+  await plans(db, ana, clock).addTradition(year, 'Grandpa carves');
+  await plans(db, ana, clock).addTradition(year, 'Kids pick the movie');
+  await plans(db, ana, clock).updateTradition((await plans(db, ana, clock).get(year)).traditions[1]!.id, { done: true });
   await mine.addPerson(year, 'guest', { name: 'Aunt June' });
   await mine.addPerson(year, 'card', { name: 'Grandma' });
   await mine.addStep(year, { words: 'Chill the wine', rule: 'morning_of', at: '09:00' });
@@ -596,6 +600,9 @@ it('holidays go out and come back: how each finds its day, each year, its lists 
   expect(foodOf(there.plan)).toEqual(foodOf(here.plan));
   expect(foodOf(there.plan)).toEqual(['17:00', 'refreshments', [['Turkey', null, 16, false], ['Rolls', 'Sam', null, true]]]);
   expect(there.countdown.thaw.map((t) => t.pounds)).toEqual([16]);
+  expect([there.plan.start_time, there.plan.end_time, there.plan.place]).toEqual(['16:00', '20:00', "Grandma's house"]);
+  // What is always done comes back in its order, with what was checked.
+  expect(there.plan.traditions.map((r) => [r.words, r.done])).toEqual([['Grandpa carves', false], ['Kids pick the movie', true]]);
   expect([there.guests.map((g) => g.name), there.cards.map((g) => g.name), there.countdown.steps.map((s) => s.words)]).toEqual([['Aunt June'], ['Grandma'], expect.arrayContaining(['Chill the wine'])]);
   expect(there.gifts.map((g) => [g.who, g.idea, g.status, g.cents])).toEqual([['Maya', 'A scarf', 'bought', 2500]]);
   expect(there.spots.map((s) => [s.name, s.items.map((i) => i.label), s.photos.length])).toEqual([['Mantel', ['Garland'], 1]]); // the photo kept its spot

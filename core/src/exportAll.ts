@@ -617,16 +617,21 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('project-costs.csv', ['Project', 'What', 'Planned', 'Spent', 'Paid on', 'Notes'],
     (await all('SELECT c.project_id, c.label, c.planned_cents, c.actual_cents, c.paid_on, c.note FROM project_costs c JOIN projects p ON p.id = c.project_id WHERE p.owner_id = ? ORDER BY c.project_id, c.sort_order, c.id'))
       .map((c) => [str(projectOf.get(c.project_id as number)?.name), str(c.label), dollars(c.planned_cents), dollars(c.actual_cents), str(c.paid_on), str(c.note)]));
-  const plans = await all('SELECT id, name, start_day, end_day, note, story, parts, served_at, food_kind FROM plans WHERE owner_id = ? ORDER BY start_day, id');
+  const plans = await all('SELECT id, name, start_day, end_day, note, story, parts, served_at, food_kind, start_time, end_time, place FROM plans WHERE owner_id = ? ORDER BY start_day, id');
   const planOf = new Map(plans.map((p) => [p.id as number, p]));
-  out.csv('plans.csv', ['Plan', 'Starts', 'Ends', 'Notes', 'The story', 'Parts', 'Served at', 'Food is'], plans.map((p) => [str(p.name), str(p.start_day), str(p.end_day), str(p.note), str(p.story),
-    p.parts === null ? '' : String(p.parts).split(',').map((k) => PLAN_PARTS.find((x) => x.key === k)?.label ?? k).join('; '), str(p.served_at), str(p.food_kind)]));
+  out.csv('plans.csv', ['Plan', 'Starts', 'Ends', 'Notes', 'The story', 'Parts', 'Served at', 'Food is', 'Starts at', 'Ends at', 'Place'], plans.map((p) => [str(p.name), str(p.start_day), str(p.end_day), str(p.note), str(p.story),
+    p.parts === null ? '' : String(p.parts).split(',').map((k) => PLAN_PARTS.find((x) => x.key === k)?.label ?? k).join('; '), str(p.served_at), str(p.food_kind), str(p.start_time), str(p.end_time), str(p.place)]));
   // Food that is bought or brought comes after the things on the plan, as rows of kind "food" (Done: it is here).
   const foodRows = await all('SELECT f.plan_id, f.label, f.brought_by, f.thaw_pounds, f.done FROM plan_food f JOIN plans p ON p.id = f.plan_id WHERE p.owner_id = ? ORDER BY f.plan_id, f.sort_order, f.id');
-  out.csv('plan-items.csv', ['Plan', 'Kind', 'What', 'Amount', 'Done', 'Notes', 'Back home', 'After the trip', 'After the trip done', 'Brought by', 'Frozen (pounds)'], [
-    ...(await all('SELECT i.plan_id, i.kind, i.label, i.quantity, i.done, i.note, i.returned, i.after_trip, i.after_done, i.thaw_pounds FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ? ORDER BY i.plan_id, i.sort_order, i.id'))
-      .map((i) => [str(planOf.get(i.plan_id as number)?.name), str(i.kind), str(i.label), str(i.quantity), yes(i.done), str(i.note), yes(i.returned), str(i.after_trip), yes(i.after_done), '', str(i.thaw_pounds)]),
-    ...foodRows.map((f) => [str(planOf.get(f.plan_id as number)?.name), 'food', str(f.label), '', yes(f.done), '', '', '', '', str(f.brought_by), str(f.thaw_pounds)]),
+  // A task that is an upkeep job names the job, so it can be put back on it.
+  const jobNames = new Map((await all('SELECT id, name FROM upkeep_jobs WHERE owner_id = ?')).map((j) => [j.id as number, j.name as string]));
+  // What is always done comes last, as rows of kind "tradition" (Done: checked off this year).
+  const traditionRows = await all('SELECT r.plan_id, r.words, r.done FROM plan_traditions r JOIN plans p ON p.id = r.plan_id WHERE p.owner_id = ? ORDER BY r.plan_id, r.sort_order, r.id');
+  out.csv('plan-items.csv', ['Plan', 'Kind', 'What', 'Amount', 'Done', 'Notes', 'Back home', 'After the trip', 'After the trip done', 'Brought by', 'Frozen (pounds)', 'Upkeep job'], [
+    ...(await all('SELECT i.plan_id, i.kind, i.label, i.quantity, i.done, i.note, i.returned, i.after_trip, i.after_done, i.thaw_pounds, i.job_id FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ? ORDER BY i.plan_id, i.sort_order, i.id'))
+      .map((i) => [str(planOf.get(i.plan_id as number)?.name), str(i.kind), str(i.label), str(i.quantity), yes(i.done), str(i.note), yes(i.returned), str(i.after_trip), yes(i.after_done), '', str(i.thaw_pounds), i.kind === 'task' ? str(jobNames.get(i.job_id as number)) : '']),
+    ...traditionRows.map((r) => [str(planOf.get(r.plan_id as number)?.name), 'tradition', str(r.words), '', yes(r.done), '', '', '', '', '', '', '']),
+    ...foodRows.map((f) => [str(planOf.get(f.plan_id as number)?.name), 'food', str(f.label), '', yes(f.done), '', '', '', '', str(f.brought_by), str(f.thaw_pounds), '']),
   ]);
   // The check marks on a plan's countdown that are not steps of its own (thawing, cooking, a recipe's prep steps), by name, because their numbers do not travel.
   const foodName = new Map((await all('SELECT f.id, f.label FROM plan_food f JOIN plans p ON p.id = f.plan_id WHERE p.owner_id = ?')).map((f) => [f.id as number, str(f.label)]));
@@ -2164,6 +2169,7 @@ ${mediaId}`);
     const seen = new Seen((await c.tx.all<{ name: string; start_day: string }>('SELECT name, start_day FROM plans WHERE owner_id = ?', [c.owner])).map((p) => `${labelKey(p.name)}\n${p.start_day}`));
     const items = tableOf(c.files, 'plan-items.csv')?.rows ?? [];
     const photos = tableOf(c.files, 'plan-photos.csv')?.rows ?? [];
+    const jobIds = new Map((await c.tx.all<{ id: number; name: string }>('SELECT id, name FROM upkeep_jobs WHERE owner_id = ?', [c.owner])).map((j) => [labelKey(j.name), j.id]));
     const lists = tableOf(c.files, 'holiday-lists.csv')?.rows ?? [];
     const trips = tableOf(c.files, 'outdoor-trip-lists.csv')?.rows ?? [];
     const keysOf = (file: string) => new Set((tableOf(c.files, file)?.rows ?? []).map((y) => `${labelKey(cellOf(y, 'Plan'))}\n${dayOf(cellOf(y, 'Starts'))}`));
@@ -2184,9 +2190,12 @@ ${mediaId}`);
       const parts = partWords.length ? PLAN_PARTS.filter((p) => partWords.includes(p.label.toLowerCase())).map((p) => p.key).join(',') || null : null;
       const served = cellOf(row, 'Served at');
       const foodKind = cellOf(row, 'Food is').toLowerCase();
-      const made = await c.tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, served_at, food_kind, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      const timeOf = (words: string) => (/^([01]\d|2[0-3]):[0-5]\d$/.test(words) ? words : null);
+      const startsAt = timeOf(cellOf(row, 'Starts at'));
+      const endsAt = startsAt ? timeOf(cellOf(row, 'Ends at')) : null;
+      const made = await c.tx.run('INSERT INTO plans (owner_id, name, start_day, end_day, note, story, parts, served_at, food_kind, start_time, end_time, place, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [c.owner, name, start, end && end >= start ? end : start, clean(row.notes, 5000),clean(cellOf(row, 'The story'), 20000), parts,
-          /^([01]\d|2[0-3]):[0-5]\d$/.test(served) ? served : null, ['meal', 'refreshments'].includes(foodKind) ? foodKind : null, c.at, c.at]);
+          /^([01]\d|2[0-3]):[0-5]\d$/.test(served) ? served : null, ['meal', 'refreshments'].includes(foodKind) ? foodKind : null, startsAt, endsAt, clean(cellOf(row, 'Place'), 200), c.at, c.at]);
       d.fresh += 1;
       if (filled.has(key)) continue;
       filled.add(key);
@@ -2194,6 +2203,7 @@ ${mediaId}`);
       let lost = false;
       let order = 1;
       let foods = 0;
+      let traditions = 0;
       for (const i of items.filter(mine)) {
         const kind = cellOf(i, 'Kind').toLowerCase();
         const label = clean(cellOf(i, 'What'), 200);
@@ -2208,15 +2218,24 @@ ${mediaId}`);
           }
           continue;
         }
+        if (label && kind === 'tradition') {
+          if (traditions < 100) {
+            await c.tx.run('INSERT INTO plan_traditions (plan_id, words, done, sort_order) VALUES (?, ?, ?, ?)', [made.lastId, clean(label, 200), yesOf(cellOf(i, 'Done')) ? 1 : 0, traditions + 1]);
+            traditions += 1;
+          }
+          continue;
+        }
         if (!label || !['task', 'recipe', 'thing', 'media', 'project'].includes(kind)) continue;
         const ref = kind === 'task' ? null : pointed[kind]!.get(labelKey(label)) ?? null;
+        const job = kind === 'task' && cellOf(i, 'Upkeep job') ? jobIds.get(labelKey(cellOf(i, 'Upkeep job'))) ?? null : null;
+        const jobSeen = job !== null ? (await c.tx.get<{ last: number | null }>('SELECT MAX(id) AS last FROM upkeep_done WHERE job_id = ?', [job]))!.last ?? 0 : 0;
         if (kind !== 'task' && ref === null) lost = true;
         const quantity = numberOf(cellOf(i, 'Amount'));
         const after = cellOf(i, 'After the trip').toLowerCase();
         const kept = kind === 'thing' && ['dry', 'clean', 'repair', 'replace'].includes(after) ? after : null;
-        await c.tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id, returned, after_trip, after_done, thaw_pounds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)',
+        await c.tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id, returned, after_trip, after_done, thaw_pounds, job_id, job_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)',
           [made.lastId, kind, ref, label, quantity !== null && quantity > 0 ? quantity : null, clean(i.notes, 1000), yesOf(cellOf(i, 'Done')) ? 1 : 0, order,
-            kind === 'thing' && yesOf(cellOf(i, 'Back home')) ? 1 : 0, kept, kept && yesOf(cellOf(i, 'After the trip done')) ? 1 : 0, kind === 'recipe' ? thaw : null]);
+            kind === 'thing' && yesOf(cellOf(i, 'Back home')) ? 1 : 0, kept, kept && yesOf(cellOf(i, 'After the trip done')) ? 1 : 0, kind === 'recipe' ? thaw : null, job, jobSeen]);
         order += 1;
       }
       // The check marks on its countdown, found again by the names of what they were for.

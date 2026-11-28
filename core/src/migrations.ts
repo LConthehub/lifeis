@@ -1972,6 +1972,30 @@ export const MIGRATIONS: Migration[] = [
     ],
   },
   {
+    number: 67,
+    name: 'Traditions, when and where, and an upkeep job on a plan',
+    // Traditions: the short lines a plan keeps of what is always done ("Grandpa carves"), each checked off for the year.
+    // plan_traditions is read like plan_food: its own table, copied unchecked when a year starts from the last.
+    statements: [
+      `CREATE TABLE plan_traditions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        words TEXT NOT NULL,
+        done INTEGER NOT NULL DEFAULT 0 CHECK(done IN (0, 1)),
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )`,
+      `CREATE INDEX idx_plan_traditions ON plan_traditions(plan_id)`,
+      // When and where: a start time, an optional end time (both as 18:30) and a place in the person's own words.
+      `ALTER TABLE plans ADD COLUMN start_time TEXT`,
+      `ALTER TABLE plans ADD COLUMN end_time TEXT`,
+      `ALTER TABLE plans ADD COLUMN place TEXT`,
+      // An upkeep job on a plan is a task line with plan_items.job_id set (that column came with migration 63). job_seen is the
+      // last time it was marked done in Upkeep when the line was added (or last unchecked): the line is done once the job has
+      // been marked done since. The plan never changes or removes the job.
+      `ALTER TABLE plan_items ADD COLUMN job_seen INTEGER NOT NULL DEFAULT 0`,
+    ],
+  },
+  {
     number: 68,
     name: 'Things with pieces',
     // A thing lists its pieces as light lines (pieces.ts). `state` is here, missing or broken. A piece that is replaced every so often

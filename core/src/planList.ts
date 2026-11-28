@@ -37,6 +37,9 @@ export type PlanLine = {
   next: string | null;
   /** True for a birthday or yearly date with no plan: shown as a small line. */
   small: boolean;
+  /** When it starts that day (18:30) and where, when the plan says; null otherwise. */
+  time: string | null;
+  place: string | null;
   /** For a holiday not started this year: it can be started from last year's. */
   not_started: boolean;
   /** How many years since the first, for a birthday or anniversary. */
@@ -57,6 +60,8 @@ export function planList(db: Db, owner: number, clock: Clock = () => new Date())
       const band = (start: string, end: string): PlanBand => (end < today ? 'past' : until(start) <= PLAN_SOON_DAYS ? 'soon' : 'later');
       const out: PlanLine[] = [];
       const yearPlans = new Set<number>();
+      const everyPlan = await plans(db, owner, clock).list();
+      const when = (id: number | undefined) => { const p = everyPlan.find((x) => x.id === id); return { time: p?.start_time ?? null, place: p?.place ?? null }; };
 
       for (const h of await holidays(db, owner, clock).list()) {
         for (const y of h.years) yearPlans.add(y.plan_id);
@@ -64,30 +69,30 @@ export function planList(db: Db, owner: number, clock: Clock = () => new Date())
         for (const y of h.years) {
           if (ahead && y.plan_id === ahead.plan_id) continue;
           out.push({ key: `plan-${y.plan_id}`, name: `${h.name} ${y.year}`, kind: 'gathering', yearly: true, start_day: y.day, end_day: y.day,
-            band: 'past', days_until: until(y.day), link: `/plans/${y.plan_id}`, next: null, small: false, not_started: false, years: null, cover_photo: null });
+            band: 'past', days_until: until(y.day), link: `/plans/${y.plan_id}`, next: null, small: false, not_started: false, years: null, cover_photo: null, ...when(y.plan_id) });
         }
         const day = ahead?.day ?? (h.rule.kind === 'manual' ? null : nextDate(h.rule, today));
         if (!day) continue;
         out.push({ key: `holiday-${h.id}`, name: h.name, kind: 'gathering', yearly: true, start_day: day, end_day: day, band: band(day, day),
           days_until: daysUntil(day, day), link: ahead ? `/plans/${ahead.plan_id}` : `/plans/holidays/${h.id}`,
-          next: h.next, small: false, not_started: !ahead, years: null, cover_photo: null });
+          next: h.next, small: false, not_started: !ahead, years: null, cover_photo: null, ...when(ahead?.plan_id) });
       }
 
       for (const t of await outdoorTrips(db, owner, clock).list()) for (const y of t.years) yearPlans.add(y.plan_id);
 
-      for (const p of await plans(db, owner, clock).list()) {
+      for (const p of everyPlan) {
         const trip = await db.get<{ trip_id: number; name: string }>(
           'SELECT y.trip_id, t.name FROM outdoor_trip_years y JOIN outdoor_trips t ON t.id = y.trip_id WHERE y.plan_id = ? AND t.owner_id = ?', [p.id, owner]);
         if (trip) {
           out.push({ key: `plan-${p.id}`, name: p.name, kind: 'trip', yearly: true, start_day: p.start_day, end_day: p.end_day, band: band(p.start_day, p.end_day),
             days_until: daysUntil(p.start_day, p.end_day), link: `/plans/trips/${trip.trip_id}/${p.id}`,
-            next: p.when === 'past' ? null : p.tasks_left > 0 ? `${p.tasks_left} still to do` : null, small: false, not_started: false, years: null, cover_photo: p.cover_photo });
+            next: p.when === 'past' ? null : p.tasks_left > 0 ? `${p.tasks_left} still to do` : null, small: false, not_started: false, years: null, cover_photo: p.cover_photo, time: p.start_time, place: p.place });
           continue;
         }
         if (yearPlans.has(p.id)) continue;
         out.push({ key: `plan-${p.id}`, name: p.name, kind: 'gathering', yearly: false, start_day: p.start_day, end_day: p.end_day, band: band(p.start_day, p.end_day),
           days_until: daysUntil(p.start_day, p.end_day), link: `/plans/${p.id}`,
-          next: p.when === 'past' ? null : p.tasks_left > 0 ? `${p.tasks_left} still to do` : null, small: false, not_started: false, years: null, cover_photo: p.cover_photo });
+          next: p.when === 'past' ? null : p.tasks_left > 0 ? `${p.tasks_left} still to do` : null, small: false, not_started: false, years: null, cover_photo: p.cover_photo, time: p.start_time, place: p.place });
       }
 
       // Birthdays and other yearly dates with no holiday made from them yet: the next time each comes round.
@@ -97,7 +102,7 @@ export function planList(db: Db, owner: number, clock: Clock = () => new Date())
         if (planned.has(d.id) || seen.has(d.id)) continue;
         seen.add(d.id);
         out.push({ key: `date-${d.id}`, name: d.title, kind: 'birthday', yearly: true, start_day: d.day, end_day: d.day, band: band(d.day, d.day),
-          days_until: until(d.day), link: '/calendar', next: null, small: true, not_started: false, years: d.years > 0 ? d.years : null, cover_photo: null });
+          days_until: until(d.day), link: `/plans/date-${d.id}`, next: null, small: true, not_started: false, years: d.years > 0 ? d.years : null, cover_photo: null, time: d.time, place: null });
       }
 
       // Ahead: soonest first. Past: newest first.

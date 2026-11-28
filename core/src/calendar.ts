@@ -114,11 +114,14 @@ export function calendar(db: Db, owner: number, clock: Clock = () => new Date())
         }
       }
       // A plan is on each of its days, and leads to its own page.
-      for (const p of await db.all<{ id: number; name: string; start_day: string; end_day: string }>(
-        'SELECT id, name, start_day, end_day FROM plans WHERE owner_id = ? AND start_day <= ? AND end_day >= ? ORDER BY start_day, id', [owner, end, start])) {
+      for (const p of await db.all<{ id: number; name: string; start_day: string; end_day: string; start_time: string | null; end_time: string | null; place: string | null }>(
+        'SELECT id, name, start_day, end_day, start_time, end_time, place FROM plans WHERE owner_id = ? AND start_day <= ? AND end_day >= ? ORDER BY start_day, id', [owner, end, start])) {
         for (let day = p.start_day < start ? start : p.start_day; day <= p.end_day && day <= end; day = addDays(day, 1)) {
           const nth = dayNumber(day) - dayNumber(p.start_day) + 1;
-          entries.push({ kind: 'plan', day, time: null, title: p.name, detail: p.end_day !== p.start_day ? `day ${nth} of ${dayNumber(p.end_day) - dayNumber(p.start_day) + 1}` : null, link: `/plans/${p.id}`, id: null });
+          // Its time is on its first day (and the end, on its last); where it is goes on each.
+          const until = p.end_time && day === p.end_day ? `until ${p.end_time}` : null;
+          const detail = [p.end_day !== p.start_day ? `day ${nth} of ${dayNumber(p.end_day) - dayNumber(p.start_day) + 1}` : null, until, p.place].filter(Boolean).join(' · ') || null;
+          entries.push({ kind: 'plan', day, time: day === p.start_day ? p.start_time : null, title: p.name, detail, link: `/plans/${p.id}`, id: null });
         }
       }
       // Other calendars a person follows. One followed "busy only" has no titles: its times go under its own name.

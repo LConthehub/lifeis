@@ -2,12 +2,14 @@
 import { beforeEach, expect, it } from 'vitest';
 import { calendar } from '../src/calendar.ts';
 import type { Db } from '../src/db.ts';
+import { holidays } from '../src/holidays.ts';
 import { inventory } from '../src/inventory.ts';
 import { kitchen } from '../src/kitchen.ts';
 import { media } from '../src/media.ts';
 import { migrate } from '../src/migrations.ts';
 import { pictureType, plans, type Plans } from '../src/plans.ts';
 import { projects } from '../src/projects.ts';
+import { upkeep } from '../src/upkeep.ts';
 import { memoryDb } from './memoryDb.ts';
 
 let db: Db;
@@ -287,4 +289,124 @@ it('a plan from before parts shows the parts it has something in', async () => {
   await mine.addItem(p.id, { kind: 'thing', ref_id: item.id });
   expect((await mine.get(p.id)).parts).toEqual(['budget', 'more_days', 'bring']);
   expect((await mine.list()).find((x) => x.id === p.id)!.parts).toEqual(['budget', 'more_days', 'bring']);
+});
+
+it('traditions: short lines to add, reword, reorder, check off and remove; a copy carries them over unchecked', async () => {
+  const p = await mine.create({ name: 'Supper', start_day: '2046-03-05', parts: ['food'] });
+  expect(p.traditions).toEqual([]);
+  await expect(mine.addTradition(p.id, '  ')).rejects.toEqual(problem(400));
+  let view = await mine.addTradition(p.id, 'Grandpa carves');
+  view = await mine.addTradition(p.id, 'Kids pick the movie');
+  view = await mine.addTradition(p.id, 'Everyone says one thing they are glad of');
+  expect(view.parts).toEqual(['food', 'traditions']); // adding one checks the part
+  const [a, b, c] = view.traditions;
+  view = await mine.updateTradition(b!.id, { words: 'Kids pick the film', done: true });
+  expect(view.traditions.map((r) => [r.words, r.done])).toEqual([['Grandpa carves', false], ['Kids pick the film', true], ['Everyone says one thing they are glad of', false]]);
+  view = await mine.moveTradition(c!.id, 'up');
+  view = await mine.moveTradition(c!.id, 'up');
+  view = await mine.moveTradition(c!.id, 'up'); // already first: stays
+  expect(view.traditions.map((r) => r.id)).toEqual([c!.id, a!.id, b!.id]);
+  view = await mine.moveTradition(c!.id, 'down');
+  expect(view.traditions.map((r) => r.id)).toEqual([a!.id, c!.id, b!.id]);
+  await expect(mine.moveTradition(a!.id, 'sideways')).rejects.toEqual(problem(400));
+  const next = await mine.copy(p.id, { start_day: '2047-03-05' });
+  expect(next.traditions.map((r) => [r.words, r.done])).toEqual([['Grandpa carves', false], ['Everyone says one thing they are glad of', false], ['Kids pick the film', false]]);
+  view = await mine.removeTradition(c!.id);
+  expect(view.traditions.map((r) => r.id)).toEqual([a!.id, b!.id]);
+  await expect(mine.removeTradition(c!.id)).rejects.toEqual(problem(404));
+  // They go when the plan goes, and are another person's to see never.
+  await mine.remove(next.id);
+  expect(await db.get('SELECT COUNT(*) AS n FROM plan_traditions WHERE plan_id = ?', [next.id])).toEqual({ n: 0 });
+});
+
+it('traditions of a yearly plan carry over, unchecked, into next year', async () => {
+  const h = await holidays(db, owner, clock).create({ name: 'Family supper', rule: { kind: 'fixed', month: 3, day: 5 } });
+  const first = h.years[0]!.plan_id;
+  const one = await mine.addTradition(first, 'Grandpa carves');
+  await mine.updateTradition(one.traditions[0]!.id, { done: true });
+  time = new Date(2046, 2, 10, 10, 0, 0); // this year's has passed
+  const second = await holidays(db, owner, clock).startYear(h.id);
+  expect((await mine.get(second.plan_id)).traditions.map((r) => [r.words, r.done])).toEqual([['Grandpa carves', false]]);
+});
+
+it('when and where: a start time, an optional end time and a place, shown on the calendar and kept when done again', async () => {
+  const p = await mine.create({ name: 'Garden party', start_day: '2046-03-12', parts: ['food'] });
+  expect([p.start_time, p.end_time, p.place]).toEqual([null, null, null]);
+  await expect(mine.setWhenWhere(p.id, { start_time: '25:00' })).rejects.toEqual(problem(400));
+  await expect(mine.setWhenWhere(p.id, { end_time: '20:00' })).rejects.toEqual(problem(400)); // needs a start
+  const set = await mine.setWhenWhere(p.id, { start_time: '15:30', place: "Aunt Ruth's back yard" });
+  expect([set.start_time, set.end_time, set.place, set.parts]).toEqual(['15:30', null, "Aunt Ruth's back yard", ['food', 'when_where']]);
+  await expect(mine.setWhenWhere(p.id, { end_time: '15:30' })).rejects.toEqual(problem(400)); // one day: must end after it starts
+  const ended = await mine.setWhenWhere(p.id, { end_time: '18:00' });
+  expect([ended.start_time, ended.end_time, ended.place]).toEqual(['15:30', '18:00', "Aunt Ruth's back yard"]);
+  expect((await mine.setWhenWhere(p.id, { place: '  ' })).place).toBeNull();
+  await mine.setWhenWhere(p.id, { place: 'The park' });
+  const line = (await calendar(db, owner, clock).between('2046-03-12', 1)).find((e) => e.kind === 'plan')!;
+  expect([line.time, line.detail]).toEqual(['15:30', 'until 18:00 · The park']);
+  expect((await mine.list()).find((x) => x.id === p.id)).toMatchObject({ start_time: '15:30', place: 'The park' });
+  const again = await mine.copy(p.id, { start_day: '2047-03-12' });
+  expect([again.start_time, again.end_time, again.place]).toEqual(['15:30', '18:00', 'The park']);
+  // Taking a time off keeps the rest.
+  expect((await mine.setWhenWhere(p.id, { start_time: null, end_time: null })).place).toBe('The park');
+});
+
+it('an upkeep job on a plan is a line that links to the job, done together both ways, and taking it off never removes the job', async () => {
+  const jobs = upkeep(db, owner, clock);
+  const gutters = await jobs.create({ name: 'Clean the gutters', every_n: 1, every_unit: 'year' });
+  const other = await jobs.create({ name: 'Check the smoke alarms' });
+  const p = await mine.create({ name: 'Fall tidy-up', start_day: '2046-03-12', parts: ['tasks'] });
+  await expect(mine.addItem(p.id, { kind: 'task', job_id: 9999 })).rejects.toEqual(problem(404));
+  let view = await mine.addItem(p.id, { kind: 'task', job_id: gutters.id });
+  await expect(mine.addItem(p.id, { kind: 'task', job_id: gutters.id })).rejects.toEqual(problem(409));
+  view = await mine.addItem(p.id, { kind: 'task', label: 'Buy a ladder' });
+  const line = view.items_list.find((i) => i.job_id === gutters.id)!;
+  expect([line.label, line.link, line.done]).toEqual(['Clean the gutters', `/things/upkeep/${gutters.id}`, false]);
+  expect(view.tasks_left).toBe(2);
+  // Marked done in Upkeep: the line shows done.
+  await jobs.done(gutters.id, {});
+  view = await mine.get(p.id);
+  expect(view.items_list.find((i) => i.id === line.id)!.done).toBe(true);
+  expect(view.tasks_left).toBe(1);
+  // Unchecking the line only stops it counting; what Upkeep has is kept.
+  view = await mine.updateItem(line.id, { done: false });
+  expect(view.items_list.find((i) => i.id === line.id)!.done).toBe(false);
+  expect((await jobs.get(gutters.id)).done).toHaveLength(1);
+  // Checking the line marks the job done the way Upkeep does, once.
+  view = await mine.updateItem(line.id, { done: true });
+  expect(view.items_list.find((i) => i.id === line.id)!.done).toBe(true);
+  expect((await jobs.get(gutters.id)).done).toHaveLength(2);
+  view = await mine.updateItem(line.id, { done: true });
+  expect((await jobs.get(gutters.id)).done).toHaveLength(2);
+  // Its name is the job's, and cannot be reworded here.
+  await jobs.update(gutters.id, { name: 'Clean the gutters and downspouts', every_n: 1, every_unit: 'year' });
+  view = await mine.updateItem(line.id, { label: 'Something else' });
+  expect(view.items_list.find((i) => i.id === line.id)!.label).toBe('Clean the gutters and downspouts');
+  // A copy carries the line along, not done.
+  const next = await mine.copy(p.id, { start_day: '2047-03-12' });
+  const carried = next.items_list.find((i) => i.job_id === gutters.id)!;
+  expect([carried.done, carried.label]).toEqual([false, 'Clean the gutters and downspouts']);
+  expect(next.tasks_left).toBe(2);
+  // Taking the line off, or the plan, leaves the job.
+  await mine.removeItem(line.id);
+  await mine.remove(next.id);
+  expect((await jobs.get(gutters.id)).name).toBe('Clean the gutters and downspouts');
+  expect((await jobs.get(other.id)).name).toBe('Check the smoke alarms');
+  // A job that is removed leaves its line as a plain task with the name it had.
+  const again = await mine.addItem(p.id, { kind: 'task', job_id: other.id });
+  await jobs.remove(other.id);
+  const left = (await mine.get(p.id)).items_list.find((i) => i.id === again.items_list.find((x) => x.label === 'Check the smoke alarms')!.id)!;
+  expect([left.label, left.job_id, left.link]).toEqual(['Check the smoke alarms', null, null]);
+});
+
+it('a plan from before parts with nothing in it shows the parts a new plan starts with', async () => {
+  const empty = await mine.create({ name: 'Quiet afternoon', start_day: '2046-03-05' });
+  const longer = await mine.create({ name: 'Painting week', start_day: '2046-03-05', end_day: '2046-03-09' });
+  await db.run('UPDATE plans SET parts = NULL WHERE id IN (?, ?)', [empty.id, longer.id]);
+  expect((await mine.get(empty.id)).parts).toEqual(['food', 'budget', 'tasks', 'bring']);
+  expect((await mine.get(longer.id)).parts).toEqual(['food', 'budget', 'more_days', 'tasks', 'bring']);
+  expect((await mine.list()).find((x) => x.id === empty.id)!.parts).toEqual(['food', 'budget', 'tasks', 'bring']);
+  // With something in it, it shows only the part that holds it, and Budget.
+  await mine.addItem(empty.id, { kind: 'task', label: 'Sweep' });
+  await db.run('UPDATE plans SET parts = NULL WHERE id = ?', [empty.id]);
+  expect((await mine.get(empty.id)).parts).toEqual(['budget', 'tasks']);
 });

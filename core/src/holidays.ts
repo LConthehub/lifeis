@@ -19,7 +19,8 @@
 import { atomic, type Db, type Queries } from './db.ts';
 import { calendarMonths, CALENDARS, checkedRule, columnsFromRule, dateFromYear, nextDate, RULE_COLUMN_NAMES, ruleFromColumns, ruleWords, thawDays, THAW_SOURCE, type CalendarName, type DateRule, type RuleColumns } from './holidayDates.ts';
 import { inventory } from './inventory.ts';
-import { plans as plansOf, type FoodKind, type Plan } from './plans.ts';
+import { calendar } from './calendar.ts';
+import { PLAN_STARTS, partsChecked, plans as plansOf, type FoodKind, type Plan } from './plans.ts';
 import { clockWords, momentMinutes, prep, prepTime, tidyStep, whenWords, type Moment, type PrepStepInput } from './prep.ts';
 import { Problem } from './problem.ts';
 import { addDays, clean, dayNumber, dayOrNull, labelKey, stamp, todayOf, type Clock } from './small.ts';
@@ -53,6 +54,8 @@ export type DecorInput = {
 };
 
 export type YearOf = { plan_id: number; year: number; day: string };
+/** A yearly date on the calendar, shown as a plan before anything is saved. */
+export type DateDraft = { event_id: number; name: string; day: string; /** Turning this many, or null when it is the first. */ years: number | null; note: string | null; /** Set once the date has become a yearly plan: its latest year. */ plan_id: number | null };
 export type HolidaySummary = {
   id: number; name: string; rule: DateRule; rule_words: string; lead_weeks: number; first_year: number | null; from_calendar: boolean;
   years: YearOf[];
@@ -367,7 +370,7 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       const y = await yearRow(db, ahead.plan_id);
       const steps = (await countdownOf(ahead.plan_id, ahead.day)).steps.filter((s) => !s.done);
       const undone = (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM holiday_decor WHERE plan_id = ? AND put_up = 0', [ahead.plan_id]))!.n;
-      const tasks = (await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM plan_items WHERE plan_id = ? AND kind = 'task' AND done = 0", [ahead.plan_id]))!.n;
+      const tasks = (await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM plan_items i WHERE i.plan_id = ? AND i.kind = 'task' AND CASE WHEN i.job_id IS NULL THEN i.done = 0 ELSE NOT EXISTS (SELECT 1 FROM upkeep_done d WHERE d.job_id = i.job_id AND d.id > i.job_seen) END", [ahead.plan_id]))!.n;
       const next = steps[0] ? `${steps[0].words}: ${steps[0].label}`
         : undone > 0 && y.put_up_on ? `${undone} ${undone === 1 ? 'decoration' : 'decorations'} to put up${y.put_up_on >= day ? ` by ${y.put_up_on}` : ''}`
         : tasks > 0 ? `${tasks} ${tasks === 1 ? 'thing' : 'things'} left on the checklist` : 'Everything is ready';
@@ -554,6 +557,40 @@ export function holidays(db: Db, owner: number, clock: Clock = () => new Date())
       if (e.yearly !== 1) throw new Problem(400, 'Only a date that comes every year can become a holiday');
       if (await db.get('SELECT 1 AS x FROM holidays WHERE owner_id = ? AND event_id = ?', [owner, eventId])) throw new Problem(409, 'That date is already a holiday');
       return this.create({ name: e.title, rule: { kind: 'fixed', month: Number(e.day.slice(5, 7)), day: Number(e.day.slice(8, 10)) }, event_id: eventId, first_year: Number(e.day.slice(0, 4)) });
+    },
+
+    /**
+     * A yearly date on the calendar as a plan to look at: its name, its next day and how many years it turns, with
+     * nothing saved. When the date has already become a yearly plan, `plan_id` is that plan's latest year.
+     */
+    async dateDraft(eventId: number): Promise<DateDraft> {
+      const e = await db.get<{ id: number; title: string; day: string; yearly: number; note: string | null }>('SELECT id, title, day, yearly, note FROM events WHERE id = ? AND owner_id = ?', [eventId, owner]);
+      if (!e) throw new Problem(404, "That date isn't here anymore. It may have been deleted.");
+      if (e.yearly !== 1) throw new Problem(400, 'Only a date that comes every year can be planned this way');
+      const next = (await calendar(db, owner, clock).yearly(today(), 366)).find((d) => d.id === eventId);
+      const h = await db.get<{ id: number }>('SELECT id FROM holidays WHERE owner_id = ? AND event_id = ?', [owner, eventId]);
+      const latest = h ? (await yearsOf(db, h.id))[0] : undefined;
+      return { event_id: e.id, name: e.title, day: next?.day ?? e.day, years: next && next.years > 0 ? next.years : null, note: e.note, plan_id: latest?.plan_id ?? null };
+    },
+
+    /**
+     * The first time something is checked or added on a yearly date's plan page: the date becomes a yearly plan (see
+     * `fromEvent`) and this year's plan gets the parts asked for, from a starting point or from the list. Something to do
+     * can be added with it. Asked again for a date that is already one, it only changes that plan.
+     */
+    async startFromDate(eventId: number, input: { parts?: string[] | null; start?: string | null; task?: string | null }): Promise<Plan> {
+      const draft = await this.dateDraft(eventId);
+      const start = input.start == null ? null : PLAN_STARTS.find((s) => s.key === input.start);
+      if (start === undefined) throw new Problem(400, 'Pick one: a trip, a gathering, a birthday or something else.');
+      const parts = partsChecked(input.parts ?? (start ? start.parts.filter((p) => p !== 'more_days') : []));
+      const task = clean(input.task, 300);
+      if (task && !parts.includes('tasks')) parts.push('tasks');
+      if (draft.plan_id === null) await this.fromEvent(eventId);
+      const h = (await db.get<{ id: number }>('SELECT id FROM holidays WHERE owner_id = ? AND event_id = ?', [owner, eventId]))!;
+      const planId = draft.plan_id ?? (await yearsOf(db, h.id))[0]!.plan_id;
+      if (parts.length > 0 || draft.plan_id === null) await plans().setParts(planId, parts);
+      if (task) await plans().addItem(planId, { kind: 'task', label: task });
+      return plans().get(planId);
     },
 
     /**
