@@ -15,7 +15,7 @@ const DAYS_AHEAD = 7;
 const TODAY = 1001;
 const MORNING_IDS = Array.from({ length: DAYS_AHEAD + 1 }, (_, ahead) => ({ id: TODAY + ahead }));
 
-const lineText = (l) => `${l.title}${l.detail ? ` — ${l.detail}` : ''}`;
+const lineText = (l) => `${l.title}${l.detail ? `: ${l.detail}` : ''}`;
 
 export async function scheduleReminders() {
   const { data } = await axios.get('/api/reminders');

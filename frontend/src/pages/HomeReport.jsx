@@ -208,7 +208,7 @@ export default function HomeReport() {
                     <td className="hidden py-1.5 pr-2 sm:table-cell print:table-cell">{l.model}{l.model && l.serial ? ', ' : ''}{l.serial && <span className="serial">{l.serial}</span>}</td>
                     <td className="hidden py-1.5 pr-2 sm:table-cell print:table-cell">{[l.bought_on, l.bought_at].filter(Boolean).join(' · ')}</td>
                     <td className="hidden whitespace-nowrap py-1.5 text-right sm:table-cell print:table-cell">{l.price_cents != null ? money(l.price_cents) : ''}</td>
-                    <td className="whitespace-nowrap py-1.5 text-right">{l.worth_cents ? money(l.worth_cents) : '—'}{l.value_cents === null && l.price_cents !== null && l.price_cents > 0 ? ' *' : ''}</td>
+                    <td className="whitespace-nowrap py-1.5 text-right">{l.worth_cents ? money(l.worth_cents) : ''}{l.value_cents === null && l.price_cents !== null && l.price_cents > 0 ? ' *' : ''}</td>
                   </tr>
                 ))}
               </tbody>
