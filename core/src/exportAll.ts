@@ -424,7 +424,7 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   for (const s of await all('SELECT s.item_id, u.username FROM item_shares s JOIN items i ON i.id = s.item_id JOIN users u ON u.id = s.user_id WHERE i.owner_id = ? ORDER BY u.username')) {
     sharedItems.set(s.item_id as number, [...(sharedItems.get(s.item_id as number) ?? []), str(s.username)]);
   }
-  const shownValue = (f: R,stored: string | undefined) => (stored === undefined ? '' : f.type === 'yesno' ? (stored === '1' ? 'yes' : 'no') : stored);
+  const shownValue = (f: R, stored: string | undefined) => (stored === undefined ? '' : f.type === 'yesno' ? (stored === '1' ? 'yes' : 'no') : stored);
   out.csv('things.csv',
     ['Name', 'Kind', 'Place', 'Amount', 'Unit', 'Running low at', 'Notes', 'For activities', 'Barcode', 'Make or model', 'Serial number', 'Bought on', 'Bought at', 'Cost', 'Worth now', 'Warranty until', 'Photo file',
       'Asset number', 'Insured', 'No longer have', 'Gone on', 'Gone to', 'Gone price', 'Shared with', ...fieldColumns.map((c) => c.heading)],
