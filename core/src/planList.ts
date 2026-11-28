@@ -97,7 +97,7 @@ export function planList(db: Db, owner: number, clock: Clock = () => new Date())
         if (planned.has(d.id) || seen.has(d.id)) continue;
         seen.add(d.id);
         out.push({ key: `date-${d.id}`, name: d.title, kind: 'birthday', yearly: true, start_day: d.day, end_day: d.day, band: band(d.day, d.day),
-          days_until: until(d.day), link: '/calendar', next: null, small: true, not_started: false, years: d.years > 0 ? d.years : null, cover_photo: null });
+          days_until: until(d.day), link: `/plans/date-${d.id}`, next: null, small: true, not_started: false, years: d.years > 0 ? d.years : null, cover_photo: null });
       }
 
       // Ahead: soonest first. Past: newest first.

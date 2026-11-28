@@ -38,7 +38,7 @@ it('puts plans, a holiday, a trip and an unplanned birthday in one list, each on
     ['Yard sale', 'past', 'gathering', false, false],
   ]);
   expect(list.find((l) => l.name === 'Thanksgiving')).toMatchObject({ start_day: '2026-11-26', days_until: 56, not_started: false });
-  expect(list.find((l) => l.kind === 'birthday')).toMatchObject({ start_day: '2026-10-20', years: 36, link: '/calendar' });
+  expect(list.find((l) => l.kind === 'birthday')).toMatchObject({ start_day: '2026-10-20', years: 36, link: expect.stringMatching(/^\/plans\/date-\d+$/) });
   expect(list.find((l) => l.kind === 'trip')!.link).toMatch(/^\/plans\/trips\/\d+\/\d+$/);
   // A holiday's year is a plan, so its line opens the plan page.
   expect(list.find((l) => l.name === 'Thanksgiving')!.link).toMatch(/^\/plans\/\d+$/);

@@ -526,3 +526,29 @@ it("a holiday's first year starts with the parts a holiday uses", async () => {
   expect(plan.parts).toEqual(['food', 'guests', 'cards', 'gifts', 'decorations', 'budget', 'tasks']);
   expect(plan.yearly!.name).toBe('Thanksgiving');
 });
+
+it('a yearly date on the calendar can be looked at as a plan, and becomes a yearly plan only when a part is checked or something is added', async () => {
+  const event = await calendar(db, owner, clock).createEvent({ title: "Mina's birthday", day: '2017-03-05', yearly: true });
+  const draft = await mine().dateDraft(event.id);
+  expect(draft).toMatchObject({ event_id: event.id, name: "Mina's birthday", day: '2027-03-05', years: 10, plan_id: null });
+  // Looking saves nothing.
+  expect(await mine().list()).toEqual([]);
+  expect(await db.get('SELECT COUNT(*) AS n FROM plans')).toEqual({ n: 0 });
+  await expect(mine().dateDraft(event.id + 99)).rejects.toEqual(problem(404));
+  const once = await calendar(db, owner, clock).createEvent({ title: 'Moving day', day: '2026-12-01' });
+  await expect(mine().dateDraft(once.id)).rejects.toEqual(problem(400));
+
+  const plan = await mine().startFromDate(event.id, { parts: ['guests', 'gifts'] });
+  expect(plan.parts).toEqual(['guests', 'gifts']);
+  expect(plan.start_day).toBe('2027-03-05');
+  expect(plan.yearly).toMatchObject({ name: "Mina's birthday", year: 2027 });
+  expect((await mine().dateDraft(event.id)).plan_id).toBe(plan.id);
+  expect(await mine().list()).toHaveLength(1);
+  // Asked again, it changes the same plan and makes no second holiday.
+  const again = await mine().startFromDate(event.id, { start: 'birthday', task: 'Blow up balloons' });
+  expect(again.id).toBe(plan.id);
+  expect(again.parts).toContain('tasks');
+  expect(again.items_list.map((i) => i.label)).toEqual(['Blow up balloons']);
+  expect(await mine().list()).toHaveLength(1);
+  await expect(mine().startFromDate(event.id, { parts: ['nope'] })).rejects.toEqual(problem(400));
+});

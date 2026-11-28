@@ -45,7 +45,7 @@ export type { Inbox, Mail, MailAccount, MailAccountInput, MailMessage, MailServe
 export { lookups, isbnOf, bookGenres, readProduct, BOOK_SERVICE, GROCERY_SERVICE, TITLE_SERVICES } from './lookups.ts';
 export type { FoundBook, FoundProduct, FoundTitle, Lookups } from './lookups.ts';
 export { holidays, givenTo, GIFT_STATES } from './holidays.ts';
-export type { GatheringView } from './holidays.ts';
+export type { DateDraft, GatheringView } from './holidays.ts';
 export type { Countdown, Holidays, HolidayInput, HolidayCard, HolidaySummary, YearView, Stage as HolidayStage, CountdownStep, GiftInput, DecorInput, PersonInput, YearChange } from './holidays.ts';
 export { dateInYear, nextDate, checkedRule, thawDays, ruleWords as holidayRuleWords, WEEKDAY_NAMES, MONTHS, THAW_SOURCE } from './holidayDates.ts';
 export type { DateRule } from './holidayDates.ts';

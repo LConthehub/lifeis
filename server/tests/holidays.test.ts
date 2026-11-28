@@ -137,6 +137,18 @@ it('turns a birthday into a holiday with one request', async () => {
   expect((await admin.post('/api/plans/holidays/from-event', {})).status).toBe(422);
 });
 
+it('opens a yearly date as a plan without saving, and makes it a yearly plan when a part is checked', async () => {
+  const admin = await owner();
+  const event = (await admin.post('/api/calendar/events', { title: 'Mina turns', day: '2017-12-02', yearly: true })).json;
+  const draft = await admin.get(`/api/plans/holidays/from-date/${event.id}`);
+  expect([draft.status, draft.json.name, draft.json.day, draft.json.years, draft.json.plan_id]).toEqual([200, 'Mina turns', '2026-12-02', 9, null]);
+  expect((await admin.get('/api/plans/holidays')).json).toEqual([]);
+  const made = await admin.post(`/api/plans/holidays/from-date/${event.id}`, { parts: ['gifts'] });
+  expect([made.status, made.json.parts, made.json.start_day]).toEqual([201, ['gifts'], '2026-12-02']);
+  expect((await admin.get(`/api/plans/holidays/from-date/${event.id}`)).json.plan_id).toBe(made.json.id);
+  expect((await admin.get('/api/plans/holidays/from-date/9999')).status).toBe(404);
+});
+
 it('hides a gift from the person it is for, in the holiday, in search, in spending, in tags, until the day has passed', async () => {
   const admin = await owner();
   const partner = await member(admin, 'partner');

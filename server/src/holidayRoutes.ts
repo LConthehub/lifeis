@@ -49,6 +49,11 @@ export function holidayRoutes(db: Db): Route[] {
     // Guests, cards, gifts and decorations of any plan (a birthday's gifts, a lunch's guests), changed through the addresses below.
     ['GET', at('/gathering/:id'), async (c) => ({ json: await mine(c).gathering(c.id) })],
     ['POST', at('/from-event'), async (c) => ({ status: 201, json: await mine(c).fromEvent(needed(read.maybeWhole(c.body, 'event_id'), 'event_id')) })],
+    // A yearly date on the calendar, shown as a plan to look at (nothing saved), and the first thing checked or added on it, which makes it a yearly plan.
+    ['GET', at('/from-date/:id'), async (c) => ({ json: await mine(c).dateDraft(c.id) })],
+    ['POST', at('/from-date/:id'), async (c) => ({
+      status: 201, json: await mine(c).startFromDate(c.id, { parts: sent(c.body, 'parts') ? read.texts(c.body, 'parts') : null, start: read.maybeText(c.body, 'start'), task: read.maybeText(c.body, 'task') }),
+    })],
     // Make a plan come back every year. Answers with the plan, now the first year of a yearly one.
     ['POST', at('/from-plan'), async (c) => ({
       status: 201, json: await mine(c).makeYearly(needed(read.maybeWhole(c.body, 'plan_id'), 'plan_id'), { rule: ruleFrom(c.body), lead_weeks: read.maybeWhole(c.body, 'lead_weeks') }),

@@ -216,5 +216,22 @@ const smallFood = await tooSmall([region('Food').locator('button'), region('Food
 say('the Food card and countdown have 44px controls' + (smallFood.length ? ` (too small: ${smallFood})` : ''), smallFood.length === 0);
 say('the food plan does not scroll sideways', await noSideways());
 
+// ---------- a yearly date on the calendar opens as a plan ----------
+const born = new Date(Date.now() + 40 * 86400000);
+const kid = await send('POST', '/api/calendar/events', { title: "Mina's birthday", day: `${born.getFullYear() - 8}-${pad(born.getMonth() + 1)}-${pad(born.getDate())}`, yearly: true });
+await page.goto(base + '/plans'); await wait(1200);
+const dateLine = page.getByRole('link', { name: /Mina's birthday/ });
+say('a calendar date with no plan shows as a small line on Plans', await dateLine.isVisible());
+await dateLine.click(); await wait(1200);
+t = await text();
+say('the small line opens a plan page with the date, its age and the starting points', page.url().includes('/plans/date-') && /Mina's birthday/.test(t) && /turning 8/.test(t) && await region('Starting points').isVisible() && await region('Parts of this plan').isVisible());
+say('looking saves nothing', (await send('GET', '/api/plans/holidays')).every((h) => h.name !== "Mina's birthday"));
+say('the date page fits the phone with 44px controls', await noSideways() && (await tooSmall([region('Starting points').locator('button'), region('Parts of this plan').locator('label'), region('Something to do').locator('button, input')])).length === 0);
+await region('Parts of this plan').getByRole('checkbox', { name: 'Gifts', exact: true }).click(); await wait(1800);
+say('checking a part makes it a yearly plan and moves to its page', /\/plans\/\d+$/.test(page.url()) && /Gifts/.test(await text()) && /Yearly/.test(await text()));
+say('the date is now a yearly plan whose plan has only that part', (await send('GET', '/api/plans/holidays')).some((h) => h.name === "Mina's birthday") && (await send('GET', page.url().replace(base, '/api'))).parts.join() === 'gifts');
+await page.goto(base + '/plans/date-' + kid.id); await wait(1500);
+say('opening the date again goes to the plan', /\/plans\/\d+$/.test(page.url()));
+
 say('no request failed' + (bad.length ? `: ${bad.join(' | ')}` : ''), bad.length === 0);
 await browser.close();

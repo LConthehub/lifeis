@@ -5,6 +5,7 @@ import axios from 'axios';
 import { shrink } from '../components/shrink';
 import Picture from '../components/Picture';
 import { PlanGoal } from '../components/Goals';
+import DatePlan from '../components/DatePlan';
 import { Basics, Budget, Countdown, Decor, Ending, Gifts, GivenToYou, Heading, Hint, LastNote, NextYear, People, Remove, RuleFields, Shopping, ruleBody, ruleStart } from './Holidays';
 import { After, Harvest, Licenses, Seasons } from './Trips';
 import { BulkBar, PickBox, SelectButton, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
@@ -335,7 +336,14 @@ function PlanForm({ plan, onDone }) {
 }
 
 /** One plan: what belongs to it, what happened on its days, your words about it, and its photos. */
+/** A yearly date from the calendar (/plans/date-12) opens as a plan to look at; anything else is a saved plan. */
 export function PlanPage() {
+  const { id } = useParams();
+  const date = /^date-(\d+)$/.exec(id);
+  return date ? <DatePlan key={id} eventId={Number(date[1])} parts={PARTS} /> : <SavedPlanPage key={id} />;
+}
+
+function SavedPlanPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [plan, setPlan] = useState(undefined);
