@@ -111,4 +111,4 @@ If this policy changes, the new version will be published at this address with a
 
 Questions about this policy: hello@lifeis.living
 
-Life Is is published by [PUBLISHER NAME TO BE ADDED].
+Published by Life Is, lifeis.living.
