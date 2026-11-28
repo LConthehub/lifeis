@@ -49,6 +49,8 @@ This lets an AI app you use, such as Claude, read the parts you check and add a 
 
 **A backup every week, by itself:** turn it on in the same place and choose a passphrase once. The phone remembers it, locked away. Each week Life Is makes a fresh backup and puts it in the phone's Documents, in a folder called Life Is, keeping the newest two. These stay on the phone, so save a copy somewhere else now and then: one tap, nothing to type. On a new phone, choose **I have a backup** on the first screen.
 
+**Let this phone's own backup carry it:** a checkbox under weekly backups, off unless you check it. When it is on, the phone's own backup (Google's, on an Android phone, if backup is on in the phone's settings) takes your newest weekly backup to your own account there and brings it back to a new phone. That one locked file is all it takes, and Life Is itself still sends nothing. On the new phone, the first screen finds it and asks only for your passphrase. A backup over 24 MB is too large to be carried; the app says so.
+
 **On a computer you run:** copy the data folder and the keys folder you chose when you [installed it](install.html). Keep both together: one is no use without the other. Life Is also saves a copy of the database by itself before every upgrade.
 
 ## Taking it with you

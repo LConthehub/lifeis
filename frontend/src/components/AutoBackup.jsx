@@ -60,6 +60,11 @@ export default function AutoBackup() {
     await noteCopyMade();
     await load();
   });
+  const carry = (on) => run('carry', async () => {
+    await (await auto()).setCarried(on);
+    setSaid(on ? "On. The newest weekly backup is now where this phone's own backup picks it up." : "Off. The file is taken back out, so this phone's own backup stops carrying it. A copy it already took may stay there until its next backup.");
+    await load();
+  });
   const show = () => run('show', async () => setShown(shown === null ? await (await auto()).rememberedPassphrase() : null));
 
   return (
@@ -88,6 +93,14 @@ export default function AutoBackup() {
             <button type="button" onClick={copyOut} disabled={busy === 'copy'} className={`${buttonClass} ${touch}`}>{busy === 'copy' ? 'Locking it…' : 'Save a copy somewhere else'}</button>
             <button type="button" onClick={show} className={`${quietButtonClass} ${touch}`}>{shown === null ? 'Show the passphrase' : 'Hide the passphrase'}</button>
             <button type="button" onClick={turnOff} disabled={busy === 'off'} className={`${quietButtonClass} ${touch}`}>Turn off</button>
+          </div>
+          <div className="mt-4 rounded-lg border border-life-100 p-3 dark:border-life-700" data-carry={s.carry ? 'on' : 'off'}>
+            <label className={`flex ${touch} items-start gap-3 text-sm text-gray-800 dark:text-life-50`}>
+              <input type="checkbox" checked={s.carry} disabled={busy === 'carry'} onChange={(e) => carry(e.target.checked)} className="mt-0.5 h-5 w-5 flex-none accent-life-600" />
+              <span className="font-medium">Let this phone's own backup carry it</span>
+            </label>
+            <p className="mt-1 text-sm text-gray-600 dark:text-life-100">Off unless you check it. When it is on, this phone's own backup (Google's, on an Android phone, if backup is on in the phone's settings) takes your newest weekly backup to your own account there, about once a day on Wi-Fi, and brings it back to a new phone. That one file is all it takes. It is locked with your passphrase, so whoever holds it can't read it. Life Is itself still sends nothing.</p>
+            {s.carry && s.too_large && <p className="mt-1 text-sm text-red-600" role="alert">Your backup is now over 24 MB, more than a phone's own backup will take from one app. It is not being carried. Save a copy somewhere else instead.</p>}
           </div>
           {shown !== null && <p className="mt-2 break-all rounded-lg bg-life-50 px-3 py-2 font-mono text-sm text-life-800 dark:bg-life-800 dark:text-life-50" data-auto-passphrase>{shown}</p>}
         </>

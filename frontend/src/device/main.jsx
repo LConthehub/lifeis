@@ -62,7 +62,7 @@ async function start() {
     // A backup from another phone, brought back before anything else. The phone's own Life Is is opened (once)
     // to put it in. If the phone already holds one, nothing is changed until the person says to replace it.
     let opened = null;
-    const bringBack = async (file, passphrase, sure) => {
+    const bringBack = async (file, passphrase, sure, carried = false) => {
       opened ??= onThisPhone();
       try { await opened; } catch (problem) { opened = null; throw problem; }
       if (!sure && (await axios.get('/api/start')).data.status !== 'new') return { holds: true };
@@ -71,10 +71,12 @@ async function start() {
       for (let at = 0; at < bytes.length; at += 0x8000) text += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
       await axios.post('/api/device/restore', { passphrase, file: btoa(text) });
       await window.lifeisDevice?.saved?.();
+      // One the phone's own backup brought across: weekly backups carry on as they were, with the same passphrase.
+      if (carried) await (await import('./autoBackup.js')).carryOnWith(passphrase).catch((problem) => console.error(problem));
       await chosen({ kind: 'device' });
       return {};
     };
-    root.render(<React.StrictMode><Welcome onChosen={chosen} onBringBack={bringBack} /></React.StrictMode>);
+    root.render(<React.StrictMode><Welcome onChosen={chosen} onBringBack={bringBack} findCarried={() => import('./autoBackup.js').then((m) => m.findCarriedBackup())} /></React.StrictMode>);
     return;
   }
   if (place.kind === 'server') await onTheirServer(place.address); else await onThisPhone();

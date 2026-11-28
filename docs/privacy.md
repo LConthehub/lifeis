@@ -22,7 +22,7 @@ Nothing.
 
 You choose one of two places the first time you open the app.
 
-**On your device.** Everything is stored in a database on the device, encrypted with a key that is made on the device and held in its secure key storage (the Android Keystore, and the Apple Keychain when the app comes to Apple devices). The key never leaves the device. The app asks the device not to include its data in automatic cloud backups or device-to-device transfers.
+**On your device.** Everything is stored in a database on the device, encrypted with a key that is made on the device and held in its secure key storage (the Android Keystore, and the Apple Keychain when the app comes to Apple devices). The key never leaves the device. The app asks the device not to include its data in automatic cloud backups or device-to-device transfers, with one exception that is off unless you turn it on: if you turn on weekly backups and check "Let this phone's own backup carry it", your newest weekly backup file, locked with your passphrase, is placed where the device's own backup (Google's, on an Android phone) can take it to your account and bring it back to a new phone. Whoever holds that file cannot read it without your passphrase. Uncheck it and the file is taken back out.
 
 **On a Life Is you host yourself.** If you run the free Life Is software on your own computer, the app can sign in to it. Your information is then kept on that computer, under your control. The app stores only that computer's address and your sign-in, in the device's secure key storage, and talks to that address and no other.
 

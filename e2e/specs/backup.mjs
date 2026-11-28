@@ -138,6 +138,26 @@ say('and still does after closing and opening', /Kept omelette/.test(t) && !/Wri
   await wait(9000);
   await page.reload(); await wait(1500);
   say('after a week it makes a fresh one by itself when the app is opened', moved && /8 days ago/.test(stale) && /Last one made today/.test(await part.innerText()));
+
+  // The phone's own backup may carry it, only once that is checked; a new phone then finds it on the first screen.
+  const carry = part.locator('[data-carry]');
+  say('the phone\'s own backup carrying it is off unless checked, and says what goes and to whom', (await carry.getAttribute('data-carry')) === 'off' && /Off unless you check it/.test(await carry.innerText()) && /That one file is all it takes/.test(await carry.innerText()) && /Google/.test(await carry.innerText()));
+  await carry.getByRole('checkbox').click(); await wait(6000);
+  say('checked, it says the newest weekly backup is where the phone\'s backup picks it up', (await part.locator('[data-carry]').getAttribute('data-carry')) === 'on' && /picks it up/.test(await part.innerText()));
+  await part.locator('[data-carry]').screenshot({ path: shots + '/app-weekly-backup-carried.png' });
+  await page.evaluate(() => window.lifeisApp.chooseAgain()); await wait(2500);
+  say('the first screen finds the carried backup and offers to bring it back first', await page.locator('[data-carried]').isVisible() && /came across with this phone's own backup/.test(await text()) && /Start fresh on this phone/.test(await text()));
+  await page.screenshot({ path: shots + '/app-first-screen-carried.png' });
+  await page.locator('[data-carried]').getByRole('button', { name: 'Bring it back' }).click(); await wait(400);
+  await page.getByLabel('Its passphrase').fill(WEEKLY);
+  await page.getByRole('button', { name: 'Bring it back', exact: true }).click(); await wait(3000);
+  await page.getByRole('button', { name: 'Replace what is here' }).click(); await wait(6000);
+  await page.goto(base + '/recipes'); await wait(1500);
+  const back = /Kept omelette/.test(await text());
+  await page.goto(base + '/settings/data'); await wait(1500);
+  say('only the passphrase is asked, what it held is back, and weekly backups carry on', back && (await part.getAttribute('data-auto-backup')) === 'on' && (await part.locator('[data-carry]').getAttribute('data-carry')) === 'on');
+  await part.locator('[data-carry]').getByRole('checkbox').click(); await wait(2500);
+  say('unchecked, the file is taken back out', (await part.locator('[data-carry]').getAttribute('data-carry')) === 'off' && /taken back out/.test(await part.innerText()));
   await part.getByRole('button', { name: 'Turn off' }).click(); await wait(1500);
   say('turned off, the phone forgets the passphrase and says the backups made are still there', (await part.getAttribute('data-auto-backup')) === 'off' && /forgotten the passphrase/.test(await part.innerText()));
 }
