@@ -5,6 +5,7 @@ import Icon from '../components/Icon';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage } from '../components/ui';
 import { money, toCents } from '../components/Budget';
 import { GoalProgress, GoalQuestion, SafeToSpend } from '../components/Goals';
+import PotsSection from '../components/Pots';
 
 const pad = (n) => String(n).padStart(2, '0');
 const today = () => { const now = new Date(); return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`; };
@@ -281,6 +282,7 @@ export function GoalsPage() {
         </section>
       ))}
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+      <PotsSection />
       {modal?.goal && <Modal title={modal.goal.id ? modal.goal.name : 'A goal'} onClose={() => setModal(null)}><GoalForm goal={modal.goal} onDone={done} /></Modal>}
       {modal?.put && <Modal title={`Put money toward ${modal.put.name}`} onClose={() => setModal(null)}><PutForm goal={modal.put} out={false} onDone={done} /></Modal>}
       {modal?.take && <Modal title={`Take money out of ${modal.take.name}`} onClose={() => setModal(null)}><PutForm goal={modal.take} out onDone={done} /></Modal>}

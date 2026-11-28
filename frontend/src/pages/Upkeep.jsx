@@ -334,6 +334,7 @@ export function JobPage() {
           <button type="button" onClick={() => setModal('done')} className={buttonClass}><Icon of="done" /> {doneWord(job)}</button>
           {job.every_reading && <button type="button" onClick={() => setModal('reading')} className={quietButtonClass}>Note the {job.reading_unit || 'reading'}</button>}
           {job.mine && <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Change</button>}
+          {job.kind === 'bill' && <Link to={`/money/splits?bill=${job.id}`} className={`${quietButtonClass} inline-flex min-h-[44px] items-center`}>Split</Link>}
         </div>
         {said && <p className="text-sm text-life-700 dark:text-life-100" role="status">{said}</p>}
       </section>
