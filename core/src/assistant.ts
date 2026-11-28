@@ -51,6 +51,8 @@ export type PhoneModel = {
 export type AssistantTools = { fetcher?: Fetcher; sealer?: Sealer; phone?: PhoneModel };
 export type Source = 'address' | 'phone';
 
+const BREAK_SYSTEM = 'Give exactly three smaller steps that make the one step you are given easy to start, in the order to do them. ' +
+  'Each takes about five minutes or less and starts with a plain action word. One step on each line. No numbers, no bullets, no extra words.';
 const SETTING = 'assistant';
 const SYSTEM = 'You help someone with their own household. Answer ONLY from the JSON facts you are given about their home: ' +
   'recipes, pantry, groceries, the things they own and where they are, projects, spending and calendar. If the facts don\'t hold the answer, ' +
@@ -289,6 +291,42 @@ export function assistant(db: Db, owner: number, clock: Clock = () => new Date()
       const text = answerOnly(said).replace(/^```[a-z]*\s*|\s*```$/g, '').trim();
       if (!text || /^NOTHING\.?$/i.test(text)) throw new Problem(400, "The model couldn't read a recipe in that photo. A sharper photo, straight on and in good light, reads best.");
       return { text: text.slice(0, 20_000) };
+    },
+
+    /**
+     * Three smaller steps for one step, from the person's assistant. Only the step's words (and the name of the chore,
+     * project or routine it is part of) are sent; none of the household's facts. Fewer than three clean steps is an error,
+     * and nothing is changed either way.
+     */
+    async breakDown(step: string | null | undefined, part: string | null | undefined): Promise<{ steps: string[]; sent: string }> {
+      const words = clean(step, 300);
+      if (!words) throw new Problem(400, 'There is no step to break down');
+      const k = await kept();
+      if (!k.enabled) throw new Problem(409, 'Turn the assistant on in Settings, under "Connections"');
+      if (k.source === 'address' && !isLocal(k.url) && !k.cloud_ok) throw new Problem(409, "The assistant's address isn't on this computer or your network, and a cloud AI hasn't been allowed");
+      const of = clean(part, 200);
+      const prompt = `${of ? `This is part of: ${of}\n` : ''}Step: ${words}`;
+      const sent = of ? `${words} (part of: ${of})` : words;
+      let text: string;
+      if (k.source === 'phone') {
+        const phone = tools!.phone!;
+        const state = await phone.check().catch(() => ({ ready: false, why: undefined }));
+        if (!state.ready) throw new Problem(409, state.why ?? `${phone.name} isn't ready on this device.`);
+        try { text = await phone.answer(BREAK_SYSTEM, prompt); } catch { throw new Problem(400, `${phone.name} couldn't answer that. Nothing was changed.`); }
+      } else {
+        const got = await call(k, '/chat/completions', JSON.stringify({
+          ...(k.model ? { model: k.model } : {}), temperature: 0.3,
+          messages: [{ role: 'system', content: BREAK_SYSTEM }, { role: 'user', content: prompt }],
+        }));
+        const said = (got.choices as { message?: { content?: unknown } }[] | undefined)?.[0]?.message?.content;
+        if (typeof said !== 'string') throw new Problem(400, "The model's server sent something that isn't an answer");
+        text = said;
+      }
+      const steps = answerOnly(text).split('\n')
+        .map((line) => line.replace(/^\s*(?:[-*\u2022]|\d{1,2}[.)])\s*/, '').replace(/[*_`]/g, '').trim())
+        .filter((line) => line.length > 0 && line.length <= 160);
+      if (steps.length !== 3) throw new Problem(400, "The assistant didn't give three clear steps this time. Nothing was changed. You can try again.");
+      return { steps, sent };
     },
 
     /** An answer to a question about the household, and exactly what the model was given to answer it. */

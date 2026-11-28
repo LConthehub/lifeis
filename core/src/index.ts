@@ -81,6 +81,7 @@ export type { CostLine, CostView, GoalPanel, GoalTools } from './goals.ts';
 export { fmt as goalMoney, monthlyAsk, progressOf } from './goalFigures.ts';
 export type { Progress } from './goalFigures.ts';
 export { assistant, isLocal as isLocalAddress, ASSISTANT_SERVICE, AREAS as ASSISTANT_AREAS, type AssistantTools, type PhoneModel } from './assistant.ts';
+export { firstStep, pickChoreStep, pickProjectLine, pickRoutineStep, stepLines, FIRST_STEP_KINDS, type FirstStep, type FirstStepKind, type FirstStepDone } from './firstStep.ts';
 export { actions, ACTION_LIST, type ActionInfo, type ActionResult } from './actions.ts';
 export { upkeep, dueOf, addInterval, STARTER_JOBS, EVERY_UNITS } from './upkeep.ts';
 export type { Job, JobInput, DoneInput, DoneRecord, Due, DueState, Upkeep } from './upkeep.ts';
