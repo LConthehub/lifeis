@@ -2,7 +2,7 @@
  * The addresses for the things you keep (/api/things) and the projects that use them (/api/projects).
  * What they do is core/'s inventory.ts and projects.ts; this only reads what was sent and passes it on.
  */
-import { importHomebox, inventory, sharedPhoto, sharedWithMe, lookOverHomebox, readHomebox, packing, pets, projects, upkeep, whatIsThis, MAX_PET_PHOTO, MAX_DOCUMENT, MAX_THING_PHOTO, STARTER_JOBS, type Db, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
+import { importHomebox, inventory, sharedPhoto, sharedWithMe, lookOverHomebox, readHomebox, packing, pets, photoLibrary, projects, upkeep, whatIsThis, MAX_PET_PHOTO, MAX_DOCUMENT, MAX_THING_PHOTO, MAX_PHOTO_BYTES, STARTER_JOBS, type Db, type Fetcher, type Sealer, type FieldInput, type FieldType, type JobInput } from '../../core/src/index.ts';
 import { notUnderstood, queryNumber, read, Refusal, type Body, type Context, type Route } from './http.ts';
 
 const ID = '(\\d{1,15})';
@@ -101,9 +101,10 @@ function jobFrom(body: Body): JobInput {
 /** Whether a field was sent at all: left out means "leave it as it is", where null means "clear it". */
 const sent = (body: Body, name: string) => Object.hasOwn(body, name);
 
-export function makingRoutes(db: Db): Route[] {
+export function makingRoutes(db: Db, tools?: { fetcher: Fetcher; sealer: Sealer }): Route[] {
   const things = (c: Context) => inventory(db, c.user.id, c.clock);
   const making = (c: Context) => projects(db, c.user.id, c.clock);
+  const library = (c: Context) => photoLibrary(db, c.user.id, c.clock, tools);
   const jobs = (c: Context) => upkeep(db, c.user.id, c.clock);
   const animals = (c: Context) => pets(db, c.user.id, c.clock);
   const boxes = (c: Context) => packing(db, c.user.id, c.clock);
@@ -363,6 +364,32 @@ export function makingRoutes(db: Db): Route[] {
     ['GET', at('projects/:id'), async (c) => ({ json: await making(c).getProject(c.id) })],
     ['PUT', at('projects/:id'), async (c) => ({ json: await making(c).updateProject(c.id, projectFrom(c.body)) })],
     ['DELETE', at('projects/:id'), async (c) => (await making(c).deleteProject(c.id), { status: 204 })],
+
+    // A project's pictures: ideas to aim for and the person's own work. Kept here, or linked from their photo library.
+    ['POST', at('projects/:id/pictures'), async (c) => ({ status: 201, json: await making(c).keepPicture(c.id, photoFrom(c.body, MAX_PHOTO_BYTES), read.text(c.body, 'kind'), read.maybeText(c.body, 'caption')) })],
+    ['GET', at('projects/:id/library'), async (c) => {
+      const whole = await making(c).getProject(c.id);
+      const linked = new Set<string>();
+      for (const one of whole.pictures) if (one.source === 'immich') { const p = await making(c).picture(one.id); if (p.source === 'immich') linked.add(p.asset_id); }
+      return { json: (await library(c).taken(c.query.get('start') ?? '', c.query.get('end') ?? '')).map((photo) => ({ ...photo, linked: linked.has(photo.id) })) };
+    }],
+    ['POST', at('projects/:id/pictures/linked'), async (c) => {
+      const ids = read.texts(c.body, 'ids');
+      if (ids.length === 0 || ids.length > 80) throw notUnderstood('ids');
+      const kind = read.text(c.body, 'kind');
+      let project = await making(c).getProject(c.id);
+      for (const id of ids) project = await making(c).linkPicture(c.id, id, kind);
+      return { status: 201, json: project };
+    }],
+    ['GET', at('projects/pictures/:id'), async (c) => {
+      const one = await making(c).picture(c.id);
+      const found = one.source === 'kept' ? one : await library(c).picture(one.asset_id, 'preview');
+      return { body: found.bytes, headers: { 'Content-Type': found.type, 'Cache-Control': `private, max-age=${one.source === 'kept' ? 604_800 : 86_400}`, 'X-Content-Type-Options': 'nosniff' } };
+    }],
+    ['PUT', at('projects/pictures/:id'), async (c) => ({
+      json: await making(c).updatePicture(c.id, { ...(sent(c.body, 'caption') ? { caption: read.maybeText(c.body, 'caption') } : {}), ...(sent(c.body, 'kind') ? { kind: read.maybeText(c.body, 'kind') } : {}) }),
+    })],
+    ['DELETE', at('projects/pictures/:id'), async (c) => ({ json: await making(c).removePicture(c.id) })],
 
     ['POST', at('projects/:id/lines'), async (c) => ({ status: 201, json: await making(c).addLine(c.id, lineFrom(c.body)) })],
     ['PUT', at('projects/lines/:id'), async (c) => ({ json: await making(c).updateLine(c.id, lineFrom(c.body)) })],

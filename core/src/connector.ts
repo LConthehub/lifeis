@@ -247,7 +247,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'get_projects', section: 'projects', add: false, title: 'Read projects', annotations: READ,
-    description: 'Projects still going: status, when wanted by, what each uses, and its budget in cents.', inputSchema: object({}),
+    description: 'Projects still going: status, when wanted by, what each uses, its budget in cents, and the captions of its pictures (Idea or Mine). The pictures themselves are never shared.', inputSchema: object({}),
     async run({ db, clock, live, today }) {
       const making = projects(db, live.owner, clock);
       const never = await guarded(db, live.owner);
@@ -259,6 +259,8 @@ const TOOLS: ToolDef[] = [
           uses: whole.lines.filter((l) => !(l.item_id !== null && never.ids.has(l.item_id)) && !never.names.has(labelKey(l.label)))
             .map((l) => ({ what: l.label, ...(l.amount ? { amount: l.amount } : {}), ...(l.short ? { short_by: l.short_text } : {}), ...(l.used_on ? { used: true } : {}) })),
           ...(whole.costs.length ? { budget: { planned_cents: whole.budget.planned, spent_cents: whole.budget.spent, left_cents: whole.budget.left } } : {}),
+          // Only each picture's caption and whether it is an idea or the person's own work. The pictures themselves never leave.
+          ...(whole.pictures.length ? { pictures: whole.pictures.slice(0, 40).map((x) => ({ kind: x.kind === 'idea' ? 'Idea' : 'Mine', ...(x.caption ? { caption: x.caption } : {}) })) } : {}),
         };
       }));
       return { text: answer(today, { projects: out }), what: 'Read your projects' };

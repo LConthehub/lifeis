@@ -133,6 +133,19 @@ it('never shows guns, ammunition, measures, gifts, the house manual or calendar 
   for (const word of ['oat milk', 'Plum cake', 'Soup night', 'Piano lesson', 'Cordless drill', 'Garden shed', 'Plywood', 'Milk run', 'Weekend films', 'busy']) expect([word, all.includes(word)]).toEqual([word, true]);
 });
 
+it("tells the AI app a project's picture captions and whether each is Idea or Mine, and never the pictures", async () => {
+  await fill();
+  const shed = (await projects(db, ana, clock).listProjects()).find((p) => p.name === 'Garden shed')!;
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+  await projects(db, ana, clock).keepPicture(shed.id, png, 'idea', 'Roof with a slope');
+  await projects(db, ana, clock).keepPicture(shed.id, png, 'mine', 'Walls up');
+  await projects(db, ana, clock).linkPicture(shed.id, '8a5c3e5e-1c2d-4c7e-9b1a-2f3d4e5f6a7b', 'mine');
+  const text = await call(await connection(ana, ['projects']), 'get_projects');
+  const garden = JSON.parse(text).projects.find((p: { name: string }) => p.name === 'Garden shed');
+  expect(garden.pictures).toEqual([{ kind: 'Idea', caption: 'Roof with a slope' }, { kind: 'Mine', caption: 'Walls up' }, { kind: 'Mine' }]);
+  expect(text).not.toMatch(/8a5c3e5e|image\/png|base64/);
+});
+
 it('shows other calendars as busy and nothing more, and no note on an event', async () => {
   await fill();
   const out = JSON.parse(await call(await connection(ana, ['calendar']), 'get_calendar', { days: 14 }));

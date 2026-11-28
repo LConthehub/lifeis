@@ -1971,6 +1971,27 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE holidays ADD COLUMN every_from INTEGER`,
     ],
   },
+  {
+    number: 75,
+    name: 'A project keeps pictures: ideas to aim for, and its own work',
+    // Like plan_photos: a picture kept here (its bytes) or only linked from a photo library (which one: asset_id).
+    // kind says whether it is an 'idea' (what the person is aiming for) or 'mine' (their own work).
+    statements: [
+      `CREATE TABLE project_pictures (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        source TEXT NOT NULL CHECK(source IN ('kept', 'immich')),
+        kind TEXT NOT NULL CHECK(kind IN ('idea', 'mine')),
+        asset_id TEXT,
+        type TEXT,
+        bytes BLOB,
+        caption TEXT,
+        sort_order INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_project_pictures ON project_pictures(project_id, sort_order)`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

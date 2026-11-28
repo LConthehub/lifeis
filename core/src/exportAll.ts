@@ -602,6 +602,15 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   out.csv('project-costs.csv', ['Project', 'What', 'Planned', 'Spent', 'Paid on', 'Notes'],
     (await all('SELECT c.project_id, c.label, c.planned_cents, c.actual_cents, c.paid_on, c.note FROM project_costs c JOIN projects p ON p.id = c.project_id WHERE p.owner_id = ? ORDER BY c.project_id, c.sort_order, c.id'))
       .map((c) => [str(projectOf.get(c.project_id as number)?.name), str(c.label), dollars(c.planned_cents), dollars(c.actual_cents), str(c.paid_on), str(c.note)]));
+  // A project's pictures: one kept here has its file in pictures/projects; one linked from a photo library says which photo it is.
+  const projectPictures: Cell[][] = [];
+  for (const p of await all('SELECT x.id, x.project_id, x.source, x.kind, x.asset_id, x.type, x.bytes, x.caption FROM project_pictures x JOIN projects pr ON pr.id = x.project_id WHERE pr.owner_id = ? ORDER BY x.project_id, x.sort_order, x.id')) {
+    const project = projectOf.get(p.project_id as number)!;
+    const bytes = bytesOf(p.bytes);
+    const file = bytes && p.type ? out.binary(`pictures/projects/${slug(str(project.name), project.id as number)}`, `picture-${p.id}`, str(p.type), bytes) : '';
+    projectPictures.push([str(project.name), p.kind === 'mine' ? 'Mine' : 'Idea', str(p.caption), p.source === 'immich' ? 'In your photo library, not copied here' : 'Kept here', file, p.source === 'immich' ? str(p.asset_id) : '']);
+  }
+  out.csv('project-pictures.csv', ['Project', 'Idea or mine', 'Caption', 'Where the picture is', 'File', 'Photo library id'], projectPictures);
   const plans = await all('SELECT id, name, start_day, end_day, note, story, parts, served_at, food_kind FROM plans WHERE owner_id = ? ORDER BY start_day, id');
   const planOf = new Map(plans.map((p) => [p.id as number, p]));
   out.csv('plans.csv', ['Plan', 'Starts', 'Ends', 'Notes', 'The story', 'Parts', 'Served at', 'Food is'], plans.map((p) => [str(p.name), str(p.start_day), str(p.end_day), str(p.note), str(p.story),
@@ -762,6 +771,7 @@ export async function exportEverything(db: Db, owner: number, clock: Clock = () 
       'SELECT COALESCE(SUM(LENGTH(d.bytes)), 0) AS n FROM item_documents d JOIN items i ON i.id = d.item_id WHERE i.owner_id = ?',
       'SELECT COALESCE(SUM(LENGTH(photo)), 0) AS n FROM pets WHERE owner_id = ?',
       'SELECT COALESCE(SUM(LENGTH(p.bytes)), 0) AS n FROM plan_photos p JOIN plans l ON l.id = p.plan_id WHERE l.owner_id = ?',
+      'SELECT COALESCE(SUM(LENGTH(p.bytes)), 0) AS n FROM project_pictures p JOIN projects l ON l.id = p.project_id WHERE l.owner_id = ?',
       'SELECT COALESCE(SUM(LENGTH(c.bytes)), 0) AS n FROM media_covers c JOIN media m ON m.id = c.media_id WHERE m.owner_id = ?',
     ]) weight += (await tx.get<{ n: number }>(sql, [owner]))?.n ?? 0;
     if (await hasTable(tx, 'trip_receipts')) weight += (await tx.get<{ n: number }>('SELECT COALESCE(SUM(LENGTH(bytes)), 0) AS n FROM trip_receipts WHERE owner_id = ?', [owner]))?.n ?? 0;
@@ -815,7 +825,7 @@ const FILE_ABOUT: [string, string][] = [
   ['collection-log.csv', 'When you watched, read, listened to or played something.'],
   ['lists.csv', 'Your lists of titles (To watch, read or hear, and the ones you made): each title on each list, in order, and whether the list is shared. Titles you do not own yet are in collection.csv, marked Not owned yet.'],
   ['events.csv', 'Calendar events you wrote.'],
-  ['projects.csv', 'Projects, and project-lines.csv, project-time.csv and project-costs.csv for what they use, the time spent and what they cost.'],
+  ['projects.csv', 'Projects, and project-lines.csv, project-time.csv, project-costs.csv and project-pictures.csv for what they use, the time spent, what they cost and their pictures (ideas and your own work).'],
   ['plans.csv', 'Plans (with when the food is served), and plan-items.csv and plan-photos.csv for what belongs to each. In plan-items.csv, rows of kind food are food that is bought or brought; a frozen weight makes a step to thaw it.'],
   ['holidays.csv', 'Holidays: how each finds its day. holiday-years.csv has each year (its plan, days to put up and take down, notes for next year) and holiday-lists.csv has what each year keeps: guests, cards, gifts, decorations and countdown steps.'],
   ['outdoor-trips.csv', 'Outdoor trips: the parts each has on. outdoor-trip-years.csv has each year (its plan, the water, the site booking, notes for next year) and outdoor-trip-lists.csv has what each year kept: the bring list, seasons, the catch log and the harvest log.'],
@@ -926,7 +936,7 @@ export type KindReport = {
   /** Anything else worth saying in a sentence. */
   note?: string;
 };
-export type Pending = { file: string; as: 'thing-photo' | 'thing-paper' | 'pet-photo' | 'cover' | 'plan-photo'; id: number; kind?: string; name?: string; spot?: string };
+export type Pending = { file: string; as: 'thing-photo' | 'thing-paper' | 'pet-photo' | 'cover' | 'plan-photo' | 'project-picture'; id: number; kind?: string; name?: string; spot?: string };
 export type Brought = { kinds: KindReport[]; pending: Pending[] };
 
 type Ctx = { tx: Queries; owner: number; today: string; at: string; files: Files };
@@ -2030,6 +2040,7 @@ ${mediaId}`);
     const lines = tableOf(c.files, 'project-lines.csv')?.rows ?? [];
     const time = tableOf(c.files, 'project-time.csv')?.rows ?? [];
     const costs = tableOf(c.files, 'project-costs.csv')?.rows ?? [];
+    const pictures = tableOf(c.files, 'project-pictures.csv')?.rows ?? [];
     // A project's lines, time and costs are told apart by its name: of two with one name, only the first is given them.
     const filled = new Set<string>();
     for (const [at, row] of t.rows.entries()) {
@@ -2076,6 +2087,18 @@ ${mediaId}`);
             [c.owner, label, spent, paidOn, c.at, made.lastId, cost.lastId]);
         }
         order += 1;
+      }
+      // Pictures kept here come back with their files (see `Pending`); one linked from a photo library comes back as the link.
+      order = 0;
+      for (const x of pictures.filter(mine)) {
+        const kind = cellOf(x, 'Idea or mine').toLowerCase() === 'mine' ? 'mine' : 'idea';
+        const file = cellOf(x, 'File');
+        const asset = cellOf(x, 'Photo library id');
+        if (file) d.pending.push({ file, as: 'project-picture', id: made.lastId, kind, name: cellOf(x, 'Caption') });
+        else if (/^[0-9a-fA-F-]{8,64}$/.test(asset) && order < 80) {
+          await c.tx.run("INSERT INTO project_pictures (project_id, source, kind, asset_id, caption, sort_order, created_at) VALUES (?, 'immich', ?, ?, ?, ?, ?)", [made.lastId, kind, asset, clean(cellOf(x, 'Caption'), 300), order, c.at]);
+          order += 1;
+        }
       }
     }
     return d;
@@ -2524,6 +2547,12 @@ export async function bringInPictures(db: Db, owner: number, pictures: PictureIn
           [p.id, owner, p.bytes]);
         if (!ok || type === 'application/pdf' || p.bytes.length > 3_000_000) { left += 1; continue; }
         await tx.run('INSERT INTO plan_photos (plan_id, source, type, bytes, caption, sort_order, created_at, spot) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [p.id, 'kept', type, p.bytes, clean(p.name, 300), (ok.last ?? 0) + 1, at, clean(p.spot, 100)]);
+      } else if (p.as === 'project-picture') {
+        const ok = await tx.get<{ last: number | null }>(
+          'SELECT (SELECT MAX(x.sort_order) FROM project_pictures x WHERE x.project_id = l.id) AS last FROM projects l WHERE l.id = ? AND l.owner_id = ? AND (SELECT COUNT(*) FROM project_pictures x WHERE x.project_id = l.id) < 80 AND NOT EXISTS (SELECT 1 FROM project_pictures x WHERE x.project_id = l.id AND x.bytes = ?)',
+          [p.id, owner, p.bytes]);
+        if (!ok || type === 'application/pdf' || p.bytes.length > 3_000_000) { left += 1; continue; }
+        await tx.run('INSERT INTO project_pictures (project_id, source, kind, type, bytes, caption, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [p.id, 'kept', p.kind === 'mine' ? 'mine' : 'idea', type, p.bytes, clean(p.name, 300), (ok.last ?? 0) + 1, at]);
       } else if (p.as === 'cover') {
         const ok = await tx.get('SELECT m.id FROM media m WHERE m.id = ? AND m.owner_id = ? AND NOT EXISTS (SELECT 1 FROM media_covers x WHERE x.media_id = m.id)', [p.id, owner]);
         if (!ok || type === 'application/pdf' || p.bytes.length > 8_000_000) { left += 1; continue; }

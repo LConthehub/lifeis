@@ -94,6 +94,8 @@ async function fill(owner: number, tag = '') {
   await projects(db, owner, clock).addLine(project.id, { item_id: thing.id, quantity: 2 });
   await projects(db, owner, clock).addSession(project.id, { day: '2046-03-01', minutes: 90, note: 'Cut' });
   await projects(db, owner, clock).addCost(project.id, { label: 'Thread', planned_cents: 500, actual_cents: 450 });
+  await projects(db, owner, clock).keepPicture(project.id, PNG, 'mine', 'The hem');
+  await projects(db, owner, clock).linkPicture(project.id, '8a5c3e5e-1c2d-4c7e-9b1a-2f3d4e5f6a7b', 'idea', 'Pleats');
   const plan = await plans(db, owner, clock).create({ name: `Beach week${tag}`, start_day: '2046-07-01', end_day: '2046-07-07', note: 'Pack sunscreen' });
   await plans(db, owner, clock).addItem(plan.id, { kind: 'task', label: 'Book the car' });
   await db.run("INSERT INTO plan_photos (plan_id, source, type, bytes, caption, sort_order, created_at) VALUES (?, 'kept', 'image/png', ?, 'Us', 0, 'now')", [plan.id, PNG]);
@@ -183,7 +185,8 @@ it('holds every kind of record for a person with some of each, in plain headings
   expect(present.some((p) => /^pictures\/covers\/Alien-\d+\.png$/.test(p))).toBe(true);
   expect(present.some((p) => /^pictures\/plans\/Beach-week-\d+\/photo-\d+\.png$/.test(p))).toBe(true);
   expect(present).toContain('recipes-open-format/Recipes/Leek soup/recipe.json');
-  expect(made.pictures).toBe(5);
+  expect(made.pictures).toBe(6);
+  expect(present.some((p) => /^pictures\/projects\/Curtains-\d+\/picture-\d+\.png$/.test(p))).toBe(true);
   const paper = [...zip.pictures.entries()].find(([p]) => p.endsWith('Receipt.pdf'))!;
   expect([...paper[1]]).toEqual([...PDF]);
 
@@ -324,6 +327,7 @@ async function shape(owner: number) {
     projectCosts: await s('SELECT p.name, c.label, c.planned_cents, c.actual_cents, c.paid_on FROM project_costs c JOIN projects p ON p.id = c.project_id WHERE p.owner_id = ?'),
     plans: await s('SELECT name, start_day, end_day, note, story FROM plans WHERE owner_id = ?'),
     planItems: await s('SELECT p.name, i.kind, i.label, i.quantity, i.done, i.sort_order, i.ref_id IS NOT NULL FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ?'),
+    projectPictures: await s('SELECT p.name, f.source, f.kind, f.asset_id, f.type, LENGTH(f.bytes), f.caption FROM project_pictures f JOIN projects p ON p.id = f.project_id WHERE p.owner_id = ? ORDER BY f.kind, f.id'),
     planPhotos: await s('SELECT p.name, f.source, f.type, LENGTH(f.bytes), f.caption FROM plan_photos f JOIN plans p ON p.id = f.plan_id WHERE p.owner_id = ?'),
     income: await s('SELECT name, cents, every, start_day, end_day FROM money_income WHERE owner_id = ?'),
     goals: await s('SELECT name, target_cents, by_day FROM money_goals WHERE owner_id = ?'),
@@ -355,10 +359,10 @@ it('brings what went out into a fresh person, kind by kind, and a second time ad
   expect(byKey.things).toMatchObject({ found: 2, fresh: 2, already: 0, pictures: 2 });
   expect(byKey.upkeep).toMatchObject({ found: 4, fresh: 4 });
   expect(byKey.meals).toMatchObject({ found: 2, fresh: 2, unlinked: 0 });
-  expect(first.kept).toEqual({ kept: 5, left: 0 });
+  expect(first.kept).toEqual({ kept: 6, left: 0 });
   expect(byKey).toMatchObject({
     budget: { found: 2, fresh: 2 }, stores: { found: 2, fresh: 2 }, barcodes: { found: 1, fresh: 1 }, prices: { found: 2, fresh: 2 }, coupons: { found: 2, fresh: 2 },
-    projects: { found: 1, fresh: 1 }, plans: { found: 1, fresh: 1, unlinked: 0, pictures: 1 },
+    projects: { found: 1, fresh: 1, pictures: 1 }, plans: { found: 1, fresh: 1, unlinked: 0, pictures: 1 },
   });
   expect(byKey.tags!.found).toBeGreaterThan(3);
 
