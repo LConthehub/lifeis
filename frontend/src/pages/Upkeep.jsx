@@ -337,8 +337,8 @@ export function JobPage() {
         <div className="flex flex-wrap gap-2">
           {job.landlord ? (
             <>
-              <button type="button" onClick={() => setModal('ask')} className={buttonClass}><Icon of="done" /> {job.asked_on && !job.fixed_on ? 'Ask again' : 'Ask the landlord'}</button>
-              {job.asked_on && !job.fixed_on && <button type="button" onClick={fixed} className={quietButtonClass}>It was fixed</button>}
+              <button type="button" onClick={() => setModal('ask')} className={`${buttonClass} min-h-[44px]`}><Icon of="done" /> {job.asked_on && !job.fixed_on ? 'Ask again' : 'Ask the landlord'}</button>
+              {job.asked_on && !job.fixed_on && <button type="button" onClick={fixed} className={`${quietButtonClass} min-h-[44px]`}>It was fixed</button>}
             </>
           ) : <button type="button" onClick={() => setModal('done')} className={buttonClass}><Icon of="done" /> {doneWord(job)}</button>}
           {job.every_reading && <button type="button" onClick={() => setModal('reading')} className={quietButtonClass}>Note the {job.reading_unit || 'reading'}</button>}

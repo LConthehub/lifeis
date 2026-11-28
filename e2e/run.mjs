@@ -41,6 +41,7 @@ const SUITE = [
   { specs: ['dont-forget'], demo: true },
   { specs: ['pets'] },
   { specs: ['licenses'] },
+  { specs: ['renters'] },
   { specs: ['manual'] },
   { specs: ['home-services'] },
   { specs: ['guns'] },
