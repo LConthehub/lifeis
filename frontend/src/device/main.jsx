@@ -59,7 +59,24 @@ async function start() {
   const place = await kept.get('place');
   if (!place) {
     const chosen = async (next) => { await kept.set('place', next); window.location.replace('/'); };
-    root.render(<React.StrictMode><Welcome onChosen={chosen} /></React.StrictMode>);
+    // A backup from another phone, brought back before anything else. The phone's own Life Is is opened (once)
+    // to put it in. If the phone already holds one, nothing is changed until the person says to replace it.
+    let opened = null;
+    const bringBack = async (file, passphrase, sure, carried = false) => {
+      opened ??= onThisPhone();
+      try { await opened; } catch (problem) { opened = null; throw problem; }
+      if (!sure && (await axios.get('/api/start')).data.status !== 'new') return { holds: true };
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let text = '';
+      for (let at = 0; at < bytes.length; at += 0x8000) text += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+      await axios.post('/api/device/restore', { passphrase, file: btoa(text) });
+      await window.lifeisDevice?.saved?.();
+      // One the phone's own backup brought across: weekly backups carry on as they were, with the same passphrase.
+      if (carried) await (await import('./autoBackup.js')).carryOnWith(passphrase).catch((problem) => console.error(problem));
+      await chosen({ kind: 'device' });
+      return {};
+    };
+    root.render(<React.StrictMode><Welcome onChosen={chosen} onBringBack={bringBack} findCarried={() => import('./autoBackup.js').then((m) => m.findCarriedBackup())} /></React.StrictMode>);
     return;
   }
   if (place.kind === 'server') await onTheirServer(place.address); else await onThisPhone();
@@ -73,6 +90,7 @@ async function start() {
     },
   };
   root.render(<React.StrictMode><App /></React.StrictMode>);
+  if (place.kind === 'device') weeklyBackup();
   if (onPhone) {
     await followLinks();
     await phoneReminders();
@@ -88,6 +106,13 @@ async function phoneReminders() {
   Phone.addListener('appStateChange', ({ isActive }) => { if (isActive) again(); });
   window.addEventListener('lifeis-reminders', again);
   await again();
+}
+
+/** The backup that makes itself (autoBackup.js): looked at a moment after opening, and whenever the app comes back. */
+function weeklyBackup() {
+  const look = () => import('./autoBackup.js').then((m) => m.autoBackupIfDue()).catch((problem) => console.error(problem));
+  setTimeout(look, 3000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') look(); });
 }
 
 /** Show a page of the app, as if it had been tapped to. */

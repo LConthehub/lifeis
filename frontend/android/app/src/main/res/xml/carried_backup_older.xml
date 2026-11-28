@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and earlier: the same rule as carried_backup.xml, in the older form. Only files/carried. -->
+<full-backup-content>
+    <include domain="file" path="carried" />
+</full-backup-content>

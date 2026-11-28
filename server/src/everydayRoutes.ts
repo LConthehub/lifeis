@@ -267,10 +267,11 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
       return { json: await mine.due(from, addDays(from, (queryNumber(c.query, 'days') ?? 2) - 1)) };
     }],
     ['GET', /^\/api\/reminders\/digest$/, async (c) => {
-      if (c.query.get('ahead') !== '1') return { json: await remind(c).digest() };
-      // Tomorrow's, so the phone can have it waiting for tomorrow morning.
-      const tomorrow = Object.assign(() => c.clock(), { today: () => addDays(todayOf(c.clock), 1) });
-      return { json: await reminders(db, c.user.id, tomorrow, {}).digest() };
+      const ahead = Number(c.query.get('ahead') ?? 0);
+      if (!Number.isInteger(ahead) || ahead < 1 || ahead > 7) return { json: await remind(c).digest() };
+      // A later morning's (up to a week on), so the phone can have it waiting even if the app isn't opened till then.
+      const later = Object.assign(() => c.clock(), { today: () => addDays(todayOf(c.clock), ahead) });
+      return { json: await reminders(db, c.user.id, later, {}).digest() };
     }],
     ['POST', /^\/api\/reminders\/try$/, async (c) => {
       const channel = read.maybeText(c.body, 'channel');

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and later. The phone's own backup, and a move to a new phone, may take one folder and nothing
+     else: files/carried, where Life Is puts its newest weekly backup only when the person has turned that on
+     (src/device/autoBackup.js). That file is locked with their passphrase before it is put there. Naming an
+     include leaves everything else out: the database, the settings and every other file stay on the phone. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="file" path="carried" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="file" path="carried" />
+    </device-transfer>
+</data-extraction-rules>

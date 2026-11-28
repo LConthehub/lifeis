@@ -1,7 +1,8 @@
 /**
  * The morning reminders, made on the phone itself. Whenever the app opens or comes back to the front, this
- * morning's digest (if its time hasn't come) and tomorrow's are worked out from what Life Is holds and handed
- * to the phone to show at the person's time. Nothing is sent anywhere: the phone shows them by itself.
+ * morning's digest (if its time hasn't come) and the next seven mornings' are worked out from what Life Is holds
+ * and handed to the phone to show at the person's time, so a week without opening the app is not a week without
+ * reminders. Each opening replaces them with fresh ones. Nothing is sent anywhere: the phone shows them by itself.
  *
  * Works the same whether Life Is lives on the phone or on the person's own server: the digest is asked for
  * the way every page asks for things.
@@ -9,15 +10,16 @@
 import axios from 'axios';
 import { LocalNotifications } from '@capacitor/local-notifications';
 
-// The two that are ever waiting: this morning's and tomorrow's. Each new schedule replaces them.
+// The mornings that are ever waiting: this one and the next seven. Each new schedule replaces them.
+const DAYS_AHEAD = 7;
 const TODAY = 1001;
-const TOMORROW = 1002;
+const MORNING_IDS = Array.from({ length: DAYS_AHEAD + 1 }, (_, ahead) => ({ id: TODAY + ahead }));
 
 const lineText = (l) => `${l.title}${l.detail ? ` — ${l.detail}` : ''}`;
 
 export async function scheduleReminders() {
   const { data } = await axios.get('/api/reminders');
-  await LocalNotifications.cancel({ notifications: [{ id: TODAY }, { id: TOMORROW }, ...PREP_IDS, ...ROUTINE_IDS] }).catch(() => {});
+  await LocalNotifications.cancel({ notifications: [...MORNING_IDS, ...PREP_IDS, ...ROUTINE_IDS] }).catch(() => {});
   if (!data.settings.phone) return;
   let allowed = (await LocalNotifications.checkPermissions()).display;
   if (allowed !== 'granted') allowed = (await LocalNotifications.requestPermissions()).display;
@@ -26,10 +28,10 @@ export async function scheduleReminders() {
   const [hour, minute] = data.settings.time.split(':').map(Number);
   const now = new Date();
   const waiting = [];
-  for (const [id, ahead] of [[TODAY, 0], [TOMORROW, 1]]) {
+  for (const [ahead, { id }] of MORNING_IDS.entries()) {
     const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + ahead, hour, minute);
     if (at <= now) continue;
-    const { data: digest } = await axios.get('/api/reminders/digest', { params: ahead ? { ahead: 1 } : {} });
+    const { data: digest } = await axios.get('/api/reminders/digest', { params: ahead ? { ahead } : {} });
     if (!digest.lines.length) continue;
     const shown = digest.lines.slice(0, 5).map(lineText);
     if (digest.lines.length > 5) shown.push(`…and ${digest.lines.length - 5} more`);
@@ -47,11 +49,11 @@ export async function scheduleReminders() {
 // ids is set aside for them, and every schedule replaces what was waiting, so a meal that moved or went off the
 // week takes its reminders with it. A step whose time has gone is never shown late (the server leaves it out).
 const PREP_FIRST = 2000;
-const PREP_MOST = 40;
+const PREP_MOST = 60;
 const PREP_IDS = Array.from({ length: PREP_MOST }, (_, i) => ({ id: PREP_FIRST + i }));
 
 async function schedulePrep() {
-  const { data: coming } = await axios.get('/api/prep/coming', { params: { days: 4 } });
+  const { data: coming } = await axios.get('/api/prep/coming', { params: { days: 8 } });
   const now = new Date();
   const waiting = [];
   for (const step of coming) {
@@ -70,11 +72,11 @@ async function schedulePrep() {
 // A time of a routine that has a clock time ("Evening, 9 pm") is kept apart the same way: its own run of ids, replaced
 // on every schedule, and one that is already finished (or whose time has gone) is left out by the server or here.
 const ROUTINE_FIRST = 2100;
-const ROUTINE_MOST = 20;
+const ROUTINE_MOST = 60;
 const ROUTINE_IDS = Array.from({ length: ROUTINE_MOST }, (_, i) => ({ id: ROUTINE_FIRST + i }));
 
 async function scheduleRoutines() {
-  const { data: coming } = await axios.get('/api/routines/coming', { params: { days: 2 } });
+  const { data: coming } = await axios.get('/api/routines/coming', { params: { days: 8 } });
   const now = new Date();
   const waiting = [];
   for (const one of coming) {

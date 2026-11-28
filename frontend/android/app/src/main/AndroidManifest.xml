@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Life Is makes no copies of itself anywhere it wasn't asked to: nothing goes to the phone maker's
-         cloud backup or across to a new phone on its own (allowBackup, dataExtractionRules). The database's
-         key lives in this phone's keystore and would not survive the trip anyway.
+    <!-- Life Is makes no copies of itself anywhere it wasn't asked to. The phone's own backup, and a move to a
+         new phone, may take one folder only (dataExtractionRules, fullBackupContent: res/xml/carried_backup*.xml).
+         That folder is empty unless the person turns on "Let this phone's own backup carry it" in Settings, and
+         then it holds one file: their newest weekly backup, locked with their passphrase. The database never
+         goes; its key lives in this phone's keystore and would not survive the trip anyway.
          usesCleartextTraffic lets the app reach a Life Is on the home network at an http:// address, which
          is how most people run one at home. The app says so plainly before connecting to one. -->
 
@@ -12,8 +14,9 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
-        android:allowBackup="false"
-        android:dataExtractionRules="@xml/no_copies"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/carried_backup"
+        android:fullBackupContent="@xml/carried_backup_older"
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
