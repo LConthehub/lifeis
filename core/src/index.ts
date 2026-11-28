@@ -23,6 +23,8 @@ export { projects, STATUSES } from './projects.ts';
 export type { Line, LineInput, Project, ProjectInput, Projects, ProjectSummary, Session, SessionInput, Status } from './projects.ts';
 export { STARTERS } from './starters.ts';
 export { life, AREAS, SECTIONS, sectionsFor } from './life.ts';
+export { garden, CROPS, PLANT_KINDS, SEED_KIND, cropFor, frostFromYears, waterState, tasksThisWeek, warningsFrom, RAIN_WATERS } from './garden.ts';
+export type { GardenCard, Plant, PlantLine, PlantInput, Frost as GardenFrost } from './garden.ts';
 export type { Area, Life, LifeProfile, Section } from './life.ts';
 export { calendar } from './calendar.ts';
 export type { Calendar, Entry, EntryKind, Event, EventInput, YearlyDate } from './calendar.ts';

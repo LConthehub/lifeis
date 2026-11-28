@@ -1995,6 +1995,57 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE items ADD COLUMN pieces_checked_missing INTEGER`,
     ],
   },
+  {
+    number: 79,
+    name: 'the garden: plants kept in places, harvests, photos and frost dates',
+    statements: [
+      // A plant is a thing (items) in a place; this adds what only a plant has. Its watering is a chore (upkeep_jobs) so it can be given to a child.
+      `CREATE TABLE plants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        item_id INTEGER NOT NULL UNIQUE REFERENCES items(id) ON DELETE CASCADE,
+        crop TEXT,
+        outdoor INTEGER NOT NULL DEFAULT 1 CHECK(outdoor IN (0, 1)),
+        water_every INTEGER CHECK(water_every IS NULL OR water_every > 0),
+        water_job_id INTEGER REFERENCES upkeep_jobs(id) ON DELETE SET NULL,
+        planted_on TEXT,
+        how_it_did TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_plants_owner ON plants(owner_id)`,
+      `CREATE TABLE plant_harvests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plant_id INTEGER NOT NULL REFERENCES plants(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        amount REAL CHECK(amount IS NULL OR amount >= 0),
+        unit TEXT,
+        note TEXT,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_plant_harvests ON plant_harvests(plant_id, day)`,
+      // A photo kept here (its bytes), or only linked from a photo library (which one: asset_id), as plan_photos does.
+      `CREATE TABLE plant_photos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plant_id INTEGER NOT NULL REFERENCES plants(id) ON DELETE CASCADE,
+        source TEXT NOT NULL CHECK(source IN ('kept', 'immich')),
+        asset_id TEXT,
+        type TEXT,
+        bytes BLOB,
+        caption TEXT,
+        sort_order INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX idx_plant_photos ON plant_photos(plant_id, sort_order)`,
+      // The town's usual last spring frost and first fall frost, as MM-DD: worked out from past years, or typed.
+      `CREATE TABLE garden_frost (
+        owner_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        last_spring TEXT,
+        first_fall TEXT,
+        how TEXT NOT NULL CHECK(how IN ('weather', 'typed')),
+        worked_out_on TEXT
+      )`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

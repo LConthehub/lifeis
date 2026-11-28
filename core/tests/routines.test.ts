@@ -498,6 +498,7 @@ it('upgrades from the version before pet routines: routines and ticks kept, tick
   for (const table of ['routine_closed', 'dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE measure_entries');
   await db.run('DROP TABLE measures');
+  for (const table of ['plant_photos', 'plant_harvests', 'plants', 'garden_frost']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE item_pieces');
   for (const column of ['pieces_checked_on', 'pieces_checked_missing']) await db.run(`ALTER TABLE items DROP COLUMN ${column}`);
   await db.run('DROP TABLE plan_food');
@@ -639,6 +640,7 @@ it('upgrades from the version before workouts: routines and ticks stay, as plain
   for (const table of ['routine_closed', 'dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE measure_entries');
   await db.run('DROP TABLE measures');
+  for (const table of ['plant_photos', 'plant_harvests', 'plants', 'garden_frost']) await db.run(`DROP TABLE ${table}`);
   await db.run('DROP TABLE item_pieces');
   for (const column of ['pieces_checked_on', 'pieces_checked_missing']) await db.run(`ALTER TABLE items DROP COLUMN ${column}`);
   await db.run('DROP TABLE plan_food');

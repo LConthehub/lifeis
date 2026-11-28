@@ -32,6 +32,7 @@ import { weather, type Forecast, type WeatherPlace } from './weather.ts';
 export const CARDS = [
   { key: 'days', label: 'Today and the next two days', section: 'planning' },
   { key: 'routines', label: 'Routines: today’s checklists to check off', section: null },
+  { key: 'garden', label: 'Garden: what to do this week, and watering due', section: null },
   { key: 'weather', label: 'The weather', section: null },
   { key: 'mail', label: 'Email: what’s unread', section: null },
   { key: 'coming', label: 'Coming up: plans, holidays, trips and birthdays', section: 'planning' },
@@ -121,7 +122,8 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
     async summary(): Promise<HomeSummary> {
       const day = todayOf(clock);
       dayNumber(day);
-      const sections = (await life(db, owner, clock).getProfile()).sections;
+      const profile = await life(db, owner, clock).getProfile();
+      const sections = profile.sections;
       const out = await hidden();
       const skies = weather(db, owner, clock, fetcher);
       const place = await skies.place();
@@ -131,7 +133,7 @@ export function home(db: Db, owner: number, clock: Clock = () => new Date(), fet
       const hasCoupons = await any('SELECT 1 AS n FROM coupons WHERE owner_id = ? AND used_on IS NULL LIMIT 1');
       // Routines for this person (or for everyone); a household member's show on the chore chart instead.
       const hasRoutines = Boolean(await db.get('SELECT 1 AS n FROM routines WHERE for_member IS NULL AND (for_user = ? OR for_user IS NULL) AND (owner_id = ? OR for_user = ? OR for_user IS NULL) LIMIT 1', [owner, owner, owner]));
-      const offered = CARDS.filter((card) => (card.key === 'weather' ? place !== null : card.key === 'mail' ? hasMail : card.key === 'routines' ? hasRoutines
+      const offered = CARDS.filter((card) => (card.key === 'weather' ? place !== null : card.key === 'mail' ? hasMail : card.key === 'routines' ? hasRoutines : card.key === 'garden' ? Boolean(profile.areas?.includes('gardening'))
         : (card.section === null || sections.includes(card.section)) && (card.key !== 'coupons' || hasCoupons) && (card.key !== 'services' || hasServices)));
       const cards = offered.map((card) => card.key).filter((key) => !out.includes(key));
       const shows = (key: CardKey) => cards.includes(key);

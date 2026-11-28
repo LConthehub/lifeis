@@ -90,6 +90,7 @@ export const KINDS: KindInfo[] = [
   { key: 'coupons', label: 'Coupons', file: 'coupons.csv', importable: true, matched: 'by name, store and code' },
   { key: 'projects', label: 'Projects, with their lines, time and costs', file: 'projects.csv', importable: true, matched: 'by name' },
   { key: 'plans', label: 'Plans, with their things to do and photos', file: 'plans.csv', importable: true, matched: 'by name and first day' },
+  { key: 'garden', label: 'The garden: plants, harvests, photos and frost dates', file: 'garden.csv', importable: true, matched: 'a plant by its name and place' },
   { key: 'budget', label: 'Income and goals, with the money put toward each, what each is for, and its own cost lines', file: 'money-income.csv', importable: true, matched: 'income by name, amount and how often; goals by name' },
   { key: 'holidays', label: 'Holidays: how each finds its day, and what each year kept (guests, cards, gifts, decorations, countdown)', file: 'holidays.csv', importable: true, matched: 'by name; a year by its plan' },
   { key: 'trips', label: 'Outdoor trips: the parts each has on, and what each year kept (bring list, seasons, catch and harvest logs, site booking)', file: 'outdoor-trips.csv', importable: true, matched: 'by name; a year by its plan' },
@@ -654,6 +655,26 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   }
   out.csv('plan-photos.csv', ['Plan', 'Caption', 'Where the photo is', 'File', 'Decoration spot'], planPhotos);
 
+  // ---------- the garden: plants (the things themselves are in things.csv, their watering in upkeep.csv) ----------
+  const plantRows = await all(`SELECT p.id, p.crop, p.outdoor, p.water_every, p.planted_on, p.how_it_did, i.name, i.place_id, k.name AS kind FROM plants p JOIN items i ON i.id = p.item_id JOIN kinds k ON k.id = i.kind_id
+    WHERE p.owner_id = ? ORDER BY i.name COLLATE NOCASE, p.id`);
+  const plantOf = new Map(plantRows.map((p) => [p.id as number, p]));
+  out.csv('garden.csv', ['Plant', 'Place', 'Kind of thing', 'Kind of plant', 'Lives', 'Planted on', 'Water every (days)', 'How it did'],
+    plantRows.map((p) => [str(p.name), where(p.place_id), str(p.kind), str(p.crop), p.outdoor ? 'outdoors' : 'indoors', str(p.planted_on), str(p.water_every), str(p.how_it_did)]));
+  out.csv('garden-harvests.csv', ['Plant', 'Place', 'Day', 'Amount', 'Unit', 'Notes'],
+    (await all('SELECT h.plant_id, h.day, h.amount, h.unit, h.note FROM plant_harvests h JOIN plants p ON p.id = h.plant_id WHERE p.owner_id = ? ORDER BY h.day, h.id'))
+      .map((h) => [str(plantOf.get(h.plant_id as number)?.name), where(plantOf.get(h.plant_id as number)?.place_id), str(h.day), str(h.amount), str(h.unit), str(h.note)]));
+  const frostRows = await all('SELECT last_spring, first_fall, how, worked_out_on FROM garden_frost WHERE owner_id = ?');
+  out.csv('garden-frost.csv', ['Last spring frost (month-day)', 'First fall frost (month-day)', 'How it was found', 'Worked out on'], frostRows.map((f) => [str(f.last_spring), str(f.first_fall), str(f.how), str(f.worked_out_on)]));
+  const gardenPhotos: Cell[][] = [];
+  for (const p of await all('SELECT f.id, f.plant_id, f.source, f.type, f.bytes, f.caption FROM plant_photos f JOIN plants pl ON pl.id = f.plant_id WHERE pl.owner_id = ? ORDER BY f.plant_id, f.sort_order, f.id')) {
+    const plant = plantOf.get(p.plant_id as number)!;
+    const bytes = bytesOf(p.bytes);
+    const file = bytes && p.type ? out.binary(`pictures/garden/${slug(str(plant.name), plant.id as number)}`, `photo-${p.id}`, str(p.type), bytes) : '';
+    gardenPhotos.push([str(plant.name), where(plant.place_id), str(p.caption), p.source === 'immich' ? 'In your photo library, not copied here' : 'Kept here', file]);
+  }
+  out.csv('garden-photos.csv', ['Plant', 'Place', 'Caption', 'Where the photo is', 'File'], gardenPhotos);
+
   // ---------- holidays: how each finds its day, and what each year keeps ----------
   const holidayRows = await all('SELECT id, name, rule, month, day_of_month, weekday, nth, lead_weeks, first_year, rule_kind, calendar, cal_month, cal_day, every_years, every_from FROM holidays WHERE owner_id = ? ORDER BY id');
   const holidayOf = new Map(holidayRows.map((h) => [h.id as number, h]));
@@ -842,6 +863,7 @@ const FILE_ABOUT: [string, string][] = [
   ['pet-weights.csv', 'Your pets’ weights over time. Their care is in upkeep.csv, with the pet’s name.'],
   ['home-services.csv', 'Your Home lab: links to programs at home, with their addresses (no passwords), and who sees each. Only the links you may see are in it.'],
   ['house-manual.csv', 'The house manual. Entries marked private in the Private column are included: this is your own copy.'],
+  ['garden.csv', 'Your plants: where each is, what kind, whether it lives outdoors, when it was planted and how it did. The plant is also a thing in things.csv, and its watering a chore in upkeep.csv. garden-harvests.csv is the harvest log, garden-photos.csv the photos and garden-frost.csv your frost dates.'],
   ['licenses.csv', 'Licenses and permits, with their numbers. The numbers are included because this file is yours alone; keep it as carefully as the license itself.'],
   ['collection.csv', 'The titles in your collection (films, shows, music, books, games).'],
   ['copies.csv', 'Each copy of a title: format, place, discs, who it is lent to, and its link.'],
@@ -959,7 +981,7 @@ export type KindReport = {
   /** Anything else worth saying in a sentence. */
   note?: string;
 };
-export type Pending = { file: string; as: 'thing-photo' | 'thing-paper' | 'pet-photo' | 'cover' | 'plan-photo'; id: number; kind?: string; name?: string; spot?: string };
+export type Pending = { file: string; as: 'thing-photo' | 'thing-paper' | 'pet-photo' | 'cover' | 'plan-photo' | 'plant-photo'; id: number; kind?: string; name?: string; spot?: string };
 export type Brought = { kinds: KindReport[]; pending: Pending[] };
 
 type Ctx = { tx: Queries; owner: number; today: string; at: string; files: Files };
@@ -2327,6 +2349,66 @@ ${mediaId}`);
     return d;
   },
 
+  async garden(c) {
+    const d = blank();
+    const t = tableOf(c.files, 'garden.csv');
+    const book = await PlaceBook.load(c.tx, c.owner, c.at);
+    const things = new Map<string, number>();
+    for (const i of await c.tx.all<{ id: number; name: string; place_id: number | null }>('SELECT id, name, place_id FROM items WHERE owner_id = ? ORDER BY id DESC', [c.owner])) {
+      things.set(`${labelKey(i.name)}\n${labelKey(i.place_id === null ? '' : book.pathOf(i.place_id))}`, i.id);
+    }
+    const plantFor = new Map<string, number>();
+    for (const p of await c.tx.all<{ id: number; item_id: number }>('SELECT id, item_id FROM plants WHERE owner_id = ?', [c.owner])) {
+      const i = await c.tx.get<{ name: string; place_id: number | null }>('SELECT name, place_id FROM items WHERE id = ?', [p.item_id]);
+      if (i) plantFor.set(`${labelKey(i.name)}\n${labelKey(i.place_id === null ? '' : book.pathOf(i.place_id))}`, p.id);
+    }
+    const keyOf = (row: Record<string, string>, name: string) => `${labelKey(cellOf(row, name))}\n${labelKey(book.normal(cellOf(row, 'Place')))}`;
+    for (const [at, row] of (t?.rows ?? []).entries()) {
+      if (!clean(cellOf(row, 'Plant'), 120)) { skip(d, at, 'it has no name'); continue; }
+      d.found += 1;
+      const key = keyOf(row, 'Plant');
+      if (plantFor.has(key)) { d.already += 1; continue; }
+      const itemId = things.get(key);
+      if (itemId === undefined) { d.found -= 1; skip(d, at, `${cellOf(row, 'Plant')} is not among your things, so it was left out`); continue; }
+      const job = await c.tx.get<{ id: number }>("SELECT id FROM upkeep_jobs WHERE owner_id = ? AND item_id = ? AND kind = 'chore' ORDER BY id LIMIT 1", [c.owner, itemId]);
+      const every = wholeOf(cellOf(row, 'Water every (days)'));
+      const made = await c.tx.run('INSERT INTO plants (owner_id, item_id, crop, outdoor, water_every, water_job_id, planted_on, how_it_did, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [c.owner, itemId, clean(cellOf(row, 'Kind of plant'), 40), /^indoor/i.test(cellOf(row, 'Lives')) ? 0 : 1, every !== null && every > 0 && every <= 365 && job ? every : null, job?.id ?? null,
+          dayOf(cellOf(row, 'Planted on')), clean(row['how it did'], 2000), c.at]);
+      plantFor.set(key, made.lastId);
+      if (every !== null && !job) d.unlinked += 1;
+      d.fresh += 1;
+    }
+    const harvested = new Set((await c.tx.all<{ plant_id: number; day: string; amount: number | null; unit: string | null }>('SELECT h.plant_id, h.day, h.amount, h.unit FROM plant_harvests h JOIN plants p ON p.id = h.plant_id WHERE p.owner_id = ?', [c.owner]))
+      .map((h) => `${h.plant_id}|${h.day}|${h.amount ?? ''}|${labelKey(h.unit ?? '')}`));
+    for (const row of tableOf(c.files, 'garden-harvests.csv')?.rows ?? []) {
+      const plant = plantFor.get(keyOf(row, 'Plant'));
+      const day = dayOf(cellOf(row, 'Day'));
+      if (plant === undefined || !day) continue;
+      const amount = numberOf(cellOf(row, 'Amount'));
+      const unit = clean(cellOf(row, 'Unit'), 30);
+      const mark = `${plant}|${day}|${amount ?? ''}|${labelKey(unit ?? '')}`;
+      if (harvested.has(mark)) continue;
+      harvested.add(mark);
+      await c.tx.run('INSERT INTO plant_harvests (plant_id, day, amount, unit, note, created_at) VALUES (?, ?, ?, ?, ?, ?)', [plant, day, amount !== null && amount >= 0 ? amount : null, unit, clean(cellOf(row, 'Notes'), 500), c.at]);
+    }
+    const frostRow = tableOf(c.files, 'garden-frost.csv')?.rows[0];
+    if (frostRow && !(await c.tx.get('SELECT 1 AS yes FROM garden_frost WHERE owner_id = ?', [c.owner]))) {
+      const md = (text: string) => { const m = /^(\d{2})-(\d{2})$/.exec(text); return m && dayOf(`2024-${text}`) ? text : null; };
+      const how = cellOf(frostRow, 'How it was found') === 'weather' ? 'weather' : 'typed';
+      await c.tx.run('INSERT INTO garden_frost (owner_id, last_spring, first_fall, how, worked_out_on) VALUES (?, ?, ?, ?, ?)',
+        [c.owner, md(cellOf(frostRow, 'Last spring frost (month-day)')), md(cellOf(frostRow, 'First fall frost (month-day)')), how, dayOf(cellOf(frostRow, 'Worked out on'))]);
+    }
+    const kept = new Set((await c.tx.all<{ plant_id: number }>('SELECT DISTINCT f.plant_id FROM plant_photos f JOIN plants p ON p.id = f.plant_id WHERE p.owner_id = ?', [c.owner])).map((r) => r.plant_id));
+    for (const row of tableOf(c.files, 'garden-photos.csv')?.rows ?? []) {
+      const plant = plantFor.get(keyOf(row, 'Plant'));
+      const file = cellOf(row, 'File');
+      if (plant === undefined || !file || kept.has(plant)) continue;
+      d.pending.push({ file, as: 'plant-photo', id: plant, name: cellOf(row, 'Caption') });
+    }
+    return d;
+  },
+
   async trips(c) {
     const d = blank();
     const t = tableOf(c.files, 'outdoor-trips.csv');
@@ -2506,7 +2588,7 @@ ${mediaId}`);
     return d;
   },
 };
-const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'measures', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'holidays', 'trips', 'budget', 'tags'];
+const ORDER = ['places', 'things', 'recipes', 'meals', 'grocery', 'pantry', 'household', 'pets', 'upkeep', 'routines', 'measures', 'manual', 'services', 'licenses', 'collection', 'lists', 'events', 'money', 'stores', 'barcodes', 'prices', 'coupons', 'projects', 'plans', 'garden', 'holidays', 'trips', 'budget', 'tags'];
 
 function rowsIn(files: Files, info: KindInfo): number {
   return tableOf(files, info.file)?.rows.length ?? 0;
@@ -2612,6 +2694,12 @@ export async function bringInPictures(db: Db, owner: number, pictures: PictureIn
           [p.id, owner, p.bytes]);
         if (!ok || type === 'application/pdf' || p.bytes.length > 3_000_000) { left += 1; continue; }
         await tx.run('INSERT INTO plan_photos (plan_id, source, type, bytes, caption, sort_order, created_at, spot) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [p.id, 'kept', type, p.bytes, clean(p.name, 300), (ok.last ?? 0) + 1, at, clean(p.spot, 100)]);
+      } else if (p.as === 'plant-photo') {
+        const ok = await tx.get<{ last: number | null }>(
+          'SELECT (SELECT MAX(x.sort_order) FROM plant_photos x WHERE x.plant_id = l.id) AS last FROM plants l WHERE l.id = ? AND l.owner_id = ? AND (SELECT COUNT(*) FROM plant_photos x WHERE x.plant_id = l.id) < 40 AND NOT EXISTS (SELECT 1 FROM plant_photos x WHERE x.plant_id = l.id AND x.bytes = ?)',
+          [p.id, owner, p.bytes]);
+        if (!ok || type === 'application/pdf' || p.bytes.length > 3_000_000) { left += 1; continue; }
+        await tx.run('INSERT INTO plant_photos (plant_id, source, type, bytes, caption, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [p.id, 'kept', type, p.bytes, clean(p.name, 300), (ok.last ?? 0) + 1, at]);
       } else if (p.as === 'cover') {
         const ok = await tx.get('SELECT m.id FROM media m WHERE m.id = ? AND m.owner_id = ? AND NOT EXISTS (SELECT 1 FROM media_covers x WHERE x.media_id = m.id)', [p.id, owner]);
         if (!ok || type === 'application/pdf' || p.bytes.length > 8_000_000) { left += 1; continue; }
