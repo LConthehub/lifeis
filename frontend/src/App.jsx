@@ -42,6 +42,8 @@ const WalkThrough = lazyPage(() => import('./pages/WalkThrough'));
 const PetsPage = lazyPage(() => import('./pages/Pets'));
 const PetPage = lazyPage(() => import('./pages/Pets').then((m) => ({ default: m.PetPage })));
 const LicensesPage = lazyPage(() => import('./pages/Licenses'));
+const RentingPage = lazyPage(() => import('./pages/Renting'));
+const RentingPrint = lazyPage(() => import('./pages/RentingPrint'));
 const ManualPage = lazyPage(() => import('./pages/Manual'));
 const HomeServicesPage = lazyPage(() => import('./pages/HomeServices'));
 const PackingPage = lazyPage(() => import('./pages/Packing'));
@@ -92,7 +94,7 @@ const SECTIONS = [
     tabs: [['/week', 'Week'], ['/groceries', 'Groceries'], ['/recipes', 'Recipes'], ['/pantry', 'Pantry'], ['/prices', 'Prices']] },
   // Home services sit inside the House Manual, and Licenses inside Things.
   { word: 'keeping', shown: 'in order', icon: 'thing', home: '/manual', owns: (path) => (path.startsWith('/things') && !path.startsWith('/things/activities')) || path.startsWith('/manual'),
-    tabs: [['/manual', 'House Manual', ['/manual/services']], ['/things/upkeep', 'Upkeep'], ['/things/pets', 'Pets'], ['/things/places', 'Places'], ['/things', 'Things', ['/things/licenses']]] },
+    tabs: [['/manual', 'House Manual', ['/manual/services']], ['/things/upkeep', 'Upkeep'], ['/things/pets', 'Pets'], ['/things/places', 'Places'], ['/things', 'Things', ['/things/licenses', '/things/renting']]] },
   { word: 'spending', shown: 'budgeted', icon: 'bill', home: '/money', owns: (path) => path.startsWith('/money'), tabs: [['/money', 'This month'], ['/money/income', 'Income and bills'], ['/money/goals', 'Goals'], ['/money/year', 'Year']] },
   { word: 'enjoying', shown: 'entertaining', icon: 'media', home: '/media', owns: (path) => path.startsWith('/media'),
     // The third place in a tab is the older addresses that still open it (the book shelves are now chips in the Collection).
@@ -212,6 +214,8 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/manual" element={<ManualPage />} />
           <Route path="/manual/services" element={<HomeServicesPage />} />
           <Route path="/things/licenses" element={<LicensesPage />} />
+          <Route path="/things/renting" element={<RentingPage />} />
+          <Route path="/things/renting/print" element={<RentingPrint />} />
           <Route path="/things/pets" element={<PetsPage />} />
           <Route path="/things/pets/:id" element={<PetPage />} />
           <Route path="/things/:id" element={<Thing />} />

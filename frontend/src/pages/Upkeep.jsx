@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import Icon from '../components/Icon';
+import CopyButton from '../components/Copy';
 import axios from 'axios';
 import { BulkBar, PickBox, SelectButton, TagChips, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import { lastDoneText, todayHere } from '../ago';
@@ -9,7 +10,9 @@ import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, err
 const UNITS = [['day', 'days'], ['week', 'weeks'], ['month', 'months'], ['year', 'years']];
 export const KINDS = { job: ['Jobs', 'upkeep', 'Done'], bill: ['Bills', 'bill', 'Paid'], renewal: ['Renewals', 'renewal', 'Renewed'], chore: ['Chores', 'chore', 'Done'] };
 const KIND_ONE = { job: 'A job around the home', bill: 'A bill', renewal: 'A renewal (insurance, registration, a passport)', chore: 'A chore' };
-const doneWord = (job) => KINDS[job.kind][2];
+const doneWord = (job) => (job.landlord ? 'Ask the landlord' : KINDS[job.kind][2]);
+/** "Asked 12 days ago": said until the landlord has fixed it. */
+export const askedText = (days) => (days === 0 ? 'Asked today' : `Asked ${days} day${days === 1 ? '' : 's'} ago`);
 /** What all the bills and renewals come to in a month, each spread over its own round. */
 const monthly = (jobs) => jobs.filter((j) => (j.kind === 'bill' || j.kind === 'renewal') && j.amount_cents && j.every)
   .reduce((n, j) => n + j.amount_cents / (j.every.n * { day: 1 / 30.44, week: 7 / 30.44, month: 1, year: 12 }[j.every.unit]), 0);
@@ -162,7 +165,7 @@ export default function UpkeepPage() {
   const rescore = () => axios.get('/api/things/upkeep/scores').then(({ data }) => setScores(data)).catch(() => {});
   const swap = (job) => setJobs((all) => all.map((j) => (j.id === job.id ? { ...j, ...job, tag_list: j.tag_list } : j)));
   const groupOf = (j) => (j.due.needs_date ? GROUPS[0][0] : (GROUPS.find(([, st]) => st !== 'date' && st.includes(j.due.state)) ?? [])[0]);
-  const quick = (j) => j.kind !== 'bill' && j.kind !== 'renewal';
+  const quick = (j) => j.kind !== 'bill' && j.kind !== 'renewal' && !j.landlord;
   const didIt = async (j) => {
     setDidError('');
     try {
@@ -242,14 +245,14 @@ export default function UpkeepPage() {
                   <Link to={`/things/upkeep/${j.id}`} className="min-w-0 flex-1">
                     <span className="block text-sm text-gray-800 hover:underline dark:text-life-50">{j.kind !== 'job' && <><Icon of={KINDS[j.kind][1]} /> </>}{j.name}</span>
                     <span className="block text-xs text-gray-500 dark:text-life-300">
-                      {[j.amount_cents != null && money(j.amount_cents), j.autopay && 'pays itself', j.points != null && `${j.points} point${j.points === 1 ? '' : 's'}`, j.item?.name, j.activity, (j.member ?? j.assigned_to) && `${(j.member ?? j.assigned_to).name} does it`, !j.mine && `${j.owner}'s`].filter(Boolean).join(' · ') || scheduleText(j)}
+                      {[j.asked_days != null && askedText(j.asked_days), j.amount_cents != null && money(j.amount_cents), j.autopay && 'pays itself', j.points != null && `${j.points} point${j.points === 1 ? '' : 's'}`, j.item?.name, j.activity, (j.member ?? j.assigned_to) && `${(j.member ?? j.assigned_to).name} does it`, !j.mine && `${j.owner}'s`].filter(Boolean).join(' · ') || scheduleText(j)}
                     </span>
                     {quick(j) && !didToday[j.id]?.rec && <span className="block text-xs text-gray-500 dark:text-life-300" data-last-done>{lastDoneText(j.last_done?.day, todayHere())}</span>}
                   </Link>
                   <DueBadge job={j} />
                   {/* Hidden just after a tap, so a double tap is not two records; back once details are saved. */}
                   {quick(j) && didToday[j.id]?.rec && !didToday[j.id].details ? null : (
-                    <button type="button" onClick={() => (quick(j) ? didIt(j) : setModal({ done: j }))} aria-label={`${j.name} ${doneWord(j).toLowerCase()}`} className="shrink-0 rounded-full border border-life-200 px-2.5 py-1 text-xs text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100"><Icon of="done" size={14} /> {doneWord(j)}</button>
+                    <button type="button" onClick={() => (j.landlord ? navigate(`/things/upkeep/${j.id}?ask=1`) : quick(j) ? didIt(j) : setModal({ done: j }))} aria-label={`${j.name} ${doneWord(j).toLowerCase()}`} className="shrink-0 rounded-full border border-life-200 px-2.5 py-1 text-xs text-life-700 hover:bg-life-50 dark:border-life-700 dark:text-life-100"><Icon of="done" size={14} /> {doneWord(j)}</button>
                   )}
                   {quick(j) && didToday[j.id]?.rec && (
                     <div className="flex basis-full flex-wrap items-center gap-x-4 gap-y-0 text-sm" data-did>
@@ -297,7 +300,7 @@ export function JobPage() {
   const id = Number(useParams().id);
   const navigate = useNavigate();
   const [job, setJob] = useState(undefined);
-  const [modal, setModal] = useState(() => (new URLSearchParams(window.location.search).get('edit') ? 'edit' : null));       // 'edit', 'done' or 'reading'
+  const [modal, setModal] = useState(() => (new URLSearchParams(window.location.search).get('edit') ? 'edit' : new URLSearchParams(window.location.search).get('ask') ? 'ask' : null));       // 'edit', 'done', 'reading' or 'ask'
   const [said, setSaid] = useState('');
   const load = useCallback(() => { axios.get(`/api/things/upkeep/${id}`).then(({ data }) => setJob(data)).catch(() => setJob(null)); }, [id]);
   useEffect(() => { load(); }, [load]);
@@ -309,6 +312,7 @@ export function JobPage() {
     navigate('/things/upkeep');
   };
   const undo = async (d) => { if (window.confirm(`Undo ${dayText(d.day)}?`)) setJob((await axios.delete(`/api/things/upkeep/done/${d.id}`)).data); };
+  const fixed = async () => { const { data } = await axios.post(`/api/things/renting/jobs/${id}/fixed`, {}); setJob({ ...job, ...data }); load(); };
   const steps = (job.steps || '').split('\n').map((s) => s.trim()).filter(Boolean);
 
   return (
@@ -331,12 +335,20 @@ export function JobPage() {
           <DueBadge job={job} />
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setModal('done')} className={buttonClass}><Icon of="done" /> {doneWord(job)}</button>
+          {job.landlord ? (
+            <>
+              <button type="button" onClick={() => setModal('ask')} className={buttonClass}><Icon of="done" /> {job.asked_on && !job.fixed_on ? 'Ask again' : 'Ask the landlord'}</button>
+              {job.asked_on && !job.fixed_on && <button type="button" onClick={fixed} className={quietButtonClass}>It was fixed</button>}
+            </>
+          ) : <button type="button" onClick={() => setModal('done')} className={buttonClass}><Icon of="done" /> {doneWord(job)}</button>}
           {job.every_reading && <button type="button" onClick={() => setModal('reading')} className={quietButtonClass}>Note the {job.reading_unit || 'reading'}</button>}
           {job.mine && <button type="button" onClick={() => setModal('edit')} className={quietButtonClass}>Change</button>}
         </div>
+        {job.landlord && job.asked_days != null && <p className="text-sm font-semibold text-honey-700" role="status" data-asked>{askedText(job.asked_days)}</p>}
+        {job.landlord && job.fixed_on && <p className="text-sm text-life-700 dark:text-life-100" role="status">Fixed {dayText(job.fixed_on)}</p>}
         {said && <p className="text-sm text-life-700 dark:text-life-100" role="status">{said}</p>}
       </section>
+      {job.landlord && <LandlordNotes job={job} refresh={load} />}
 
       <div className="grid gap-4 md:grid-cols-2">
         <section className={cardClass} aria-label="What it needs">
@@ -400,6 +412,11 @@ export function JobPage() {
           }} />
         </Modal>
       )}
+      {modal === 'ask' && (
+        <Modal title="Ask the landlord" onClose={() => setModal(null)}>
+          <AskForm job={job} onDone={(r) => { setJob({ ...job, ...r.job }); load(); }} onClose={() => setModal(null)} />
+        </Modal>
+      )}
       {modal === 'reading' && <Modal title={`The ${job.reading_unit || 'reading'} now`} onClose={() => setModal(null)}><ReadingForm job={job} onDone={(j) => { setModal(null); setJob({ ...job, ...j }); }} /></Modal>}
     </div>
   );
@@ -423,6 +440,7 @@ function JobForm({ job, onDone }) {
   });
   const [tags, setTags] = useState(job.tag_list || []);
   const [error, setError] = useState('');
+  const [landlord, setLandlord] = useState(Boolean(job.landlord));
   useEffect(() => {
     axios.get('/api/things/items').then(({ data }) => setThings(data)).catch(() => {});
     axios.get('/api/things/upkeep/people').then(({ data }) => setPeople(data)).catch(() => {});
@@ -435,6 +453,7 @@ function JobForm({ job, onDone }) {
     e.preventDefault();
     const dated = form.kind === 'bill' || form.kind === 'renewal';
     const body = {
+      landlord: form.kind === 'job' && landlord,
       kind: form.kind, amount_cents: dated && form.amount.trim() !== '' ? Math.round(Number(form.amount.replace(/[^0-9.]/g, '')) * 100) : null,
       points: form.kind === 'chore' && form.points !== '' ? Number(form.points) : null, autopay: dated && form.autopay,
       ...(dated ? { first_due: form.first_due || null } : {}),
@@ -461,6 +480,11 @@ function JobForm({ job, onDone }) {
         {dated && <Field label={form.kind === 'bill' ? 'Next due on' : 'Runs out on'}><input type="date" value={form.first_due} onChange={set('first_due')} className={inputClass} /></Field>}
         {dated && <Field label="What it costs each time"><input inputMode="decimal" value={form.amount} onChange={set('amount')} placeholder="0.00" className={inputClass} /></Field>}
         {form.kind === 'chore' && <Field label="Points for doing it"><input type="number" min="0" max="1000" step="1" value={form.points} onChange={set('points')} placeholder="2" className={inputClass} /></Field>}
+        {form.kind === 'job' && (
+          <label className="flex min-h-[44px] items-center gap-2 text-sm text-gray-700 dark:text-life-100 sm:col-span-2">
+            <input type="checkbox" checked={landlord} onChange={(e) => setLandlord(e.target.checked)} className="accent-life-600" /> This is the landlord's to fix (it says "Ask the landlord" in place of Done)
+          </label>
+        )}
         <Field label="Part of (an activity)"><input value={form.activity} onChange={set('activity')} placeholder="Home maintenance, Car, Garden" className={inputClass} /></Field>
         <Field label="It's for">
           <select value={form.item_id} onChange={set('item_id')} className={inputClass}>
@@ -783,6 +807,85 @@ function Allowance({ scores, members }) {
       )}
       {said && <p className="text-sm text-life-700 dark:text-life-100" role="status">{said}</p>}
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+    </section>
+  );
+}
+
+/** The note to the landlord: what is wrong, since when, and the place. One tap copies it, or opens the phone's own share sheet. Life Is keeps a copy of the note and the day it was asked. Nothing is sent from here. */
+function AskForm({ job, onDone, onClose }) {
+  const [form, setForm] = useState({ what: job.note || job.name, since: '', place: job.item?.place || job.item?.name || '' });
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
+  const [kept, setKept] = useState(false);
+  const [state, setState] = useState('');                       // '', 'copied' or 'manual'
+  const box = useRef(null);
+  const set = (k) => (e) => { setForm({ ...form, [k]: e.target.value }); setKept(false); };
+  useEffect(() => {
+    let live = true;
+    const body = { what: form.what || null, since: form.since || null, place: form.place || null };
+    axios.post(`/api/things/renting/jobs/${job.id}/preview`, body).then(({ data }) => { if (live) { setText(data.text); setError(''); } }).catch((err) => { if (live) setError(errorMessage(err, "Couldn't write the note")); });
+    return () => { live = false; };
+  }, [form, job.id]);
+  /** Keeping the note is what marks the landlord as asked. It is kept once for each tap on Copy or Share. */
+  const keep = async () => {
+    const { data } = await axios.post(`/api/things/renting/jobs/${job.id}/ask`, { what: form.what || null, since: form.since || null, place: form.place || null });
+    setKept(true);
+    onDone(data);
+    return data.note.body;
+  };
+  const copy = async () => {
+    setError('');
+    try {
+      const body = kept ? text : await keep();
+      try { await navigator.clipboard.writeText(body); setState('copied'); } catch { box.current?.select(); setState('manual'); }
+    } catch (err) { setError(errorMessage(err, "Couldn't keep the note")); }
+  };
+  const share = async () => {
+    setError('');
+    try {
+      const body = kept ? text : await keep();
+      await navigator.share({ title: job.name, text: body });
+    } catch (err) { if (err?.name !== 'AbortError') setError(errorMessage(err, "Couldn't open the share sheet")); }
+  };
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-gray-500 dark:text-life-300">Life Is writes the note. You send it yourself, however you reach your landlord. Nothing is sent from here.</p>
+      <Field label="What is wrong"><textarea rows={3} value={form.what} onChange={set('what')} className={inputClass} /></Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Since when"><input type="date" value={form.since} onChange={set('since')} className={inputClass} /></Field>
+        <Field label="The place"><input value={form.place} onChange={set('place')} placeholder="Kitchen sink" className={inputClass} /></Field>
+      </div>
+      <Field label="The note"><textarea ref={box} readOnly rows={7} value={text} aria-label="The note" className={`${inputClass} font-mono text-xs`} /></Field>
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      <p role="status" className="text-sm text-life-700 dark:text-life-100">{state === 'copied' ? 'Copied. A copy is kept with today\'s date.' : state === 'manual' ? 'Press Ctrl+C to copy. A copy is kept with today\'s date.' : kept ? 'A copy is kept with today\'s date.' : ''}</p>
+      <div className="flex flex-wrap justify-end gap-2">
+        <button type="button" onClick={onClose} className={`${quietButtonClass} min-h-[44px]`}>Close</button>
+        {typeof navigator !== 'undefined' && navigator.share && <button type="button" onClick={share} className={`${quietButtonClass} min-h-[44px]`}>Share</button>}
+        <button type="button" onClick={copy} className={`${buttonClass} min-h-[44px]`}>Copy the note</button>
+      </div>
+    </div>
+  );
+}
+
+/** The notes written for this job, newest first, each with its date and a Copy button. */
+function LandlordNotes({ job }) {
+  const [notes, setNotes] = useState(null);
+  useEffect(() => { axios.get(`/api/things/renting/jobs/${job.id}/notes`).then(({ data }) => setNotes(data)).catch(() => setNotes([])); }, [job.id, job.asked_on, job.fixed_on]);
+  if (!notes?.length) return null;
+  return (
+    <section className={cardClass} aria-label="Notes to the landlord">
+      <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Notes to the landlord</h2>
+      <ul className="divide-y divide-life-50 dark:divide-life-700">
+        {notes.map((n) => (
+          <li key={n.id} className="flex flex-wrap items-start gap-2 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-gray-600 dark:text-life-200">{dayText(n.day)}</p>
+              <p className="whitespace-pre-line break-words text-sm text-gray-800 dark:text-life-50">{n.body}</p>
+            </div>
+            <CopyButton text={n.body} what={`the note of ${n.day}`} />
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

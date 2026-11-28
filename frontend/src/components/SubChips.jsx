@@ -23,4 +23,4 @@ export default function SubChips({ items, label }) {
 export const ROUTINE_CHIPS = [['/routines', 'Routines'], ['/measures', 'Measures']];
 export const PLAN_CHIPS = [['/plans', 'All'], ['/plans/holidays', 'Holidays'], ['/plans/trips', 'Trips']];
 export const MANUAL_CHIPS = [['/manual', 'Manual'], ['/manual/services', 'Home lab']];
-export const THING_CHIPS = [['/things', 'Things'], ['/things/licenses', 'Licenses']];
+export const THING_CHIPS = [['/things', 'Things'], ['/things/licenses', 'Licenses'], ['/things/renting', 'Renting']];
