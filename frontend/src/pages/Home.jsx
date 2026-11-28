@@ -140,7 +140,7 @@ export default function Home({ user }) {
 
       <DontForget cards={s.cards} />
 
-      <JotLine />
+      {shows('jot') && <JotLine />}
 
       <AskCard />
       <AskBack />

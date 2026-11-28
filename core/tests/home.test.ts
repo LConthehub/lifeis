@@ -30,7 +30,7 @@ beforeEach(async () => {
 
 it('an empty home shows every card, with nothing on them', async () => {
   const s = await front.summary();
-  expect([s.day, s.cards]).toEqual([TODAY, ['days', 'coming', 'kitchen', 'pantry', 'projects', 'upkeep', 'things', 'collection', 'week']]);
+  expect([s.day, s.cards]).toEqual([TODAY, ['jot', 'days', 'coming', 'kitchen', 'pantry', 'projects', 'upkeep', 'things', 'collection', 'week']]);
   expect(s.days.map((d) => [d.day, d.entries])).toEqual([[TODAY, []], ['2046-03-06', []], ['2046-03-07', []]]);
   expect([s.kitchen, s.pantry, s.projects, s.things, s.collection]).toEqual([
     { meals: [], to_buy: 0, short: [], use_up: null }, { low: [], expiring: [] }, [], { low: [], total: 0 }, { total: 0, wanted: 0, lent: [], lately: [], added: [], added_count: 0 }]);
@@ -98,21 +98,24 @@ it('it gathers today from every section', async () => {
 
 it('a person chooses what shows, and a section they do not use brings no cards', async () => {
   let s = await front.hideCards(['pantry', 'collection']);
-  expect(s.cards).toEqual(['days', 'coming', 'kitchen', 'projects', 'upkeep', 'things', 'week']);
+  expect(s.cards).toEqual(['jot', 'days', 'coming', 'kitchen', 'projects', 'upkeep', 'things', 'week']);
   expect(s.choices.filter((c) => !c.shown).map((c) => c.key)).toEqual(['pantry', 'collection']);
-  expect((await front.summary()).cards).toEqual(['days', 'coming', 'kitchen', 'projects', 'upkeep', 'things', 'week']); // remembered
+  expect((await front.summary()).cards).toEqual(['jot', 'days', 'coming', 'kitchen', 'projects', 'upkeep', 'things', 'week']); // remembered
   s = await front.hideCards([]);
-  expect(s.cards).toHaveLength(9);
+  expect(s.cards).toHaveLength(10);
+  // The jot line is a card too: on by default, and a person can put it out of sight.
+  expect((await front.hideCards(['jot'])).cards).not.toContain('jot');
+  expect((await front.hideCards([])).cards).toContain('jot');
   await expect(front.hideCards(['horoscope'])).rejects.toMatchObject({ name: 'Problem', status: 400 });
 
   await life(db, owner, clock).saveProfile(['eating']); // only the kitchen
   s = await front.summary();
-  expect([s.cards, s.choices.map((c) => c.key)]).toEqual([['kitchen', 'pantry', 'week'], ['kitchen', 'pantry', 'week']]);
+  expect([s.cards, s.choices.map((c) => c.key)]).toEqual([['jot', 'kitchen', 'pantry', 'week'], ['jot', 'kitchen', 'pantry', 'week']]);
 
   // Someone else's front page is their own.
   await kitchen(db, owner, clock).savePantry({ name: 'Cream', quantity: 1, low_at: 1 });
   const theirs = await home(db, await person('other'), clock).summary();
-  expect([theirs.cards.length, theirs.pantry.low]).toEqual([9, []]);
+  expect([theirs.cards.length, theirs.pantry.low]).toEqual([10, []]);
 });
 
 it('plans come up on the Coming up card, and coupons about to run out get a card once there is one', async () => {

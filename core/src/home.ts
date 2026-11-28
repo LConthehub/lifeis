@@ -30,6 +30,7 @@ import { weather, type Forecast, type WeatherPlace } from './weather.ts';
  * The email card's messages aren't in the summary: the page asks for those apart (they come from the provider).
  */
 export const CARDS = [
+  { key: 'jot', label: 'Jot it down: one line for a stray thought', section: null },
   { key: 'days', label: 'Today and the next two days', section: 'planning' },
   { key: 'routines', label: 'Routines: today’s checklists to check off', section: null },
   { key: 'weather', label: 'The weather', section: null },
