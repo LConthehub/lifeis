@@ -77,3 +77,16 @@ it('covers changing the house manual, home lab, shopping, cooking, keys and reca
   expect(decide(accessNow({ trial_started: null, unlocked: false }, at(BEGAN)), 'POST', '/api/manual/entries')).toBe('start');
   expect(decide(accessNow({ trial_started: BEGAN, unlocked: true }, at('2046-06-01T00:00:00Z')), 'POST', '/api/manual/entries')).toBe('go');
 });
+
+it('covers changing medicines once the trial has ended, keeps reading free, and keeps checking Taken on a routine step free', () => {
+  const paths = ['/api/medicines', '/api/medicines/4', '/api/medicines/4/refilled', '/api/medicines/4/sharing', '/api/medicines/4/photo', '/api/medicines/settings'];
+  for (const path of paths) expect(isPaidPath(path)).toBe(true);
+  const ended = accessNow({ trial_started: BEGAN, unlocked: false }, at('2046-06-01T00:00:00Z'));
+  for (const path of paths) {
+    expect(decide(ended, 'GET', path)).toBe('go');
+    for (const method of ['POST', 'PUT', 'DELETE']) expect(decide(ended, method, path)).toBe('read_only');
+  }
+  // Checking Taken is checking a routine step, which stays free.
+  expect(decide(ended, 'PUT', '/api/routine-day/steps/7')).toBe('go');
+  expect(decide(accessNow({ trial_started: null, unlocked: false }, at(BEGAN)), 'POST', '/api/medicines')).toBe('start');
+});
