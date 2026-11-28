@@ -15,7 +15,7 @@
 import { randomBytes } from 'node:crypto';
 import { statSync } from 'node:fs';
 import {
-  budget, calendar, displayName, goals, holidays, homeServices, inventory, kitchen, life, manual, media, mediaLists, money, outdoorTrips, packing, pets, projects, routines, upkeep, type Db,
+  budget, calendar, displayName, goals, holidays, homeServices, inventory, kitchen, life, manual, media, mediaLists, money, outdoorTrips, packing, pets, plans, projects, routines, upkeep, type Db,
 } from '../../core/src/index.ts';
 import { AREAS } from '../../core/src/life.ts';
 import { addDays } from '../../core/src/small.ts';
@@ -285,6 +285,39 @@ async function fill(db: Db, me: number): Promise<void> {
     await out.setYear(weekendPlan, { campground: 'Salty Pines Campground', site: '14', confirmation: 'SP-20418', check_in: day(18), check_out: day(25), notes_next: 'Bring a second tarp.' });
   }
   await out.addMeal(weekendPlan, { recipe_id: muffins.id, day: day(19), meal: 'breakfast' });
+
+  // ---- the family's plans: a yearly dinner they call Thanksgiving, Hank's birthday, and a memorial lunch ----
+  const feast = holidays(db, me);
+  const thanks = await feast.create({ name: 'Thanksgiving', rule: { kind: 'weekday', month: 11, weekday: 4, nth: 4 } });
+  const thanksPlan = thanks.years[0]!.plan_id;
+  const planning = plans(db, me);
+  const thanksDay = (await planning.get(thanksPlan)).start_day;
+  await planning.setParts(thanksPlan, [...(await planning.get(thanksPlan)).parts, 'traditions', 'when_where']);
+  const turkey = await k.createRecipe({ title: 'Roast turkey', servings: 10, ingredients_text: '1 turkey, about 16 lb\n4 tbsp butter\n2 tsp salt\n1 tsp pepper', steps_text: 'Thaw the turkey in the refrigerator.\nRub it with butter, salt and pepper.\nRoast at 325 F until it is 165 F inside.' });
+  await planning.setFood(thanksPlan, { served_at: '16:00', food_kind: 'meal' });
+  await planning.addItem(thanksPlan, { kind: 'recipe', ref_id: turkey.id, day: thanksDay, meal: 'dinner', thaw_pounds: 16 });
+  await planning.addFood(thanksPlan, { label: 'Apple pie', brought_by: 'Aunt Dot' });
+  await planning.setWhenWhere(thanksPlan, { start_time: '15:00', place: 'Our house' });
+  for (const label of ['Hank sets the table', 'Loretta makes the cranberry sauce']) await planning.addItem(thanksPlan, { kind: 'task', label });
+  for (const name of ['Aunt Dot', 'Uncle Ray', 'Cousin June']) await feast.addPerson(thanksPlan, 'guest', { name });
+  for (const words of ['Hank carves', 'The kids pick the movie']) await planning.addTradition(thanksPlan, words);
+
+  const hankUser = (await db.run('INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, 0, ?)', ['hank', await auth.hashPassword(randomBytes(24).toString('base64url')), new Date().toISOString()])).lastId;
+  await displayName(db, hankUser).set('Hank');
+  const birthday = await cal.createEvent({ title: "Hank's birthday", day: `1990-${day(34).slice(5)}`, yearly: true });
+  const birthdayPlan = await feast.startFromDate(birthday.id, { start: 'birthday' });
+  await planning.setFood(birthdayPlan.id, { served_at: '18:00', food_kind: 'meal' });
+  await planning.addFood(birthdayPlan.id, { label: 'Chocolate cake', brought_by: 'Loretta' });
+  await feast.addGift(birthdayPlan.id, { for_user: hankUser, idea: 'A new rod and reel' }); // Hank is signed in, so this one stays hidden from him
+  await feast.addGift(birthdayPlan.id, { who: 'Hank', idea: 'A tackle box he picked out' });
+
+  const lunch = await planning.create({ name: "Grandpa's memorial lunch", start_day: day(45), start: 'gathering', parts: ['food', 'guests', 'budget', 'when_where', 'tasks'] });
+  await planning.setWhenWhere(lunch.id, { start_time: '12:00', end_time: '14:00', place: 'Oak Hill Community Center' });
+  await planning.setFood(lunch.id, { served_at: '12:30', food_kind: 'refreshments' });
+  for (const label of ['Sandwich trays', 'Coffee and lemonade']) await planning.addFood(lunch.id, { label });
+  await planning.addFood(lunch.id, { label: 'Lemon bars', brought_by: 'Aunt Dot' });
+  await planning.addItem(lunch.id, { kind: 'task', label: 'Loretta picks out the photos to show' });
+  for (const name of ['Aunt Dot', 'Uncle Ray']) await feast.addPerson(lunch.id, 'guest', { name });
   void tent;
   void jigs;
   void tv;

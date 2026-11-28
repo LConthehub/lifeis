@@ -110,3 +110,29 @@ it('shows a shared trip to the house without its hunting, and hides a private on
   expect((await admin.put(`${API}/${made.id}`, { private: true })).json.private).toBe(true);
   expect((await client.get(`${API}/shared`)).json).toEqual([]);
 });
+
+it("a trip's plan page data, with hunting on, reaches nobody but its person", async () => {
+  const admin = await owner();
+  const { client } = await member(admin, 'Sam');
+  const made = (await admin.post(API, { ...TRIP, name: 'Fall hunt', parts: ['camping', 'hunting'] })).json;
+  const planId = made.years[0].plan_id;
+  await admin.post(`${API}/years/${planId}/harvest`, { animal: 'Buck secret-buck', tag_number: 'secret-tag' });
+  await admin.post(`${API}/years/${planId}/seasons`, { part: 'hunting', label: 'Deer secret-season', opens_on: '2026-09-15' });
+  // The person's own plan page: the plan says it is a trip with hunting, and the same parts the page shows.
+  const plan = (await admin.get(`/api/plans/${planId}`)).json;
+  expect(plan.trip).toMatchObject({ name: 'Fall hunt', parts: ['camping', 'hunting'] });
+  expect(plan.parts).toEqual(expect.arrayContaining(['harvest', 'seasons', 'bring', 'after_trip']));
+  expect(JSON.stringify((await admin.get(`${API}/outdoor/${planId}`)).json)).toMatch(/secret-buck/);
+  // Everything the page asks for is closed to another person in the house.
+  for (const address of [`/api/plans/${planId}`, `${API}/outdoor/${planId}`, `${API}/years/${planId}`, `${API}/${made.id}`, `/api/plans/holidays/gathering/${planId}`]) {
+    const refused = await client.get(address);
+    expect([address, refused.status]).toEqual([address, 404]);
+    expect(refused.text).not.toMatch(/secret|Buck|hunting/);
+  }
+  expect((await client.post(`${API}/years/${planId}/harvest`, { animal: 'x' })).status).toBe(404);
+  expect(JSON.stringify((await client.get('/api/plans/all')).json)).not.toMatch(/Fall hunt/);
+  // The house sees the trip's name and days, and nothing of hunting.
+  const seen = await client.get(`${API}/shared`);
+  expect(seen.json).toMatchObject([{ name: 'Fall hunt', first_day: '2026-10-09', last_day: '2026-10-11', parts: ['camping'] }]);
+  expect(seen.text).not.toMatch(/secret|Buck|hunting/);
+});

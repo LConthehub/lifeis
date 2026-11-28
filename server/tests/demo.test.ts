@@ -82,6 +82,37 @@ it('the sign-in page is handed the demo sign-in, which opens a household with so
   expect((await guest.get('/api/auth/status')).json.user).toMatchObject({ username: 'demo', is_admin: false });
 });
 
+it("the demo family's plans: a yearly dinner with a frozen turkey, Hank's birthday with a hidden gift, and a one-time memorial lunch", async () => {
+  const guest = visitor();
+  await guest.post('/api/auth/login', DEMO);
+  const lines = (await guest.get('/api/plans/all')).json as { name: string; link: string; yearly: boolean; kind: string }[];
+  const dinner = lines.find((l) => /^Thanksgiving/.test(l.name))!;
+  expect(dinner.yearly).toBe(true);
+  const plan = (await guest.get(`/api/plans${dinner.link.slice('/plans'.length)}`)).json;
+  expect(plan.yearly).toMatchObject({ name: 'Thanksgiving' });
+  expect(plan.parts).toEqual(expect.arrayContaining(['food', 'guests', 'tasks', 'traditions']));
+  expect(plan.items_list.filter((i: { kind: string }) => i.kind === 'recipe')).toMatchObject([{ label: 'Roast turkey', thaw_pounds: 16 }]);
+  expect(plan.food_lines).toMatchObject([{ label: 'Apple pie', brought_by: 'Aunt Dot' }]);
+  expect(plan.items_list.filter((i: { kind: string }) => i.kind === 'task')).toHaveLength(2);
+  expect(plan.traditions.map((t: { words: string }) => t.words)).toEqual(['Hank carves', 'The kids pick the movie']);
+  const gathering = (await guest.get(`/api/plans/holidays/gathering/${plan.id}`)).json;
+  expect(gathering.guests.map((g: { name: string }) => g.name)).toEqual(['Aunt Dot', 'Uncle Ray', 'Cousin June']);
+  expect(gathering.countdown.steps.some((s: { words: string }) => /refrigerator|thaw/i.test(s.words))).toBe(true);
+
+  const birthday = lines.find((l) => /Hank's birthday/.test(l.name))!;
+  const bPlan = (await guest.get(`/api/plans${birthday.link.slice('/plans'.length)}`)).json;
+  expect(bPlan.parts).toEqual(expect.arrayContaining(['gifts']));
+  const gifts = (await guest.get(`/api/plans/holidays/gathering/${bPlan.id}`)).json.gifts as { who: string; for_user: number | null }[];
+  expect(gifts).toHaveLength(2);
+  expect(gifts.filter((g) => g.for_user !== null)).toHaveLength(1); // the one for Hank's own sign-in stays hidden from him
+
+  const lunch = lines.find((l) => /memorial lunch/.test(l.name))!;
+  expect(lunch.yearly).toBe(false);
+  const lPlan = (await guest.get(`/api/plans${lunch.link.slice('/plans'.length)}`)).json;
+  expect(lPlan).toMatchObject({ place: 'Oak Hill Community Center', start_time: '12:00', food_kind: 'refreshments' });
+  expect(lPlan.yearly).toBeNull();
+});
+
 it('a visitor can change things, but not lock others out, add people, publish a page or reach outside', async () => {
   const guest = visitor();
   await guest.post('/api/auth/login', DEMO);
