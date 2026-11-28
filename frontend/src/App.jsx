@@ -49,6 +49,10 @@ const UpkeepPage = lazyPage(() => import('./pages/Upkeep'));
 const JobPage = lazyPage(() => import('./pages/Upkeep').then((m) => ({ default: m.JobPage })));
 const RoutinesPage = lazyPage(() => import('./pages/Routines'));
 const MeasuresPage = lazyPage(() => import('./pages/Measures'));
+const CheckupsPage = lazyPage(() => import('./pages/Checkups'));
+const CheckInPage = lazyPage(() => import('./pages/CheckIn'));
+const IncidentLogPage = lazyPage(() => import('./pages/IncidentLog'));
+const IncidentPrintPage = lazyPage(() => import('./pages/IncidentPrint'));
 const ChoreChart = lazyPage(() => import('./pages/ChoreChart'));
 const CollectionPrint = lazyPage(() => import('./pages/CollectionPrint'));
 const ThingStickersPage = lazyPage(() => import('./pages/ThingStickers').then((m) => ({ default: m.ThingStickersPage })));
@@ -86,8 +90,8 @@ axios.interceptors.request.use((config) => {
 // The third place in a tab is the older addresses that still open it (a part that now lives inside another page).
 const SECTIONS = [
   // Everything with a date or a time to it. Measures sit inside Routines, Holidays and Trips inside Plans.
-  { word: 'making', shown: 'on track', icon: 'date', home: '/calendar', owns: (path) => ['/calendar', '/routines', '/measures', '/projects', '/plans', '/things/activities'].some((p) => path.startsWith(p)),
-    tabs: [['/calendar', 'Calendar'], ['/routines', 'Routines', ['/measures']], ['/plans', 'Plans', ['/plans/holidays', '/plans/trips']], ['/projects', 'Projects'], ['/things/activities', 'Activities']] },
+  { word: 'making', shown: 'on track', icon: 'date', home: '/calendar', owns: (path) => ['/calendar', '/routines', '/measures', '/checkups', '/check-in', '/incident-log', '/projects', '/plans', '/things/activities'].some((p) => path.startsWith(p)),
+    tabs: [['/calendar', 'Calendar'], ['/routines', 'Routines', ['/measures', '/checkups', '/check-in', '/incident-log']], ['/plans', 'Plans', ['/plans/holidays', '/plans/trips']], ['/projects', 'Projects'], ['/things/activities', 'Activities']] },
   { word: 'eating', shown: 'cooking', icon: 'recipe', home: '/week', owns: (path) => ['/week', '/groceries', '/pantry', '/prices'].includes(path) || path.startsWith('/recipes'),
     tabs: [['/week', 'Week'], ['/groceries', 'Groceries'], ['/recipes', 'Recipes'], ['/pantry', 'Pantry'], ['/prices', 'Prices']] },
   // Home services sit inside the House Manual, and Licenses inside Things.
@@ -201,6 +205,10 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/things/activities" element={<Activities />} />
           <Route path="/routines" element={<RoutinesPage />} />
           <Route path="/measures" element={<MeasuresPage />} />
+          <Route path="/checkups" element={<CheckupsPage />} />
+          <Route path="/check-in" element={<CheckInPage />} />
+          <Route path="/incident-log" element={<IncidentLogPage />} />
+          <Route path="/incident-log/print" element={<IncidentPrintPage />} />
           <Route path="/things/upkeep" element={<UpkeepPage />} />
           <Route path="/things/upkeep/chart" element={<ChoreChart />} />
           <Route path="/things/upkeep/:id" element={<JobPage />} />
