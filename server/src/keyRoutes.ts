@@ -3,7 +3,7 @@
  * (/api/voice, for a key and nothing else). What a voice says and does is core/'s voice.ts; this reads what was
  * sent and passes it on. A key never opens any other address, and a session cookie never opens these.
  */
-import { KEY_ACTIONS, voice, type Db, type KeyAction } from '../../core/src/index.ts';
+import { KEY_ACTIONS, readPut, voice, type Db, type KeyAction } from '../../core/src/index.ts';
 import * as auth from './auth.ts';
 import { read, Refusal, type Context, type Reply, type Route } from './http.ts';
 import { deleteKey, listKeys, makeKey, MOST_KEYS, REFUSED, turnKey } from './personalKeys.ts';
@@ -60,6 +60,14 @@ export function voiceRoutes(db: Db): Route[] {
     ['GET', /^\/api\/voice\/week$/, only('meals_read', (_c, say) => say.week())],
     ['GET', /^\/api\/voice\/today$/, only('today_read', (c, say) => say.today(Boolean(c.key?.can.includes('meals_read'))))],
     ['POST', /^\/api\/voice\/jottings$/, only('jotting_add', (c, say) => say.addJotting(read.text(c.body, 'text')))],
+    ['POST', /^\/api\/voice\/put$/, only('thing_put', (c, say) => {
+      // "I put the egg cooker in the hall closet" whole, or the thing and the place sent apart.
+      const apart = read.maybeText(c.body, 'thing') !== null && read.maybeText(c.body, 'place') !== null;
+      const said = apart ? { thing: read.text(c.body, 'thing'), place: read.text(c.body, 'place') } : readPut(read.text(c.body, 'text'));
+      return say.putThing(said.thing, said.place);
+    })],
+    ['GET', /^\/api\/voice\/where$/, only('thing_where', (c, say) => say.whereIs(c.query.get('thing') ?? c.query.get('text') ?? ''))],
+    ['POST', /^\/api\/voice\/where$/, only('thing_where', (c, say) => say.whereIs(read.maybeText(c.body, 'thing') ?? read.text(c.body, 'text')))],
     ['POST', /^\/api\/voice\/reminders$/, only('reminder_add', (c, say) => say.addReminder(read.text(c.body, 'text'), read.maybeText(c.body, 'when') ?? read.maybeText(c.body, 'time')))],
   ];
 }

@@ -132,5 +132,5 @@ export { outdoorTrips, PARTS as TRIP_PARTS, AFTER_TRIP, GEAR_SOURCES, ammoOnHand
 export type { OutdoorTrips, TripSummary as OutdoorTripSummary, YearView as OutdoorYearView, TripInput as OutdoorTripInput, SharedTrip as OutdoorSharedTrip, Gear as OutdoorGear, Part as OutdoorPart, OutdoorView, PlanGear as OutdoorPlanGear } from './outdoorTrips.ts';
 export { CONNECTOR_SERVICE, CONNECTOR_SECTIONS, CONNECTOR_NEVER, CONNECTOR_ADDS, UNUSED_DAYS, MOST_CONNECTIONS, RESULT_LIMIT, HOUSEHOLD_KEY, householdOn, checkConnection, stillLive, connectionTools, callTool, connector } from './connector.ts';
 export type { SectionId, ConnectionInfo, LogLine, ConnectorStatus, Live, ToolInfo } from './connector.ts';
-export { KEY_ACTIONS, isKeyAction, voice, splitGroceries, spokenList, spokenTime, spokenDay, readWhen } from './voice.ts';
+export { KEY_ACTIONS, isKeyAction, voice, splitGroceries, spokenList, spokenTime, spokenDay, readWhen, readPut } from './voice.ts';
 export type { KeyAction } from './voice.ts';

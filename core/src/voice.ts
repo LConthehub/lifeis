@@ -13,6 +13,7 @@ import { jottings } from './jottings.ts';
 import { Problem } from './problem.ts';
 import { shopping } from './shopping.ts';
 import { addDays, clean, dayNumber, todayOf, type Clock } from './small.ts';
+import { whereabouts } from './whereabouts.ts';
 
 // ---------- what a key may do ----------
 
@@ -24,6 +25,8 @@ export const KEY_ACTIONS = [
   { id: 'meals_read', says: "Read the week's meals (and what is for dinner)" },
   { id: 'reminder_add', says: 'Add a reminder to your calendar' },
   { id: 'jotting_add', says: 'Add a jotting to your private list' },
+  { id: 'thing_put', says: 'Move a thing to a place ("I put the egg cooker in the hall closet")' },
+  { id: 'thing_where', says: 'Say where a thing is kept ("Where is the egg cooker?")' },
 ] as const;
 export type KeyAction = (typeof KEY_ACTIONS)[number]['id'];
 export const isKeyAction = (value: unknown): value is KeyAction => KEY_ACTIONS.some((a) => a.id === value);
@@ -121,6 +124,19 @@ export function readWhen(said: string | null | undefined, today: string): { day:
   return { day: day ?? today, time };
 }
 
+/**
+ * "the egg cooker in the hall closet", or "I put the egg cooker in the hall closet": what was moved, and where to.
+ * Cut at the first "in", "into", "on", "onto", "inside" or "under"; a voice that says both parts apart sends them apart.
+ */
+export function readPut(said: string): { thing: string; place: string } {
+  const words = said.replace(/\s+/g, ' ').trim().replace(/^(?:i(?:'ve| have)?\s+)?put\s+/i, '').replace(/[.!?]+$/, '');
+  const cut = /\s+(?:in|into|inside|on|onto|under)\s+/i.exec(words);
+  if (!cut || !words.slice(0, cut.index).trim() || !words.slice(cut.index + cut[0].length).trim()) {
+    throw new Problem(400, 'Say what you put and where, like: the egg cooker in the hall closet.');
+  }
+  return { thing: words.slice(0, cut.index).trim(), place: words.slice(cut.index + cut[0].length).trim() };
+}
+
 // ---------- the answers ----------
 
 /** One person's voice: what each spoken request does for them, and the sentence that comes back. */
@@ -216,6 +232,12 @@ export function voice(db: Db, owner: number, clock: Clock = () => new Date()) {
       await jottings(db, owner, clock).add(said);
       return 'Jotted down.';
     },
+
+    /** "I put X in Y": see whereabouts.ts. Asks, and changes nothing, when it is not clear which. */
+    putThing: (thing: string, place: string) => whereabouts(db, owner, clock).put(thing, place),
+
+    /** "Where's X?": see whereabouts.ts. */
+    whereIs: (thing: string) => whereabouts(db, owner, clock).where(thing),
 
     /** A reminder: a dated line on the calendar, with a time when one was said. It shows in the morning reminders too. */
     async addReminder(text: string, when?: string | null): Promise<string> {
