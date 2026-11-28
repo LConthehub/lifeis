@@ -177,7 +177,7 @@ const cardsOf = (name, cells) => {
 const words = (text) => safe(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
 // One card for each section of the app, in the app's order and by the app's names (frontend/src/App.jsx).
 // Each name finishes the sentence "Life is…".
-const FEATURES = cardsOf('what', 3).map((c) => c.cells);
+const FEATURES = cardsOf('what', 2).map((c) => c.cells);
 const SHOTS = cardsOf('pictures', 2).map((c) => c.cells);
 mkdirSync(path.join(out, 'img'), { recursive: true });
 const shots = SHOTS.filter(([file]) => {
@@ -243,7 +243,7 @@ writeFileSync(path.join(out, 'index.html'), `<!doctype html>
   .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 1.25rem; padding: 1.1rem 1.2rem; }
   .card h3 { margin: 0 0 .3rem; font-size: 1.05rem; } .card p { margin: 0; color: var(--soft); font-size: .95rem; }
-  .card .icon { font-size: 1.5rem; } .card h3 .lifeis { font-weight: 400; color: var(--soft); }
+  .card h3 .lifeis { font-weight: 400; color: var(--soft); }
   .card .act { margin: .9rem 0 0; } .card .act .button { background: var(--btn); color: var(--btn-ink); min-height: 44px; margin: 0; }
   .card .soon { margin-top: .6rem; font-style: italic; }
   .shots { display: grid; gap: 1.2rem; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
@@ -280,7 +280,7 @@ ${shots[0] ? `<img class="shot" src="img/${shots[0][0]}" alt="${safe(shots[0][1]
 <h2 id="what">${words(say('what', 'heading'))}</h2>
 <p class="lede">${words(say('what', 'intro'))}</p>
 <div class="grid">
-${FEATURES.map(([icon, title, text]) => `  <div class="card"><div class="icon" aria-hidden="true">${icon}</div><h3><span class="lifeis">Life is</span> ${safe(title)}.</h3><p>${safe(text)}</p></div>`).join('\n')}
+${FEATURES.map(([title, text]) => `  <div class="card"><h3><span class="lifeis">Life is</span> ${safe(title)}.</h3><p>${safe(text)}</p></div>`).join('\n')}
 </div>
 
 <h2>${words(say('search', 'heading'))}</h2>
