@@ -123,6 +123,16 @@ export type YearView = {
   worked: Worked[]; catch_years: CatchYear[];
   budget: { tag: string | null; spent_cents: number; count: number; target_cents: number | null };
 };
+/** A thing on a plain plan's Bring list, with what it needs after the trip. */
+export type PlanGear = { id: number; label: string; returned: boolean; after_trip: AfterTrip | null; after_done: boolean; job_id: number | null };
+/**
+ * Seasons and licenses, the harvest log and After the trip on a plan that is not a trip's year (a camping weekend, a lunch
+ * at the lake). For a trip's year the same parts show the year itself (YearView). `trip` is null here.
+ */
+export type OutdoorView = {
+  trip: null; plan_id: number; day: string; end_day: string; when: 'ahead' | 'now' | 'past';
+  seasons: Season[]; harvest: Harvest[]; gear: PlanGear[]; checks: { licenses: LicenseCheck[] };
+};
 export type SharedTrip = { trip_id: number; name: string; who: string; first_day: string; last_day: string; parts: Part[]; catches: { fish: string; day: string; length_inches: number | null; kept: boolean }[] };
 
 type TripRow = { id: number; name: string; camping: number; fishing: number; hunting: number; private: number; tag_id: number | null };
@@ -274,12 +284,13 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
     return (await things().listItems({ low: true })).filter((t) => t.kind === 'Fishing tackle').map((t) => ({ id: t.id, name: t.name, amount: t.amount }));
   }
 
-  async function licenseChecks(trip: TripRow, day: string, end: string): Promise<LicenseCheck[]> {
+  /** The license for each kind asked about (fishing, hunting), against the last day. */
+  async function licenseChecks(kinds: ReadonlySet<'fishing' | 'hunting'>, end: string): Promise<LicenseCheck[]> {
     const out: LicenseCheck[] = [];
     const list = await licenses(db, owner, clock).list();
     const want: ['fishing' | 'hunting', RegExp][] = [['fishing', /fish|angl/i], ['hunting', /hunt|tag|deer|elk|turkey|waterfowl|duck|bear|moose/i]];
     for (const [part, pattern] of want) {
-      if (trip[part] !== 1) continue;
+      if (!kinds.has(part)) continue;
       const mine = list.filter((l) => pattern.test(l.name));
       if (mine.length === 0) { out.push({ part, kind: part, found: null, expires_on: null, ok: false, words: `No ${part} license is kept in Licenses yet.` }); continue; }
       // The one that lasts longest is the one to go by.
@@ -287,7 +298,6 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
       const ok = best.expires_on === null || best.expires_on >= end;
       out.push({ part, kind: part, found: best.name, expires_on: best.expires_on, ok,
         words: ok ? `${best.name}${best.expires_on ? ` is good through ${best.expires_on}` : ' has no end day'}.` : `${best.name} ends ${best.expires_on}, before the trip is over (${end}). Renew it first.` });
-      void day;
     }
     return out;
   }
@@ -378,13 +388,39 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
       checks: {
         kitchen: t.camping === 1 ? await kitchenCheck(plan.start_day, plan.end_day) : null,
         tackle_low: t.fishing === 1 ? await tackleLow() : [],
-        licenses: await licenseChecks(t, plan.start_day, plan.end_day),
+        licenses: await licenseChecks(new Set(parts.filter((p): p is 'fishing' | 'hunting' => p !== 'camping')), plan.end_day),
         ammo: t.hunting === 1 ? await ammoChecks(gear) : [],
       },
       worked: t.fishing === 1 ? await workedOf(y.water) : [], catch_years: t.fishing === 1 ? await catchYears(t.id) : [],
       budget: await budgetOf(t, plan.start_day, plan.end_day, y.budget_cents),
     };
   }
+
+  /** The plan, checked to be this person's; any plan, a trip's year or not. */
+  async function ownPlan(q: Queries, planId: number): Promise<void> {
+    if (!(await q.get('SELECT 1 AS x FROM plans WHERE id = ? AND owner_id = ?', [planId, owner]))) throw new Problem(404, "That plan isn't here anymore. It may have been deleted.");
+  }
+  const isYear = async (q: Queries, planId: number) => Boolean(await q.get('SELECT 1 AS x FROM outdoor_trip_years WHERE plan_id = ?', [planId]));
+
+  /** Seasons, licenses, the harvest log and what came back, for a plan that is not a trip's year. */
+  async function plainView(planId: number): Promise<OutdoorView> {
+    const plan = await plans().get(planId);
+    const seasons = await seasonsOf(planId);
+    const harvest = await harvestOf(planId);
+    // Each kind with a season on the plan is checked; so is hunting once the harvest log has a line.
+    const kinds = new Set<'fishing' | 'hunting'>(seasons.map((s) => s.part));
+    if (harvest.length > 0) kinds.add('hunting');
+    const names = new Map(plan.items_list.map((i) => [i.id, i.label]));
+    const rows = await db.all<{ id: number; label: string; returned: number; after_trip: AfterTrip | null; after_done: number; job_id: number | null }>(
+      "SELECT id, label, returned, after_trip, after_done, job_id FROM plan_items WHERE plan_id = ? AND kind = 'thing' ORDER BY sort_order, id", [planId]);
+    return {
+      trip: null, plan_id: planId, day: plan.start_day, end_day: plan.end_day, when: plan.when, seasons, harvest,
+      gear: rows.map((r) => ({ id: r.id, label: names.get(r.id) ?? r.label, returned: r.returned === 1, after_trip: r.after_trip, after_done: r.after_done === 1, job_id: r.job_id })),
+      checks: { licenses: await licenseChecks(kinds, plan.end_day) },
+    };
+  }
+  /** What a change hands back: the whole year of a trip, or the outdoor parts of any other plan. */
+  const viewOf = async (planId: number): Promise<YearView | OutdoorView> => ((await isYear(db, planId)) ? yearView(planId) : plainView(planId));
 
   /** The booking on the calendar: made, changed or taken away to match what was typed. A private trip shows only its name. */
   async function syncBooking(tx: Queries, planId: number): Promise<void> {
@@ -480,6 +516,12 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
     },
 
     year: yearView,
+
+    /** Seasons, licenses, the harvest log and After the trip of any plan; for a trip's year, the whole year. */
+    async outdoor(planId: number): Promise<YearView | OutdoorView> {
+      await ownPlan(db, planId);
+      return viewOf(planId);
+    },
 
     /** Change what a year keeps: its days, the water, the site booking, its budget, notes for next year. */
     async setYear(planId: number, c: YearChange): Promise<YearView> {
@@ -619,11 +661,17 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
 
     // ---------- seasons ----------
 
-    async addSeason(planId: number, input: SeasonInput): Promise<YearView> {
-      const y = await yearRow(db, planId);
-      const t = await tripRow(db, y.trip_id);
-      const part = partChecked(t, input.part);
-      if (part === 'camping') throw new Problem(400, 'Seasons are for fishing and hunting');
+    async addSeason(planId: number, input: SeasonInput): Promise<YearView | OutdoorView> {
+      await ownPlan(db, planId);
+      let part: Part;
+      if (await isYear(db, planId)) {
+        part = partChecked(await tripRow(db, (await yearRow(db, planId)).trip_id), input.part);
+        if (part === 'camping') throw new Problem(400, 'Seasons are for fishing and hunting');
+      } else {
+        // No trip to say which: any plan can have a fishing or a hunting season.
+        if (input.part !== 'fishing' && input.part !== 'hunting') throw new Problem(400, 'Pick one: fishing or hunting.');
+        part = input.part;
+      }
       const label = clean(input.label, 100);
       if (!label) throw new Problem(400, 'Name the season');
       const opens = dayOrNull(input.opens_on);
@@ -634,12 +682,12 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
       if (!Number.isInteger(remind) || remind < 0 || remind > 120) throw new Problem(400, 'Remind you 0 to 120 days ahead');
       await roomFor('outdoor_seasons', planId);
       await db.run('INSERT INTO outdoor_seasons (plan_id, part, label, opens_on, closes_on, remind_days, note) VALUES (?, ?, ?, ?, ?, ?, ?)', [planId, part, label, opens, closes, remind, clean(input.note, 500)]);
-      return yearView(planId);
+      return viewOf(planId);
     },
-    async removeSeason(id: number): Promise<YearView> {
+    async removeSeason(id: number): Promise<YearView | OutdoorView> {
       const planId = await planOf('outdoor_seasons', id);
       await db.run('DELETE FROM outdoor_seasons WHERE id = ?', [id]);
-      return yearView(planId);
+      return viewOf(planId);
     },
 
     // ---------- the catch log ----------
@@ -694,9 +742,9 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
 
     // ---------- the harvest log ----------
 
-    async addHarvest(planId: number, input: HarvestInput): Promise<YearView> {
-      const y = await yearRow(db, planId);
-      partChecked(await tripRow(db, y.trip_id), 'hunting');
+    async addHarvest(planId: number, input: HarvestInput): Promise<YearView | OutdoorView> {
+      await ownPlan(db, planId);
+      if (await isYear(db, planId)) partChecked(await tripRow(db, (await yearRow(db, planId)).trip_id), 'hunting');
       const animal = clean(input.animal, 100);
       if (!animal) throw new Problem(400, 'Say what the animal was');
       const full = await plans().get(planId);
@@ -704,19 +752,40 @@ export function outdoorTrips(db: Db, owner: number, clock: Clock = () => new Dat
       await roomFor('outdoor_harvest', planId);
       await db.run('INSERT INTO outdoor_harvest (plan_id, animal, day, place, tag_number, weight_lb, note) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [planId, animal, dayOrNull(input.day) ?? full.start_day, clean(input.place, 200), clean(input.tag_number, 60), input.weight_lb ?? null, clean(input.note, 500)]);
-      return yearView(planId);
+      return viewOf(planId);
     },
-    async removeHarvest(id: number): Promise<YearView> {
+    async removeHarvest(id: number): Promise<YearView | OutdoorView> {
       const planId = await planOf('outdoor_harvest', id);
       await db.run('DELETE FROM outdoor_harvest WHERE id = ?', [id]);
-      return yearView(planId);
+      return viewOf(planId);
     },
     /** Meat into the freezer, once, under what the person called the animal. */
-    async freezeHarvest(id: number): Promise<YearView> {
+    async freezeHarvest(id: number): Promise<YearView | OutdoorView> {
       const planId = await planOf('outdoor_harvest', id);
       const h = (await db.get<{ animal: string; frozen: number }>('SELECT animal, frozen FROM outdoor_harvest WHERE id = ?', [id]))!;
       if (h.frozen === 0) { await toFreezer(`${h.animal} meat`); await db.run('UPDATE outdoor_harvest SET frozen = 1 WHERE id = ?', [id]); }
-      return yearView(planId);
+      return viewOf(planId);
+    },
+
+    // ---------- after the trip, on any plan ----------
+
+    /** A thing on a plan's Bring list: back home, what it needs, and that done. A repair goes to Upkeep once; a replacement goes on the shopping list once. */
+    async updateBring(itemId: number, c: { returned?: boolean; after_trip?: string | null; after_done?: boolean }): Promise<YearView | OutdoorView> {
+      const o = await db.get<{ plan_id: number; ref_id: number | null; label: string; returned: number; after_trip: AfterTrip | null; after_done: number; job_id: number | null }>(
+        `SELECT i.plan_id, i.ref_id, i.label, i.returned, i.after_trip, i.after_done, i.job_id FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE i.id = ? AND i.kind = 'thing' AND p.owner_id = ?`, [itemId, owner]);
+      if (!o) throw new Problem(404, "That isn't on the Bring list anymore. It may have been deleted.");
+      if (c.after_trip != null && !(AFTER_TRIP as readonly string[]).includes(c.after_trip)) throw new Problem(400, 'Pick one: dry, clean, repair or replace.');
+      const after = c.after_trip === undefined ? o.after_trip : (c.after_trip as AfterTrip | null);
+      await db.run('UPDATE plan_items SET returned = ?, after_trip = ?, after_done = ? WHERE id = ?',
+        [(c.returned ?? o.returned === 1) ? 1 : 0, after, (after !== o.after_trip ? false : (c.after_done ?? o.after_done === 1)) ? 1 : 0, itemId]);
+      const plan = await plans().get(o.plan_id);
+      const label = plan.items_list.find((i) => i.id === itemId)?.label ?? o.label;
+      if (after === 'repair' && o.job_id === null) {
+        const job = await upkeep(db, owner, clock).create({ name: `Repair: ${label}`, item_id: o.ref_id, first_due: today(), note: `Found after ${plan.name}.` });
+        await db.run('UPDATE plan_items SET job_id = ? WHERE id = ?', [job.id, itemId]);
+      }
+      if (after === 'replace' && o.after_trip !== 'replace') await kitchen(db, owner, clock).addGroceries([`${label} (replace)`]);
+      return viewOf(o.plan_id);
     },
 
     // ---------- the house, the morning round ----------

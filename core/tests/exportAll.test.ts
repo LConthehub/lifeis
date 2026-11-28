@@ -15,6 +15,7 @@ import { money } from '../src/money.ts';
 import { pets } from '../src/pets.ts';
 import { prep } from '../src/prep.ts';
 import { holidays } from '../src/holidays.ts';
+import { outdoorTrips } from '../src/outdoorTrips.ts';
 import { plans } from '../src/plans.ts';
 import { projects } from '../src/projects.ts';
 import { tags as tagsOf } from '../src/tags.ts';
@@ -604,6 +605,49 @@ it('a plain plan keeps its guest, card, gift and decoration through a download, 
   // The same file again adds nothing.
   await bringIn(bob, zip, ['money', 'plans', 'holidays']);
   expect(await kept()).toEqual(first);
+});
+
+it('a plain plan keeps its seasons, harvest and after-the-trip lines through a download, once', async () => {
+  const stuff = inventory(db, ana, clock);
+  const kind = (await stuff.createKind({ name: 'Camping gear', icon: null, fields: [] })).find((k) => k.name === 'Camping gear')!;
+  const tent = await stuff.createItem({ kind_id: kind.id, name: 'Family tent' });
+  const plan = await plans(db, ana, clock).create({ name: 'Camping weekend', start_day: '2046-09-12', end_day: '2046-09-14', parts: ['bring', 'seasons', 'harvest', 'after_trip'] });
+  const trips = outdoorTrips(db, ana, clock);
+  await trips.addSeason(plan.id, { part: 'hunting', label: 'Deer season', opens_on: '2046-11-01', closes_on: '2046-11-30', remind_days: 9 });
+  await trips.addHarvest(plan.id, { animal: 'Deer', day: '2046-09-13', place: 'North ridge', tag_number: 'T-9', weight_lb: 130 });
+  await trips.freezeHarvest((await db.get<{ id: number }>('SELECT id FROM outdoor_harvest WHERE plan_id = ?', [plan.id]))!.id);
+  const item = (await plans(db, ana, clock).addItem(plan.id, { kind: 'thing', ref_id: tent.id })).items_list[0]!;
+  await trips.updateBring(item.id, { returned: true, after_trip: 'clean' });
+  await trips.updateBring(item.id, { after_done: true });
+  const zip = (await exportEverything(db, ana, clock)).bytes;
+  const done = await bringIn(bob, zip, ['things', 'plans', 'trips']);
+  for (const kind of done.kinds) expect(kind.ok, `${kind.key}: ${kind.problem}`).toBe(true);
+  const kept = async () => {
+    const there = (await db.get<{ id: number }>('SELECT id FROM plans WHERE owner_id = ? AND name = ?', [bob, 'Camping weekend']))!.id;
+    return {
+      seasons: (await db.all<{ part: string; label: string; opens_on: string; closes_on: string | null; remind_days: number }>('SELECT part, label, opens_on, closes_on, remind_days FROM outdoor_seasons WHERE plan_id = ?', [there])).map((x) => [x.part, x.label, x.opens_on, x.closes_on, x.remind_days]),
+      harvest: (await db.all<{ animal: string; day: string; place: string; tag_number: string; weight_lb: number; frozen: number }>('SELECT animal, day, place, tag_number, weight_lb, frozen FROM outdoor_harvest WHERE plan_id = ?', [there])).map((x) => [x.animal, x.day, x.place, x.tag_number, x.weight_lb, x.frozen]),
+      things: (await db.all<{ label: string; ref_id: number | null; returned: number; after_trip: string | null; after_done: number }>("SELECT label, ref_id, returned, after_trip, after_done FROM plan_items WHERE plan_id = ? AND kind = 'thing'", [there]))
+        .map((x) => [x.label, x.ref_id !== null, x.returned, x.after_trip, x.after_done]),
+    };
+  };
+  const first = await kept();
+  expect(first.seasons).toEqual([['hunting', 'Deer season', '2046-11-01', '2046-11-30', 9]]);
+  expect(first.harvest).toEqual([['Deer', '2046-09-13', 'North ridge', 'T-9', 130, 1]]);
+  expect(first.things).toEqual([['Family tent', true, 1, 'clean', 1]]);
+  // The same file again adds nothing.
+  await bringIn(bob, zip, ['things', 'plans', 'trips']);
+  expect(await kept()).toEqual(first);
+  // A trip's year is not read as a plain plan: its seasons come back through the trips only, once.
+  const trip = await trips.create({ name: 'Lake weekend', parts: ['fishing'], day: '2046-06-13', end_day: '2046-06-15' });
+  await trips.addSeason(trip.years[0]!.plan_id, { part: 'fishing', label: 'Walleye opener', opens_on: '2046-05-15' });
+  // A trip's year can have guests too: they still come back with the plan.
+  await holidays(db, ana, clock).addPerson(trip.years[0]!.plan_id, 'guest', { name: 'The neighbors' });
+  const zip2 = (await exportEverything(db, ana, clock)).bytes;
+  const carol = await person('carol');
+  await bringIn(carol, zip2, ['things', 'plans', 'trips']);
+  expect(await db.get("SELECT COUNT(*) AS n FROM holiday_people h JOIN plans p ON p.id = h.plan_id WHERE p.owner_id = ? AND h.name = 'The neighbors'", [carol])).toEqual({ n: 1 });
+  expect(await db.get("SELECT COUNT(*) AS n FROM outdoor_seasons s JOIN plans p ON p.id = s.plan_id WHERE p.owner_id = ? AND s.label = 'Walleye opener'", [carol])).toEqual({ n: 1 });
 });
 
 it('what is new about things goes out and comes back in: asset numbers, insured, gone, and fields of your own', async () => {

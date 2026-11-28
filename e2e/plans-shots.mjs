@@ -84,7 +84,7 @@ try {
         await page.getByRole('button', { name: 'Parts', exact: true }).click(); await page.waitForTimeout(500);
         const dialog = page.getByRole('dialog');
         const boxes = await dialog.getByRole('checkbox').evaluateAll((bs) => bs.map((b) => Math.round(b.closest('label').getBoundingClientRect().height)));
-        check(`${tag}: every part row is 44px or taller`, boxes.length === 11 && boxes.every((h) => h >= 44), boxes.join(','));
+        check(`${tag}: every part row is 44px or taller`, boxes.length === 14 && boxes.every((h) => h >= 44), boxes.join(','));
         await dialog.screenshot({ path: path.join(shots, `parts-${sizeName}-${look}.png`) });
         await page.keyboard.press('Escape');
         await page.goto(base + `/plans/${plan.party}`); await page.waitForTimeout(1500);

@@ -31,6 +31,10 @@ export function outdoorTripRoutes(db: Db): Route[] {
     ['DELETE', at('/:id'), async (c) => (await mine(c).remove(c.id), { status: 204 })],
     ['POST', at('/:id/years'), async (c) => ({ status: 201, json: await mine(c).startYear(c.id, { day: read.maybeText(c.body, 'day'), end_day: read.maybeText(c.body, 'end_day') }) })],
 
+    // Seasons, licenses, the harvest log and After the trip of any plan (a camping weekend, a lunch at the lake); a trip's year gives the whole year.
+    ['GET', at('/outdoor/:id'), async (c) => ({ json: await mine(c).outdoor(c.id) })],
+    ['PUT', at('/plan-things/:id'), async (c) => ({ json: await mine(c).updateBring(c.id, { ...yes(c.body, 'returned'), ...yes(c.body, 'after_done'), ...maybe(c.body, 'after_trip', () => read.maybeText(c.body, 'after_trip')) }) })],
+
     ['GET', at('/years/:id'), async (c) => ({ json: await mine(c).year(c.id) })],
     ['PUT', at('/years/:id'), async (c) => ({
       json: await mine(c).setYear(c.id, {

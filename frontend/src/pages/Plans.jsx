@@ -6,6 +6,7 @@ import { shrink } from '../components/shrink';
 import Picture from '../components/Picture';
 import { PlanGoal } from '../components/Goals';
 import { Decor, Gifts, People } from './Holidays';
+import { After, Harvest, Licenses, Seasons } from './Trips';
 import { BulkBar, PickBox, SelectButton, TagFilter, TagPicker, saveTags, useSelecting } from '../components/tags';
 import Modal, { Field, inputClass, buttonClass, quietButtonClass, cardClass, errorMessage, toDateInput, fromDateInput } from '../components/ui';
 
@@ -19,10 +20,12 @@ const HOLDS = {
 };
 
 /** The parts a plan can check now, in the order they show. More come as holidays and trips join plans. */
-const PARTS = [['food', 'Food'], ['guests', 'Guests'], ['cards', 'Cards'], ['gifts', 'Gifts'], ['decorations', 'Decorations'], ['budget', 'Budget'], ['more_days', 'More than one day'], ['tasks', 'Helpers and tasks'], ['bring', 'Bring list'], ['media', 'To watch, hear or read'], ['projects', 'Projects']];
+const PARTS = [['food', 'Food'], ['guests', 'Guests'], ['cards', 'Cards'], ['gifts', 'Gifts'], ['decorations', 'Decorations'], ['budget', 'Budget'], ['more_days', 'More than one day'], ['tasks', 'Helpers and tasks'], ['bring', 'Bring list'], ['seasons', 'Seasons and licenses'], ['harvest', 'Harvest log'], ['after_trip', 'After the trip'], ['media', 'To watch, hear or read'], ['projects', 'Projects']];
 const partOrder = (key) => PARTS.findIndex(([k]) => k === key);
 const GATHERING = ['guests', 'cards', 'gifts', 'decorations'];
+const OUTDOOR = ['seasons', 'harvest', 'after_trip'];
 const HOLIDAY_API = '/api/plans/holidays';
+const TRIP_API = '/api/plans/trips';
 
 /**
  * Guests, cards, gifts and decorations on any plan, using the same sections as a holiday's year. Each sits in the
@@ -48,6 +51,38 @@ function Gathering({ plan }) {
       {uses('cards') && box('cards', <People year={view} options={options} post={post} put={put} del={del} role="card" />)}
       {uses('gifts') && box('gifts', <Gifts year={view} options={options} post={post} put={put} del={del} />)}
       {uses('decorations') && box('decorations', <Decor year={view} options={options} post={post} put={put} del={del} act={act} mode={plan.when === 'past' ? 'down' : 'up'} />)}
+    </>
+  );
+}
+/**
+ * Seasons and licenses, the harvest log and After the trip on any plan, using the same sections as a trip's year. A plan
+ * that is not a trip's year has no trip parts, so seasons offer fishing or hunting and After the trip goes by its Bring list.
+ */
+function Outdoor({ plan }) {
+  const [view, setView] = useState(null);
+  const [error, setError] = useState('');
+  // The Bring list can change on this page: ask again when the things on it do.
+  const bringKey = plan.items_list.filter((i) => i.kind === 'thing').map((i) => `${i.id}:${i.label}`).join(',');
+  const load = useCallback(() => { axios.get(`${TRIP_API}/outdoor/${plan.id}`).then(({ data }) => setView(data)).catch(() => setView(null)); }, [plan.id]);
+  useEffect(() => { load(); }, [load, bringKey]);
+  if (!view) return null;
+  const act = async (work) => { setError(''); try { setView((await work()).data); } catch (err) { setError(errorMessage(err, "Couldn't do that")); } };
+  const post = (path, body) => act(() => axios.post(`${TRIP_API}/${path}`, body));
+  const put = (path, body) => act(() => axios.put(`${TRIP_API}/${path}`, body));
+  const del = (path) => act(() => axios.delete(`${TRIP_API}/${path}`));
+  const uses = (part) => plan.parts.includes(part);
+  const box = (part, child) => <div style={{ order: partOrder(part) }}>{child}</div>;
+  // A trip's year has its parts turned on in the trip: say so where it is off.
+  const off = (what, part) => <section className={cardClass} aria-label={what}><h2 className="font-semibold text-life-800 dark:text-life-50">{what}</h2><p className="text-sm text-gray-600 dark:text-life-200">Turn on {part} for this trip first, on the Trips page.</p></section>;
+  const tripParts = view.trip ? view.trip.parts : null;
+  const firstWithChecks = uses('seasons') ? 'seasons' : 'harvest';
+  return (
+    <>
+      {error && <p className="text-sm text-red-600" style={{ order: 0 }}>{error}</p>}
+      {view.checks.licenses.length > 0 && (uses('seasons') || uses('harvest')) && box(firstWithChecks, <Licenses year={view} />)}
+      {uses('seasons') && box('seasons', tripParts && !tripParts.includes('fishing') && !tripParts.includes('hunting') ? off('Seasons', 'fishing or hunting') : <Seasons year={view} post={post} del={del} />)}
+      {uses('harvest') && box('harvest', tripParts && !tripParts.includes('hunting') ? off('Harvest log', 'hunting') : <Harvest year={view} post={post} del={del} />)}
+      {uses('after_trip') && box('after_trip', <After year={view} put={put} />)}
     </>
   );
 }
@@ -299,6 +334,7 @@ export function PlanPage() {
 
       <div className="grid gap-3 md:grid-cols-2">
         {GATHERING.some(uses) && <Gathering plan={plan} />}
+        {OUTDOOR.some(uses) && <Outdoor plan={plan} />}
         {uses('tasks') && <section className={cardClass} style={{ order: partOrder('tasks') }}>
           <h2 className="mb-2 font-semibold text-life-800 dark:text-life-50">Helpers and tasks {tasks.length > 0 && <span className="text-sm font-normal text-gray-500 dark:text-life-300">{tasks.filter((t) => t.done).length} of {tasks.length}</span>}</h2>
           <ul className="space-y-1">

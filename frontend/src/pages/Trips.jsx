@@ -268,8 +268,8 @@ function Basics({ year, put }) {
   );
 }
 
-/** What each license says about the trip's days. */
-function Licenses({ year }) {
+/** What each license says about the trip's days. Also shown on a plan that is not a trip's year. */
+export function Licenses({ year }) {
   return (
     <section className={`${cardClass} space-y-1`} aria-label="License check">
       <Heading icon="warranty">License check</Heading>
@@ -441,9 +441,9 @@ function Menu({ year, act, post, del }) {
   );
 }
 
-/** Dates you type, with a reminder before opening day. */
-function Seasons({ year, post, del }) {
-  const parts = year.trip.parts.filter((p) => p !== 'camping');
+/** Dates you type, with a reminder before opening day. On a plan that is not a trip's year there are no trip parts, so it offers fishing or hunting. */
+export function Seasons({ year, post, del }) {
+  const parts = year.trip ? year.trip.parts.filter((p) => p !== 'camping') : ['fishing', 'hunting'];
   const [form, setForm] = useState({ part: parts[0], label: '', opens_on: '', closes_on: '', remind_days: 7 });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const add = async (e) => {
@@ -583,7 +583,7 @@ function Ammo({ year }) {
 }
 
 /** The harvest log: the animal in words, the tag number, and meat to the freezer. Private to its person. */
-function Harvest({ year, post, del }) {
+export function Harvest({ year, post, del }) {
   const empty = { animal: '', day: year.day, place: '', tag_number: '', weight: '' };
   const [form, setForm] = useState(empty);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -595,7 +595,7 @@ function Harvest({ year, post, del }) {
   return (
     <section className={`${cardClass} space-y-2`} aria-label="Harvest log">
       <Heading icon="lock">Harvest log</Heading>
-      <Hint>Private to you. Other people in the house see only the trip's name and days.</Hint>
+      <Hint>{year.trip ? "Private to you. Other people in the house see only the trip's name and days." : 'Private to you.'}</Hint>
       <ul className="divide-y divide-life-100 dark:divide-life-700">
         {year.harvest.map((h) => (
           <li key={h.id} className="flex items-center gap-1">
@@ -623,20 +623,24 @@ function Harvest({ year, post, del }) {
 }
 
 /** After the trip: what came back, and what each piece needs: dry, clean, repair (to Upkeep) or replace (to the shopping list). */
-function After({ year, put }) {
+export function After({ year, put }) {
+  // A trip's year keeps its own bring list (gear); any other plan's is the things on its Bring list.
+  const at = year.trip ? 'gear' : 'plan-things';
   return (
     <section className={`${cardClass} space-y-2`} aria-label="After the trip">
       <Heading icon="packed">After the trip</Heading>
-      <Hint>Check off what came back, and say what each piece needs. A repair goes to Upkeep. A replacement goes on the grocery list.</Hint>
+      {year.gear.length === 0
+        ? <Hint>Add things to the Bring list first. Then you can check off what came back here.</Hint>
+        : <Hint>Check off what came back, and say what each piece needs. A repair goes to Upkeep. A replacement goes on the grocery list.</Hint>}
       <ul className="divide-y divide-life-100 dark:divide-life-700">
         {year.gear.map((g) => (
           <li key={g.id} className="space-y-1 py-1">
-            <Tick checked={g.returned} label={`${g.label} is back`} onChange={(v) => put(`gear/${g.id}`, { returned: v })}>{g.label}</Tick>
+            <Tick checked={g.returned} label={`${g.label} is back`} onChange={(v) => put(`${at}/${g.id}`, { returned: v })}>{g.label}</Tick>
             <div className="flex flex-wrap items-center gap-2 pl-8">
-              <select value={g.after_trip ?? ''} onChange={(e) => put(`gear/${g.id}`, { after_trip: e.target.value || null })} aria-label={`What ${g.label} needs after the trip`} className={`${field} w-auto max-w-full`}>
+              <select value={g.after_trip ?? ''} onChange={(e) => put(`${at}/${g.id}`, { after_trip: e.target.value || null })} aria-label={`What ${g.label} needs after the trip`} className={`${field} w-auto max-w-full`}>
                 {AFTER.map(([k, w]) => <option key={k} value={k}>{w}</option>)}
               </select>
-              {(g.after_trip === 'dry' || g.after_trip === 'clean') && <Tick checked={g.after_done} label={`${g.label} is ${g.after_trip === 'dry' ? 'dry' : 'clean'}`} onChange={(v) => put(`gear/${g.id}`, { after_done: v })}>{g.after_trip === 'dry' ? 'Dry' : 'Clean'}</Tick>}
+              {(g.after_trip === 'dry' || g.after_trip === 'clean') && <Tick checked={g.after_done} label={`${g.label} is ${g.after_trip === 'dry' ? 'dry' : 'clean'}`} onChange={(v) => put(`${at}/${g.id}`, { after_done: v })}>{g.after_trip === 'dry' ? 'Dry' : 'Clean'}</Tick>}
               {g.after_trip === 'repair' && g.job_id && <Link to="/things/upkeep" className="inline-flex min-h-[44px] items-center text-xs text-life-600 underline dark:text-life-200">In Upkeep</Link>}
             </div>
           </li>

@@ -46,9 +46,9 @@ export const PLAN_PARTS = [
   { key: 'traditions', label: 'Traditions', ready: false },
   { key: 'tasks', label: 'Helpers and tasks', ready: true },
   { key: 'bring', label: 'Bring list', ready: true },
-  { key: 'seasons', label: 'Seasons and licenses', ready: false },
-  { key: 'harvest', label: 'Harvest log', ready: false },
-  { key: 'after_trip', label: 'After the trip', ready: false },
+  { key: 'seasons', label: 'Seasons and licenses', ready: true },
+  { key: 'harvest', label: 'Harvest log', ready: true },
+  { key: 'after_trip', label: 'After the trip', ready: true },
   { key: 'media', label: 'To watch, hear or read', ready: true },
   { key: 'projects', label: 'Projects', ready: true },
 ] as const;

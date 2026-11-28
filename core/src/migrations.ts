@@ -1905,6 +1905,18 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE plans ADD COLUMN parts TEXT`,
     ],
   },
+  {
+    number: 63,
+    name: 'After the trip on any plan',
+    // For a thing on a plan's Bring list: whether it is back home, what it needs (dry, clean, repair, replace: the same words as a
+    // trip's gear), whether that is done, and the Upkeep job a repair made (so it is made once).
+    statements: [
+      `ALTER TABLE plan_items ADD COLUMN returned INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE plan_items ADD COLUMN after_trip TEXT CHECK(after_trip IS NULL OR after_trip IN ('dry', 'clean', 'repair', 'replace'))`,
+      `ALTER TABLE plan_items ADD COLUMN after_done INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE plan_items ADD COLUMN job_id INTEGER REFERENCES upkeep_jobs(id) ON DELETE SET NULL`,
+    ],
+  },
 ];
 
 export const LATEST =MIGRATIONS[MIGRATIONS.length - 1]!.number;

@@ -605,9 +605,9 @@ async function gather(q: Queries, owner: number, today: string, out: Out): Promi
   const planOf = new Map(plans.map((p) => [p.id as number, p]));
   out.csv('plans.csv', ['Plan', 'Starts', 'Ends', 'Notes', 'The story', 'Parts'], plans.map((p) => [str(p.name), str(p.start_day), str(p.end_day), str(p.note), str(p.story),
     p.parts === null ? '' : String(p.parts).split(',').map((k) => PLAN_PARTS.find((x) => x.key === k)?.label ?? k).join('; ')]));
-  out.csv('plan-items.csv', ['Plan', 'Kind', 'What', 'Amount', 'Done', 'Notes'],
-    (await all('SELECT i.plan_id, i.kind, i.label, i.quantity, i.done, i.note FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ? ORDER BY i.plan_id, i.sort_order, i.id'))
-      .map((i) => [str(planOf.get(i.plan_id as number)?.name), str(i.kind), str(i.label), str(i.quantity), yes(i.done), str(i.note)]));
+  out.csv('plan-items.csv', ['Plan', 'Kind', 'What', 'Amount', 'Done', 'Notes', 'Back home', 'After the trip', 'After the trip done'],
+    (await all('SELECT i.plan_id, i.kind, i.label, i.quantity, i.done, i.note, i.returned, i.after_trip, i.after_done FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE p.owner_id = ? ORDER BY i.plan_id, i.sort_order, i.id'))
+      .map((i) => [str(planOf.get(i.plan_id as number)?.name), str(i.kind), str(i.label), str(i.quantity), yes(i.done), str(i.note), yes(i.returned), str(i.after_trip), yes(i.after_done)]));
   const planPhotos: Cell[][] = [];
   for (const p of await all('SELECT p.id, p.plan_id, p.source, p.type, p.bytes, p.caption, p.spot FROM plan_photos p JOIN plans pl ON pl.id = p.plan_id WHERE pl.owner_id = ? ORDER BY p.plan_id, p.sort_order, p.id')) {
     const plan = planOf.get(p.plan_id as number)!;
@@ -1048,6 +1048,28 @@ async function putLists(c: Ctx, plan: number, labelName: string, rows: Record<st
         [plan, label, rule, /^([01]\d|2[0-3]):[0-5]\d$/.test(at) ? at : null, hours !== null && hours >= 1 && hours <= 72 ? hours : null, yesOf(cellOf(l, 'Done')) ? 1 : 0, order]);
     } else continue;
     order += 1;
+  }
+}
+
+/** The seasons and harvest log of a plan that is not a trip's year (a trip's year gets them when the trips come in). */
+async function putSeasons(c: Ctx, plan: number, rows: Record<string, string>[]): Promise<void> {
+  for (const l of rows) {
+    const list = cellOf(l, 'List').toLowerCase();
+    const label = clean(cellOf(l, 'Name'), 300);
+    const day = dayOf(cellOf(l, 'Day'));
+    const note = clean(cellOf(l, 'Note'), 500);
+    if (!label || !day) continue;
+    if (list === 'season') {
+      const part = cellOf(l, 'Part').toLowerCase();
+      if (part !== 'fishing' && part !== 'hunting') continue;
+      const remind = wholeOf(cellOf(l, 'Amount'));
+      await c.tx.run('INSERT INTO outdoor_seasons (plan_id, part, label, opens_on, closes_on, remind_days, note) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [plan, part, label.slice(0, 100), day, dayOf(cellOf(l, 'Place or water')), remind !== null && remind >= 0 && remind <= 120 ? remind : 7, note]);
+    } else if (list === 'harvest') {
+      const weight = numberOf(cellOf(l, 'Weight (pounds)'));
+      await c.tx.run('INSERT INTO outdoor_harvest (plan_id, animal, day, place, tag_number, weight_lb, frozen, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [plan, label.slice(0, 100), day, clean(cellOf(l, 'Place or water'), 200), clean(cellOf(l, 'Tag number or caliber'), 60), weight !== null && weight >= 0 ? weight : null, cellOf(l, 'Status').toLowerCase().includes('frozen') ? 1 : 0, note]);
+    }
   }
 }
 
@@ -2068,7 +2090,10 @@ ${mediaId}`);
     const items = tableOf(c.files, 'plan-items.csv')?.rows ?? [];
     const photos = tableOf(c.files, 'plan-photos.csv')?.rows ?? [];
     const lists = tableOf(c.files, 'holiday-lists.csv')?.rows ?? [];
-    const yearKeys = new Set((tableOf(c.files, 'holiday-years.csv')?.rows ?? []).map((y) => `${labelKey(cellOf(y, 'Plan'))}\n${dayOf(cellOf(y, 'Starts'))}`));
+    const trips = tableOf(c.files, 'outdoor-trip-lists.csv')?.rows ?? [];
+    const keysOf = (file: string) => new Set((tableOf(c.files, file)?.rows ?? []).map((y) => `${labelKey(cellOf(y, 'Plan'))}\n${dayOf(cellOf(y, 'Starts'))}`));
+    const yearKeys = keysOf('holiday-years.csv');
+    const tripYearKeys = keysOf('outdoor-trip-years.csv');
     const filled = new Set<string>();
     let library = 0;
     for (const [at, row] of t.rows.entries()) {
@@ -2097,8 +2122,11 @@ ${mediaId}`);
         const ref = kind === 'task' ? null : pointed[kind]!.get(labelKey(label)) ?? null;
         if (kind !== 'task' && ref === null) lost = true;
         const quantity = numberOf(cellOf(i, 'Amount'));
-        await c.tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)',
-          [made.lastId, kind, ref, label, quantity !== null && quantity > 0 ? quantity : null, clean(i.notes, 1000), yesOf(cellOf(i, 'Done')) ? 1 : 0, order]);
+        const after = cellOf(i, 'After the trip').toLowerCase();
+        const kept = kind === 'thing' && ['dry', 'clean', 'repair', 'replace'].includes(after) ? after : null;
+        await c.tx.run('INSERT INTO plan_items (plan_id, kind, ref_id, label, quantity, note, done, sort_order, meal_plan_id, returned, after_trip, after_done) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)',
+          [made.lastId, kind, ref, label, quantity !== null && quantity > 0 ? quantity : null, clean(i.notes, 1000), yesOf(cellOf(i, 'Done')) ? 1 : 0, order,
+            kind === 'thing' && yesOf(cellOf(i, 'Back home')) ? 1 : 0, kept, kept && yesOf(cellOf(i, 'After the trip done')) ? 1 : 0]);
         order += 1;
       }
       for (const p of photos.filter(mine)) {
@@ -2108,7 +2136,10 @@ ${mediaId}`);
       }
       if (lost) d.unlinked += 1;
       // A holiday's year gets its lists when the holidays come in; any other plan gets them here, with its gifts named after the plan.
-      if (!yearKeys.has(`${key}\n${start}`)) await putLists(c, made.lastId, name, lists.filter((r) => labelKey(cellOf(r, 'Plan')) === key && dayOf(cellOf(r, 'Starts')) === start));
+      // A trip's year gets its seasons and harvest log when the trips come in; its guests and gifts still come in here.
+      const here = (r: Record<string, string>) => labelKey(cellOf(r, 'Plan')) === key && dayOf(cellOf(r, 'Starts')) === start;
+      if (!yearKeys.has(`${key}\n${start}`)) await putLists(c, made.lastId, name, lists.filter(here));
+      if (!tripYearKeys.has(`${key}\n${start}`)) await putSeasons(c, made.lastId, trips.filter(here));
     }
     if (library) d.note = `${library} photo${library === 1 ? ' that is' : 's that are'} in your photo library, not in the download, ${library === 1 ? 'was' : 'were'} left out`;
     return d;

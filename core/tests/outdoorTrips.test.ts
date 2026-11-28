@@ -7,7 +7,8 @@ import { inventory } from '../src/inventory.ts';
 import { kitchen } from '../src/kitchen.ts';
 import { licenses } from '../src/licenses.ts';
 import { LATEST, migrate } from '../src/migrations.ts';
-import { outdoorTrips } from '../src/outdoorTrips.ts';
+import { outdoorTrips, type OutdoorView, type PlanGear, type YearView } from '../src/outdoorTrips.ts';
+import { plans as plansOf } from '../src/plans.ts';
 import { upkeep } from '../src/upkeep.ts';
 import { memoryDb } from './memoryDb.ts';
 
@@ -179,7 +180,7 @@ it('hunting keeps a bring list with an ammunition check, a harvest log, and meat
   await mine().addHarvest(planId, { animal: 'White-tailed deer', day: '2046-11-09', place: 'North ridge', tag_number: 'T-4471', weight_lb: 140 });
   let after = await mine().year(planId);
   expect(after.harvest[0]).toMatchObject({ animal: 'White-tailed deer', tag_number: 'T-4471', weight_lb: 140, frozen: false });
-  after = await mine().freezeHarvest(after.harvest[0]!.id);
+  after = (await mine().freezeHarvest(after.harvest[0]!.id)) as typeof after;
   expect((await kitchen(db, owner, clock).listPantry()).items.find((i) => i.name === 'White-tailed deer meat')).toMatchObject({ location: 'freezer', quantity: 1 });
   await expect(mine().addCatch(planId, { fish: 'Bass' })).rejects.toEqual(problem(400)); // fishing is not on
 });
@@ -266,4 +267,114 @@ it('goes out in the download and comes back in once, with nothing of anyone else
   expect(await theirs.list()).toHaveLength(1);
   expect((await theirs.year(trip.years[0]!.plan_id)).catches).toHaveLength(1);
   expect((await mine().list())[0]!.years).toHaveLength(1);
+});
+
+/** A camping weekend that is not a trip's year: a plain plan with the outdoor parts checked. */
+async function weekend() {
+  const { tent } = await gear();
+  const plan = await plansOf(db, owner, clock).create({ name: 'Camping weekend', start_day: '2046-06-13', end_day: '2046-06-15', parts: ['bring', 'seasons', 'harvest', 'after_trip'] });
+  const view = async () => (await mine().outdoor(plan.id)) as OutdoorView;
+  return { plan, tent, view };
+}
+
+it('seasons and the license check work on a plan that is not a trip, one check for each kind it has a season for', async () => {
+  const { plan, view } = await weekend();
+  expect(await view()).toMatchObject({ trip: null, seasons: [], harvest: [], gear: [], checks: { licenses: [] } });
+  await expect(mine().addSeason(plan.id, { part: 'camping', label: 'x', opens_on: '2046-05-15' })).rejects.toEqual(problem(400));
+  await expect(mine().addSeason(plan.id, { part: null, label: 'x', opens_on: '2046-05-15' })).rejects.toEqual(problem(400));
+  const added = (await mine().addSeason(plan.id, { part: 'fishing', label: 'Walleye opener', opens_on: '2046-05-15', closes_on: '2046-12-01', remind_days: 7 })) as OutdoorView;
+  expect(added.seasons.map((s) => [s.part, s.label])).toEqual([['fishing', 'Walleye opener']]);
+  // Fishing only: one check, and no license kept yet.
+  expect(added.checks.licenses.map((l) => [l.kind, l.ok, l.found])).toEqual([['fishing', false, null]]);
+  await licenses(db, owner, clock).create({ name: 'Fishing license', category: 'Outdoors', expires_on: '2046-08-01' });
+  await licenses(db, owner, clock).create({ name: 'Deer tag', category: 'Outdoors', expires_on: '2046-06-14' });
+  expect((await view()).checks.licenses.map((l) => [l.kind, l.ok, l.found])).toEqual([['fishing', true, 'Fishing license']]);
+  const both = (await mine().addSeason(plan.id, { part: 'hunting', label: 'Deer season', opens_on: '2046-11-01' })) as OutdoorView;
+  // The hunting tag ends the 14th, before the plan is over on the 15th.
+  expect(both.checks.licenses.map((l) => [l.kind, l.ok, l.found])).toEqual([['fishing', true, 'Fishing license'], ['hunting', false, 'Deer tag']]);
+  const left = (await mine().removeSeason(both.seasons.find((s) => s.label === 'Deer season')!.id)) as OutdoorView;
+  expect(left.seasons).toHaveLength(1);
+  expect(left.checks.licenses.map((l) => l.kind)).toEqual(['fishing']);
+  expect(plan.parts).toContain('seasons');
+});
+
+it('the harvest log works on a plan that is not a trip, with meat to the freezer and a hunting license check', async () => {
+  const { plan, view } = await weekend();
+  await expect(mine().addHarvest(plan.id, { animal: ' ' })).rejects.toEqual(problem(400));
+  const added = (await mine().addHarvest(plan.id, { animal: 'Deer', day: '2046-06-14', place: 'North ridge', tag_number: 'T-1', weight_lb: 120 })) as OutdoorView;
+  expect(added.harvest).toMatchObject([{ animal: 'Deer', place: 'North ridge', tag_number: 'T-1', weight_lb: 120, frozen: false }]);
+  expect(added.checks.licenses.map((l) => [l.kind, l.ok])).toEqual([['hunting', false]]); // a harvest line asks about the hunting license
+  const frozen = (await mine().freezeHarvest(added.harvest[0]!.id)) as OutdoorView;
+  expect(frozen.harvest[0]!.frozen).toBe(true);
+  expect((await kitchen(db, owner, clock).listPantry()).items.find((i) => i.name === 'Deer meat')).toMatchObject({ location: 'freezer', quantity: 1 });
+  await mine().freezeHarvest(added.harvest[0]!.id);
+  expect((await kitchen(db, owner, clock).listPantry()).items.find((i) => i.name === 'Deer meat')).toMatchObject({ quantity: 1 }); // once
+  expect(((await mine().removeHarvest(added.harvest[0]!.id)) as OutdoorView).harvest).toEqual([]);
+  expect((await view()).checks.licenses).toEqual([]);
+});
+
+it('after the trip works on a plan that is not a trip: back home, what each thing needs, a repair to Upkeep once, a replacement to the list once', async () => {
+  const { plan, tent, view } = await weekend();
+  const plans = plansOf(db, owner, clock);
+  expect((await view()).gear).toEqual([]); // nothing on the Bring list yet
+  await plans.addItem(plan.id, { kind: 'thing', ref_id: tent.id });
+  await plans.addItem(plan.id, { kind: 'thing', ref_id: (await inventory(db, owner, clock).listItems()).find((t) => t.name === 'Big cooler')!.id });
+  await plans.addItem(plan.id, { kind: 'task', label: 'Buy ice' }); // not a thing: not listed
+  const first = (await view()).gear;
+  expect(first.map((g) => [g.label, g.returned, g.after_trip, g.after_done])).toEqual([['Family tent', false, null, false], ['Big cooler', false, null, false]]);
+  const [tentLine, cooler] = first as [PlanGear, PlanGear];
+  await expect(mine().updateBring(tentLine.id, { after_trip: 'burn' })).rejects.toEqual(problem(400));
+  await mine().updateBring(tentLine.id, { returned: true, after_trip: 'dry' });
+  let now = ((await mine().updateBring(tentLine.id, { after_done: true })) as OutdoorView).gear[0]!;
+  expect(now).toMatchObject({ returned: true, after_trip: 'dry', after_done: true });
+  now = ((await mine().updateBring(tentLine.id, { after_trip: 'clean' })) as OutdoorView).gear[0]!;
+  expect(now).toMatchObject({ after_trip: 'clean', after_done: false }); // a new need starts undone
+  await mine().updateBring(tentLine.id, { after_trip: 'repair' });
+  await mine().updateBring(tentLine.id, { after_trip: 'repair' });
+  expect((await upkeep(db, owner, clock).list()).filter((j) => j.name === 'Repair: Family tent')).toHaveLength(1);
+  expect(((await view()).gear[0]!).job_id).not.toBeNull();
+  await mine().updateBring(cooler.id, { after_trip: 'replace' });
+  await mine().updateBring(cooler.id, { after_trip: 'replace' });
+  expect((await kitchen(db, owner, clock).listGrocery()).filter((g) => /big cooler/i.test(g.label))).toHaveLength(1);
+  // Taking the thing off the plan takes its line away.
+  await plans.removeItem(cooler.id);
+  expect((await view()).gear.map((g) => g.label)).toEqual(['Family tent']);
+});
+
+it('on a plan that is not a trip, these parts are only for its own person, and a part taken off keeps what is in it', async () => {
+  const { plan, tent, view } = await weekend();
+  const plans = plansOf(db, owner, clock);
+  await mine().addSeason(plan.id, { part: 'fishing', label: 'Walleye opener', opens_on: '2046-05-15' });
+  await mine().addHarvest(plan.id, { animal: 'Turkey' });
+  const item = (await plans.addItem(plan.id, { kind: 'thing', ref_id: tent.id })).items_list[0]!;
+  await mine().updateBring(item.id, { returned: true, after_trip: 'dry' });
+  const seasonId = (await view()).seasons[0]!.id;
+  const harvestId = (await view()).harvest[0]!.id;
+  const other = outdoorTrips(db, await person('other'), clock);
+  await expect(other.outdoor(plan.id)).rejects.toEqual(problem(404));
+  await expect(other.addSeason(plan.id, { part: 'fishing', label: 'x', opens_on: '2046-05-15' })).rejects.toEqual(problem(404));
+  await expect(other.addHarvest(plan.id, { animal: 'Deer' })).rejects.toEqual(problem(404));
+  await expect(other.removeSeason(seasonId)).rejects.toEqual(problem(404));
+  await expect(other.removeHarvest(harvestId)).rejects.toEqual(problem(404));
+  await expect(other.freezeHarvest(harvestId)).rejects.toEqual(problem(404));
+  await expect(other.updateBring(item.id, { returned: false })).rejects.toEqual(problem(404));
+  // Taken off the plan, they are still there when checked again.
+  await plans.setParts(plan.id, ['bring']);
+  await plans.setParts(plan.id, ['bring', 'seasons', 'harvest', 'after_trip']);
+  const back = await view();
+  expect([back.seasons.length, back.harvest.length, back.gear[0]!.returned, back.gear[0]!.after_trip]).toEqual([1, 1, true, 'dry']);
+});
+
+it('a trip year shows its own data through the plan page route, and a plan that is not a trip does not mix with it', async () => {
+  await gear();
+  const made = await mine().create({ name: 'Lake weekend', parts: ['camping', 'fishing'], day: '2046-06-13', end_day: '2046-06-15' });
+  const planId = made.years[0]!.plan_id;
+  await mine().fillGear(planId, 'camping');
+  await mine().addSeason(planId, { part: 'fishing', label: 'Walleye opener', opens_on: '2046-05-15' });
+  const view = (await mine().outdoor(planId)) as YearView;
+  expect(view.trip.parts).toEqual(['camping', 'fishing']);
+  expect(view.gear.length).toBeGreaterThan(0);
+  expect(view.seasons.map((s) => s.label)).toEqual(['Walleye opener']);
+  // Hunting is not on for this trip, so a harvest line is refused, as on the trip's own page.
+  await expect(mine().addHarvest(planId, { animal: 'Deer' })).rejects.toEqual(problem(400));
 });

@@ -127,7 +127,7 @@ export type { Start, StartState, Step, WeeklyState, Cleared } from './start.ts';
 export { exportEverything, lookAtDownload, bringInDownload, bringInPictures, splitDownload, makeZip, readZip, csvField, csvText, KINDS as DOWNLOAD_KINDS, LEFT_OUT as DOWNLOAD_LEFT_OUT, MAX_EXPORT_BYTES, MAX_SENT_BYTES } from './exportAll.ts';
 export type { Everything, KindReport, Pending, Brought, PictureIn, ZipFile, KindInfo } from './exportAll.ts';
 export { outdoorTrips, PARTS as TRIP_PARTS, AFTER_TRIP, GEAR_SOURCES, ammoOnHand } from './outdoorTrips.ts';
-export type { OutdoorTrips, TripSummary as OutdoorTripSummary, YearView as OutdoorYearView, TripInput as OutdoorTripInput, SharedTrip as OutdoorSharedTrip, Gear as OutdoorGear, Part as OutdoorPart } from './outdoorTrips.ts';
+export type { OutdoorTrips, TripSummary as OutdoorTripSummary, YearView as OutdoorYearView, TripInput as OutdoorTripInput, SharedTrip as OutdoorSharedTrip, Gear as OutdoorGear, Part as OutdoorPart, OutdoorView, PlanGear as OutdoorPlanGear } from './outdoorTrips.ts';
 export { CONNECTOR_SERVICE, CONNECTOR_SECTIONS, CONNECTOR_NEVER, CONNECTOR_ADDS, UNUSED_DAYS, MOST_CONNECTIONS, RESULT_LIMIT, HOUSEHOLD_KEY, householdOn, checkConnection, stillLive, connectionTools, callTool, connector } from './connector.ts';
 export type { SectionId, ConnectionInfo, LogLine, ConnectorStatus, Live, ToolInfo } from './connector.ts';
 export { KEY_ACTIONS, isKeyAction, voice, splitGroceries, spokenList, spokenTime, spokenDay, readWhen } from './voice.ts';

@@ -76,7 +76,9 @@ check('no step is ticked yet: the examples do not count', (await card.locator('l
 const lead = page.locator('[data-lead=true]');
 check('Home opens on the card for the answer (Things), before the other cards', (await lead.count()) === 1 && /Things/.test(await lead.locator('h2').innerText()));
 const grid = await page.evaluate(() => {
-  const cards = [...document.querySelectorAll('main section')].filter((s) => s.querySelector('h2') && !s.matches('[aria-label]'));
+  // Home's cards are the lead card and the sections beside it (each has its name as a label now).
+  const first = document.querySelector('main [data-lead=true]');
+  const cards = first ? [...first.parentElement.children].filter((s) => s.matches('section') && s.querySelector('h2')) : [];
   const tops = cards.map((c) => [c.querySelector('h2').innerText, Math.round(c.getBoundingClientRect().top + scrollY), c.dataset.lead === 'true']);
   return tops;
 });
