@@ -182,6 +182,7 @@ export function makingRoutes(db: Db): Route[] {
       };
     }],
     // Guns and ammunition: private to the person, and shared only with the people they pick. See core/'s inventory.ts.
+    ['GET', at('things/collection'), async (c) => ({ json: await things(c).collectionThings() })],
     ['GET', at('things/guns'), async (c) => ({ json: await things(c).guns() })],
     ['GET', at('things/shared'), async (c) => ({ json: await sharedWithMe(db, c.user.id, c.clock) })],
     ['GET', at('things/shared/:id/photo'), async (c) => {

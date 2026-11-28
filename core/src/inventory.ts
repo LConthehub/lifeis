@@ -12,6 +12,7 @@
  * `inventory(db, owner)` is one person's things: everything it reads and writes is theirs.
  */
 import { atomic, type Db, type Queries, type Value } from './db.ts';
+import { physicalCopies, type PhysicalCopy } from './collectionThings.ts';
 import { shown } from './displayName.ts';
 import { historyOf, noteHistory, noteMove, placePath, type HistoryEntry } from './history.ts';
 import { Problem } from './problem.ts';
@@ -217,7 +218,10 @@ export type ReportLine = {
   serial: string | null; model: string | null; bought_on: string | null; bought_at: string | null;
   price_cents: number | null; value_cents: number | null; /** What it's worth now if said, else what it cost. */ worth_cents: number; warranty_until: string | null;
   asset_no: string; insured: boolean;
+  /** Set on a physical copy kept in the Collection (a disc, a record, a printed book): `id` is then minus the copy's id, and the line leads to its title. */
+  collection?: { media_id: number; format: string };
 };
+export type CollectionThing = PhysicalCopy & { place: string | null };
 export type ReportRoom = {
   id: number; name: string; things: number;
   /** What the things shown cost, in cents (those with no price count nothing). */ price_cents: number;
@@ -245,6 +249,8 @@ export type HomeReport = {
   /** All of the household's things and what they are worth, whatever was chosen to leave out. */
   things: number; worth_cents: number; price_cents: number; /** How many have a price or a value. */ valued: number; unvalued: number;
   with_photo: number; with_receipt: number; with_serial: number; at_cost: number;
+  /** How many of `things` are physical copies kept in the Collection (discs, records, printed books, cartridges). */
+  collection_copies: number;
   /** How many of all of them are insured. */
   insured: number;
   /** What is in the report as chosen. */
@@ -644,9 +650,26 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
         asset_no: t.asset_no, insured: t.insured,
       };
     };
-    const lines = all.map((t) => ({ t, line: lineOf(t) }));
+    // Physical copies kept in the Collection count as things, by the room of the place they are kept in. Copies only on a
+    // server never get here (see collectionThings.ts). A copy has no photo, serial number or receipt, so it adds nothing to
+    // "gaps": there is nothing to walk through a room to fill in for it.
+    const copies = await physicalCopies(db, owner);
+    const pathsOf = placePaths(rows);
+    const copyAsItem = (c: Awaited<ReturnType<typeof physicalCopies>>[number]): Item => ({
+      id: -c.copy_id, name: c.title, kind: c.format, place_id: c.place_id, place: c.place_id !== null ? (pathsOf.get(c.place_id) ?? null) : null,
+      amount: '1', quantity: 1, photo: false, insured: false, warranty_days: null, asset_no: '',
+      records: { price_cents: c.cost_cents, value_cents: c.value_cents, serial: null, model: null, bought_on: null, bought_at: null, warranty_until: null },
+    }) as unknown as Item;
+    const copyOf = new Map<number, (typeof copies)[number]>(copies.map((c) => [-c.copy_id, c]));
+    const copyItems = copies.map(copyAsItem);
+    const everything = [...all, ...copyItems];
+    const lines = everything.map((t) => {
+      const line = lineOf(t);
+      const copy = copyOf.get(t.id);
+      return { t, line: copy ? { ...line, collection: { media_id: copy.media_id, format: copy.format } } : line };
+    });
     const sum = (list: Item[], pick: (t: Item) => number) => list.reduce((n, t) => n + pick(t), 0);
-    const missing = (t: Item) => Number(!t.photo) + Number(!recorded(t)) + Number(!t.records.serial);
+    const missing = (t: Item) => (t.id < 0 ? 0 : Number(!t.photo) + Number(!recorded(t)) + Number(!t.records.serial));
 
     const grouped = new Map<number, typeof lines>();
     for (const one of lines) grouped.set(one.line.room_id, [...(grouped.get(one.line.room_id) ?? []), one]);
@@ -654,7 +677,7 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
       Number(a.id === NO_ROOM) - Number(b.id === NO_ROOM) || a.name.localeCompare(b.name) || a.id - b.id;
     const choices = [...grouped.entries()].map(([id, list]) => ({
       id, name: roomNames.get(id)!, things: list.length,
-      incomplete: list.filter(({ t }) => !t.photo || !recorded(t)).length, gaps: sum(list.map(({ t }) => t), missing),
+      incomplete: list.filter(({ t }) => t.id > 0 && (!t.photo || !recorded(t))).length, gaps: sum(list.map(({ t }) => t), missing),
     })).sort(inOrderOfName);
     const needy = choices.filter((c) => c.id !== NO_ROOM && c.gaps > 0).sort((a, b) => b.gaps - a.gaps || inOrderOfName(a, b))[0];
 
@@ -677,12 +700,13 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
 
     return {
       day: todayOf(clock),
-      things: all.length, worth_cents: sum(all, worth), price_cents: sum(all, (t) => t.records.price_cents ?? 0),
-      valued: all.filter(recorded).length, unvalued: all.filter((t) => !recorded(t)).length,
-      with_photo: all.filter((t) => t.photo).length, with_receipt: all.filter((t) => receipts.has(t.id)).length,
-      with_serial: all.filter((t) => t.records.serial).length, insured: all.filter((t) => t.insured).length,
-      at_cost: all.filter((t) => t.records.value_cents === null && t.records.price_cents !== null).length,
+      things: everything.length, worth_cents: sum(everything, worth), price_cents: sum(everything, (t) => t.records.price_cents ?? 0),
+      valued: everything.filter(recorded).length, unvalued: everything.filter((t) => !recorded(t)).length,
+      with_photo: everything.filter((t) => t.photo).length, with_receipt: everything.filter((t) => receipts.has(t.id)).length,
+      with_serial: everything.filter((t) => t.records.serial).length, insured: everything.filter((t) => t.insured).length,
+      at_cost: everything.filter((t) => t.records.value_cents === null && t.records.price_cents !== null).length,
       shown: { things: rooms.reduce((n, r) => n + r.things, 0), worth_cents: rooms.reduce((n, r) => n + r.worth_cents, 0), price_cents: rooms.reduce((n, r) => n + r.price_cents, 0) },
+      collection_copies: copies.length,
       choices, neediest: needy ? { id: needy.id, name: needy.name, gaps: needy.gaps } : null,
       rooms,
       warranties: all.filter((t) => t.warranty_days !== null && t.warranty_days >= 0 && t.warranty_days <= 90)
@@ -1083,6 +1107,16 @@ export function inventory(db: Db, owner: number, clock: Clock = () => new Date()
      * cost and is worth, its serial number, and whether there is a photo and a receipt to show for it.
      */
     homeReport: (options: ReportOptions = {}) => homeReportIn(options),
+
+    /**
+     * The physical copies in the Collection, as rows among things, for the Things page's Collection chip. A view: nothing is
+     * copied out of the Collection. `total` is what the Things total adds with the chip on (copies, and what they are worth).
+     */
+    async collectionThings(): Promise<{ copies: CollectionThing[]; total: { copies: number; worth_cents: number; price_cents: number } }> {
+      const paths = placePaths(await placeRows(db));
+      const copies = (await physicalCopies(db, owner)).map((c) => ({ ...c, place: c.place_id !== null ? (paths.get(c.place_id) ?? null) : null }));
+      return { copies, total: { copies: copies.length, worth_cents: copies.reduce((n, c) => n + c.worth_cents, 0), price_cents: copies.reduce((n, c) => n + (c.cost_cents ?? 0), 0) } };
+    },
 
     /** The same, as a spreadsheet: one row for each thing, with a byte-order mark so Excel reads it as UTF-8. */
     async homeReportCsv(options: ReportOptions = {}): Promise<{ filename: string; text: string }> {
