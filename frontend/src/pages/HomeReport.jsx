@@ -172,6 +172,7 @@ export default function HomeReport() {
             {report.things} thing{report.things === 1 ? '' : 's'} · worth {money(report.worth_cents)} in all · {report.with_photo} with a photo · {report.with_receipt} with a receipt
           </p>
           <p className="text-sm">Cost {money(report.price_cents)} in all · {report.with_serial} with a serial number</p>
+          {report.collection_copies > 0 && <p className="text-sm" data-collection-note>{plural(report.collection_copies, 'of them is a disc, record, book or cartridge', 'of them are discs, records, books or cartridges')} from your Collection. Copies kept only on a server are not counted.</p>}
           {report.unvalued > 0 && <p className="text-sm" data-unvalued>{plural(report.unvalued, 'thing has', 'things have')} no value recorded, so the totals leave {report.unvalued === 1 ? 'it' : 'them'} out.</p>}
           {filtered && <p className="text-sm font-medium" data-shown>This report shows {plural(report.shown.things, 'thing', 'things')}, worth {money(report.shown.worth_cents)}.</p>}
         </header>
@@ -199,7 +200,7 @@ export default function HomeReport() {
                       <div className="flex gap-2">
                         {photos && l.photo && <Picture src={`/api/things/items/${l.id}/photo`} alt={`Photo of ${l.name}`} className="h-16 w-16 shrink-0 rounded object-cover" />}
                         <div className="min-w-0">
-                          <Link to={`/things/${l.id}`} className="font-medium">{l.name}</Link>{l.amount !== 'some' && l.amount !== '1' && <span className="text-gray-700"> × {l.amount}</span>}
+                          <Link to={l.collection ? `/media/${l.collection.media_id}` : `/things/${l.id}`} className="font-medium">{l.name}</Link>{l.amount !== 'some' && l.amount !== '1' && <span className="text-gray-700"> × {l.amount}</span>}
                           <div className="text-[11px] text-gray-700">{[l.asset_no, l.kind, l.where, l.insured && 'insured', l.photo && 'photo', l.receipt && 'receipt'].filter(Boolean).join(' · ')}</div>
                           <div className="text-[11px] text-gray-700 sm:hidden print:hidden">{[l.model, l.serial && <span key="s" className="serial">S/N {l.serial}</span>, l.bought_on, l.bought_at].filter(Boolean).reduce((out, part, i) => (i ? [...out, ' · ', part] : [part]), [])}</div>
                         </div>

@@ -84,6 +84,8 @@ export default function Things() {
   const [q, setQ] = useState('');
   const [tag, setTag] = useState('');
   const [showGone, setShowGone] = useState(false);   // the "No longer have" list: sold, given away, thrown out, stolen
+  const [showCollection, setShowCollection] = useState(false);   // the Collection chip: physical discs, records, books and cartridges as rows
+  const [collection, setCollection] = useState({ copies: [], total: { copies: 0, worth_cents: 0, price_cents: 0 } });
   const sel = useSelecting();
   const navigate = useNavigate();
   const [shared, setShared] = useState([]);   // guns and ammunition other people chose to share with this person
@@ -92,6 +94,7 @@ export default function Things() {
     axios.get('/api/things/shared').then(({ data }) => setShared(data)).catch(() => setShared([]));
     axios.get('/api/things/kinds').then(({ data }) => setKinds(data)).catch(() => setKinds([]));
     axios.get('/api/things/places').then(({ data }) => setPlaces(data)).catch(() => {});
+    axios.get('/api/things/collection').then(({ data }) => setCollection(data)).catch(() => {});
     axios.get('/api/things/items', { params: { tag: tag || undefined, gone: showGone ? 1 : undefined, guarded: 1 } }).then(({ data }) => setItems(data)).catch(() => setItems([]));
   }, [tag, showGone]);
   useEffect(() => { load(); }, [load]);
@@ -124,11 +127,15 @@ export default function Things() {
   const word = q.trim().toLowerCase();
   const matches = (item) => !word || [item.name, item.note, item.place, item.asset_no, ...Object.values(item.values), ...(item.own_fields || []).flatMap((f) => [f.name, f.value])].some((v) => String(v ?? '').toLowerCase().includes(word));
   const shownItems = items.filter((i) => (chosenKind === null || i.kind_id === chosenKind) && inGroup.some((k) => k.id === i.kind_id) && matches(i));
+  // The Collection chip: with it on, the physical copies are rows among the things and are counted in the totals. Off: nothing changes.
+  const copyRows = collection.copies.filter((c) => !word || [c.title, c.format, c.place, c.type].some((v) => String(v ?? '').toLowerCase().includes(word)));
+  const copiesOn = showCollection ? collection.total.copies : 0;
+  const copiesShown = showCollection && chosenKind === null && chosenGroup === null ? copyRows : [];
   const low = items.filter((i) => i.low && !i.gone).map((i) => i.name);
   const chip = (on) => `min-h-[44px] rounded-full px-4 py-2 text-sm ${on ? 'bg-life-600 text-white' : 'bg-card text-life-700 ring-1 ring-life-100 hover:bg-life-50 dark:bg-life-800 dark:text-life-100 dark:ring-life-700'}`;
   const kindChips = (list, label, all) => (
     <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>
-      {[{ id: null, name: all, items: list.reduce((n, k) => n + k.items, 0) }, ...list].map((k) => (
+      {[{ id: null, name: all, items: list.reduce((n, k) => n + k.items, 0) + (list === kinds ? copiesOn : 0) }, ...list].map((k) => (
         <button key={k.id ?? 'all'} type="button" onClick={() => setKind(k.id)} aria-pressed={chosenKind === k.id} className={chip(chosenKind === k.id)}>
           {k.icon ? `${k.icon} ` : ''}{k.name} <span className="opacity-80">{k.items}</span>
         </button>
@@ -198,7 +205,7 @@ export default function Things() {
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Part of the house or hobby">
             {/* A heading with nothing in it yet stays out of the row (unless it is the one picked), so a long list of
                 interests does not fill the row with zeros. Its kinds are still in the Add form. */}
-            {[{ name: 'Everything', id: null, count: items.length },
+            {[{ name: 'Everything', id: null, count: items.length + copiesOn },
               ...groupNames.map((g) => ({ name: g, id: g, count: groupItems(g) })).filter((g) => g.count > 0 || g.id === chosenGroup)].map((g) => (
               <button key={g.name} type="button" onClick={() => pickGroup(g.id)} aria-pressed={chosenGroup === g.id} className={chip(chosenGroup === g.id)}>
                 {g.name} <span className="opacity-80">{g.count}</span>
@@ -210,13 +217,21 @@ export default function Things() {
       ) : kindChips(kinds, 'Kind of thing', 'Everything')}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={() => setShowGone((on) => !on)} aria-pressed={showGone} className={chip(showGone)}>No longer have</button>
+        {(collection.total.copies > 0 || showCollection) && (
+          <button type="button" onClick={() => setShowCollection((on) => !on)} aria-pressed={showCollection} className={chip(showCollection)}>Collection <span className="opacity-80">{collection.total.copies}</span></button>
+        )}
         <Link to="/things/licenses" className={`${chip(false)} flex items-center`}>Licenses</Link>
         {items.length > 6 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find something" aria-label="Find a thing" className={`${inputClass} max-w-sm`} />}
         <TagFilter value={tag} onChange={setTag} />
         {items.length > 0 && <SelectButton sel={sel} />}
       </div>
       <BulkBar sel={sel} kind="thing" list={shownItems.map((i) => i.id)} noun="things" onDone={load} />
-      {shownItems.length === 0 ? (
+      {showCollection && !showGone && (
+        <p className="text-sm text-gray-700 dark:text-life-100" data-things-total>
+          {items.filter((i) => !i.gone).length + collection.total.copies} things in all, {collection.total.copies} of them from your Collection, worth {money(collection.total.worth_cents)}.
+        </p>
+      )}
+      {shownItems.length === 0 && copiesShown.length === 0 ? (
         <div className={`${cardClass} text-center text-sm text-gray-500 dark:text-life-200`}>{showGone && items.length === 0 ? 'Nothing is marked as gone. Open a thing and choose "No longer have it" when you sell it, give it away, throw it out, or it is stolen.'
           : items.length === 0 && !tag ? 'Nothing here yet. Add the first thing you keep.' : 'Nothing matches.'}</div>
       ) : grouped ? (
@@ -231,6 +246,25 @@ export default function Things() {
           ))}
         </div>
       ) : cards(inGroup, 'h2')}
+      {copiesShown.length > 0 && (
+        <section className={cardClass} aria-label="Collection" data-collection-things>
+          <h2 className="mb-1 font-semibold text-life-800 dark:text-life-50">Collection <span className="text-sm font-normal text-gray-500 dark:text-life-300">{copiesShown.length} {copiesShown.length === 1 ? 'copy' : 'copies'}</span></h2>
+          <p className="mb-1 text-xs text-gray-500 dark:text-life-300">Discs, records, printed books and cartridges. They stay in your Collection: open one to change it there.</p>
+          <ul className="divide-y divide-life-50 dark:divide-life-700">
+            {copiesShown.map((c) => (
+              <li key={c.copy_id}>
+                <Link to={`/media/${c.media_id}`} className="flex min-h-[44px] w-full items-start gap-2 py-2 text-left">
+                  <span className="flex-1">
+                    <span className="block text-sm text-gray-800 dark:text-life-50">{c.title}{c.year ? ` (${c.year})` : ''}</span>
+                    <span className="block text-xs text-gray-500 dark:text-life-300"><Dots parts={[c.format, c.place && <><Icon of="place" /> {c.place}</>]} /></span>
+                  </span>
+                  {c.worth_cents > 0 && <span className="text-sm text-gray-500 dark:text-life-300">{money(c.worth_cents)}</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {editing && (
         <Modal title={editing.id ? editing.name : 'Add a thing'} onClose={() => setEditing(null)}>
           <ItemForm item={editing} kinds={kinds} places={places} onPlaces={setPlaces} onDone={(saved) => { setEditing(null); load(); if (saved?.guard === 'firearm' && !editing.id) navigate(`/things/${saved.id}`); }} />
