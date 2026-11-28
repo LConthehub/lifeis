@@ -202,6 +202,7 @@ export default function Settings({ user, onLogout, onLifeChanged }) {
       <div>
         <h1 className="text-xl font-semibold text-life-800 dark:text-life-50">Settings</h1>
         {!onDevice() && <p className="text-sm text-gray-600 dark:text-life-200">Signed in as <span className="font-medium">{user.username}</span>{user.is_admin ? ' (admin)' : ''}</p>}
+        <Link to="/privacy-check" className="inline-flex min-h-[44px] items-center text-sm text-life-600 underline dark:text-life-200" data-privacy-link>Privacy check-up: what could other people see?</Link>
       </div>
 
       {/* Phone: the list of groups, until one is picked. */}

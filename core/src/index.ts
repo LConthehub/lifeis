@@ -135,3 +135,4 @@ export type { SectionId, ConnectionInfo, LogLine, ConnectorStatus, Live, ToolInf
 export { KEY_ACTIONS, isKeyAction, voice, splitGroceries, spokenList, spokenTime, spokenDay, readWhen } from './voice.ts';
 export type { KeyAction } from './voice.ts';
 export { PAUSABLE, isPaused, pausedKinds, setPaused, unlessPaused, unlessPausedAll, type Pausable, type PausedKinds } from './paused.ts';
+export { seenByOthers, type SeenByOthers } from './privacyCheck.ts';

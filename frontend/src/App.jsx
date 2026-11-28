@@ -4,6 +4,7 @@ import Icon from './components/Icon';
 import axios from 'axios';
 import Login from './pages/Login';
 import Home from './pages/Home';
+import PrivacyCheck from './pages/PrivacyCheck';
 const Recipes = lazyPage(() => import('./pages/Recipes'));
 const RecipePage = lazyPage(() => import('./pages/Recipes').then((m) => ({ default: m.RecipePage })));
 const Week = lazyPage(() => import('./pages/Week'));
@@ -210,6 +211,7 @@ function Shell({ user, demo = false, onLogout }) {
           <Route path="/things/shared/:id" element={<SharedThing />} />
           <Route path="/things/packing" element={<PackingPage />} />
           <Route path="/manual" element={<ManualPage />} />
+          <Route path="/privacy-check" element={<PrivacyCheck />} />
           <Route path="/manual/services" element={<HomeServicesPage />} />
           <Route path="/things/licenses" element={<LicensesPage />} />
           <Route path="/things/pets" element={<PetsPage />} />

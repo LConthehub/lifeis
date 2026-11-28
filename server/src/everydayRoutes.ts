@@ -24,6 +24,7 @@ import { makingRoutes } from './makingRoutes.ts';
 import { moneyRoutes } from './moneyRoutes.ts';
 import { assistantRoutes } from './assistantRoutes.ts';
 import { pausedRoutes } from './pausedRoutes.ts';
+import { privacyRoutes } from './privacyRoutes.ts';
 import { actionRoutes } from './actionRoutes.ts';
 import { holidayRoutes } from './holidayRoutes.ts';
 import { outdoorTripRoutes } from './outdoorTripRoutes.ts';
@@ -401,6 +402,7 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ...moneyRoutes(db, options.bank),
     ...assistantRoutes(db, options.assistant),
     ...pausedRoutes(db),
+    ...privacyRoutes(db),
     ...actionRoutes(db),
     ...(options.reach ? connectionRoutes(db, options.reach) : []),
     ...enjoyingRoutes(db, options.calendars),
