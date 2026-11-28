@@ -1121,12 +1121,13 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   await database.db.run('ALTER TABLE media DROP COLUMN stars');
   await database.db.run('DROP TABLE personal_keys');
   await database.db.run('DROP TABLE item_shares');
+  for (const column of ['landlord', 'asked_on', 'fixed_on']) await database.db.run(`ALTER TABLE upkeep_jobs DROP COLUMN ${column}`);
   await database.db.run('ALTER TABLE kinds DROP COLUMN guard');
   await database.db.run('DROP TABLE plan_food');
   for (const column of ['returned', 'after_trip', 'after_done', 'job_id', 'thaw_pounds']) await database.db.run(`ALTER TABLE plan_items DROP COLUMN ${column}`);
   for (const column of ['served_at', 'food_kind', 'parts']) await database.db.run(`ALTER TABLE plans DROP COLUMN ${column}`);
   for (const column of ['every_days', 'every_from']) await database.db.run(`ALTER TABLE routine_steps DROP COLUMN ${column}`);
-  for (const table of ['item_pieces', 'routine_closed','dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients', 'measure_entries', 'measures', 'home_service_pins', 'home_service_people', 'home_services', 'media_list_items', 'media_lists', 'item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
+  for (const table of ['rental_photos', 'rental_rooms', 'leases', 'landlord_notes', 'item_pieces', 'routine_closed','dont_forget_hidden', 'ai_log', 'ai_connections', 'ai_clients', 'measure_entries', 'measures', 'home_service_pins', 'home_service_people', 'home_services', 'media_list_items', 'media_lists', 'item_fields', 'outdoor_harvest', 'outdoor_catch', 'outdoor_seasons', 'outdoor_gear', 'outdoor_trip_years', 'outdoor_trips', 'holiday_ticks', 'holiday_steps', 'holiday_decor', 'holiday_gifts', 'holiday_people', 'holiday_years', 'holidays', 'trip_receipts', 'shopping_trips', 'routine_sent', 'routine_finished', 'routine_ticks', 'routine_steps', 'routine_times', 'routines', 'prep_sent', 'prep_steps', 'simplefin_accounts', 'simplefin_connections', 'money_goal_saved', 'money_goals', 'money_income', 'tag_links', 'tags', 'recipe_photos', 'auth_challenges', 'passkeys', 'recovery_codes', 'user_security', 'licenses','recall_checks', 'vehicle_recalls', 'manual_shares','manual_entries', 'pet_weights', 'item_documents', 'push_subscriptions', 'readings', 'upkeep_done', 'upkeep_supplies', 'upkeep_tools', 'upkeep_jobs', 'pets', 'household_members', 'item_history', 'item_activities', 'item_photos', 'money_entries', 'money_shares', 'money_categories', 'project_costs', 'followed_events', 'followed_calendars', 'calendar_feeds', 'stores', 'ingredient_barcodes', 'coupons', 'prices', 'plan_photos', 'plan_items', 'plans', 'mail_accounts', 'recipe_equipment', 'media_covers', 'media_log', 'media_copies', 'library_sources', 'media', 'media_sources', 'events', 'project_sessions', 'project_items', 'projects', 'item_values', 'items', 'places', 'kind_fields', 'kinds']) {
     await database.db.run(`DROP TABLE ${table}`);
   }
   // Columns later added to a table that was already there go back too.
@@ -1142,6 +1143,46 @@ it('a database from before things and projects is upgraded, with a copy saved fi
   expect((await database.db.get<{ user_version: number }>('PRAGMA user_version'))!.user_version).toBe(LATEST);
   expect((await admin.get('/api/kitchen/recipes')).json.map((r: { title: string }) => r.title)).toEqual(['Toast']); // still signed in, recipe still there
   expect((await admin.get('/api/things/kinds')).json).toEqual([]);
+});
+
+it('renting answers over the web: a landlord job and its notes, the lease, and rooms with their photos, private to the person', async () => {
+  const admin = await owner();
+  const job = (await admin.post('/api/things/upkeep', { name: 'Leaking tap', landlord: true, note: 'Drips all night' })).json;
+  expect(job).toMatchObject({ landlord: true, asked_on: null });
+  const draft = await admin.post(`/api/things/renting/jobs/${job.id}/preview`, { since: '2046-03-01', place: 'Kitchen' });
+  expect([draft.status, draft.json.text.includes('What is wrong: Drips all night')]).toEqual([200, true]);
+  expect((await admin.get(`/api/things/renting/jobs/${job.id}/notes`)).json).toEqual([]);
+  const asked = await admin.post(`/api/things/renting/jobs/${job.id}/ask`, { since: '2046-03-01', place: 'Kitchen' });
+  expect([asked.status, asked.json.job.asked_on === null, asked.json.note.body.includes('Where: Kitchen')]).toEqual([201, false, true]);
+  expect((await admin.get(`/api/things/renting/jobs/${job.id}/notes`)).json).toHaveLength(1);
+  expect((await admin.post(`/api/things/renting/jobs/${job.id}/fixed`, {})).json.fixed_on).not.toBeNull();
+  expect((await admin.post(`/api/things/renting/jobs/${job.id}/preview`, { since: 'last week' })).status).toBe(400);
+
+  const lease = await admin.put('/api/things/renting/lease', { start_day: '2045-09-01', end_day: '2046-08-31', rent_day: 1, deposit_cents: 150000, landlord_name: 'Loretta', landlord_contact: '555-0100' });
+  expect([lease.status, lease.json.deposit_cents, lease.json.landlord_name]).toEqual([200, 150000, 'Loretta']);
+  expect((await admin.put('/api/things/renting/lease', { rent_day: 40 })).status).toBe(400);
+
+  const room = (await admin.post('/api/things/renting/rooms', { name: 'Kitchen' })).json[0];
+  expect((await admin.put(`/api/things/renting/rooms/${room.id}`, { in_note: 'Chip in the sink' })).json[0].in_note).toBe('Chip in the sink');
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+  const kept = await admin.post(`/api/things/renting/rooms/${room.id}/photos`, { phase: 'in', data: jpeg.toString('base64'), day: '2045-09-01' });
+  expect([kept.status, kept.json[0].photos.map((p: { phase: string; day: string }) => [p.phase, p.day])]).toEqual([201, [['in', '2045-09-01']]]);
+  const shown = await admin.get(`/api/things/renting/photos/${kept.json[0].photos[0].id}`);
+  expect([shown.status, shown.headers.get('content-type'), shown.headers.get('x-content-type-options'), shown.bytes.equals(jpeg)]).toEqual([200, 'image/jpeg', 'nosniff', true]);
+  expect((await admin.post(`/api/things/renting/rooms/${room.id}/photos`, { phase: 'out', data: Buffer.from('<svg onload=alert(1)>').toString('base64') })).status).toBe(400);
+  expect((await admin.post(`/api/things/renting/rooms/${room.id}/photos`, { phase: 'out', data: 'not base64!' })).status).toBe(400);
+  expect((await admin.get('/api/things/renting')).json).toMatchObject({ lease: { landlord_name: 'Loretta' }, rooms: [{ name: 'Kitchen' }] });
+
+
+  // Someone else in the house sees none of it.
+  expect((await admin.post('/api/users', { username: 'other', password: PASSWORD })).status).toBe(201);
+  const other = visitor();
+  await other.post('/api/auth/login', { username: 'other', password: PASSWORD });
+  expect((await other.get('/api/things/renting')).json).toMatchObject({ lease: { landlord_name: null }, rooms: [] });
+  expect((await other.get(`/api/things/renting/photos/${kept.json[0].photos[0].id}`)).status).toBe(404);
+  expect((await other.post(`/api/things/renting/jobs/${job.id}/ask`, {})).status).toBe(404);
+  expect((await admin.delete(`/api/things/renting/rooms/${room.id}`)).json).toEqual([]);
+  expect((await admin.delete('/api/things/renting/lease')).status).toBe(204);
 });
 
 it('plans answer over the web, with their photos', async () => {

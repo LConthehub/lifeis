@@ -33,6 +33,7 @@ import { shoppingRoutes } from './shoppingRoutes.ts';
 import { recallRoutes } from './recallRoutes.ts';
 import { startRoutes } from './startRoutes.ts';
 import { licenseRoutes } from './licenseRoutes.ts';
+import { renterRoutes } from './renterRoutes.ts';
 import { exportRoutes } from './exportRoutes.ts';
 import { tagRoutes } from './tagRoutes.ts';
 
@@ -413,5 +414,6 @@ export function everydayRoutes(db: Db, options: Outside = {}): Route[] {
     ...tagRoutes(db),
     ...routineRoutes(db),
     ...measureRoutes(db),
+    ...renterRoutes(db),
   ];
 }
